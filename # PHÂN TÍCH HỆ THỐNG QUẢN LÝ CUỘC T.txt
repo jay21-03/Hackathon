@@ -1,0 +1,3555 @@
+# HỆ THỐNG HỖ TRỢ TỔ CHỨC VÀ CHẤM ĐIỂM CUỘC THI SEAL HACKATHON
+
+## BẢN PHÂN TÍCH HỆ THỐNG – PHIÊN BẢN ĐIỀU CHỈNH SAU GÓP Ý GIẢNG VIÊN
+
+**Tên hệ thống:** SEAL Hackathon Management System  
+**Phiên bản:** 2.1 – Simplified MVP  
+**Ngày:** 2026-05-21  
+**Phạm vi:** Hỗ trợ đăng ký nhóm, chia bảng, check-in, mở đề đúng giờ, chấm điểm, xếp hạng, chọn đội vào chung kết và AI Review định kỳ.
+
+---
+
+## MỤC LỤC
+
+1. [EXECUTIVE SUMMARY](#1-executive-summary)  
+2. [PHASE 1 – BUSINESS ANALYSIS](#2-phase-1--business-analysis)  
+   - 2.1 Tổng quan nghiệp vụ  
+   - 2.2 Phạm vi hệ thống  
+   - 2.3 Stakeholders  
+   - 2.4 Actors  
+   - 2.5 Functional Requirements  
+   - 2.6 Non-functional Requirements  
+   - 2.7 Business Rules  
+   - 2.8 Edge Cases  
+3. [PHASE 2 – SYSTEM ANALYSIS](#3-phase-2--system-analysis)  
+   - 3.1 Module Decomposition  
+   - 3.2 Database Design  
+   - 3.3 API Design  
+   - 3.4 Permission Matrix  
+   - 3.5 State Machines  
+   - 3.6 Validation Matrix  
+4. [PHASE 3 – SOFTWARE ARCHITECTURE](#4-phase-3--software-architecture)  
+   - 4.1 Architecture Style  
+   - 4.2 Technology Stack  
+   - 4.3 System Flow  
+   - 4.4 Security Design  
+   - 4.5 Deployment Overview  
+5. [PHASE 4 – AI CODE REVIEW EXTENSION](#5-phase-4--ai-code-review-extension)  
+6. [PHASE 5 – PRODUCT BACKLOG](#6-phase-5--product-backlog)  
+7. [FINAL CONSISTENCY CHECK](#7-final-consistency-check)  
+8. [DEPLOYMENT & OPERATIONS](#8-deployment--operations)
+
+---
+
+## 1. EXECUTIVE SUMMARY
+
+Tài liệu này mô tả bản phân tích hệ thống cho **SEAL Hackathon Management System** – hệ thống hỗ trợ tổ chức, vận hành và chấm điểm cuộc thi SEAL Hackathon.
+
+Phiên bản này đã được điều chỉnh theo góp ý của giảng viên và các quyết định nghiệp vụ đã chốt. Hệ thống không tập trung vào việc quản lý team như một workspace phức tạp, mà tập trung hỗ trợ quy trình thi thực tế:
+
+**Đăng ký nhóm → xác nhận thành viên → chia bảng → check-in → mở đề đúng giờ → thi → chấm điểm → ranking theo bảng → organizer chọn đội vào chung kết → công bố kết quả.**
+
+Các quyết định nghiệp vụ chính đã chốt:
+
+| Nội dung | Quyết định |
+|---|---|
+| Team size | Mỗi team có từ 1 đến 5 người. |
+| Quota event | Số lượng team tối đa do Organizer tự nhập khi cấu hình cuộc thi. |
+| Chia bảng | Hỗ trợ cả chia bảng ngẫu nhiên và chia bảng thủ công. |
+| Điều kiện mở đề | Chỉ cần đến đúng thời gian `release_at` là participant được xem đề. |
+| Check-in | Dùng để xác nhận sự có mặt tại sự kiện, không phải điều kiện bắt buộc để xem đề. |
+| AI Review | Hệ thống review repository/code định kỳ mỗi 30 phút. |
+| Cách tính điểm | Điểm team được tính bằng trung bình điểm từ các judge đã submit. |
+| Advancement | Hệ thống sort ranking theo từng bảng, sau đó Organizer tick chọn thủ công team vào chung kết. |
+
+Hệ thống hướng đến việc thay thế các thao tác thủ công như đăng ký bằng Google Form, quản lý danh sách nhóm bằng Excel, chia bảng thủ công, kiểm tra check-in bằng giấy tờ, tổng hợp điểm bằng file riêng lẻ và công bố kết quả thủ công.
+
+### Phạm vi chính của hệ thống
+
+Trong phạm vi MVP, hệ thống tập trung vào 8 nhóm chức năng chính:
+
+1. **Quản lý tài khoản và hồ sơ người dùng**  
+   Người dùng đăng nhập bằng Google/Gmail, cập nhật thông tin cá nhân như họ tên, MSSV, trường và ảnh đại diện.
+
+2. **Quản lý cuộc thi**  
+   Ban tổ chức tạo cuộc thi, cấu hình thời gian đăng ký, quota số team tối đa, giới hạn team size từ 1 đến 5 người, vòng thi và bảng thi.
+
+3. **Đăng ký nhóm**  
+   Participant điền form đăng ký nhóm, nhập thông tin thành viên và email xác nhận. Team chỉ được công nhận hợp lệ khi số lượng thành viên nằm trong giới hạn cho phép và cuộc thi chưa vượt quota.
+
+4. **Chia bảng thi**  
+   Organizer có thể tạo bảng thi và chia team vào bảng bằng hai cách: random assignment hoặc manual assignment. Hệ thống cần đảm bảo một team không bị gán vào nhiều bảng trong cùng một vòng.
+
+5. **Check-in và mở đề**  
+   Participant check-in bằng hình ảnh để xác nhận có mặt tại sự kiện. Đề thi được hiển thị khi đến đúng thời gian `release_at`. Check-in không phải điều kiện bắt buộc để xem đề trong phiên bản MVP này.
+
+6. **Mentor và Judge**  
+   Mentor xem danh sách team được phân công để hỗ trợ hoặc review. Judge xem danh sách team được assign và chấm điểm theo rubric.
+
+7. **Chấm điểm, ranking và advancement**  
+   Judge nhập điểm vào score sheet. Hệ thống tính điểm trung bình từ các judge đã submit, sau đó sort ranking theo từng bảng. Organizer xem ranking từng bảng và tick chọn thủ công các team vào vòng chung kết.
+
+8. **AI Code Review – chức năng mở rộng**  
+   Hệ thống lưu repository/commit của team và tự động chạy AI Review định kỳ mỗi 30 phút. Kết quả AI Review chỉ dùng để tham khảo cho participant, mentor và organizer; không thay thế điểm chính thức của judge và không tự động ảnh hưởng đến ranking.
+
+### Những phần đã được đơn giản hóa so với bản phân tích cũ
+
+So với bản thiết kế ban đầu, phiên bản này đã loại bỏ hoặc hạ mức ưu tiên các phần quá phức tạp, chưa cần thiết trong phạm vi đồ án sinh viên:
+
+- Không tách riêng actor `Team Leader` và `Team Member`.
+- Không quản lý team như một workspace có mời, kick hoặc chuyển leader phức tạp.
+- Không dùng quy trình team tự đăng ký track; thay bằng việc Organizer chia bảng.
+- Không triển khai submission versioning phức tạp.
+- Không dùng multi-attempt scoring phức tạp.
+- Không đưa Research Analytics, Calibration Dashboard, Inter-rater Analysis vào MVP.
+- Không đưa Outbox Pattern, Idempotency, Audit Immutable, SERIALIZABLE transaction vào phần nghiệp vụ chính.
+- Không dùng check-in làm điều kiện bắt buộc để xem đề.
+- Không tự động chọn top N vào chung kết; Organizer sẽ tick chọn thủ công từ ranking từng bảng.
+- AI Code Review được giữ lại như chức năng mở rộng định kỳ mỗi 30 phút, không phải luồng bắt buộc để tính điểm.
+
+### Định hướng triển khai
+
+Hệ thống được thiết kế theo hướng dễ hiểu, dễ demo và phù hợp với đồ án sinh viên. Giao diện cho participant nên ưu tiên mobile app hoặc responsive web/PWA để thuận tiện cho việc:
+
+- Xem thông tin cuộc thi.
+- Đăng ký nhóm.
+- Xác nhận tham gia nhóm.
+- Check-in bằng ảnh.
+- Xem bảng thi.
+- Xem đề đúng giờ.
+- Theo dõi countdown.
+- Gửi hoặc cập nhật repository link.
+- Xem kết quả sau khi được công bố.
+- Xem kết quả AI Review của team mình.
+
+Giao diện cho Organizer, Mentor và Judge có thể triển khai dưới dạng web dashboard:
+
+- Organizer quản lý cuộc thi, đăng ký, chia bảng, đề thi, check-in, phân công mentor/judge, ranking, advancement và công bố kết quả.
+- Mentor xem team được phân công, repository/link bài làm và AI Review.
+- Judge xem team cần chấm, mở score sheet, nhập điểm và submit điểm.
+
+### Mục tiêu cuối cùng
+
+Mục tiêu của hệ thống là hỗ trợ ban tổ chức vận hành cuộc thi một cách rõ ràng, minh bạch và giảm thao tác thủ công. Hệ thống giúp đảm bảo quy trình đăng ký nhóm, xác nhận thành viên, chia bảng, check-in, mở đề, chấm điểm, xếp hạng và công bố kết quả được thực hiện tập trung trên một nền tảng thống nhất.
+
+Nói ngắn gọn, hệ thống không phải là một nền tảng quản lý hackathon production-ready phức tạp, mà là một hệ thống hỗ trợ quy trình thi thực tế:
+
+**Tạo cuộc thi → cấu hình quota → đăng ký nhóm 1–5 người → xác nhận thành viên → chia bảng random/thủ công → check-in → mở đề đúng giờ → thi → judge chấm điểm → tính điểm trung bình → sort ranking theo bảng → Organizer tick chọn đội vào chung kết → công bố kết quả → AI Review định kỳ mỗi 30 phút để tham khảo.**
+
+## 2. PHASE 1 – BUSINESS ANALYSIS
+
+### 2.1 Tổng quan nghiệp vụ
+
+SEAL Hackathon là cuộc thi dành cho sinh viên, được tổ chức theo quy trình gồm nhiều bước: đăng ký nhóm, xác nhận thành viên, chia bảng, check-in, nhận đề, làm bài, nộp/link bài làm, chấm điểm, xếp hạng và chọn đội vào vòng chung kết.
+
+Hiện tại, nhiều công việc trong quy trình tổ chức cuộc thi có thể được thực hiện thủ công bằng Google Form, Excel, email rời rạc hoặc trao đổi trực tiếp. Điều này gây khó khăn cho ban tổ chức trong việc kiểm soát số lượng nhóm, xác nhận thành viên, chia bảng, theo dõi check-in, tổng hợp điểm và công bố kết quả.
+
+Hệ thống được đề xuất nhằm hỗ trợ ban tổ chức quản lý tập trung toàn bộ quy trình thi. Hệ thống không tập trung vào việc quản lý team như một workspace phức tạp, mà tập trung vào việc ghi nhận người thi, nhóm thi và các hoạt động cần thiết trong quá trình vận hành cuộc thi.
+
+Luồng nghiệp vụ tổng quát:
+
+```text
+Tạo cuộc thi
+→ Cấu hình quota và team size
+→ Mở đăng ký
+→ Participant đăng ký nhóm
+→ Thành viên xác nhận qua email
+→ Hệ thống kiểm tra quota và điều kiện hợp lệ
+→ Organizer chia bảng ngẫu nhiên hoặc thủ công
+→ Participant check-in bằng ảnh
+→ Hệ thống mở đề đúng giờ
+→ Participant làm bài và gửi/link repository
+→ AI Review chạy định kỳ mỗi 30 phút
+→ Judge chấm điểm theo rubric
+→ Hệ thống tính điểm trung bình và sort ranking theo từng bảng
+→ Organizer tick chọn thủ công team vào chung kết
+→ Chấm chung kết
+→ Công bố kết quả
+````
+
+#### Mục tiêu kinh doanh
+
+| Mục tiêu                          | Mô tả                                                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Số hóa quy trình tổ chức cuộc thi | Chuyển các bước đăng ký, xác nhận, chia bảng, check-in, chấm điểm và công bố kết quả lên hệ thống.    |
+| Giảm thao tác thủ công            | Hạn chế việc dùng nhiều file Excel, Google Form và email rời rạc.                                     |
+| Quản lý chính xác số lượng nhóm   | Organizer tự nhập quota số team tối đa; hệ thống kiểm tra quota khi xác nhận team.                    |
+| Hỗ trợ team size linh hoạt        | Mỗi team có từ 1 đến 5 người, phù hợp với yêu cầu đã chốt.                                            |
+| Hỗ trợ chia bảng minh bạch        | Organizer có thể chia bảng bằng random assignment hoặc manual assignment.                             |
+| Hỗ trợ check-in tại sự kiện       | Participant check-in bằng ảnh để xác nhận có mặt; check-in không phải điều kiện bắt buộc để xem đề.   |
+| Mở đề đúng thời điểm              | Đề thi chỉ hiển thị khi đến thời gian `release_at`.                                                   |
+| Tăng tính minh bạch khi chấm điểm | Judge chấm theo rubric; hệ thống tính điểm trung bình từ các judge đã submit.                         |
+| Hỗ trợ chọn đội vào chung kết     | Hệ thống sort ranking theo từng bảng; Organizer tick chọn thủ công team vào final.                    |
+| Bổ sung AI Review tham khảo       | AI Review repository/code định kỳ mỗi 30 phút, chỉ dùng để tham khảo, không thay thế điểm chính thức. |
+
+#### Pain Points
+
+| Vấn đề hiện tại                     | Ảnh hưởng                                                                              |
+| ----------------------------------- | -------------------------------------------------------------------------------------- |
+| Đăng ký nhóm bằng form rời rạc      | Khó kiểm tra nhóm đã đủ điều kiện hợp lệ hay chưa.                                     |
+| Xác nhận thành viên thủ công        | Dễ xảy ra trường hợp một người nằm trong nhiều nhóm.                                   |
+| Quản lý số lượng nhóm bằng tay      | Khó kiểm soát quota do Organizer đặt ra.                                               |
+| Chia bảng thủ công hoàn toàn        | Dễ nhầm lẫn, khó minh bạch nếu có nhiều nhóm.                                          |
+| Check-in tại sự kiện chưa tập trung | Khó biết participant/team nào đã có mặt.                                               |
+| Gửi đề bằng cách thủ công           | Khó đảm bảo đề chỉ được xem đúng giờ.                                                  |
+| Chấm điểm bằng Excel riêng lẻ       | Khó tổng hợp, dễ sai công thức, khó theo dõi judge nào đã chấm.                        |
+| Công bố kết quả thủ công            | Tốn thời gian, dễ sai sót khi tính ranking và chọn đội vào vòng sau.                   |
+| Mentor/Judge nhận thông tin rời rạc | Khó biết mình được phân công hỗ trợ/chấm nhóm nào.                                     |
+| Không có review code định kỳ        | Mentor/Organizer khó có thêm dữ liệu tham khảo về chất lượng code trong quá trình thi. |
+
+---
+
+### 2.2 Phạm vi hệ thống
+
+#### Phạm vi trong MVP
+
+Hệ thống tập trung vào các chức năng chính sau:
+
+1. Quản lý tài khoản người dùng và hồ sơ cá nhân.
+2. Quản lý cuộc thi, vòng thi và bảng thi.
+3. Cho phép Organizer tự nhập quota số team tối đa.
+4. Cấu hình team size từ 1 đến 5 người.
+5. Đăng ký nhóm qua form.
+6. Gửi email xác nhận thành viên.
+7. Kiểm tra giới hạn số lượng nhóm.
+8. Chia bảng ngẫu nhiên hoặc thủ công.
+9. Upload đề và cấu hình thời gian mở đề.
+10. Hiển thị đề đúng giờ theo `release_at`.
+11. Check-in bằng hình ảnh để xác nhận có mặt.
+12. Hiển thị đồng hồ đếm ngược trong lúc thi.
+13. Gán mentor và judge cho bảng thi.
+14. Chấm điểm theo rubric.
+15. Tính điểm trung bình từ các judge đã submit.
+16. Sort ranking theo từng bảng.
+17. Organizer tick chọn thủ công team vào vòng chung kết.
+18. Công bố và xuất kết quả.
+19. AI Code Review định kỳ mỗi 30 phút ở mức tham khảo, không ảnh hưởng điểm chính thức.
+
+#### Ngoài phạm vi MVP
+
+Các phần sau không đưa vào MVP để tránh làm hệ thống quá phức tạp:
+
+| Nội dung                                  | Lý do không đưa vào MVP                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------------------------- |
+| Quản lý team như workspace                | Không cần mời/kick/chuyển leader phức tạp.                                            |
+| Actor Team Leader / Team Member riêng     | Người tham gia chỉ cần đăng ký, xác nhận, check-in, xem đề và xem kết quả.            |
+| Team tự đăng ký track                     | Ban tổ chức sẽ chia bảng thay vì team tự chọn track.                                  |
+| Submission versioning phức tạp            | Không cần quản lý nhiều phiên bản nộp bài.                                            |
+| Multi-attempt scoring                     | Chỉ cần score sheet dạng draft/submitted.                                             |
+| Calibration Dashboard                     | Không nằm trong yêu cầu vận hành cuộc thi cơ bản.                                     |
+| Research Analytics / Inter-rater Analysis | Không cần cho MVP.                                                                    |
+| Outbox Pattern / Idempotency chi tiết     | Đây là kỹ thuật nâng cao, không cần đưa vào nghiệp vụ chính.                          |
+| Audit immutable phức tạp                  | Chỉ cần log cơ bản nếu có thời gian.                                                  |
+| Auto-advance top N                        | Không tự động chọn top N; Organizer tick chọn thủ công từ ranking từng bảng.          |
+| Check-in là điều kiện xem đề              | Theo yêu cầu đã chốt, đúng giờ là đủ để xem đề.                                       |
+| AI Review ảnh hưởng ranking               | AI Review chỉ tham khảo, không thay thế điểm judge và không tự động thay đổi ranking. |
+
+---
+
+### 2.3 Stakeholders
+
+| Stakeholder   | Vai trò                 | Mối quan tâm chính                                                                                                               |
+| ------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Guest         | Người chưa đăng nhập    | Xem thông tin cuộc thi công khai.                                                                                                |
+| Participant   | Người tham gia cuộc thi | Đăng ký nhóm, xác nhận tham gia, check-in, xem đề, xem countdown, gửi repository, xem kết quả.                                   |
+| Organizer     | Ban tổ chức             | Tạo cuộc thi, cấu hình quota, quản lý đăng ký, chia bảng, upload đề, theo dõi check-in, phân công mentor/judge, công bố kết quả. |
+| Mentor        | Người hỗ trợ chuyên môn | Xem nhóm được phân công, xem repository/link bài làm, xem AI Review để tham khảo.                                                |
+| Judge         | Giám khảo               | Xem nhóm được assign, chấm điểm theo rubric, gửi phiếu chấm.                                                                     |
+| Email Service | Dịch vụ gửi email       | Gửi email xác nhận thành viên, mời mentor/judge, gửi thông báo.                                                                  |
+| AI Service    | Dịch vụ AI              | Phân tích repository/source code định kỳ mỗi 30 phút và tạo nhận xét tham khảo.                                                  |
+
+---
+
+### 2.4 Phân tích Actors
+
+#### Guest
+
+| Nội dung      | Mô tả                                                            |
+| ------------- | ---------------------------------------------------------------- |
+| Cách xác định | Người chưa đăng nhập.                                            |
+| Quyền chính   | Xem thông tin cuộc thi công khai.                                |
+| Hạn chế       | Không đăng ký nhóm, không check-in, không xem đề riêng của bảng. |
+
+#### Participant
+
+| Nội dung      | Mô tả                                                                                                                                                           |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cách xác định | Người dùng đã đăng nhập bằng Google/Gmail và tham gia cuộc thi.                                                                                                 |
+| Quyền chính   | Cập nhật profile, đăng ký nhóm, xác nhận lời mời, xem thông tin nhóm, check-in, xem bảng thi, xem đề đúng giờ, xem countdown, gửi repository link, xem kết quả. |
+| Hạn chế       | Không được chỉnh cấu hình cuộc thi, không được chia bảng, không được chấm điểm.                                                                                 |
+
+#### Organizer
+
+| Nội dung      | Mô tả                                                                                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cách xác định | User có role `ORGANIZER`.                                                                                                                    |
+| Quyền chính   | Quản lý toàn bộ cuộc thi, quota, vòng thi, bảng thi, đề thi, đăng ký nhóm, check-in, mentor, judge, rubric, ranking, advancement và kết quả. |
+| Hạn chế       | Mọi thao tác quan trọng nên được ghi nhận để truy vết nếu cần.                                                                               |
+
+#### Mentor
+
+| Nội dung      | Mô tả                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------- |
+| Cách xác định | User được Organizer gán vào một hoặc nhiều bảng thi.                                  |
+| Quyền chính   | Xem danh sách team được phân công, xem repository/link bài làm, xem AI Review nếu có. |
+| Hạn chế       | Không chấm điểm chính thức, không công bố kết quả.                                    |
+
+#### Judge
+
+| Nội dung      | Mô tả                                                                            |
+| ------------- | -------------------------------------------------------------------------------- |
+| Cách xác định | User được Organizer gán làm judge cho một hoặc nhiều bảng thi.                   |
+| Quyền chính   | Xem danh sách team cần chấm, mở score sheet, nhập điểm theo rubric, submit điểm. |
+| Hạn chế       | Chỉ chấm các team thuộc bảng được phân công.                                     |
+
+#### Email Service
+
+| Nội dung      | Mô tả                                                                   |
+| ------------- | ----------------------------------------------------------------------- |
+| Cách xác định | Dịch vụ hệ thống dùng để gửi email.                                     |
+| Quyền chính   | Gửi email xác nhận thành viên, email mời mentor/judge, email thông báo. |
+| Hạn chế       | Không phải người dùng trực tiếp của hệ thống.                           |
+
+#### AI Service
+
+| Nội dung      | Mô tả                                                                      |
+| ------------- | -------------------------------------------------------------------------- |
+| Cách xác định | Dịch vụ AI được gọi định kỳ mỗi 30 phút để review code/repository.         |
+| Quyền chính   | Phân tích repository/commit và tạo nhận xét AI Review.                     |
+| Hạn chế       | Kết quả chỉ mang tính tham khảo, không thay thế điểm chính thức của judge. |
+
+---
+
+### 2.5 Functional Requirements
+
+#### 2.5.1 Auth & Profile
+
+| FR-ID  | Tên chức năng          | Mô tả                                                                     | Priority |
+| ------ | ---------------------- | ------------------------------------------------------------------------- | -------- |
+| FR-001 | Đăng nhập Google       | Người dùng đăng nhập bằng Google/Gmail.                                   | Must     |
+| FR-002 | Xem hồ sơ cá nhân      | Người dùng xem thông tin cá nhân.                                         | Must     |
+| FR-003 | Cập nhật hồ sơ cá nhân | Người dùng cập nhật họ tên, MSSV, trường, ảnh đại diện.                   | Must     |
+| FR-004 | Quản lý role hệ thống  | Organizer gán role `ORGANIZER`, `MENTOR`, `JUDGE` cho user phù hợp. | Must     |
+
+#### 2.5.2 Contest Management
+
+| FR-ID  | Tên chức năng          | Mô tả                                                                       | Priority |
+| ------ | ---------------------- | --------------------------------------------------------------------------- | -------- |
+| FR-010 | Tạo cuộc thi           | Organizer tạo cuộc thi với tên, mô tả, thời gian bắt đầu/kết thúc.          | Must     |
+| FR-011 | Cấu hình đăng ký       | Thiết lập thời gian mở/đóng đăng ký.                                        | Must     |
+| FR-012 | Cấu hình quota event   | Organizer tự nhập số team tối đa được tham gia event.                       | Must     |
+| FR-013 | Cấu hình team size     | Team size được cấu hình trong khoảng 1–5 người.                             | Must     |
+| FR-014 | Cập nhật cuộc thi      | Organizer cập nhật thông tin cuộc thi khi cần.                              | Must     |
+| FR-015 | Tạo vòng thi           | Organizer tạo vòng bảng và vòng chung kết.                                  | Must     |
+| FR-016 | Tạo bảng thi           | Organizer tạo các bảng cho từng vòng thi.                                   | Must     |
+| FR-017 | Tạo thông báo/bài đăng | Organizer tạo thông báo, nội dung seminar, hướng dẫn hoặc tin tức cuộc thi. | Should   |
+
+#### 2.5.3 Team Registration
+
+| FR-ID  | Tên chức năng                 | Mô tả                                                                               | Priority |
+| ------ | ----------------------------- | ----------------------------------------------------------------------------------- | -------- |
+| FR-020 | Đăng ký nhóm qua form         | Participant nhập tên nhóm, thông tin cá nhân và email các thành viên.               | Must     |
+| FR-021 | Gửi email xác nhận thành viên | Hệ thống gửi email đến các thành viên được mời.                                     | Must     |
+| FR-022 | Xác nhận tham gia nhóm        | Thành viên xác nhận hoặc từ chối tham gia nhóm.                                     | Must     |
+| FR-023 | Kiểm tra số lượng thành viên  | Nhóm phải có từ 1 đến 5 thành viên.                                                 | Must     |
+| FR-024 | Kiểm tra trùng nhóm           | Một email/user chỉ được thuộc một nhóm trong cùng cuộc thi.                         | Must     |
+| FR-025 | Kiểm tra giới hạn số nhóm     | Nhóm chỉ được xác nhận nếu quota cuộc thi chưa đầy.                                 | Must     |
+| FR-026 | Xem trạng thái nhóm           | Participant xem nhóm đang pending, confirmed, waitlist, rejected hoặc disqualified. | Must     |
+| FR-027 | Quản lý đăng ký nhóm          | Organizer xem danh sách nhóm, trạng thái xác nhận và xử lý trường hợp ngoại lệ.     | Must     |
+
+#### 2.5.4 Board Assignment
+
+| FR-ID  | Tên chức năng                | Mô tả                                                                 | Priority |
+| ------ | ---------------------------- | --------------------------------------------------------------------- | -------- |
+| FR-030 | Tạo slot bảng                | Organizer tạo slot nhóm theo số thứ tự cho từng bảng.                 | Must     |
+| FR-031 | Chia bảng ngẫu nhiên         | Hệ thống random team/slot vào các bảng.                               | Must     |
+| FR-032 | Chia bảng thủ công           | Organizer chỉnh team/slot vào bảng nếu cần.                           | Must     |
+| FR-033 | Xem bảng được phân công      | Participant xem team mình thuộc bảng nào.                             | Must     |
+| FR-034 | Xem danh sách team theo bảng | Organizer/Mentor/Judge xem danh sách team trong bảng được phân quyền. | Must     |
+
+#### 2.5.5 Problem Release & Contest Runtime
+
+| FR-ID  | Tên chức năng            | Mô tả                                                                     | Priority |
+| ------ | ------------------------ | ------------------------------------------------------------------------- | -------- |
+| FR-040 | Upload đề thi            | Organizer upload đề, file đính kèm hoặc link đề cho từng bảng.            | Must     |
+| FR-041 | Cấu hình thời gian mở đề | Organizer thiết lập `release_at` cho đề thi.                              | Must     |
+| FR-042 | Xem đề thi đúng giờ      | Participant xem đề khi thời gian hiện tại lớn hơn hoặc bằng `release_at`. | Must     |
+| FR-043 | Hiển thị countdown       | Hệ thống hiển thị thời gian còn lại của vòng thi.                         | Must     |
+| FR-044 | Gửi/link bài làm         | Team/Participant gửi repository link hoặc work link nếu cuộc thi yêu cầu. | Should   |
+
+#### 2.5.6 Check-in
+
+| FR-ID  | Tên chức năng           | Mô tả                                                | Priority |
+| ------ | ----------------------- | ---------------------------------------------------- | -------- |
+| FR-050 | Check-in bằng ảnh       | Participant chụp hoặc upload ảnh để check-in.        | Must     |
+| FR-051 | Xem trạng thái check-in | Participant xem mình đã check-in hay chưa.           | Must     |
+| FR-052 | Theo dõi check-in       | Organizer xem danh sách thành viên/team đã check-in. | Must     |
+| FR-053 | Xác minh check-in       | Organizer có thể approve/reject check-in nếu cần.    | Should   |
+
+#### 2.5.7 Mentor & Judge Assignment
+
+| FR-ID  | Tên chức năng                  | Mô tả                                               | Priority |
+| ------ | ------------------------------ | --------------------------------------------------- | -------- |
+| FR-060 | Mời mentor                     | Organizer mời mentor bằng email.                    | Must     |
+| FR-061 | Mời judge                      | Organizer mời judge bằng email.                     | Must     |
+| FR-062 | Gán mentor vào bảng            | Organizer gán mentor phụ trách một hoặc nhiều bảng. | Must     |
+| FR-063 | Gán judge vào bảng             | Organizer gán judge chấm một hoặc nhiều bảng.       | Must     |
+| FR-064 | Mentor xem team được phân công | Mentor xem team thuộc bảng mình phụ trách.          | Must     |
+| FR-065 | Judge xem team được phân công  | Judge xem team thuộc bảng mình cần chấm.            | Must     |
+
+#### 2.5.8 Scoring
+
+| FR-ID  | Tên chức năng           | Mô tả                                                       | Priority |
+| ------ | ----------------------- | ----------------------------------------------------------- | -------- |
+| FR-070 | Cấu hình rubric         | Organizer tạo tiêu chí chấm điểm, trọng số, min/max score.  | Must     |
+| FR-071 | Mở score sheet          | Judge mở phiếu chấm của team được phân công.                | Must     |
+| FR-072 | Nhập điểm theo tiêu chí | Judge nhập điểm và nhận xét theo từng tiêu chí.             | Must     |
+| FR-073 | Lưu nháp điểm           | Judge có thể lưu nháp trước khi submit.                     | Should   |
+| FR-074 | Submit score sheet      | Judge gửi điểm chính thức.                                  | Must     |
+| FR-075 | Xem tiến độ chấm        | Organizer xem team nào đã được chấm, judge nào chưa submit. | Must     |
+
+#### 2.5.9 Ranking & Advancement
+
+| FR-ID  | Tên chức năng                | Mô tả                                                                             | Priority |
+| ------ | ---------------------------- | --------------------------------------------------------------------------------- | -------- |
+| FR-080 | Tính điểm trung bình         | Hệ thống tính điểm trung bình từ các judge đã submit score sheet.                 | Must     |
+| FR-081 | Sort ranking theo bảng       | Hệ thống sắp xếp team trong từng bảng theo điểm trung bình giảm dần.              | Must     |
+| FR-082 | Xem ranking từng bảng        | Organizer xem ranking theo từng bảng; Participant xem sau khi publish.            | Must     |
+| FR-083 | Tick chọn team vào chung kết | Organizer tick chọn thủ công team từ ranking từng bảng để đưa vào vòng chung kết. | Must     |
+| FR-084 | Tạo bảng chung kết           | Hệ thống tạo hoặc cập nhật board chung kết từ các team được chọn.                 | Must     |
+| FR-085 | Công bố kết quả              | Organizer publish kết quả vòng bảng hoặc chung kết.                               | Must     |
+| FR-086 | Export kết quả               | Organizer xuất bảng điểm/ranking ra file.                                         | Should   |
+| FR-087 | Disqualify team              | Organizer loại team khỏi ranking nếu vi phạm quy định.                            | Should   |
+
+#### 2.5.10 Notification
+
+| FR-ID  | Tên chức năng                | Mô tả                                                    | Priority |
+| ------ | ---------------------------- | -------------------------------------------------------- | -------- |
+| FR-090 | Gửi email xác nhận           | Gửi email xác nhận cho thành viên khi được mời vào nhóm. | Must     |
+| FR-091 | Gửi email mời mentor/judge   | Gửi email mời mentor hoặc judge tham gia cuộc thi.       | Must     |
+| FR-092 | Gửi thông báo trong hệ thống | Gửi thông báo về lịch thi, check-in, mở đề, kết quả.     | Should   |
+
+#### 2.5.11 AI Code Review Extension
+
+| FR-ID  | Tên chức năng           | Mô tả                                                                         | Priority |
+| ------ | ----------------------- | ----------------------------------------------------------------------------- | -------- |
+| FR-100 | Lưu repository của team | Lưu repository URL hoặc project link của team.                                | Should   |
+| FR-101 | Lưu commit              | Lưu commit SHA, message, author, thời gian commit nếu có tích hợp repository. | Could    |
+| FR-102 | Chạy AI Review định kỳ  | Hệ thống tự động review repository/code của team mỗi 30 phút.                 | Should   |
+| FR-103 | Lưu kết quả AI Review   | Hệ thống lưu score tham khảo, summary, issues và suggestions.                 | Should   |
+| FR-104 | Xem kết quả AI Review   | Mentor/Organizer/Participant xem nhận xét AI Review.                          | Should   |
+
+---
+
+### 2.6 Non-functional Requirements
+
+| Category        | Requirement                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------- |
+| Performance     | Các màn hình danh sách, ranking và score progress phản hồi trong thời gian hợp lý cho quy mô khoảng 30–50 nhóm. |
+| Usability       | Giao diện participant cần đơn giản, dễ dùng trên mobile hoặc responsive web/PWA.                                |
+| Reliability     | Hệ thống cần lưu chính xác trạng thái đăng ký, xác nhận thành viên, check-in, điểm số và kết quả AI Review.     |
+| Security        | Chỉ người có quyền mới được xem đề, chấm điểm, chia bảng hoặc công bố kết quả.                                  |
+| Data Integrity  | Một người không được thuộc nhiều nhóm trong cùng một cuộc thi; điểm số phải nằm trong thang điểm của rubric.    |
+| Transparency    | Ranking và kết quả cần được tính từ dữ liệu score sheet đã submit.                                              |
+| Maintainability | Thiết kế module rõ ràng, dễ mở rộng, phù hợp quy mô đồ án sinh viên.                                            |
+| Compatibility   | Giao diện participant nên dùng được trên điện thoại; dashboard admin/judge/mentor có thể dùng web.              |
+| Extensibility   | AI Review chạy định kỳ mỗi 30 phút nhưng không ảnh hưởng đến luồng chấm điểm chính thức.                        |
+
+---
+
+### 2.7 Business Rules
+
+| ID     | Rule                                                                                   |
+| ------ | -------------------------------------------------------------------------------------- |
+| BR-001 | Một cuộc thi có giới hạn số team tối đa `max_teams` do Organizer tự nhập.              |
+| BR-002 | Một team có từ 1 đến 5 thành viên.                                                     |
+| BR-003 | Một email/user chỉ được thuộc một team trong cùng một event.                           |
+| BR-004 | Team chỉ được xác nhận nếu số lượng thành viên hợp lệ và event chưa vượt quota.        |
+| BR-005 | Nếu quota đã đầy trước khi team hợp lệ, team chuyển sang `WAITLIST` hoặc `REJECTED`.   |
+| BR-006 | Organizer có thể chia bảng bằng random assignment hoặc manual assignment.              |
+| BR-007 | Participant chỉ được xem đề khi thời gian hiện tại lớn hơn hoặc bằng `release_at`.     |
+| BR-008 | Check-in dùng để xác nhận participant có mặt, không phải điều kiện bắt buộc để xem đề. |
+| BR-009 | Mentor chỉ xem các team thuộc board được phân công.                                    |
+| BR-010 | Judge chỉ chấm các team thuộc board được phân công.                                    |
+| BR-011 | Score value phải nằm trong khoảng `min_score` và `max_score` của criteria.             |
+| BR-012 | Điểm cuối của team được tính bằng trung bình điểm từ các judge đã submit.              |
+| BR-013 | Ranking được sort theo điểm trung bình từ cao xuống thấp trong từng board.             |
+| BR-014 | Team bị disqualified không được tính vào ranking.                                      |
+| BR-015 | Organizer tick chọn thủ công team vào chung kết từ ranking từng board.                 |
+| BR-016 | Kết quả chỉ hiển thị cho participant sau khi Organizer publish.                        |
+| BR-017 | AI Review chạy định kỳ mỗi 30 phút cho repository/code của team.                       |
+| BR-018 | AI Review chỉ dùng để tham khảo, không thay thế điểm chính thức của judge.             |
+
+---
+
+### 2.8 Edge Cases
+
+| Edge Case                                          | Cách xử lý                                                                                                     |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Thành viên được mời nhưng chưa có tài khoản        | Hệ thống vẫn gửi email; khi thành viên đăng nhập bằng email đó thì liên kết với lời mời.                       |
+| Team chỉ có 1 người                                | Vẫn hợp lệ nếu event cho phép team size từ 1 đến 5.                                                            |
+| Thành viên từ chối lời mời                         | Team vẫn ở trạng thái pending hoặc Organizer/participant cần xử lý lại đăng ký.                                |
+| Một email được mời vào nhiều team trong cùng event | Chỉ cho phép xác nhận một team; các lời mời khác bị từ chối hoặc báo lỗi.                                      |
+| Team xác nhận hợp lệ nhưng quota đã đầy            | Team chuyển sang `WAITLIST` hoặc `REJECTED` tùy cấu hình.                                                      |
+| Organizer muốn chia bảng random                    | Hệ thống lấy các team hợp lệ và random vào các board/slot.                                                     |
+| Organizer muốn chỉnh bảng thủ công                 | Organizer có thể gán lại team vào slot nếu không vi phạm rule một team chỉ nằm trong một board của cùng round. |
+| Participant chưa check-in nhưng đã đến giờ mở đề   | Vẫn được xem đề vì điều kiện mở đề chỉ dựa trên `release_at`.                                                  |
+| Participant upload ảnh check-in sai                | Organizer có thể reject và yêu cầu check-in lại.                                                               |
+| Judge chưa chấm đủ team                            | Ranking có thể chưa được tính hoặc hiển thị cảnh báo thiếu điểm.                                               |
+| Judge nhập điểm ngoài thang điểm                   | Hệ thống từ chối và yêu cầu nhập lại.                                                                          |
+| Hai team bằng điểm trung bình                      | Hệ thống có thể hiển thị cùng điểm; Organizer quyết định chọn team vào final thủ công.                         |
+| Team bị disqualified sau khi đã có điểm            | Team bị loại khỏi ranking; kết quả cần được tính lại nếu chưa publish.                                         |
+| Đề được upload trước giờ thi                       | Hệ thống lưu đề nhưng chỉ hiển thị khi đến `release_at`.                                                       |
+| AI Review chưa đủ 30 phút từ lần trước             | Hệ thống chưa chạy review mới, chờ đến chu kỳ tiếp theo.                                                       |
+| AI Review thất bại                                 | Lưu trạng thái `FAILED`; không ảnh hưởng quy trình chấm điểm chính thức.                                       |
+
+## 3. PHASE 2 – SYSTEM ANALYSIS
+
+### 3.1 Module Decomposition
+
+Sau khi điều chỉnh theo góp ý của giáo viên, hệ thống được chia thành các module chính sau:
+
+```text
+seal-hackathon-system/
+├── auth-profile-module
+│   └── Đăng nhập Google, quản lý hồ sơ cá nhân, phân quyền người dùng
+│
+├── contest-module
+│   └── Quản lý cuộc thi, vòng thi, bảng thi, đề thi và thời gian mở đề
+│
+├── registration-module
+│   └── Đăng ký nhóm 1–5 người, xác nhận thành viên, kiểm tra quota, kiểm tra trùng nhóm
+│
+├── checkin-module
+│   └── Check-in bằng ảnh, theo dõi và xác minh trạng thái có mặt tại sự kiện
+│
+├── assignment-module
+│   └── Gán mentor và judge vào từng bảng thi
+│
+├── scoring-module
+│   └── Cấu hình rubric, tạo score sheet, nhập điểm, submit điểm
+│
+├── ranking-module
+│   └── Tính điểm trung bình, sort ranking theo bảng, hỗ trợ Organizer tick chọn team vào chung kết
+│
+├── notification-module
+│   └── Gửi email xác nhận, email mời mentor/judge, thông báo hệ thống
+│
+├── ai-review-module
+│   └── Lưu repository, commit và chạy AI Review định kỳ mỗi 30 phút
+│
+└── common
+    └── DTO, exception, validation, utility, shared config
+````
+
+#### Các module đã loại bỏ khỏi MVP
+
+Các module sau không đưa vào MVP vì không nằm trong yêu cầu chính sau góp ý:
+
+```text
+research-module
+calibration-module
+submission-versioning-module
+audit-immutable-module
+idempotency-module
+outbox-worker-module
+```
+
+Lý do: hệ thống hiện tập trung vào quy trình thi thực tế: đăng ký nhóm, chia bảng, check-in, mở đề đúng giờ, chấm điểm, ranking và chọn đội vào chung kết.
+
+---
+
+### 3.2 Database Design
+
+Database được thiết kế theo hướng đơn giản, dễ hiểu, đủ để hỗ trợ nghiệp vụ cuộc thi. Các bảng được chia theo nhóm chức năng như sau:
+
+---
+
+#### 3.2.1 Nhóm User & Role
+
+| Bảng         | Mục đích                                                                                        |
+| ------------ | ----------------------------------------------------------------------------------------------- |
+| `users`      | Lưu thông tin người dùng: email, Google ID, họ tên, MSSV, trường, avatar, trạng thái tài khoản. |
+| `user_roles` | Lưu vai trò hệ thống của user: `ORGANIZER`, `MENTOR`, `JUDGE`.                                  |
+
+##### `users`
+
+| Cột                        | Ý nghĩa                                     |
+| -------------------------- | ------------------------------------------- |
+| `id`                       | Khóa chính.                                 |
+| `email`                    | Email đăng nhập, thường là Gmail/FPT email. |
+| `google_sub`               | ID từ Google OAuth.                         |
+| `password_hash`            | Dự phòng nếu có đăng nhập bằng mật khẩu.    |
+| `full_name`                | Họ tên người dùng.                          |
+| `student_id`               | Mã số sinh viên, nếu là participant.        |
+| `university`               | Trường đại học.                             |
+| `avatar_url`               | Ảnh đại diện.                               |
+| `status`                   | Trạng thái tài khoản: `ACTIVE`, `DISABLED`. |
+| `created_at`, `updated_at` | Thời gian tạo/cập nhật.                     |
+
+##### `user_roles`
+
+| Cột          | Ý nghĩa                                  |
+| ------------ | ---------------------------------------- |
+| `id`         | Khóa chính.                              |
+| `user_id`    | FK đến `users.id`.                       |
+| `role`       | Vai trò: `ORGANIZER`, `MENTOR`, `JUDGE`. |
+| `created_at` | Thời gian gán role.                      |
+
+Quan hệ:
+
+```text
+users 1 - n user_roles
+```
+
+---
+
+#### 3.2.2 Nhóm Contest Structure
+
+| Bảng          | Mục đích                                                         |
+| ------------- | ---------------------------------------------------------------- |
+| `events`      | Lưu thông tin cuộc thi, quota và giới hạn team size.             |
+| `rounds`      | Lưu vòng thi: vòng bảng, vòng chung kết.                         |
+| `boards`      | Lưu bảng thi trong từng vòng.                                    |
+| `board_slots` | Lưu slot nhóm trong bảng, phục vụ chia bảng ngẫu nhiên/thủ công. |
+| `problems`    | Lưu đề thi, link đề và thời gian mở đề.                          |
+
+##### `events`
+
+| Cột                                            | Ý nghĩa                                              |
+| ---------------------------------------------- | ---------------------------------------------------- |
+| `id`                                           | Khóa chính.                                          |
+| `name`                                         | Tên cuộc thi.                                        |
+| `description`                                  | Mô tả cuộc thi.                                      |
+| `start_date`, `end_date`                       | Ngày bắt đầu/kết thúc.                               |
+| `registration_start_at`, `registration_end_at` | Thời gian mở/đóng đăng ký.                           |
+| `max_teams`                                    | Số team tối đa, do Organizer tự nhập.                |
+| `min_team_size`                                | Số thành viên tối thiểu trong team, mặc định là `1`. |
+| `max_team_size`                                | Số thành viên tối đa trong team, tối đa là `5`.      |
+| `status`                                       | Trạng thái cuộc thi.                                 |
+| `created_by`                                   | User tạo cuộc thi.                                   |
+| `created_at`, `updated_at`                     | Thời gian tạo/cập nhật.                              |
+
+##### `rounds`
+
+| Cột                        | Ý nghĩa                              |
+| -------------------------- | ------------------------------------ |
+| `id`                       | Khóa chính.                          |
+| `event_id`                 | FK đến `events.id`.                  |
+| `name`                     | Tên vòng thi.                        |
+| `round_type`               | `GROUP_STAGE` hoặc `FINAL`.          |
+| `round_order`              | Thứ tự vòng.                         |
+| `start_at`, `end_at`       | Thời gian bắt đầu/kết thúc vòng thi. |
+| `status`                   | Trạng thái vòng thi.                 |
+| `created_at`, `updated_at` | Thời gian tạo/cập nhật.              |
+
+##### `boards`
+
+| Cột                        | Ý nghĩa                                       |
+| -------------------------- | --------------------------------------------- |
+| `id`                       | Khóa chính.                                   |
+| `round_id`                 | FK đến `rounds.id`.                           |
+| `name`                     | Tên bảng, ví dụ: Bảng A, Bảng B, Final Board. |
+| `board_order`              | Thứ tự bảng.                                  |
+| `description`              | Mô tả bảng.                                   |
+| `status`                   | Trạng thái bảng.                              |
+| `created_at`, `updated_at` | Thời gian tạo/cập nhật.                       |
+
+##### `board_slots`
+
+| Cột           | Ý nghĩa                                               |
+| ------------- | ----------------------------------------------------- |
+| `id`          | Khóa chính.                                           |
+| `round_id`    | FK đến `rounds.id`.                                   |
+| `board_id`    | FK đến `boards.id`.                                   |
+| `team_number` | Số thứ tự team/slot.                                  |
+| `team_id`     | FK đến `teams.id`, có thể null nếu slot chưa có team. |
+| `created_at`  | Thời gian tạo slot.                                   |
+
+##### `problems`
+
+| Cột                        | Ý nghĩa                        |
+| -------------------------- | ------------------------------ |
+| `id`                       | Khóa chính.                    |
+| `board_id`                 | FK đến `boards.id`.            |
+| `title`                    | Tên đề thi.                    |
+| `description`              | Nội dung đề.                   |
+| `attachment_url`           | File đề đính kèm.              |
+| `external_link`            | Link đề ngoài hệ thống nếu có. |
+| `release_at`               | Thời gian mở đề.               |
+| `created_by`               | Người tạo đề.                  |
+| `created_at`, `updated_at` | Thời gian tạo/cập nhật.        |
+
+Ghi chú:
+
+```text
+Theo quyết định mới, điều kiện mở đề chỉ dựa trên release_at.
+Check-in không phải điều kiện bắt buộc để xem đề.
+Vì vậy không cần cột require_full_team_checkin trong MVP.
+```
+
+Quan hệ:
+
+```text
+events 1 - n rounds
+rounds 1 - n boards
+boards 1 - n board_slots
+boards 1 - n problems
+teams 1 - n board_slots
+```
+
+---
+
+#### 3.2.3 Nhóm Team Registration & Check-in
+
+| Bảng           | Mục đích                                             |
+| -------------- | ---------------------------------------------------- |
+| `teams`        | Lưu thông tin nhóm thi.                              |
+| `team_members` | Lưu thành viên nhóm và trạng thái xác nhận.          |
+| `check_ins`    | Lưu thông tin check-in bằng ảnh của từng thành viên. |
+
+##### `teams`
+
+| Cột                        | Ý nghĩa                                                         |
+| -------------------------- | --------------------------------------------------------------- |
+| `id`                       | Khóa chính.                                                     |
+| `event_id`                 | FK đến `events.id`.                                             |
+| `name`                     | Tên nhóm.                                                       |
+| `sequence_no`              | Số thứ tự nhóm trong cuộc thi.                                  |
+| `contact_user_id`          | Người đại diện đăng ký nhóm.                                    |
+| `contact_email`            | Email liên hệ của nhóm.                                         |
+| `status`                   | `PENDING`, `CONFIRMED`, `WAITLIST`, `REJECTED`, `DISQUALIFIED`. |
+| `confirmed_at`             | Thời gian nhóm được xác nhận.                                   |
+| `rejected_reason`          | Lý do bị từ chối nếu có.                                        |
+| `created_at`, `updated_at` | Thời gian tạo/cập nhật.                                         |
+
+##### `team_members`
+
+| Cột                                         | Ý nghĩa                                                           |
+| ------------------------------------------- | ----------------------------------------------------------------- |
+| `id`                                        | Khóa chính.                                                       |
+| `event_id`                                  | FK đến `events.id`.                                               |
+| `team_id`                                   | FK đến `teams.id`.                                                |
+| `user_id`                                   | FK đến `users.id`, có thể null nếu người được mời chưa đăng nhập. |
+| `email`                                     | Email thành viên.                                                 |
+| `full_name`                                 | Họ tên thành viên.                                                |
+| `student_id`                                | MSSV.                                                             |
+| `university`                                | Trường.                                                           |
+| `is_contact_person`                         | Có phải người đại diện nhóm hay không.                            |
+| `status`                                    | `INVITED`, `CONFIRMED`, `DECLINED`.                               |
+| `invite_token`                              | Token xác nhận qua email.                                         |
+| `invited_at`, `confirmed_at`, `declined_at` | Thời gian mời/xác nhận/từ chối.                                   |
+
+##### `check_ins`
+
+| Cột              | Ý nghĩa                            |
+| ---------------- | ---------------------------------- |
+| `id`             | Khóa chính.                        |
+| `event_id`       | FK đến `events.id`.                |
+| `team_id`        | FK đến `teams.id`.                 |
+| `team_member_id` | FK đến `team_members.id`.          |
+| `user_id`        | FK đến `users.id`.                 |
+| `photo_url`      | Ảnh check-in.                      |
+| `status`         | `PENDING`, `APPROVED`, `REJECTED`. |
+| `checked_in_at`  | Thời gian check-in.                |
+| `verified_by`    | Người xác minh check-in.           |
+| `verified_at`    | Thời gian xác minh.                |
+| `note`           | Ghi chú nếu có.                    |
+
+Ghi chú:
+
+```text
+Check-in dùng để xác nhận participant có mặt tại sự kiện.
+Check-in không dùng để chặn quyền xem đề trong MVP.
+```
+
+Quan hệ:
+
+```text
+events 1 - n teams
+teams 1 - n team_members
+team_members 1 - n check_ins
+teams 1 - n check_ins
+users 1 - n team_members
+users 1 - n check_ins
+```
+
+---
+
+#### 3.2.4 Nhóm Mentor & Judge Assignment
+
+| Bảng                 | Mục đích                 |
+| -------------------- | ------------------------ |
+| `mentor_assignments` | Gán mentor vào bảng thi. |
+| `judge_assignments`  | Gán judge vào bảng thi.  |
+
+##### `mentor_assignments`
+
+| Cột          | Ý nghĩa              |
+| ------------ | -------------------- |
+| `id`         | Khóa chính.          |
+| `board_id`   | FK đến `boards.id`.  |
+| `mentor_id`  | FK đến `users.id`.   |
+| `created_at` | Thời gian phân công. |
+
+##### `judge_assignments`
+
+| Cột          | Ý nghĩa              |
+| ------------ | -------------------- |
+| `id`         | Khóa chính.          |
+| `board_id`   | FK đến `boards.id`.  |
+| `judge_id`   | FK đến `users.id`.   |
+| `created_at` | Thời gian phân công. |
+
+Quan hệ:
+
+```text
+boards 1 - n mentor_assignments
+boards 1 - n judge_assignments
+users 1 - n mentor_assignments
+users 1 - n judge_assignments
+```
+
+---
+
+#### 3.2.5 Nhóm Scoring
+
+| Bảng             | Mục đích                                               |
+| ---------------- | ------------------------------------------------------ |
+| `score_criteria` | Lưu tiêu chí chấm điểm/rubric.                         |
+| `score_sheets`   | Lưu phiếu chấm của một judge cho một team.             |
+| `score_items`    | Lưu điểm chi tiết theo từng tiêu chí trong phiếu chấm. |
+
+##### `score_criteria`
+
+| Cột                      | Ý nghĩa             |
+| ------------------------ | ------------------- |
+| `id`                     | Khóa chính.         |
+| `round_id`               | FK đến `rounds.id`. |
+| `name`                   | Tên tiêu chí.       |
+| `description`            | Mô tả tiêu chí.     |
+| `weight`                 | Trọng số điểm.      |
+| `min_score`, `max_score` | Thang điểm.         |
+| `created_at`             | Thời gian tạo.      |
+
+##### `score_sheets`
+
+| Cột                        | Ý nghĩa                        |
+| -------------------------- | ------------------------------ |
+| `id`                       | Khóa chính.                    |
+| `judge_assignment_id`      | FK đến `judge_assignments.id`. |
+| `board_id`                 | FK đến `boards.id`.            |
+| `team_id`                  | FK đến `teams.id`.             |
+| `judge_id`                 | FK đến `users.id`.             |
+| `status`                   | `DRAFT` hoặc `SUBMITTED`.      |
+| `general_feedback`         | Nhận xét chung.                |
+| `submitted_at`             | Thời gian submit điểm.         |
+| `created_at`, `updated_at` | Thời gian tạo/cập nhật.        |
+
+##### `score_items`
+
+| Cột              | Ý nghĩa                     |
+| ---------------- | --------------------------- |
+| `id`             | Khóa chính.                 |
+| `score_sheet_id` | FK đến `score_sheets.id`.   |
+| `criteria_id`    | FK đến `score_criteria.id`. |
+| `score_value`    | Điểm cho tiêu chí.          |
+| `comment`        | Nhận xét theo tiêu chí.     |
+
+Quan hệ:
+
+```text
+rounds 1 - n score_criteria
+judge_assignments 1 - n score_sheets
+teams 1 - n score_sheets
+score_sheets 1 - n score_items
+score_criteria 1 - n score_items
+```
+
+---
+
+#### 3.2.6 Nhóm Ranking & Advancement
+
+| Bảng              | Mục đích                                                            |
+| ----------------- | ------------------------------------------------------------------- |
+| `ranking_results` | Lưu kết quả xếp hạng theo từng bảng.                                |
+| `advancements`    | Lưu các team được Organizer tick chọn vào vòng tiếp theo/chung kết. |
+
+##### `ranking_results`
+
+| Cột             | Ý nghĩa                                          |
+| --------------- | ------------------------------------------------ |
+| `id`            | Khóa chính.                                      |
+| `round_id`      | FK đến `rounds.id`.                              |
+| `board_id`      | FK đến `boards.id`.                              |
+| `team_id`       | FK đến `teams.id`.                               |
+| `rank`          | Thứ hạng trong bảng sau khi sort.                |
+| `average_score` | Điểm trung bình của team từ các judge đã submit. |
+| `calculated_at` | Thời gian tính ranking.                          |
+| `published_at`  | Thời gian công bố kết quả.                       |
+
+
+##### `advancements`
+
+| Cột             | Ý nghĩa                                   |
+| --------------- | ----------------------------------------- |
+| `id`            | Khóa chính.                               |
+| `from_round_id` | Vòng nguồn.                               |
+| `from_board_id` | Bảng nguồn.                               |
+| `to_round_id`   | Vòng đích.                                |
+| `to_board_id`   | Bảng đích, ví dụ bảng chung kết.          |
+| `team_id`       | Team được Organizer chọn.                 |
+| `basis_rank`    | Thứ hạng của team tại bảng nguồn.         |
+| `basis_score`   | Điểm trung bình dùng làm cơ sở tham khảo. |
+| `created_by`    | Organizer tick chọn team.                 |
+| `created_at`    | Thời gian chọn.                           |
+
+Ghi chú:
+
+```text
+Advancement không tự động lấy top N.
+Hệ thống chỉ sort ranking theo từng bảng.
+Organizer xem ranking và tick chọn thủ công team vào chung kết.
+```
+
+Quan hệ:
+
+```text
+rounds 1 - n ranking_results
+boards 1 - n ranking_results
+teams 1 - n ranking_results
+
+rounds 1 - n advancements
+boards 1 - n advancements
+teams 1 - n advancements
+```
+
+---
+
+#### 3.2.7 Nhóm AI Review Extension
+
+| Bảng                | Mục đích                                   |
+| ------------------- | ------------------------------------------ |
+| `team_repositories` | Lưu repository/project link của team.      |
+| `repo_commits`      | Lưu commit của repository nếu có tích hợp. |
+| `ai_reviews`        | Lưu kết quả AI Review định kỳ.             |
+
+##### `team_repositories`
+
+| Cột                        | Ý nghĩa                                 |
+| -------------------------- | --------------------------------------- |
+| `id`                       | Khóa chính.                             |
+| `team_id`                  | FK đến `teams.id`.                      |
+| `repository_url`           | Link repository/source code.            |
+| `repository_name`          | Tên repository.                         |
+| `last_reviewed_at`         | Lần gần nhất repository được AI Review. |
+| `next_review_at`           | Thời điểm dự kiến review tiếp theo.     |
+| `review_interval_minutes`  | Chu kỳ review, mặc định là `30`.        |
+| `created_by`               | Người tạo repository link.              |
+| `created_at`, `updated_at` | Thời gian tạo/cập nhật.                 |
+
+##### `repo_commits`
+
+| Cột                           | Ý nghĩa                        |
+| ----------------------------- | ------------------------------ |
+| `id`                          | Khóa chính.                    |
+| `team_repository_id`          | FK đến `team_repositories.id`. |
+| `commit_sha`                  | Mã commit.                     |
+| `author_name`, `author_email` | Tác giả commit.                |
+| `message`                     | Nội dung commit.               |
+| `committed_at`                | Thời gian commit.              |
+| `created_at`                  | Thời gian lưu vào hệ thống.    |
+
+##### `ai_reviews`
+
+| Cột              | Ý nghĩa                                                              |
+| ---------------- | -------------------------------------------------------------------- |
+| `id`             | Khóa chính.                                                          |
+| `team_id`        | FK đến `teams.id`.                                                   |
+| `round_id`       | FK đến `rounds.id`.                                                  |
+| `repo_commit_id` | FK đến `repo_commits.id`, có thể null nếu review toàn bộ repository. |
+| `status`         | `PENDING`, `COMPLETED`, `FAILED`.                                    |
+| `review_score`   | Điểm AI tham khảo.                                                   |
+| `summary`        | Tóm tắt nhận xét.                                                    |
+| `issues`         | Danh sách vấn đề dạng JSON.                                          |
+| `suggestions`    | Gợi ý cải thiện.                                                     |
+| `ai_model`       | Model AI sử dụng.                                                    |
+| `reviewed_at`    | Thời gian review.                                                    |
+| `created_at`     | Thời gian tạo bản ghi.                                               |
+
+Quan hệ:
+
+```text
+teams 1 - 1 team_repositories
+team_repositories 1 - n repo_commits
+repo_commits 1 - n ai_reviews
+teams 1 - n ai_reviews
+rounds 1 - n ai_reviews
+```
+
+Ghi chú:
+
+```text
+AI Review chạy định kỳ mỗi 30 phút.
+AI Review không thay thế điểm chính thức của judge.
+AI Review không tự động ảnh hưởng đến ranking.
+```
+
+---
+
+#### 3.2.8 Nhóm Communication
+
+| Bảng            | Mục đích                                              |
+| --------------- | ----------------------------------------------------- |
+| `announcements` | Lưu thông báo, bài đăng, nội dung seminar, hướng dẫn. |
+| `notifications` | Lưu thông báo gửi đến user/email.                     |
+
+##### `announcements`
+
+| Cột            | Ý nghĩa             |
+| -------------- | ------------------- |
+| `id`           | Khóa chính.         |
+| `event_id`     | FK đến `events.id`. |
+| `title`        | Tiêu đề thông báo.  |
+| `content`      | Nội dung.           |
+| `published_at` | Thời gian công bố.  |
+| `created_by`   | Người tạo.          |
+| `created_at`   | Thời gian tạo.      |
+
+##### `notifications`
+
+| Cột          | Ý nghĩa                                            |
+| ------------ | -------------------------------------------------- |
+| `id`         | Khóa chính.                                        |
+| `user_id`    | FK đến `users.id`, có thể null nếu gửi theo email. |
+| `email`      | Email người nhận.                                  |
+| `event_id`   | FK đến `events.id`.                                |
+| `title`      | Tiêu đề thông báo.                                 |
+| `content`    | Nội dung.                                          |
+| `is_read`    | Đã đọc hay chưa.                                   |
+| `created_at` | Thời gian tạo.                                     |
+
+Quan hệ:
+
+```text
+events 1 - n announcements
+events 1 - n notifications
+users 1 - n announcements
+users 1 - n notifications
+```
+
+---
+
+### 3.3 API Design
+
+Base URL:
+
+```text
+/api/v1
+```
+
+---
+
+#### 3.3.1 Auth & Profile
+
+| Method | Endpoint                      | Actor                              | Mô tả                   |
+| ------ | ----------------------------- | ---------------------------------- | ----------------------- |
+| POST   | `/auth/google-login`          | Guest                              | Đăng nhập bằng Google.  |
+| GET    | `/me`                         | Participant/Mentor/Judge/Organizer | Xem thông tin cá nhân.  |
+| PUT    | `/me/profile`                 | Participant/Mentor/Judge/Organizer | Cập nhật hồ sơ cá nhân. |
+| GET    | `/admin/users`                | Organizer                          | Xem danh sách user.     |
+| POST   | `/admin/users/{userId}/roles` | Organizer                          | Gán role cho user.      |
+
+---
+
+#### 3.3.2 Contest Management
+
+| Method | Endpoint                         | Actor      | Mô tả                   |
+| ------ | -------------------------------- | ---------- | ----------------------- |
+| POST   | `/admin/events`                  | Organizer  | Tạo cuộc thi.           |
+| PUT    | `/admin/events/{eventId}`        | Organizer  | Cập nhật cuộc thi.      |
+| GET    | `/events`                        | Guest/User | Xem danh sách cuộc thi. |
+| GET    | `/events/{eventId}`              | Guest/User | Xem chi tiết cuộc thi.  |
+| POST   | `/admin/events/{eventId}/rounds` | Organizer  | Tạo vòng thi.           |
+| PUT    | `/admin/rounds/{roundId}`        | Organizer  | Cập nhật vòng thi.      |
+| POST   | `/admin/rounds/{roundId}/boards` | Organizer  | Tạo bảng thi.           |
+| PUT    | `/admin/boards/{boardId}`        | Organizer  | Cập nhật bảng thi.      |
+
+---
+
+#### 3.3.3 Team Registration
+
+| Method | Endpoint                           | Actor       | Mô tả                             |
+| ------ | ---------------------------------- | ----------- | --------------------------------- |
+| POST   | `/events/{eventId}/teams/register` | Participant | Đăng ký nhóm 1–5 người qua form.  |
+| GET    | `/me/teams`                        | Participant | Xem nhóm của tôi.                 |
+| POST   | `/team-members/{memberId}/confirm` | Participant | Xác nhận tham gia nhóm.           |
+| POST   | `/team-members/{memberId}/decline` | Participant | Từ chối tham gia nhóm.            |
+| GET    | `/admin/events/{eventId}/teams`    | Organizer   | Xem danh sách nhóm đăng ký.       |
+| PUT    | `/admin/teams/{teamId}/status`     | Organizer   | Cập nhật trạng thái nhóm khi cần. |
+
+---
+
+#### 3.3.4 Board Assignment
+
+| Method | Endpoint                                       | Actor                  | Mô tả                          |
+| ------ | ---------------------------------------------- | ---------------------- | ------------------------------ |
+| POST   | `/admin/rounds/{roundId}/board-slots`          | Organizer              | Tạo slot cho các bảng.         |
+| POST   | `/admin/rounds/{roundId}/boards/random-assign` | Organizer              | Chia bảng ngẫu nhiên.          |
+| PUT    | `/admin/board-slots/{slotId}/assign-team`      | Organizer              | Gán team vào slot thủ công.    |
+| GET    | `/me/assigned-board`                           | Participant            | Xem bảng được phân công.       |
+| GET    | `/boards/{boardId}/teams`                      | Organizer/Mentor/Judge | Xem danh sách team trong bảng. |
+
+---
+
+#### 3.3.5 Problem Release & Runtime
+
+| Method | Endpoint                                   | Actor       | Mô tả                           |
+| ------ | ------------------------------------------ | ----------- | ------------------------------- |
+| POST   | `/admin/boards/{boardId}/problems`         | Organizer   | Tạo/upload đề thi.              |
+| PUT    | `/admin/problems/{problemId}`              | Organizer   | Cập nhật đề thi.                |
+| PUT    | `/admin/problems/{problemId}/release-time` | Organizer   | Cập nhật thời gian mở đề.       |
+| GET    | `/me/problems`                             | Participant | Xem đề khi đã đến `release_at`. |
+| GET    | `/me/countdown`                            | Participant | Xem đồng hồ đếm ngược.          |
+
+---
+
+#### 3.3.6 Check-in
+
+| Method | Endpoint                               | Actor       | Mô tả                             |
+| ------ | -------------------------------------- | ----------- | --------------------------------- |
+| POST   | `/events/{eventId}/check-ins`          | Participant | Check-in bằng ảnh.                |
+| GET    | `/me/check-ins`                        | Participant | Xem trạng thái check-in của mình. |
+| GET    | `/admin/events/{eventId}/check-ins`    | Organizer   | Xem danh sách check-in.           |
+| PUT    | `/admin/check-ins/{checkInId}/approve` | Organizer   | Duyệt check-in.                   |
+| PUT    | `/admin/check-ins/{checkInId}/reject`  | Organizer   | Từ chối check-in.                 |
+
+---
+
+#### 3.3.7 Mentor & Judge Assignment
+
+| Method | Endpoint                          | Actor     | Mô tả                               |
+| ------ | --------------------------------- | --------- | ----------------------------------- |
+| POST   | `/admin/boards/{boardId}/mentors` | Organizer | Gán mentor vào bảng.                |
+| POST   | `/admin/boards/{boardId}/judges`  | Organizer | Gán judge vào bảng.                 |
+| GET    | `/mentor/boards`                  | Mentor    | Xem các bảng được phân công mentor. |
+| GET    | `/judge/boards`                   | Judge     | Xem các bảng được phân công chấm.   |
+| GET    | `/mentor/boards/{boardId}/teams`  | Mentor    | Mentor xem team trong bảng.         |
+| GET    | `/judge/boards/{boardId}/teams`   | Judge     | Judge xem team cần chấm.            |
+
+---
+
+#### 3.3.8 Scoring
+
+| Method | Endpoint                                 | Actor     | Mô tả                    |
+| ------ | ---------------------------------------- | --------- | ------------------------ |
+| POST   | `/admin/rounds/{roundId}/criteria`       | Organizer | Tạo/cập nhật rubric.     |
+| GET    | `/judge/teams/{teamId}/score-sheet`      | Judge     | Mở score sheet của team. |
+| PUT    | `/judge/score-sheets/{sheetId}`          | Judge     | Lưu nháp điểm.           |
+| POST   | `/judge/score-sheets/{sheetId}/submit`   | Judge     | Submit điểm chính thức.  |
+| GET    | `/admin/boards/{boardId}/score-progress` | Organizer | Xem tiến độ chấm.        |
+
+---
+
+#### 3.3.9 Ranking & Advancement
+
+| Method | Endpoint                                    | Actor                       | Mô tả                                                   |
+| ------ | ------------------------------------------- | --------------------------- | ------------------------------------------------------- |
+| POST   | `/admin/boards/{boardId}/calculate-ranking` | Organizer                   | Tính điểm trung bình và sort ranking theo bảng.         |
+| GET    | `/boards/{boardId}/ranking`                 | Organizer/Judge/Participant | Xem ranking nếu có quyền.                               |
+| POST   | `/admin/boards/{boardId}/advance-teams`     | Organizer                   | Tick chọn team vào vòng chung kết từ ranking từng bảng. |
+| POST   | `/admin/results/publish`                    | Organizer                   | Công bố kết quả.                                        |
+| GET    | `/events/{eventId}/results`                 | Guest/User                  | Xem kết quả đã công bố.                                 |
+| GET    | `/admin/events/{eventId}/results/export`    | Organizer                   | Export kết quả.                                         |
+
+---
+
+#### 3.3.10 Notification
+
+| Method | Endpoint                                  | Actor      | Mô tả                   |
+| ------ | ----------------------------------------- | ---------- | ----------------------- |
+| POST   | `/admin/events/{eventId}/announcements`   | Organizer  | Tạo thông báo/bài đăng. |
+| GET    | `/events/{eventId}/announcements`         | Guest/User | Xem thông báo.          |
+| GET    | `/me/notifications`                       | User       | Xem thông báo cá nhân.  |
+| PUT    | `/me/notifications/{notificationId}/read` | User       | Đánh dấu đã đọc.        |
+
+---
+
+#### 3.3.11 AI Review Extension
+
+| Method | Endpoint                     | Actor                        | Mô tả                         |
+| ------ | ---------------------------- | ---------------------------- | ----------------------------- |
+| POST   | `/teams/{teamId}/repository` | Participant/Organizer        | Lưu repository link của team. |
+| PUT    | `/teams/{teamId}/repository` | Participant/Organizer        | Cập nhật repository link.     |
+| GET    | `/teams/{teamId}/ai-review`  | Participant/Mentor/Organizer | Xem kết quả AI Review.        |
+| GET    | `/admin/ai-reviews`          | Organizer                    | Xem danh sách AI Review.      |
+
+Ghi chú:
+
+```text
+AI Review chạy tự động mỗi 30 phút bằng scheduler.
+Không cần endpoint Organizer bấm chạy thủ công trong MVP.
+```
+
+---
+
+### 3.4 Permission Matrix
+
+| Hành động                        |           Guest |     Participant |                Mentor |                 Judge | Organizer |
+| -------------------------------- | --------------: | --------------: | --------------------: | --------------------: | --------: |
+| Xem thông tin cuộc thi công khai |              Có |              Có |                    Có |                    Có |        Có |
+| Đăng nhập Google                 |              Có |              Có |                    Có |                    Có |        Có |
+| Cập nhật profile cá nhân         |           Không |              Có |                    Có |                    Có |        Có |
+| Đăng ký nhóm                     |           Không |              Có |                 Không |                 Không |     Không |
+| Xác nhận tham gia nhóm           |           Không |              Có |                 Không |                 Không |     Không |
+| Xem nhóm của mình                |           Không |              Có |                 Không |                 Không |     Không |
+| Tạo/cập nhật cuộc thi            |           Không |           Không |                 Không |                 Không |        Có |
+| Cấu hình quota event             |           Không |           Không |                 Không |                 Không |        Có |
+| Cấu hình team size 1–5           |           Không |           Không |                 Không |                 Không |        Có |
+| Tạo vòng/bảng thi                |           Không |           Không |                 Không |                 Không |        Có |
+| Chia bảng random/thủ công        |           Không |           Không |                 Không |                 Không |        Có |
+| Upload/cấu hình đề               |           Không |           Không |                 Không |                 Không |        Có |
+| Xem đề thi đúng giờ              |           Không |              Có |                 Không |                 Không |        Có |
+| Check-in                         |           Không |              Có |                 Không |                 Không |        Có |
+| Theo dõi check-in                |           Không |           Không |                 Không |                 Không |        Có |
+| Xem team được phân công          |           Không |   Chỉ team mình |                    Có |                    Có |        Có |
+| Gán mentor/judge                 |           Không |           Không |                 Không |                 Không |        Có |
+| Chấm điểm                        |           Không |           Không |                 Không |                    Có |     Không |
+| Cấu hình rubric                  |           Không |           Không |                 Không |                 Không |        Có |
+| Xem tiến độ chấm                 |           Không |           Không |                 Không |                 Không |        Có |
+| Tính ranking                     |           Không |           Không |                 Không |                 Không |        Có |
+| Xem ranking                      | Chỉ khi publish | Chỉ khi publish | Có nếu được phân công | Có nếu được phân công |        Có |
+| Tick chọn team vào chung kết     |           Không |           Không |                 Không |                 Không |        Có |
+| Công bố kết quả                  |           Không |           Không |                 Không |                 Không |        Có |
+| Lưu repository                   |           Không |   Team của mình |                 Không |                 Không |        Có |
+| Xem AI Review                    |           Không |   Team của mình |   Team được phân công |                 Không |        Có |
+
+---
+
+### 3.5 State Machines
+
+#### 3.5.1 Event State
+
+```text
+DRAFT
+  → REGISTRATION_OPEN
+  → REGISTRATION_CLOSED
+  → IN_PROGRESS
+  → COMPLETED
+```
+
+Có thể chuyển sang:
+
+```text
+CANCELLED
+```
+
+nếu cuộc thi bị hủy.
+
+| State                 | Mô tả                                         |
+| --------------------- | --------------------------------------------- |
+| `DRAFT`               | Cuộc thi mới được tạo, chưa mở đăng ký.       |
+| `REGISTRATION_OPEN`   | Đang cho participant đăng ký team.            |
+| `REGISTRATION_CLOSED` | Đã đóng đăng ký, chuẩn bị chia bảng hoặc thi. |
+| `IN_PROGRESS`         | Cuộc thi đang diễn ra.                        |
+| `COMPLETED`           | Cuộc thi đã hoàn tất.                         |
+| `CANCELLED`           | Cuộc thi bị hủy.                              |
+
+---
+
+#### 3.5.2 Round State
+
+```text
+UPCOMING
+  → PROBLEM_RELEASED
+  → SCORING
+  → COMPLETED
+```
+
+| State              | Mô tả                                  |
+| ------------------ | -------------------------------------- |
+| `UPCOMING`         | Vòng thi chưa bắt đầu.                 |
+| `PROBLEM_RELEASED` | Đề đã được mở khi đến `release_at`.    |
+| `SCORING`          | Vòng thi đã kết thúc, judge đang chấm. |
+| `COMPLETED`        | Đã tính ranking/công bố kết quả vòng.  |
+
+---
+
+#### 3.5.3 Board State
+
+```text
+DRAFT
+  → READY
+  → SCORING
+  → RANKED
+  → COMPLETED
+```
+
+| State       | Mô tả                                     |
+| ----------- | ----------------------------------------- |
+| `DRAFT`     | Bảng vừa được tạo, chưa cấu hình xong.    |
+| `READY`     | Bảng đã có team/slot/đề thi.              |
+| `SCORING`   | Judge đang chấm điểm các team trong bảng. |
+| `RANKED`    | Bảng đã được tính ranking.                |
+| `COMPLETED` | Kết quả bảng đã được xử lý/công bố.       |
+
+---
+
+#### 3.5.4 Team State
+
+```text
+PENDING
+  → CONFIRMED
+  → DISQUALIFIED
+```
+
+Trường hợp khác:
+
+```text
+PENDING → WAITLIST
+PENDING → REJECTED
+```
+
+| State          | Mô tả                                              |
+| -------------- | -------------------------------------------------- |
+| `PENDING`      | Nhóm mới đăng ký, đang chờ thành viên xác nhận.    |
+| `CONFIRMED`    | Nhóm hợp lệ, có 1–5 thành viên và chưa vượt quota. |
+| `WAITLIST`     | Nhóm đủ điều kiện nhưng quota đã đầy.              |
+| `REJECTED`     | Nhóm không hợp lệ hoặc bị từ chối.                 |
+| `DISQUALIFIED` | Nhóm bị loại do vi phạm quy định.                  |
+
+---
+
+#### 3.5.5 Team Member State
+
+```text
+INVITED
+  → CONFIRMED
+```
+
+Hoặc:
+
+```text
+INVITED
+  → DECLINED
+```
+
+| State       | Mô tả                              |
+| ----------- | ---------------------------------- |
+| `INVITED`   | Thành viên đã được mời qua email.  |
+| `CONFIRMED` | Thành viên xác nhận tham gia nhóm. |
+| `DECLINED`  | Thành viên từ chối tham gia nhóm.  |
+
+---
+
+#### 3.5.6 Check-in State
+
+```text
+PENDING
+  → APPROVED
+```
+
+Hoặc:
+
+```text
+PENDING
+  → REJECTED
+```
+
+| State      | Mô tả                                                  |
+| ---------- | ------------------------------------------------------ |
+| `PENDING`  | Participant đã gửi ảnh check-in, chờ xác minh nếu cần. |
+| `APPROVED` | Check-in hợp lệ.                                       |
+| `REJECTED` | Check-in không hợp lệ.                                 |
+
+---
+
+#### 3.5.7 Score Sheet State
+
+```text
+DRAFT
+  → SUBMITTED
+```
+
+| State       | Mô tả                               |
+| ----------- | ----------------------------------- |
+| `DRAFT`     | Judge đang nhập hoặc lưu nháp điểm. |
+| `SUBMITTED` | Judge đã gửi điểm chính thức.       |
+
+---
+
+#### 3.5.8 AI Review State
+
+```text
+PENDING
+  → COMPLETED
+```
+
+Hoặc:
+
+```text
+PENDING
+  → FAILED
+```
+
+| State       | Mô tả                                                         |
+| ----------- | ------------------------------------------------------------- |
+| `PENDING`   | Đang chờ AI xử lý trong chu kỳ review.                        |
+| `COMPLETED` | AI Review đã hoàn tất.                                        |
+| `FAILED`    | AI Review thất bại, không ảnh hưởng đến chấm điểm chính thức. |
+
+---
+
+### 3.6 Validation Matrix
+
+| Input / Hành động           | Quy tắc kiểm tra                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Đăng nhập Google            | Email phải hợp lệ; nếu user chưa tồn tại thì tạo mới.                                                                    |
+| Cập nhật profile            | Họ tên không được rỗng; MSSV/trường có thể bắt buộc nếu là participant.                                                  |
+| Tạo event                   | `end_date >= start_date`; `max_teams > 0`; `min_team_size >= 1`; `max_team_size <= 5`; `max_team_size >= min_team_size`. |
+| Mở đăng ký                  | Thời gian đăng ký phải nằm trong khoảng hợp lý trước khi cuộc thi bắt đầu.                                               |
+| Tạo round                   | `round_order` không được trùng trong cùng event.                                                                         |
+| Tạo board                   | `board_order` và `name` không được trùng trong cùng round.                                                               |
+| Tạo problem                 | `release_at` phải nằm trong thời gian hợp lệ của round; phải có title và content/link/file.                              |
+| Đăng ký team                | Event phải đang mở đăng ký; tên team không rỗng; số thành viên từ 1 đến 5.                                               |
+| Thêm member vào team        | Email hợp lệ; không được trùng email trong cùng team.                                                                    |
+| Xác nhận member             | Email xác nhận phải khớp với email được mời.                                                                             |
+| Kiểm tra trùng team         | Một email/user chỉ được thuộc một team trong cùng event.                                                                 |
+| Xác nhận team               | Team có 1–5 thành viên confirmed; số team confirmed chưa vượt `max_teams`.                                               |
+| Chia bảng random            | Chỉ chia các team `CONFIRMED`; không gán một team vào nhiều slot trong cùng round.                                       |
+| Gán team thủ công vào board | Team phải thuộc event của round; slot chưa bị chiếm hoặc được Organizer cập nhật hợp lệ.                                 |
+| Check-in                    | User phải là member của team trong event; ảnh check-in không được rỗng.                                                  |
+| Duyệt check-in              | Chỉ Organizer được approve/reject check-in.                                                                              |
+| Xem đề                      | Chỉ cần `current_time >= release_at`.                                                                                    |
+| Gán mentor                  | User phải có role `MENTOR`; không được gán trùng mentor vào cùng board.                                                  |
+| Gán judge                   | User phải có role `JUDGE`; không được gán trùng judge vào cùng board.                                                    |
+| Tạo criteria                | `weight > 0`; `max_score > min_score`; tên criteria không trùng trong cùng round.                                        |
+| Nhập điểm                   | Judge phải được assign vào board chứa team; điểm phải nằm trong `min_score` và `max_score`.                              |
+| Submit score sheet          | Phải có đủ score item cho các criteria bắt buộc.                                                                         |
+| Tính ranking                | Chỉ tính score sheet có trạng thái `SUBMITTED`; team `DISQUALIFIED` không được tính.                                     |
+| Tính điểm trung bình        | Điểm cuối của team = trung bình điểm từ các judge đã submit.                                                             |
+| Sort ranking                | Sắp xếp team theo điểm trung bình giảm dần trong từng board.                                                             |
+| Advance team                | Team phải nằm trong ranking của board nguồn; Organizer tick chọn thủ công; không được advance trùng vào cùng round đích. |
+| Publish result              | Chỉ Organizer được publish; ranking phải được tính trước.                                                                |
+| Lưu repository              | URL repository không được rỗng và phải đúng định dạng URL.                                                               |
+| AI Review định kỳ           | Repository được review mỗi 30 phút nếu đã đến `next_review_at`.                                                          |
+| AI Review thất bại          | Lưu trạng thái `FAILED`; không ảnh hưởng ranking hoặc điểm chính thức.                                                   |
+
+## 4. PHASE 3 – SOFTWARE ARCHITECTURE
+
+### 4.1 Architecture Style & Principles
+
+Hệ thống được thiết kế theo kiến trúc **Modular Monolith** kết hợp với cách tổ chức code theo hướng **Clean Architecture đơn giản hóa**.
+
+Lý do chọn Modular Monolith:
+
+- Phù hợp với quy mô đồ án sinh viên.
+- Dễ triển khai, dễ debug, dễ demo.
+- Không cần tách microservices phức tạp.
+- Vẫn có thể chia module rõ ràng theo nghiệp vụ.
+- Dễ mở rộng sau này nếu hệ thống lớn hơn.
+
+Hệ thống không tập trung vào các kỹ thuật production quá nặng như distributed transaction, message queue phức tạp, event sourcing hay CQRS. Thay vào đó, hệ thống ưu tiên:
+
+- Đúng nghiệp vụ cuộc thi.
+- Dễ hiểu, dễ triển khai.
+- Dữ liệu nhất quán ở các bước quan trọng.
+- Phân quyền rõ ràng.
+- Dễ bảo trì và mở rộng.
+- AI Review chạy định kỳ mỗi 30 phút nhưng không làm ảnh hưởng đến điểm chính thức.
+
+#### Nguyên tắc thiết kế chính
+
+| Nguyên tắc | Mô tả |
+|---|---|
+| Separation of Concerns | Tách rõ controller, service, repository, entity và DTO. |
+| Business-first Design | Thiết kế xoay quanh quy trình thi thực tế: đăng ký nhóm, chia bảng, check-in, mở đề đúng giờ, chấm điểm, ranking. |
+| Simple Role-based Access Control | Phân quyền theo role chính: Participant, Organizer, Mentor, Judge. |
+| Data Integrity | Ràng buộc dữ liệu quan trọng như một user không thuộc nhiều team trong cùng event, score nằm trong thang điểm hợp lệ. |
+| Simplicity over Over-engineering | Không đưa các kỹ thuật phức tạp nếu không cần thiết cho MVP. |
+| Scheduled AI Review | AI Review chạy theo chu kỳ 30 phút để tạo nhận xét tham khảo, không thay thế điểm judge. |
+| Extensibility | Có thể mở rộng thêm webhook, queue hoặc cloud storage sau khi MVP ổn định. |
+
+---
+
+### 4.2 High-level System Architecture
+
+Hệ thống gồm 3 phần chính:
+
+```text
+Client Layer
+├── Participant Mobile / Responsive Web / PWA
+└── Organizer / Mentor / Judge Web Dashboard
+
+Backend Layer
+└── Spring Boot Modular Monolith
+
+Data Layer
+├── PostgreSQL Database
+└── File Storage / Cloud Storage for images and attachments
+```
+
+#### Client Layer
+
+| Giao diện | Người dùng | Mục đích |
+|---|---|---|
+| Participant App / PWA | Participant | Đăng ký nhóm, xác nhận tham gia, check-in, xem đề đúng giờ, xem countdown, gửi repository link, xem kết quả. |
+| Organizer Dashboard | Organizer | Quản lý cuộc thi, quota, chia bảng, upload đề, theo dõi check-in, phân công mentor/judge, công bố kết quả. |
+| Mentor Dashboard | Mentor | Xem team được phân công, xem repository/link bài làm, xem AI Review nếu có. |
+| Judge Dashboard | Judge | Xem team được phân công, mở score sheet, nhập điểm và submit điểm. |
+
+#### Backend Layer
+
+Backend sử dụng Spring Boot và được chia thành các module nghiệp vụ:
+
+```text
+auth-profile-module
+contest-module
+registration-module
+checkin-module
+assignment-module
+scoring-module
+ranking-module
+notification-module
+ai-review-module
+common
+```
+
+#### Data Layer
+
+Database dùng PostgreSQL để lưu:
+
+- User và role.
+- Event, quota, round, board, problem.
+- Team, team member, check-in.
+- Judge/Mentor assignment.
+- Score sheet và score item.
+- Ranking và advancement.
+- Notification.
+- Repository, commit và AI Review định kỳ.
+
+File như ảnh check-in, file đề thi, attachment có thể lưu ở:
+
+```text
+Local storage trong MVP
+hoặc
+Cloud storage nếu triển khai thật
+```
+
+---
+
+### 4.3 Technology Stack
+
+| Layer | Công nghệ đề xuất | Ghi chú |
+|---|---|---|
+| Backend | Spring Boot 3.x, Java 21 | Phù hợp với đồ án, dễ tổ chức module. |
+| Database | PostgreSQL | Hỗ trợ quan hệ dữ liệu tốt, phù hợp ERD hiện tại. |
+| ORM | Spring Data JPA / Hibernate | Dễ mapping entity và repository. |
+| Authentication | Google OAuth2 + Spring Security | Phù hợp yêu cầu đăng nhập bằng Gmail/Google. |
+| Authorization | Role-based Access Control | Dùng role: Organizer, Mentor, Judge; Participant là user thường. |
+| Frontend Web | React + TypeScript | Dùng cho admin, mentor, judge dashboard. |
+| Mobile/PWA | React responsive / PWA hoặc mobile app | Dùng cho participant check-in, xem đề, countdown. |
+| File Upload | Local storage hoặc Cloudinary/S3/Firebase Storage | Lưu ảnh check-in, file đề, attachment. |
+| API Docs | Swagger / OpenAPI | Giúp test API dễ hơn. |
+| Deployment | Docker Compose | Backend + PostgreSQL + frontend. |
+| AI Review | OpenAI/Gemini API hoặc service tương đương | Chạy định kỳ mỗi 30 phút để review repository/code. |
+| Scheduler | Spring Scheduler | Dùng `@Scheduled` để chạy AI Review theo chu kỳ. |
+
+---
+
+### 4.4 Clean Architecture Layers
+
+Mỗi module backend được tổ chức theo các layer đơn giản:
+
+```text
+com.seal.hackathon.<module>
+├── controller
+├── service
+├── repository
+├── entity
+├── dto
+└── mapper / validator
+```
+
+#### Controller Layer
+
+Nhận request từ client, validate input cơ bản và gọi service.
+
+Ví dụ:
+
+```text
+TeamRegistrationController
+CheckInController
+ScoringController
+RankingController
+AiReviewController
+```
+
+#### Service Layer
+
+Xử lý nghiệp vụ chính.
+
+Ví dụ:
+
+```text
+TeamRegistrationService
+BoardAssignmentService
+CheckInService
+ScoreSheetService
+RankingService
+AiReviewService
+AiReviewScheduler
+```
+
+#### Repository Layer
+
+Truy xuất database thông qua Spring Data JPA.
+
+Ví dụ:
+
+```text
+TeamRepository
+BoardRepository
+ScoreSheetRepository
+RankingResultRepository
+TeamRepositoryRepository
+AiReviewRepository
+```
+
+#### Entity Layer
+
+Mapping với bảng trong database.
+
+Ví dụ:
+
+```text
+User
+Event
+Round
+Board
+Team
+TeamMember
+ScoreSheet
+ScoreItem
+RankingResult
+TeamRepository
+AiReview
+```
+
+#### DTO Layer
+
+Dùng để nhận request và trả response, không trả trực tiếp entity ra frontend.
+
+Ví dụ:
+
+```text
+RegisterTeamRequest
+ScoreSheetResponse
+RankingResultResponse
+CheckInRequest
+AiReviewResponse
+```
+
+---
+
+### 4.5 Core System Flow
+
+#### 4.5.1 Team Registration Flow
+
+```text
+Participant đăng nhập Google
+→ Cập nhật profile
+→ Điền form đăng ký nhóm
+→ Nhập email các thành viên
+→ Hệ thống kiểm tra team size từ 1 đến 5 người
+→ Hệ thống tạo team ở trạng thái PENDING
+→ Hệ thống gửi email xác nhận
+→ Thành viên xác nhận hoặc từ chối
+→ Hệ thống kiểm tra trùng email/user trong cùng event
+→ Hệ thống kiểm tra quota event do Organizer cấu hình
+→ Nếu hợp lệ: team chuyển sang CONFIRMED
+→ Nếu quota đầy: team chuyển sang WAITLIST hoặc REJECTED
+```
+
+Các validation chính:
+
+- Event phải đang mở đăng ký.
+- Team có từ 1 đến 5 thành viên.
+- Một email/user không được thuộc nhiều team trong cùng event.
+- Team chỉ confirmed khi số thành viên hợp lệ và quota chưa đầy.
+
+---
+
+#### 4.5.2 Board Assignment Flow
+
+```text
+Organizer tạo round
+→ Organizer tạo các board trong round
+→ Organizer tạo board slots
+→ Hệ thống lấy danh sách team CONFIRMED
+→ Organizer chọn random assign hoặc manual assign
+→ Team được gán vào board slot
+→ Participant xem được bảng của team mình
+```
+
+Các validation chính:
+
+- Chỉ team `CONFIRMED` mới được chia bảng.
+- Một team không được nằm ở nhiều slot trong cùng một round.
+- Board phải thuộc đúng round của event.
+- Hệ thống hỗ trợ cả chia bảng ngẫu nhiên và chia bảng thủ công.
+
+---
+
+#### 4.5.3 Problem Release & Countdown Flow
+
+```text
+Organizer upload đề cho board
+→ Organizer cấu hình release_at
+→ Participant mở màn hình đề
+→ Hệ thống kiểm tra current_time >= release_at
+→ Nếu đã đến giờ: hiển thị đề
+→ Nếu chưa đến giờ: chưa hiển thị đề
+→ Hệ thống hiển thị countdown dựa trên start_at/end_at của round
+```
+
+Các validation chính:
+
+- Đề chưa đến giờ thì không hiển thị.
+- Điều kiện mở đề chỉ dựa trên `release_at`.
+- Check-in không phải điều kiện bắt buộc để xem đề.
+- Countdown tính theo thời gian kết thúc vòng thi.
+
+---
+
+#### 4.5.4 Check-in Flow
+
+```text
+Participant mở màn hình check-in
+→ Chụp hoặc upload ảnh
+→ Hệ thống lưu check-in ở trạng thái PENDING hoặc APPROVED
+→ Organizer theo dõi danh sách check-in
+→ Organizer có thể approve/reject nếu cần
+```
+
+Các validation chính:
+
+- Người check-in phải là thành viên của team trong event.
+- Mỗi thành viên chỉ có một check-in hợp lệ cho một event.
+- Ảnh check-in không được rỗng.
+- Check-in dùng để xác nhận có mặt tại sự kiện, không dùng để chặn xem đề.
+
+---
+
+#### 4.5.5 Mentor / Judge Assignment Flow
+
+```text
+Organizer thêm mentor/judge vào hệ thống
+→ Organizer gán mentor vào board
+→ Organizer gán judge vào board
+→ Mentor xem danh sách team trong board được phân công
+→ Judge xem danh sách team cần chấm trong board được phân công
+```
+
+Các validation chính:
+
+- User được gán mentor phải có role `MENTOR`.
+- User được gán judge phải có role `JUDGE`.
+- Không gán trùng cùng một mentor/judge vào cùng một board.
+
+---
+
+#### 4.5.6 Scoring Flow
+
+```text
+Organizer tạo rubric cho round
+→ Judge mở danh sách team được phân công
+→ Judge mở score sheet của một team
+→ Judge nhập điểm theo từng criteria
+→ Judge có thể lưu nháp
+→ Judge submit score sheet
+→ Hệ thống khóa score sheet ở trạng thái SUBMITTED
+→ Organizer theo dõi tiến độ chấm
+```
+
+Các validation chính:
+
+- Judge chỉ được chấm team thuộc board được assign.
+- Điểm phải nằm trong `min_score` và `max_score` của criteria.
+- Một judge chỉ có một score sheet cho một team trong cùng board.
+- Score sheet phải có đủ score item cho các criteria bắt buộc trước khi submit.
+
+---
+
+#### 4.5.7 Ranking & Advancement Flow
+
+```text
+Organizer chọn calculate ranking cho board
+→ Hệ thống lấy các score sheet SUBMITTED
+→ Hệ thống tính điểm của từng judge cho từng team
+→ Hệ thống tính điểm trung bình của team từ các judge đã submit
+→ Hệ thống sort ranking theo điểm trung bình giảm dần trong từng board
+→ Hệ thống tạo ranking_results
+→ Organizer xem ranking từng board
+→ Organizer tick chọn thủ công team vào final
+→ Hệ thống tạo advancements
+→ Hệ thống đưa team được chọn vào final board
+→ Organizer publish kết quả
+```
+
+Công thức tính điểm:
+
+```text
+Điểm của một judge cho một team =
+SUM(score_value * criteria_weight)
+
+Điểm cuối của team =
+AVG(điểm của các judge đã submit)
+```
+
+Các validation chính:
+
+- Chỉ score sheet `SUBMITTED` mới được tính.
+- Team `DISQUALIFIED` không được tính ranking.
+- Team không có điểm từ judge nào sẽ bị cảnh báo hoặc không đưa vào ranking.
+- Ranking được sort theo từng board.
+- Advancement không tự động chọn top N.
+- Organizer tick chọn thủ công team vào chung kết từ ranking từng bảng.
+- Advancement không được trùng team trong cùng round đích.
+
+---
+
+#### 4.5.8 Scheduled AI Review Flow
+
+AI Review là chức năng mở rộng, không thay thế điểm chính thức.
+
+```text
+Participant hoặc Organizer lưu repository URL của team
+→ Scheduler chạy định kỳ mỗi 30 phút
+→ Hệ thống tìm repository đã đến next_review_at
+→ Hệ thống lấy repository/commit nếu có
+→ Gọi AI Service để phân tích code
+→ Lưu kết quả AI Review
+→ Cập nhật last_reviewed_at và next_review_at
+→ Mentor/Organizer/Participant xem nhận xét AI
+```
+
+Các validation chính:
+
+- Team phải có repository URL hoặc commit.
+- AI Review chạy theo chu kỳ 30 phút.
+- Nếu chưa đến `next_review_at`, hệ thống không chạy review mới.
+- Nếu AI service lỗi, lưu trạng thái `FAILED`.
+- AI Review không ảnh hưởng ranking chính thức.
+
+---
+
+### 4.6 Security Design
+
+#### Authentication
+
+Hệ thống ưu tiên đăng nhập bằng Google OAuth2.
+
+```text
+User chọn Login with Google
+→ Google xác thực
+→ Backend nhận thông tin email, google_sub
+→ Nếu user chưa tồn tại thì tạo user mới
+→ Nếu đã tồn tại thì cập nhật thông tin cần thiết
+→ Backend tạo session/token cho frontend
+```
+
+Trong MVP, có thể dùng:
+
+- JWT access token.
+- Hoặc session-based authentication nếu triển khai đơn giản hơn.
+
+#### Authorization
+
+Hệ thống sử dụng role-based access control.
+
+| Role | Quyền chính |
+|---|---|
+| Guest | Xem thông tin cuộc thi công khai. |
+| Participant | Đăng ký nhóm, xác nhận nhóm, check-in, xem đề đúng giờ, xem kết quả. |
+| Organizer | Quản lý toàn bộ cuộc thi. |
+| Mentor | Xem team thuộc board được phân công và AI Review liên quan. |
+| Judge | Chấm điểm team thuộc board được phân công. |
+
+Một số rule phân quyền quan trọng:
+
+| Hành động | Điều kiện |
+|---|---|
+| Tạo/cập nhật event | Chỉ Organizer. |
+| Cấu hình quota | Chỉ Organizer. |
+| Chia bảng | Chỉ Organizer. |
+| Upload đề | Chỉ Organizer. |
+| Xem đề | Participant thuộc team đã được gán board và `current_time >= release_at`. |
+| Check-in | Participant thuộc team trong event. |
+| Chấm điểm | Judge được assign vào board chứa team. |
+| Xem team mentor | Mentor được assign vào board chứa team. |
+| Tính ranking | Chỉ Organizer. |
+| Tick chọn team vào final | Chỉ Organizer. |
+| Publish kết quả | Chỉ Organizer. |
+| Xem AI Review | Participant thuộc team, mentor được phân công hoặc Organizer. |
+
+---
+
+### 4.7 Transaction & Data Integrity Strategy
+
+Hệ thống không cần mô tả transaction phức tạp như bản production-ready. Tuy nhiên, một số nghiệp vụ vẫn cần đảm bảo tính nhất quán dữ liệu.
+
+#### 4.7.1 Đăng ký và xác nhận nhóm
+
+Cần đảm bảo:
+
+- Một email/user chỉ thuộc một team trong cùng event.
+- Team size nằm trong khoảng 1–5 người.
+- Team chỉ confirmed khi đủ điều kiện.
+- Không vượt quá `max_teams`.
+
+Cách xử lý:
+
+```text
+Dùng @Transactional cho thao tác xác nhận thành viên.
+Sau khi member confirmed, service kiểm tra lại toàn bộ team.
+Nếu team có 1–5 thành viên confirmed và quota chưa đầy thì chuyển team thành CONFIRMED.
+Nếu quota đã đầy thì chuyển WAITLIST hoặc REJECTED.
+```
+
+---
+
+#### 4.7.2 Chia bảng
+
+Cần đảm bảo:
+
+- Team không bị gán vào nhiều board slot trong cùng round.
+- Chỉ team `CONFIRMED` mới được gán.
+- Hỗ trợ random assignment và manual assignment.
+
+Cách xử lý:
+
+```text
+Dùng unique constraint ở database.
+Dùng service kiểm tra trước khi assign team vào slot.
+Với random assignment, service random danh sách team và gán vào slot trống.
+Với manual assignment, Organizer chọn team và slot cụ thể.
+```
+
+---
+
+#### 4.7.3 Check-in
+
+Cần đảm bảo:
+
+- Một team member chỉ có một check-in trong một event.
+- Ảnh check-in phải được lưu trước khi tạo bản ghi check-in.
+- Check-in không ảnh hưởng quyền xem đề.
+
+Cách xử lý:
+
+```text
+Upload ảnh trước.
+Lưu photo_url.
+Tạo check_in record.
+Organizer có thể approve/reject nếu cần.
+```
+
+---
+
+#### 4.7.4 Scoring
+
+Cần đảm bảo:
+
+- Một judge chỉ có một score sheet cho một team trong cùng board.
+- Mỗi score sheet có một score item cho mỗi criteria.
+- Điểm không vượt thang điểm.
+- Chỉ score sheet `SUBMITTED` được tính ranking.
+
+Cách xử lý:
+
+```text
+Dùng unique constraint.
+Validate score_value trong service.
+Chỉ score sheet SUBMITTED mới được dùng tính ranking.
+```
+
+---
+
+#### 4.7.5 Ranking & Advancement
+
+Cần đảm bảo:
+
+- Ranking chỉ tính từ score sheet đã submit.
+- Team disqualified bị loại khỏi ranking.
+- Điểm cuối của team là trung bình điểm từ các judge đã submit.
+- Ranking được sort theo từng board.
+- Organizer tick chọn thủ công team vào final.
+- Team không được advance trùng vào cùng round đích.
+
+Cách xử lý:
+
+```text
+Khi calculate ranking:
+1. Xóa hoặc ghi đè ranking cũ nếu chưa publish.
+2. Lấy score sheet SUBMITTED.
+3. Tính điểm từng judge cho từng team.
+4. Tính điểm trung bình của team.
+5. Sort team theo điểm trung bình giảm dần trong từng board.
+6. Lưu ranking_results.
+
+Khi advance team:
+1. Organizer xem ranking từng board.
+2. Organizer tick chọn các team vào final.
+3. Hệ thống kiểm tra team chưa được advance trùng.
+4. Lưu advancements.
+```
+
+Không cần dùng `SERIALIZABLE transaction` trong MVP, chỉ cần transaction thông thường ở service.
+
+---
+
+#### 4.7.6 Scheduled AI Review
+
+Cần đảm bảo:
+
+- Repository chỉ được review khi đã đến `next_review_at`.
+- Mỗi chu kỳ review cách nhau 30 phút.
+- Nếu AI Review lỗi, không ảnh hưởng đến scoring/ranking.
+- Kết quả AI Review chỉ để tham khảo.
+
+Cách xử lý:
+
+```text
+Dùng Spring Scheduler chạy mỗi vài phút để quét repository.
+Nếu now >= next_review_at thì tạo ai_review PENDING.
+Gọi AI Service để review code/repository.
+Nếu thành công: cập nhật COMPLETED, last_reviewed_at, next_review_at.
+Nếu lỗi: cập nhật FAILED và ghi log.
+```
+
+---
+
+### 4.8 Error Handling
+
+Backend sử dụng cơ chế exception handling tập trung.
+
+```text
+@ControllerAdvice
+→ Bắt lỗi nghiệp vụ
+→ Trả response JSON thống nhất
+```
+
+#### Format lỗi đề xuất
+
+```json
+{
+  "timestamp": "2026-05-21T10:00:00",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Team size must be between 1 and 5",
+  "path": "/api/v1/events/{eventId}/teams/register"
+}
+```
+
+#### Các lỗi nghiệp vụ chính
+
+| Exception | Trường hợp |
+|---|---|
+| `EventRegistrationClosedException` | Đăng ký khi event chưa mở hoặc đã đóng. |
+| `TeamSizeInvalidException` | Số thành viên không nằm trong khoảng 1–5. |
+| `TeamQuotaExceededException` | Quota số team đã đầy. |
+| `MemberAlreadyInTeamException` | User/email đã thuộc team khác trong cùng event. |
+| `BoardSlotOccupiedException` | Slot đã có team. |
+| `ProblemNotReleasedException` | Participant xem đề trước giờ mở. |
+| `UnauthorizedScoringException` | Judge chấm team không thuộc board được assign. |
+| `ScoreOutOfRangeException` | Điểm nằm ngoài thang điểm. |
+| `RankingNotReadyException` | Chưa đủ dữ liệu để tính ranking. |
+| `DuplicateAdvancementException` | Team đã được chọn vào round đích trước đó. |
+| `RepositoryNotFoundException` | Team chưa có repository để AI Review. |
+| `AiReviewFailedException` | AI Review thất bại. |
+
+---
+
+### 4.9 Notification & Async Processing
+
+Trong MVP, notification có thể xử lý đơn giản, không cần outbox pattern phức tạp.
+
+#### Các loại thông báo
+
+| Loại thông báo | Người nhận | Mục đích |
+|---|---|---|
+| Email xác nhận team | Thành viên được mời | Xác nhận có tham gia nhóm hay không. |
+| Email mời mentor | Mentor | Thông báo được mời hỗ trợ cuộc thi. |
+| Email mời judge | Judge | Thông báo được mời chấm điểm. |
+| Thông báo mở đề | Participant | Nhắc đề đã được mở đúng giờ. |
+| Thông báo kết quả | Participant | Thông báo ranking/kết quả đã publish. |
+| Thông báo AI Review | Organizer/Mentor/Participant | Báo kết quả AI Review đã hoàn tất. |
+
+#### Cách triển khai đề xuất
+
+```text
+Với MVP:
+- Gửi email trực tiếp qua service.
+- Lưu notification vào database.
+- AI Review dùng scheduler nội bộ.
+- Nếu email lỗi, ghi log và hiển thị trạng thái failed nếu cần.
+
+Với mở rộng sau:
+- Có thể thêm background job hoặc queue.
+- Có thể thêm retry mechanism.
+```
+
+Không cần đưa `outbox_messages` thành module chính trong MVP.
+
+---
+
+### 4.10 Observability & Logging
+
+Hệ thống cần logging đủ để debug và bảo vệ đồ án.
+
+#### Logging cần có
+
+| Sự kiện | Nội dung cần log |
+|---|---|
+| Đăng nhập | User email, thời gian đăng nhập. |
+| Đăng ký team | Event, team, contact email, số lượng thành viên. |
+| Xác nhận member | Team, email, trạng thái. |
+| Chia bảng | Round, board, team được gán, kiểu random/manual. |
+| Check-in | Team member, trạng thái check-in. |
+| Upload đề | Board, problem, release_at. |
+| Submit score sheet | Judge, team, board. |
+| Calculate ranking | Board, số team, thời gian tính, công thức trung bình điểm. |
+| Advance team | Board nguồn, team được tick chọn, Organizer thực hiện. |
+| Publish result | Event/round/board, người publish. |
+| AI Review | Team, repository, trạng thái review, thời điểm review. |
+
+#### Monitoring trong MVP
+
+Có thể dùng:
+
+```text
+Spring Boot Actuator
+Application logs
+Database records
+```
+
+Không bắt buộc tích hợp Prometheus/Grafana trong MVP.
+
+---
+
+### 4.11 Deployment Overview
+
+#### Môi trường phát triển
+
+```text
+Frontend: React / PWA
+Backend: Spring Boot
+Database: PostgreSQL
+Storage: Local folder hoặc cloud storage
+AI Scheduler: Spring Scheduler
+```
+
+#### Docker Compose đề xuất
+
+```text
+docker-compose.yml
+├── postgres
+├── backend
+└── frontend
+```
+
+#### Biến môi trường chính
+
+| Biến | Mục đích |
+|---|---|
+| `DB_URL` | Kết nối PostgreSQL. |
+| `DB_USERNAME` | Username database. |
+| `DB_PASSWORD` | Password database. |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID. |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret. |
+| `JWT_SECRET` | Secret tạo token nếu dùng JWT. |
+| `MAIL_USERNAME` | Email dùng để gửi thông báo. |
+| `MAIL_PASSWORD` | Password/app password email. |
+| `AI_API_KEY` | API key cho AI Review nếu dùng. |
+| `AI_REVIEW_INTERVAL_MINUTES` | Chu kỳ AI Review, mặc định là `30`. |
+| `FILE_STORAGE_PATH` | Đường dẫn lưu file local. |
+
+#### Chiến lược triển khai
+
+Trong phạm vi đồ án, có thể triển khai theo hướng:
+
+```text
+Local development:
+- Chạy backend bằng IntelliJ/Eclipse.
+- Chạy frontend bằng npm.
+- Chạy PostgreSQL bằng Docker.
+- Scheduler AI Review chạy cùng backend.
+
+Demo:
+- Dùng Docker Compose để chạy toàn bộ hệ thống.
+- Có thể dùng mock AI response nếu AI API lỗi.
+- Có thể deploy backend/frontend lên server/cloud nếu có thời gian.
+```
+
+#### Backup dữ liệu
+
+Với MVP, chỉ cần:
+
+```text
+Backup database thủ công trước/sau demo.
+Export kết quả ranking ra file.
+Lưu ảnh check-in và file đề trong thư mục riêng.
+```
+
+Không cần chiến lược backup production phức tạp.
+
+## 5. PHASE 4 – AI CODE REVIEW EXTENSION
+
+### 5.1 Mục tiêu của AI Code Review
+
+AI Code Review là chức năng mở rộng nhằm hỗ trợ mentor, organizer và participant có thêm góc nhìn tham khảo về chất lượng code của team trong quá trình thi.
+
+Chức năng này không thay thế điểm chấm chính thức của judge. Điểm chính thức của cuộc thi vẫn được tính dựa trên score sheet do judge submit theo rubric.
+
+Sau khi chốt yêu cầu với giáo viên, AI Review được thiết kế theo hướng **chạy định kỳ mỗi 30 phút** cho repository/code của team. Kết quả review được lưu lại để participant, mentor và organizer xem tham khảo.
+
+AI Review được giữ trong hệ thống với mục tiêu:
+
+| Mục tiêu | Mô tả |
+|---|---|
+| Hỗ trợ mentor | Mentor có thể xem nhận xét AI để tham khảo khi hỗ trợ team. |
+| Hỗ trợ participant | Team có thể xem góp ý về code để cải thiện sản phẩm trong quá trình thi. |
+| Hỗ trợ organizer | Organizer có thêm dữ liệu tham khảo về chất lượng repository của các team. |
+| Theo dõi tiến độ code định kỳ | Hệ thống review code mỗi 30 phút để ghi nhận tình trạng repository theo thời gian. |
+
+---
+
+### 5.2 Phạm vi AI Review trong MVP
+
+Trong MVP, AI Review triển khai ở mức vừa đủ để demo và phù hợp với đồ án sinh viên:
+
+```text
+Team lưu repository URL
+→ Scheduler chạy định kỳ mỗi 30 phút
+→ Hệ thống kiểm tra repository nào đến thời điểm review
+→ Hệ thống gọi AI Service
+→ AI phân tích repository/code
+→ Hệ thống lưu kết quả review
+→ Participant/Mentor/Organizer xem kết quả
+```
+
+Không triển khai các phần quá phức tạp như:
+
+| Không triển khai trong MVP | Lý do |
+|---|---|
+| GitHub webhook tự động theo từng commit | Có thể làm sau; MVP chỉ cần scheduler mỗi 30 phút. |
+| Outbox worker retry nhiều lần | Thuộc kỹ thuật production-ready, chưa cần thiết. |
+| Chặn commit sau deadline bằng GitHub API | Không nằm trong yêu cầu chính của giáo viên. |
+| AI Review ảnh hưởng ranking | Điểm chính thức vẫn do judge chấm. |
+| Research analytics từ AI Review | Không cần trong scope vận hành cuộc thi. |
+| Organizer bấm review thủ công là luồng chính | Yêu cầu mới đã chốt là review định kỳ mỗi 30 phút. |
+
+---
+
+### 5.3 Actor liên quan
+
+| Actor | Vai trò trong AI Review |
+|---|---|
+| Participant | Cung cấp repository URL và xem AI Review của team mình. |
+| Mentor | Xem AI Review của các team được phân công để tham khảo. |
+| Organizer | Xem toàn bộ kết quả AI Review và cấu hình nếu cần. |
+| AI Service | Phân tích repository/code và trả về nhận xét. |
+| Scheduler | Kích hoạt AI Review tự động theo chu kỳ 30 phút. |
+
+Ghi chú:
+
+```text
+Scheduler không phải người dùng thật.
+Scheduler là thành phần nội bộ của hệ thống, ví dụ Spring Scheduler.
+```
+
+---
+
+### 5.4 Functional Requirements
+
+| FR-ID | Tên chức năng | Mô tả | Priority |
+|---|---|---|---|
+| AI-001 | Lưu repository của team | Participant hoặc Organizer nhập repository URL/project link của team. | Should |
+| AI-002 | Cập nhật repository | Team có thể cập nhật link repository trước hoặc trong thời gian thi nếu được phép. | Could |
+| AI-003 | Chạy AI Review định kỳ | Hệ thống tự động chạy AI Review mỗi 30 phút cho repository của team. | Should |
+| AI-004 | Kiểm tra thời điểm review | Hệ thống chỉ review nếu đã đến `next_review_at`. | Should |
+| AI-005 | Phân tích repository | AI Service phân tích code dựa trên repository/commit được cung cấp. | Should |
+| AI-006 | Lưu kết quả AI Review | Hệ thống lưu điểm tham khảo, nhận xét tổng quan, lỗi phát hiện và gợi ý cải thiện. | Should |
+| AI-007 | Cập nhật lịch review tiếp theo | Sau khi review xong, hệ thống cập nhật `last_reviewed_at` và `next_review_at`. | Should |
+| AI-008 | Xem kết quả AI Review | Participant, Mentor và Organizer xem kết quả AI Review theo quyền. | Should |
+| AI-009 | Ghi trạng thái xử lý | Hệ thống lưu trạng thái `PENDING`, `COMPLETED`, `FAILED`. | Should |
+
+---
+
+### 5.5 Dữ liệu cần lưu
+
+AI Review sử dụng 3 bảng chính:
+
+| Bảng | Mục đích |
+|---|---|
+| `team_repositories` | Lưu repository/project link của team và lịch review định kỳ. |
+| `repo_commits` | Lưu thông tin commit nếu hệ thống có lấy commit. |
+| `ai_reviews` | Lưu kết quả phân tích từ AI. |
+
+#### `team_repositories`
+
+| Cột | Mô tả |
+|---|---|
+| `id` | Khóa chính. |
+| `team_id` | Team sở hữu repository. |
+| `repository_url` | Link repository hoặc project source. |
+| `repository_name` | Tên repository. |
+| `last_reviewed_at` | Thời điểm AI Review gần nhất. |
+| `next_review_at` | Thời điểm dự kiến chạy AI Review tiếp theo. |
+| `review_interval_minutes` | Chu kỳ review, mặc định là `30`. |
+| `created_by` | Người lưu repository. |
+| `created_at`, `updated_at` | Thời gian tạo/cập nhật. |
+
+#### `repo_commits`
+
+| Cột | Mô tả |
+|---|---|
+| `id` | Khóa chính. |
+| `team_repository_id` | Repository chứa commit. |
+| `commit_sha` | Mã commit. |
+| `author_name` | Tên người commit. |
+| `author_email` | Email người commit. |
+| `message` | Nội dung commit. |
+| `committed_at` | Thời gian commit. |
+| `created_at` | Thời gian hệ thống lưu commit. |
+
+#### `ai_reviews`
+
+| Cột | Mô tả |
+|---|---|
+| `id` | Khóa chính. |
+| `team_id` | Team được review. |
+| `round_id` | Vòng thi liên quan, nếu có. |
+| `repo_commit_id` | Commit được review, có thể null nếu review toàn bộ repository. |
+| `status` | Trạng thái: `PENDING`, `COMPLETED`, `FAILED`. |
+| `review_score` | Điểm AI tham khảo, ví dụ từ 0 đến 10. |
+| `summary` | Tóm tắt nhận xét. |
+| `issues` | Danh sách vấn đề phát hiện, lưu dạng JSON. |
+| `suggestions` | Gợi ý cải thiện. |
+| `ai_model` | Model AI được sử dụng. |
+| `reviewed_at` | Thời gian review hoàn tất. |
+| `created_at` | Thời gian tạo bản ghi. |
+
+---
+
+### 5.6 Scheduled AI Review Flow
+
+```text
+Participant hoặc Organizer lưu repository URL
+→ Hệ thống tạo/cập nhật team_repositories
+→ Scheduler chạy định kỳ
+→ Hệ thống tìm repository có next_review_at <= thời gian hiện tại
+→ Hệ thống tạo bản ghi ai_reviews với status = PENDING
+→ Backend lấy repository/commit cần phân tích
+→ Backend gửi nội dung cần review cho AI Service
+→ AI Service trả về summary, issues, suggestions, review_score
+→ Hệ thống cập nhật ai_reviews thành COMPLETED
+→ Hệ thống cập nhật last_reviewed_at
+→ Hệ thống cập nhật next_review_at = hiện tại + 30 phút
+→ Mentor/Organizer/Participant xem kết quả
+```
+
+Nếu AI xử lý thất bại:
+
+```text
+AI Service lỗi
+→ Hệ thống cập nhật ai_reviews thành FAILED
+→ Hệ thống ghi log lỗi
+→ Hệ thống vẫn cập nhật next_review_at nếu cần
+→ Không ảnh hưởng đến điểm chính thức hoặc ranking
+```
+
+---
+
+### 5.7 Quyền truy cập AI Review
+
+| Hành động | Participant | Mentor | Judge | Organizer |
+|---|---:|---:|---:|---:|
+| Lưu repository của team mình | Có | Không | Không | Có |
+| Cập nhật repository của team mình | Có | Không | Không | Có |
+| Xem AI Review của team mình | Có | Không | Không | Có |
+| Xem AI Review của team được phân công | Không | Có | Không | Có |
+| Xem toàn bộ AI Review | Không | Không | Không | Có |
+| Cấu hình chu kỳ review | Không | Không | Không | Có |
+| Chấm điểm dựa trên AI Review | Không | Không | Không | Không |
+
+Judge không cần xem AI Review trong MVP để tránh ảnh hưởng đến việc chấm điểm độc lập.
+
+---
+
+### 5.8 Business Rules cho AI Review
+
+| ID | Rule |
+|---|---|
+| AIR-001 | Một team có thể có một repository chính. |
+| AIR-002 | Repository URL không được rỗng và phải đúng định dạng URL. |
+| AIR-003 | AI Review chạy định kỳ mỗi 30 phút cho repository của team. |
+| AIR-004 | Hệ thống chỉ chạy AI Review nếu thời gian hiện tại lớn hơn hoặc bằng `next_review_at`. |
+| AIR-005 | Sau mỗi lần review, hệ thống cập nhật `last_reviewed_at` và `next_review_at`. |
+| AIR-006 | Participant chỉ xem AI Review của team mình. |
+| AIR-007 | Mentor chỉ xem AI Review của team thuộc board được phân công. |
+| AIR-008 | Organizer được xem toàn bộ AI Review. |
+| AIR-009 | Judge không xem AI Review trong MVP để đảm bảo chấm điểm độc lập. |
+| AIR-010 | AI Review không được dùng để thay thế điểm judge. |
+| AIR-011 | AI Review không tự động làm thay đổi ranking. |
+| AIR-012 | Nếu AI Review thất bại, hệ thống lưu trạng thái `FAILED` và không chặn luồng thi. |
+
+---
+
+### 5.9 Output của AI Review
+
+Kết quả AI Review nên có cấu trúc dễ hiểu:
+
+| Thành phần | Mô tả |
+|---|---|
+| Review Score | Điểm tham khảo từ 0 đến 10. |
+| Summary | Nhận xét tổng quan về code. |
+| Issues | Các lỗi/vấn đề phát hiện. |
+| Suggestions | Gợi ý cải thiện. |
+| Reviewed At | Thời gian review. |
+| AI Model | Model AI được sử dụng. |
+| Status | Trạng thái xử lý: `PENDING`, `COMPLETED`, `FAILED`. |
+
+Ví dụ output:
+
+```json
+{
+  "review_score": 7.5,
+  "summary": "Project có cấu trúc tương đối rõ ràng, nhưng còn thiếu xử lý lỗi ở một số API.",
+  "issues": [
+    {
+      "type": "Error Handling",
+      "description": "Một số endpoint chưa xử lý exception rõ ràng."
+    },
+    {
+      "type": "Security",
+      "description": "Chưa kiểm tra quyền truy cập ở một số API nội bộ."
+    }
+  ],
+  "suggestions": [
+    "Bổ sung validation cho request đầu vào.",
+    "Tách service xử lý nghiệp vụ khỏi controller.",
+    "Bổ sung kiểm tra quyền trước khi cập nhật dữ liệu."
+  ]
+}
+```
+
+---
+
+### 5.10 Prompt AI Review đề xuất
+
+Khi gọi AI Service, backend có thể dùng prompt dạng sau:
+
+```text
+Bạn là chuyên gia review code cho cuộc thi hackathon sinh viên.
+
+Hãy phân tích source code hoặc diff được cung cấp và trả về nhận xét theo các tiêu chí:
+1. Cấu trúc project
+2. Chất lượng code
+3. Xử lý lỗi
+4. Bảo mật cơ bản
+5. Khả năng maintain
+6. Các lỗi nghiêm trọng nếu có
+7. Gợi ý cải thiện
+
+Không chấm thay giám khảo.
+Không thay đổi ranking.
+Chỉ đưa ra điểm tham khảo từ 0 đến 10.
+
+Trả về JSON gồm:
+- review_score
+- summary
+- issues
+- suggestions
+```
+
+---
+
+### 5.11 API Design cho AI Review
+
+| Method | Endpoint | Actor | Mô tả |
+|---|---|---|---|
+| POST | `/teams/{teamId}/repository` | Participant/Organizer | Lưu repository URL của team. |
+| PUT | `/teams/{teamId}/repository` | Participant/Organizer | Cập nhật repository URL. |
+| GET | `/teams/{teamId}/repository` | Participant/Mentor/Organizer | Xem repository của team. |
+| GET | `/teams/{teamId}/ai-review` | Participant/Mentor/Organizer | Xem kết quả AI Review của team. |
+| GET | `/admin/ai-reviews` | Organizer | Xem danh sách AI Review. |
+| GET | `/admin/ai-reviews/failed` | Organizer | Xem các AI Review bị lỗi. |
+
+Ghi chú:
+
+```text
+Không cần endpoint Organizer bấm chạy AI Review thủ công trong MVP.
+AI Review được kích hoạt bằng scheduler mỗi 30 phút.
+```
+
+---
+
+### 5.12 Scheduled Job Design
+
+AI Review định kỳ có thể triển khai bằng Spring Scheduler.
+
+#### Cơ chế chạy
+
+```text
+Scheduler chạy mỗi vài phút
+→ Query team_repositories có next_review_at <= now
+→ Với mỗi repository đến hạn:
+   - Tạo ai_review PENDING
+   - Gọi AI Service
+   - Nếu thành công: cập nhật COMPLETED
+   - Nếu thất bại: cập nhật FAILED
+   - Cập nhật last_reviewed_at và next_review_at
+```
+
+#### Pseudocode
+
+```text
+@Scheduled(fixedDelay = 5 minutes)
+runScheduledAiReview() {
+    repositories = findRepositoriesDueForReview(now)
+
+    for each repository in repositories:
+        create ai_review with status PENDING
+
+        try:
+            result = aiService.review(repository)
+            update ai_review as COMPLETED
+            save result summary, issues, suggestions, score
+        catch:
+            update ai_review as FAILED
+
+        update repository.last_reviewed_at = now
+        update repository.next_review_at = now + 30 minutes
+}
+```
+
+#### Lưu ý triển khai
+
+| Vấn đề | Cách xử lý |
+|---|---|
+| AI API lỗi | Lưu trạng thái `FAILED`, không chặn hệ thống. |
+| Repository chưa có URL | Không đưa vào danh sách review. |
+| Review chưa đủ 30 phút | Không chạy lại. |
+| Nhiều repository đến hạn cùng lúc | Xử lý tuần tự trong MVP. |
+| Muốn tối ưu sau này | Có thể dùng queue/background worker. |
+
+---
+
+### 5.13 Mức ưu tiên triển khai
+
+AI Review không phải luồng chính, nên triển khai sau các chức năng bắt buộc:
+
+| Thứ tự | Chức năng | Mức ưu tiên |
+|---|---|---|
+| 1 | Đăng ký nhóm, xác nhận thành viên | Must |
+| 2 | Chia bảng, check-in, mở đề đúng giờ | Must |
+| 3 | Judge chấm điểm, ranking, advancement | Must |
+| 4 | Notification cơ bản | Should |
+| 5 | Lưu repository của team | Should |
+| 6 | AI Review định kỳ mỗi 30 phút | Should |
+| 7 | AI Review theo commit chi tiết | Could |
+
+Trong demo đồ án, AI Review có thể được trình bày như chức năng cộng điểm:
+
+```text
+Team có repository
+→ Scheduler tự động review mỗi 30 phút
+→ Hệ thống lưu nhận xét AI
+→ Mentor/Participant/Organizer xem để tham khảo
+```
+
+---
+
+### 5.14 Kết luận
+
+Sau góp ý của giáo viên, không nên giữ `Research Analytics` làm phase chính vì phần này quá thiên về nghiên cứu và không phục vụ trực tiếp quy trình thi.
+
+Thay vào đó, Phase 4 được điều chỉnh thành `AI Code Review Extension`. Chức năng này vừa đủ để tạo điểm cộng cho đồ án, nhưng vẫn không làm hệ thống lệch khỏi mục tiêu chính là hỗ trợ tổ chức cuộc thi.
+
+AI Review trong MVP có vai trò tham khảo:
+
+```text
+Không thay thế judge.
+Không ảnh hưởng ranking.
+Không bắt buộc để hoàn tất cuộc thi.
+Chạy định kỳ mỗi 30 phút.
+Giúp mentor, participant và organizer có thêm nhận xét về chất lượng code.
+```
+
+## 6. PHASE 5 – PRODUCT BACKLOG
+
+### 6.1 Product Backlog Overview
+
+Sau khi điều chỉnh scope theo góp ý của giáo viên, backlog được thiết kế theo hướng ưu tiên các chức năng cốt lõi của quy trình thi thực tế:
+
+```text
+Đăng nhập
+→ Tạo cuộc thi
+→ Cấu hình quota và team size 1–5
+→ Đăng ký nhóm
+→ Xác nhận thành viên
+→ Chia bảng random/thủ công
+→ Check-in
+→ Mở đề đúng giờ
+→ Chấm điểm
+→ Tính điểm trung bình
+→ Sort ranking theo bảng
+→ Organizer tick chọn team vào chung kết
+→ Công bố kết quả
+→ AI Review định kỳ mỗi 30 phút
+````
+
+Các chức năng nâng cao như Research Analytics, Calibration Dashboard, Outbox Pattern, Idempotency, Submission Versioning và Multi-attempt Scoring không đưa vào backlog chính của MVP.
+
+---
+
+### 6.2 Sprint Plan
+
+| Sprint   | Mục tiêu                                         | User Stories chính                                                                                                                       | Đầu ra                                               |
+| -------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Sprint 1 | Auth, Profile & Contest Setup                    | Đăng nhập Google, cập nhật profile, tạo event, cấu hình thời gian đăng ký, quota team, team size 1–5                                     | Có thể tạo cuộc thi và người dùng đăng nhập được     |
+| Sprint 2 | Team Registration & Email Confirmation           | Đăng ký nhóm qua form, nhập email thành viên, gửi email xác nhận, confirm/decline lời mời, kiểm tra quota                                | Nhóm 1–5 người có thể được xác nhận hợp lệ           |
+| Sprint 3 | Board Assignment, Problem Release & Check-in     | Tạo round, tạo board, tạo slot, random/manual assign team, upload đề, cấu hình release time, check-in ảnh                                | Team biết bảng thi, check-in được và xem đề đúng giờ |
+| Sprint 4 | Mentor/Judge Assignment & Scoring                | Gán mentor/judge vào board, cấu hình rubric, judge mở score sheet, nhập điểm, submit điểm, organizer xem tiến độ chấm                    | Quy trình chấm điểm hoạt động                        |
+| Sprint 5 | Ranking, Advancement, Publish Result & AI Review | Tính điểm trung bình, sort ranking theo bảng, Organizer tick chọn team vào final, publish kết quả, lưu repository, AI Review mỗi 30 phút | Có kết quả cuối và AI Review định kỳ để tham khảo    |
+
+---
+
+### 6.3 User Stories
+
+#### Sprint 1 – Auth, Profile & Contest Setup
+
+| ID     | User Story                                                                             | Priority |
+| ------ | -------------------------------------------------------------------------------------- | -------- |
+| US-001 | Là Guest, tôi muốn đăng nhập bằng Google để sử dụng hệ thống.                          | Must     |
+| US-002 | Là Participant, tôi muốn cập nhật họ tên, MSSV, trường và ảnh đại diện.                | Must     |
+| US-003 | Là Organizer, tôi muốn tạo cuộc thi mới với tên, mô tả, ngày bắt đầu và ngày kết thúc. | Must     |
+| US-004 | Là Organizer, tôi muốn cấu hình thời gian đăng ký cho cuộc thi.                        | Must     |
+| US-005 | Là Organizer, tôi muốn tự nhập quota số team tối đa cho event.                         | Must     |
+| US-006 | Là Organizer, tôi muốn cấu hình team size từ 1 đến 5 người.                            | Must     |
+| US-007 | Là Guest, tôi muốn xem thông tin cuộc thi công khai.                                   | Must     |
+
+#### Sprint 2 – Team Registration & Email Confirmation
+
+| ID     | User Story                                                                                | Priority |
+| ------ | ----------------------------------------------------------------------------------------- | -------- |
+| US-008 | Là Participant, tôi muốn đăng ký nhóm bằng form.                                          | Must     |
+| US-009 | Là Participant, tôi muốn nhập email các thành viên trong nhóm.                            | Must     |
+| US-010 | Là hệ thống, tôi muốn kiểm tra team có từ 1 đến 5 người.                                  | Must     |
+| US-011 | Là hệ thống, tôi muốn gửi email xác nhận cho các thành viên được mời.                     | Must     |
+| US-012 | Là Participant, tôi muốn xác nhận hoặc từ chối tham gia nhóm.                             | Must     |
+| US-013 | Là hệ thống, tôi muốn kiểm tra một email/user không thuộc nhiều nhóm trong cùng cuộc thi. | Must     |
+| US-014 | Là hệ thống, tôi muốn kiểm tra quota số team trước khi xác nhận nhóm.                     | Must     |
+| US-015 | Là Organizer, tôi muốn xem danh sách nhóm đăng ký và trạng thái xác nhận.                 | Must     |
+
+#### Sprint 3 – Board Assignment, Problem Release & Check-in
+
+| ID     | User Story                                                               | Priority |
+| ------ | ------------------------------------------------------------------------ | -------- |
+| US-016 | Là Organizer, tôi muốn tạo vòng thi gồm vòng bảng và vòng chung kết.     | Must     |
+| US-017 | Là Organizer, tôi muốn tạo nhiều bảng thi trong một vòng.                | Must     |
+| US-018 | Là Organizer, tôi muốn tạo slot cho các bảng thi.                        | Should   |
+| US-019 | Là Organizer, tôi muốn chia team vào bảng ngẫu nhiên.                    | Must     |
+| US-020 | Là Organizer, tôi muốn chỉnh team vào bảng thủ công nếu cần.             | Must     |
+| US-021 | Là Organizer, tôi muốn upload đề hoặc link đề cho từng bảng.             | Must     |
+| US-022 | Là Organizer, tôi muốn cấu hình thời gian mở đề `release_at`.            | Must     |
+| US-023 | Là Participant, tôi muốn xem đề khi đã đến đúng thời gian mở đề.         | Must     |
+| US-024 | Là Participant, tôi muốn check-in bằng ảnh để xác nhận có mặt.           | Must     |
+| US-025 | Là Organizer, tôi muốn theo dõi danh sách check-in của participant/team. | Must     |
+| US-026 | Là Participant, tôi muốn xem đồng hồ đếm ngược trong lúc thi.            | Must     |
+
+#### Sprint 4 – Mentor/Judge Assignment & Scoring
+
+| ID     | User Story                                                                   | Priority |
+| ------ | ---------------------------------------------------------------------------- | -------- |
+| US-027 | Là Organizer, tôi muốn gán mentor vào bảng thi.                              | Must     |
+| US-028 | Là Organizer, tôi muốn gán judge vào bảng thi.                               | Must     |
+| US-029 | Là Mentor, tôi muốn xem danh sách team được phân công.                       | Must     |
+| US-030 | Là Judge, tôi muốn xem danh sách team cần chấm.                              | Must     |
+| US-031 | Là Organizer, tôi muốn cấu hình rubric gồm tiêu chí, trọng số và thang điểm. | Must     |
+| US-032 | Là Judge, tôi muốn mở score sheet của team.                                  | Must     |
+| US-033 | Là Judge, tôi muốn nhập điểm và nhận xét theo từng tiêu chí.                 | Must     |
+| US-034 | Là Judge, tôi muốn lưu nháp điểm trước khi submit.                           | Should   |
+| US-035 | Là Judge, tôi muốn submit score sheet chính thức.                            | Must     |
+| US-036 | Là Organizer, tôi muốn xem tiến độ chấm điểm.                                | Must     |
+
+#### Sprint 5 – Ranking, Advancement, Publish Result & AI Review
+
+| ID     | User Story                                                                            | Priority |
+| ------ | ------------------------------------------------------------------------------------- | -------- |
+| US-037 | Là Organizer, tôi muốn hệ thống tính điểm trung bình từ các judge đã submit.          | Must     |
+| US-038 | Là Organizer, tôi muốn hệ thống sort ranking theo từng bảng dựa trên điểm trung bình. | Must     |
+| US-039 | Là Organizer, tôi muốn xem ranking của từng bảng.                                     | Must     |
+| US-040 | Là Organizer, tôi muốn tick chọn thủ công team từ ranking từng bảng để vào chung kết. | Must     |
+| US-041 | Là hệ thống, tôi muốn tạo hoặc cập nhật board chung kết từ các team được chọn.        | Must     |
+| US-042 | Là Organizer, tôi muốn publish kết quả sau khi hoàn tất chấm điểm.                    | Must     |
+| US-043 | Là Participant, tôi muốn xem kết quả sau khi được công bố.                            | Must     |
+| US-044 | Là Organizer, tôi muốn export kết quả ranking.                                        | Should   |
+| US-045 | Là Participant/Organizer, tôi muốn lưu repository link của team.                      | Should   |
+| US-046 | Là hệ thống, tôi muốn tự động chạy AI Review cho repository mỗi 30 phút.              | Should   |
+| US-047 | Là Participant/Mentor/Organizer, tôi muốn xem kết quả AI Review.                      | Should   |
+
+---
+
+### 6.4 AI Prompts cho các module quan trọng
+
+Các prompt dưới đây dùng để hỗ trợ sinh code hoặc kiểm tra logic khi phát triển hệ thống. Nội dung đã được điều chỉnh theo scope mới, không dùng Team Leader, Submission Versioning, Multi-attempt Scoring, check-in làm điều kiện xem đề hoặc Outbox phức tạp.
+
+#### Prompt 1: Team Registration
+
+```text
+Create a Spring Boot service method registerTeam(eventId, currentUserId, request).
+
+Business rules:
+- Event must be REGISTRATION_OPEN.
+- Team name must not be empty.
+- Number of members must be between 1 and 5.
+- The contact user is stored as contact_user_id.
+- Each member email must be valid.
+- One email/user can only belong to one team in the same event.
+- Create Team with status PENDING.
+- Create TeamMember records with status INVITED.
+- Mark contact person as CONFIRMED if the current user is included.
+- Send confirmation email to invited members.
+Return TeamRegistrationResponse.
+```
+
+#### Prompt 2: Confirm Team Member Invitation
+
+```text
+Create a Spring Boot service method confirmInvitation(teamMemberId, currentUserEmail).
+
+Business rules:
+- The email of current user must match the invited email.
+- If the member is already CONFIRMED, return current state.
+- Check that the email/user is not already confirmed in another team of the same event.
+- Set member status to CONFIRMED.
+- After confirmation, check the team.
+- Team must have between 1 and 5 confirmed members.
+- If team is valid and event quota is not full, set team status to CONFIRMED.
+- If quota is full, set team status to WAITLIST or REJECTED.
+Use @Transactional.
+Return updated team status.
+```
+
+#### Prompt 3: Random Board Assignment
+
+```text
+Create a service method randomAssignTeamsToBoards(roundId).
+
+Business rules:
+- Only Organizer can run this operation.
+- Fetch all CONFIRMED teams of the event.
+- Fetch boards and board slots of the round.
+- A team can only be assigned to one slot in the same round.
+- Randomly assign teams to available slots.
+- Save board slot assignment.
+Return list of assigned teams grouped by board.
+```
+
+#### Prompt 4: Manual Board Assignment
+
+```text
+Create a service method manuallyAssignTeamToBoardSlot(slotId, teamId).
+
+Business rules:
+- Only Organizer can run this operation.
+- Team must have status CONFIRMED.
+- Team must belong to the same event as the round of the board slot.
+- Slot must exist.
+- A team can only be assigned to one slot in the same round.
+- If slot already has a team, Organizer can replace it only if business rule allows.
+- Save board slot assignment.
+Return updated board slot response.
+```
+
+#### Prompt 5: Problem Release Check
+
+```text
+Create a service method getProblemForCurrentUser(problemId, currentUserId).
+
+Business rules:
+- User must belong to a team assigned to the problem's board.
+- Current time must be greater than or equal to problem.releaseAt.
+- Check-in is not required to view the problem.
+- If current time is before releaseAt, throw ProblemNotReleasedException.
+Return problem detail.
+```
+
+#### Prompt 6: Submit Score Sheet
+
+```text
+Create a service method submitScoreSheet(scoreSheetId, judgeId, request).
+
+Business rules:
+- Judge must be assigned to the board of the score sheet.
+- Score sheet must be DRAFT.
+- Request must include score values for all required criteria.
+- Each score value must be between criteria.minScore and criteria.maxScore.
+- Save score items.
+- Set score sheet status to SUBMITTED.
+- Set submittedAt to current time.
+Return ScoreSheetResponse.
+```
+
+#### Prompt 7: Calculate Ranking by Average Score
+
+```text
+Create a service method calculateRanking(boardId).
+
+Business rules:
+- Only Organizer can calculate ranking.
+- Fetch all teams in the board.
+- Exclude teams with status DISQUALIFIED.
+- Fetch SUBMITTED score sheets.
+- For each judge score sheet, calculate judge score = SUM(score_value * criteria.weight).
+- Final team score = AVG(judge scores).
+- Sort teams by final team score descending.
+- Save ranking results with rank and average score.
+- If ranking already exists and not published, allow recalculation.
+Return ranking list grouped by board.
+```
+
+#### Prompt 8: Manual Advancement Selection
+
+```text
+Create a service method advanceSelectedTeams(boardId, request).
+
+Business rules:
+- Only Organizer can select teams for final.
+- Teams must come from the ranking results of the source board.
+- Organizer manually ticks selected teams from each board ranking.
+- Do not automatically select top N.
+- A team cannot be advanced twice to the same target round.
+- Create advancement records for selected teams.
+- Assign selected teams to the final board if target board is provided.
+Return advancement response.
+```
+
+#### Prompt 9: Scheduled AI Review
+
+```text
+Create a scheduled service method runScheduledAiReview().
+
+Business rules:
+- Scheduler runs periodically.
+- Find team repositories where nextReviewAt <= now.
+- AI Review interval is 30 minutes by default.
+- Create ai_review record with status PENDING.
+- Send repository/code content to AI service.
+- AI returns review_score, summary, issues, suggestions.
+- Save result and set status COMPLETED.
+- If AI service fails, set status FAILED.
+- Update repository.lastReviewedAt = now.
+- Update repository.nextReviewAt = now + 30 minutes.
+- AI Review must not affect official ranking.
+Return nothing or log scheduled job summary.
+```
+
+---
+
+### 6.5 Folder Structure
+
+```text
+backend/
+├── src/main/java/com/seal/hackathon
+│   ├── HackathonApplication.java
+│   │
+│   ├── common/
+│   │   ├── exception/
+│   │   ├── response/
+│   │   ├── config/
+│   │   ├── validator/
+│   │   └── util/
+│   │
+│   ├── authprofile/
+│   │   ├── controller/
+│   │   ├── service/
+│   │   ├── entity/
+│   │   ├── repository/
+│   │   └── dto/
+│   │
+│   ├── contest/
+│   │   ├── controller/
+│   │   ├── service/
+│   │   ├── entity/
+│   │   ├── repository/
+│   │   └── dto/
+│   │
+│   ├── registration/
+│   │   ├── controller/
+│   │   ├── service/
+│   │   ├── entity/
+│   │   ├── repository/
+│   │   └── dto/
+│   │
+│   ├── checkin/
+│   │   ├── controller/
+│   │   ├── service/
+│   │   ├── entity/
+│   │   ├── repository/
+│   │   └── dto/
+│   │
+│   ├── assignment/
+│   │   ├── controller/
+│   │   ├── service/
+│   │   ├── entity/
+│   │   ├── repository/
+│   │   └── dto/
+│   │
+│   ├── scoring/
+│   │   ├── controller/
+│   │   ├── service/
+│   │   ├── entity/
+│   │   ├── repository/
+│   │   └── dto/
+│   │
+│   ├── ranking/
+│   │   ├── controller/
+│   │   ├── service/
+│   │   ├── entity/
+│   │   ├── repository/
+│   │   └── dto/
+│   │
+│   ├── notification/
+│   │   ├── controller/
+│   │   ├── service/
+│   │   ├── entity/
+│   │   ├── repository/
+│   │   └── dto/
+│   │
+│   └── aireview/
+│       ├── controller/
+│       ├── scheduler/
+│       ├── service/
+│       ├── entity/
+│       ├── repository/
+│       └── dto/
+│
+├── src/main/resources/
+│   ├── application.yml
+│   ├── application-dev.yml
+│   ├── application-prod.yml
+│   └── db/migration/
+│
+└── src/test/
+```
+
+---
+
+### 6.6 Coding Conventions
+
+| Nội dung       | Quy ước                                                                                |
+| -------------- | -------------------------------------------------------------------------------------- |
+| Java style     | Dùng Java naming convention, class PascalCase, method camelCase.                       |
+| Package        | Chia package theo module nghiệp vụ.                                                    |
+| Entity         | Tên entity dạng số ít: `User`, `Team`, `Board`, `ScoreSheet`.                          |
+| Table          | Tên bảng snake_case số nhiều: `users`, `teams`, `score_sheets`.                        |
+| DTO request    | Hậu tố `Request`, ví dụ `RegisterTeamRequest`.                                         |
+| DTO response   | Hậu tố `Response`, ví dụ `RankingResultResponse`.                                      |
+| Service method | Tên theo hành động nghiệp vụ: `registerTeam`, `confirmInvitation`, `calculateRanking`. |
+| Scheduled job  | Đặt trong package `scheduler`, ví dụ `AiReviewScheduler`.                              |
+| Repository     | Kế thừa `JpaRepository<Entity, UUID>`.                                                 |
+| API URL        | Dùng RESTful URL, kebab-case nếu cần.                                                  |
+| Exception      | Custom exception theo nghiệp vụ, xử lý bằng `@ControllerAdvice`.                       |
+| Git commit     | Dùng Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`.                      |
+
+---
+
+### 6.7 Git Branching Strategy
+
+Trong phạm vi đồ án, chiến lược Git nên đơn giản:
+
+```text
+main
+└── develop
+    ├── feature/auth-profile
+    ├── feature/contest-management
+    ├── feature/team-registration
+    ├── feature/check-in
+    ├── feature/board-assignment
+    ├── feature/scoring
+    ├── feature/ranking
+    └── feature/ai-review-scheduler
+```
+
+| Branch      | Mục đích                                     |
+| ----------- | -------------------------------------------- |
+| `main`      | Chứa bản ổn định để demo/nộp.                |
+| `develop`   | Tích hợp tính năng trước khi merge vào main. |
+| `feature/*` | Phát triển từng module hoặc user story.      |
+| `fix/*`     | Sửa bug.                                     |
+
+Quy trình đề xuất:
+
+```text
+Tạo feature branch
+→ Code và test
+→ Pull request vào develop
+→ Review
+→ Merge develop vào main khi chuẩn bị demo
+```
+
+---
+
+### 6.8 MVP Priority Summary
+
+| Nhóm chức năng                 | Mức ưu tiên | Ghi chú                                              |
+| ------------------------------ | ----------- | ---------------------------------------------------- |
+| Auth/Profile                   | Must        | Cần để phân quyền và xác định actor.                 |
+| Contest Setup                  | Must        | Tạo event, quota, team size, round, board.           |
+| Team Registration              | Must        | Đăng ký nhóm 1–5 người và xác nhận thành viên.       |
+| Board Assignment               | Must        | Cần cả random và manual assignment.                  |
+| Problem Release                | Must        | Mở đề dựa trên `release_at`.                         |
+| Check-in                       | Must        | Dùng để xác nhận có mặt, không chặn xem đề.          |
+| Mentor/Judge Assignment        | Must        | Cần để phân công hỗ trợ/chấm điểm.                   |
+| Scoring                        | Must        | Judge nhập điểm và submit score sheet.               |
+| Ranking                        | Must        | Tính điểm trung bình và sort theo bảng.              |
+| Manual Advancement             | Must        | Organizer tick chọn team vào final.                  |
+| Publish Result                 | Must        | Công bố kết quả sau khi chấm.                        |
+| Notification                   | Should      | Email xác nhận, mời mentor/judge, thông báo kết quả. |
+| AI Review Scheduler            | Should      | Chạy review định kỳ mỗi 30 phút, dùng để tham khảo.  |
+| AI Review theo commit chi tiết | Could       | Có thể làm nếu còn thời gian.                        |
+
+```
+
+## 7. FINAL CONSISTENCY CHECK
+
+### 7.1 Scope Consistency
+
+| # | Vấn đề kiểm tra | Trạng thái sau sửa | Ghi chú |
+|---|---|---|---|
+| 1 | Có còn actor Team Leader riêng không? | Đã bỏ | Chỉ còn Participant, Organizer, Mentor, Judge. |
+| 2 | Có còn actor Team Member riêng không? | Đã bỏ | Team member chỉ là dữ liệu trong team, không phải actor chính. |
+| 3 | Có còn Researcher không? | Đã bỏ khỏi MVP | Không còn Research Analytics trong scope chính. |
+| 4 | Có còn Track không? | Đã đổi thành Board | Sát nghiệp vụ “bảng thi” giáo viên góp ý. |
+| 5 | Team có còn tự đăng ký track không? | Đã bỏ | Organizer chia bảng random hoặc thủ công. |
+| 6 | Có còn Submission Versioning không? | Đã bỏ | Chỉ lưu repository/work link nếu cần. |
+| 7 | Có còn Multi-attempt Scoring không? | Đã bỏ | Score sheet chỉ có `DRAFT` và `SUBMITTED`. |
+| 8 | Có còn Calibration Dashboard không? | Đã bỏ | Không thuộc quy trình thi chính. |
+| 9 | Có còn Outbox/Idempotency production-ready không? | Đã bỏ khỏi MVP | Chỉ giữ notification đơn giản. |
+| 10 | Team size đã đúng chưa? | Đã sửa | Team có từ 1 đến 5 người. |
+| 11 | Quota event đã đúng chưa? | Đã sửa | Organizer tự nhập `max_teams`. |
+| 12 | Điều kiện mở đề đã đúng chưa? | Đã sửa | Chỉ cần đúng giờ `release_at`, không bắt buộc check-in. |
+| 13 | Cách tính điểm đã đúng chưa? | Đã sửa | Điểm cuối là trung bình điểm từ các judge đã submit. |
+| 14 | Advancement đã đúng chưa? | Đã sửa | Hệ thống sort từng bảng, Organizer tick chọn thủ công team vào chung kết. |
+| 15 | AI Review có còn ảnh hưởng điểm chính thức không? | Không | Chỉ dùng tham khảo, không ảnh hưởng điểm chính thức. |
+| 16 | AI Review đã đúng yêu cầu mới chưa? | Đã sửa | AI Review chạy định kỳ mỗi 30 phút. |
+
+---
+
+### 7.2 Business Flow Consistency
+
+| # | Luồng nghiệp vụ | Đã hỗ trợ? | Module liên quan |
+|---|---|---|---|
+| 1 | Participant đăng nhập bằng Google | Có | auth-profile-module |
+| 2 | Participant cập nhật profile | Có | auth-profile-module |
+| 3 | Organizer tạo cuộc thi | Có | contest-module |
+| 4 | Organizer cấu hình quota event | Có | contest-module |
+| 5 | Organizer cấu hình team size 1–5 | Có | contest-module |
+| 6 | Participant đăng ký nhóm qua form | Có | registration-module |
+| 7 | Hệ thống gửi email xác nhận thành viên | Có | notification-module |
+| 8 | Thành viên xác nhận tham gia nhóm | Có | registration-module |
+| 9 | Hệ thống kiểm tra team size và quota | Có | registration-module |
+| 10 | Organizer tạo vòng/bảng thi | Có | contest-module |
+| 11 | Organizer chia bảng random | Có | contest-module |
+| 12 | Organizer chia bảng thủ công | Có | contest-module |
+| 13 | Participant check-in bằng ảnh | Có | checkin-module |
+| 14 | Organizer theo dõi check-in | Có | checkin-module |
+| 15 | Organizer upload đề | Có | contest-module |
+| 16 | Hệ thống mở đề đúng giờ | Có | contest-module |
+| 17 | Participant xem đề khi đến `release_at` | Có | contest-module |
+| 18 | Participant xem countdown | Có | contest-module |
+| 19 | Organizer gán mentor/judge | Có | assignment-module |
+| 20 | Mentor xem team được phân công | Có | assignment-module |
+| 21 | Judge chấm điểm theo rubric | Có | scoring-module |
+| 22 | Organizer xem tiến độ chấm | Có | scoring-module |
+| 23 | Hệ thống tính điểm trung bình | Có | ranking-module |
+| 24 | Hệ thống sort ranking theo từng bảng | Có | ranking-module |
+| 25 | Organizer tick chọn team vào chung kết | Có | ranking-module |
+| 26 | Organizer công bố kết quả | Có | ranking-module |
+| 27 | Participant/Organizer lưu repository | Có | ai-review-module |
+| 28 | AI Review chạy định kỳ mỗi 30 phút | Có, mức mở rộng | ai-review-module |
+| 29 | Participant/Mentor/Organizer xem AI Review | Có | ai-review-module |
+
+---
+
+### 7.3 Database Consistency
+
+| # | Kiểm tra | Trạng thái | Bảng liên quan |
+|---|---|---|---|
+| 1 | User có thể có nhiều role | Đúng | `users`, `user_roles` |
+| 2 | Event có nhiều round | Đúng | `events`, `rounds` |
+| 3 | Event có quota do Organizer nhập | Đúng | `events.max_teams` |
+| 4 | Event cấu hình team size 1–5 | Đúng | `events.min_team_size`, `events.max_team_size` |
+| 5 | Round có nhiều board | Đúng | `rounds`, `boards` |
+| 6 | Board có nhiều slot | Đúng | `boards`, `board_slots` |
+| 7 | Team thuộc một event | Đúng | `events`, `teams` |
+| 8 | Team có nhiều member | Đúng | `teams`, `team_members` |
+| 9 | Team member có trạng thái xác nhận | Đúng | `team_members` |
+| 10 | Team member có check-in | Đúng | `team_members`, `check_ins` |
+| 11 | Check-in không chặn xem đề | Đúng | `check_ins`, `problems` |
+| 12 | Board có problem | Đúng | `boards`, `problems` |
+| 13 | Problem mở theo `release_at` | Đúng | `problems.release_at` |
+| 14 | Board có mentor assignment | Đúng | `boards`, `mentor_assignments` |
+| 15 | Board có judge assignment | Đúng | `boards`, `judge_assignments` |
+| 16 | Round có scoring criteria | Đúng | `rounds`, `score_criteria` |
+| 17 | Judge chấm bằng score sheet | Đúng | `judge_assignments`, `score_sheets` |
+| 18 | Score sheet có nhiều score item | Đúng | `score_sheets`, `score_items` |
+| 19 | Ranking theo board | Đúng | `boards`, `ranking_results` |
+| 20 | Ranking lưu điểm trung bình | Đúng | `ranking_results.average_score` hoặc `ranking_results.average_score` |
+| 21 | Advancement lưu team được tick chọn vào vòng sau | Đúng | `advancements` |
+| 22 | AI Review tách khỏi scoring chính thức | Đúng | `team_repositories`, `repo_commits`, `ai_reviews` |
+| 23 | AI Review có lịch chạy 30 phút | Đúng | `team_repositories.last_reviewed_at`, `next_review_at`, `review_interval_minutes` |
+| 24 | Notification không phụ thuộc outbox | Đúng | `notifications` |
+
+---
+
+### 7.4 Permission Consistency
+
+| Hành động | Actor hợp lệ | Kết luận |
+|---|---|---|
+| Tạo event | Organizer | Hợp lý |
+| Cấu hình quota event | Organizer | Hợp lý |
+| Cấu hình team size 1–5 | Organizer | Hợp lý |
+| Đăng ký nhóm | Participant | Hợp lý |
+| Xác nhận tham gia nhóm | Participant | Hợp lý |
+| Chia bảng random | Organizer | Hợp lý |
+| Chia bảng thủ công | Organizer | Hợp lý |
+| Upload đề | Organizer | Hợp lý |
+| Xem đề | Participant khi đã đến `release_at` | Hợp lý |
+| Check-in | Participant | Hợp lý |
+| Theo dõi check-in | Organizer | Hợp lý |
+| Xem team được phân công | Mentor/Judge/Organizer | Hợp lý |
+| Chấm điểm | Judge | Hợp lý |
+| Tính ranking | Organizer | Hợp lý |
+| Tick chọn team vào chung kết | Organizer | Hợp lý |
+| Publish kết quả | Organizer | Hợp lý |
+| Xem kết quả | Participant/Guest sau publish | Hợp lý |
+| Lưu repository | Participant team mình hoặc Organizer | Hợp lý |
+| AI Review định kỳ | Scheduler/System | Hợp lý |
+| Xem AI Review | Participant team mình, Mentor được phân công, Organizer | Hợp lý |
+| Judge xem AI Review | Không | Hợp lý, tránh ảnh hưởng chấm điểm độc lập |
+
+---
+
+### 7.5 Requirement Decision Check
+
+| Yêu cầu đã chốt với giáo viên | Trạng thái trong thiết kế | Ghi chú |
+|---|---|---|
+| Team size chính xác là 1–5 người | Đã cập nhật | Áp dụng trong business rule, validation, backlog và database. |
+| Quota event do Organizer tự nhập | Đã cập nhật | Dùng `events.max_teams`. |
+| Chia bảng hỗ trợ cả random và thủ công | Đã cập nhật | Dùng board slots và board assignment flow. |
+| Điều kiện mở đề là đúng giờ là đủ | Đã cập nhật | Chỉ kiểm tra `release_at`, không kiểm tra check-in. |
+| Check-in dùng để xác nhận có mặt | Đã cập nhật | Không còn là điều kiện xem đề. |
+| AI Review chạy mỗi 30 phút | Đã cập nhật | Dùng scheduler và `next_review_at`. |
+| Cách tính điểm là trung bình điểm | Đã cập nhật | Ranking dùng trung bình điểm từ các judge đã submit. |
+| Advancement là sort từng bảng để Organizer tick chọn thủ công | Đã cập nhật | Không auto top N. |
+
+---
+
+### 7.6 Remaining Risks
+
+| Rủi ro | Mức độ | Cách xử lý |
+|---|---|---|
+| Giáo viên muốn mobile app thật thay vì responsive web | Trung bình | Trình bày hướng PWA/mobile-first; nếu đủ thời gian làm Flutter/React Native. |
+| Quy định tie-break chưa rõ | Thấp | Vì Organizer tick chọn thủ công, hệ thống chỉ cần hiển thị điểm/rank để tham khảo. |
+| AI Review mỗi 30 phút có thể khó demo đúng thời gian thật | Trung bình | Cho phép cấu hình interval nhỏ hơn trong môi trường demo, ví dụ 1–5 phút. |
+| AI API lỗi hoặc tốn chi phí | Trung bình | Dùng mock AI response trong demo, vẫn lưu đúng trạng thái `COMPLETED`/`FAILED`. |
+| Email gửi thật có thể lỗi khi demo | Thấp | Có thể log email hoặc dùng Mailtrap trong môi trường demo. |
+| Upload ảnh/file cần storage | Thấp | Dùng local storage trong MVP. |
+| Ranking sai do judge chưa submit đủ | Trung bình | Hiển thị score progress và cảnh báo thiếu score sheet. |
+| Participant không xem được đề do sai thời gian máy chủ | Thấp | Kiểm tra timezone và dùng server time làm nguồn chính. |
+
+---
+
+### 7.7 Final Conclusion
+
+Sau khi điều chỉnh, hệ thống đã chuyển từ hướng production-ready phức tạp sang hướng phù hợp hơn với yêu cầu thực tế của giáo viên.
+
+Hệ thống hiện tập trung vào:
+
+```text
+Đăng ký nhóm 1–5 người
+→ Xác nhận thành viên
+→ Giới hạn số team theo quota Organizer nhập
+→ Chia bảng random/thủ công
+→ Check-in ảnh
+→ Mở đề đúng giờ
+→ Countdown
+→ Mentor/Judge assignment
+→ Judge chấm điểm
+→ Tính điểm trung bình
+→ Sort ranking theo từng bảng
+→ Organizer tick chọn team vào chung kết
+→ Công bố kết quả
+→ AI Review định kỳ mỗi 30 phút để tham khảo
+```
+
+Thiết kế này vừa đủ cho đồ án sinh viên, dễ demo, dễ bảo vệ và sát với nghiệp vụ tổ chức cuộc thi.
+
+---
+
+## 8. DEPLOYMENT & OPERATIONS
+
+### 8.1 Deployment Scope
+
+Trong phạm vi đồ án, deployment chỉ cần đảm bảo hệ thống chạy ổn định để phát triển, test và demo.
+
+Không yêu cầu triển khai production đầy đủ với monitoring nâng cao, autoscaling, backup nhiều tầng hoặc CI/CD phức tạp.
+
+Mục tiêu deployment:
+
+| Mục tiêu | Mô tả |
+|---|---|
+| Dễ chạy local | Thành viên nhóm có thể chạy backend, frontend và database trên máy cá nhân. |
+| Dễ demo | Có thể chạy toàn bộ hệ thống bằng Docker Compose. |
+| Dễ cấu hình | Các thông tin nhạy cảm được đưa vào biến môi trường. |
+| Dễ reset dữ liệu | Có thể seed dữ liệu mẫu để demo. |
+| Hỗ trợ AI Review định kỳ | Scheduler chạy cùng backend để review repository theo chu kỳ. |
+
+---
+
+### 8.2 Local Development Setup
+
+#### Backend
+
+```text
+Technology: Spring Boot
+Port: 8080
+Profile: dev
+Scheduler: Spring Scheduler for AI Review
+```
+
+Chạy backend:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Hoặc:
+
+```bash
+mvn spring-boot:run
+```
+
+#### Frontend
+
+```text
+Technology: React / PWA
+Port: 3000
+```
+
+Chạy frontend:
+
+```bash
+npm install
+npm run dev
+```
+
+#### Database
+
+```text
+Technology: PostgreSQL
+Port: 5432
+Database name: seal_hackathon
+```
+
+Có thể chạy PostgreSQL bằng Docker:
+
+```bash
+docker run --name seal-postgres \
+  -e POSTGRES_DB=seal_hackathon \
+  -e POSTGRES_USER=seal_admin \
+  -e POSTGRES_PASSWORD=seal_password \
+  -p 5432:5432 \
+  -d postgres:16
+```
+
+---
+
+### 8.3 Docker Compose for Demo
+
+```yaml
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: seal-postgres
+    environment:
+      POSTGRES_DB: seal_hackathon
+      POSTGRES_USER: seal_admin
+      POSTGRES_PASSWORD: seal_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - seal_pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: seal-backend
+    depends_on:
+      - postgres
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/seal_hackathon
+      DB_USERNAME: seal_admin
+      DB_PASSWORD: seal_password
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      AI_API_KEY: ${AI_API_KEY}
+      AI_REVIEW_INTERVAL_MINUTES: 30
+      FILE_STORAGE_PATH: /app/uploads
+    ports:
+      - "8080:8080"
+    volumes:
+      - seal_uploads:/app/uploads
+
+  frontend:
+    build: ./frontend
+    container_name: seal-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  seal_pgdata:
+  seal_uploads:
+```
+
+Chạy toàn bộ hệ thống:
+
+```bash
+docker compose up -d
+```
+
+Dừng hệ thống:
+
+```bash
+docker compose down
+```
+
+Xóa dữ liệu demo nếu cần:
+
+```bash
+docker compose down -v
+```
+
+---
+
+### 8.4 Environment Variables
+
+| Biến môi trường | Mục đích |
+|---|---|
+| `DB_URL` | URL kết nối PostgreSQL. |
+| `DB_USERNAME` | Username database. |
+| `DB_PASSWORD` | Password database. |
+| `GOOGLE_CLIENT_ID` | Client ID cho Google OAuth. |
+| `GOOGLE_CLIENT_SECRET` | Client secret cho Google OAuth. |
+| `JWT_SECRET` | Secret key nếu dùng JWT. |
+| `MAIL_USERNAME` | Email dùng để gửi thông báo. |
+| `MAIL_PASSWORD` | Mật khẩu/app password của email gửi. |
+| `AI_API_KEY` | API key cho AI Review. |
+| `AI_REVIEW_INTERVAL_MINUTES` | Chu kỳ AI Review, mặc định là `30`. |
+| `AI_REVIEW_ENABLED` | Bật/tắt scheduler AI Review khi demo. |
+| `FILE_STORAGE_PATH` | Đường dẫn lưu ảnh check-in/file đề. |
+
+---
+
+### 8.5 Database Migration
+
+Có thể dùng Flyway hoặc chạy SQL thủ công. Nếu dùng Flyway, cấu trúc migration đề xuất:
+
+```text
+src/main/resources/db/migration/
+├── V1__init_users_roles.sql
+├── V2__init_events_rounds_boards.sql
+├── V3__init_teams_members_checkins.sql
+├── V4__init_assignments.sql
+├── V5__init_scoring.sql
+├── V6__init_ranking_advancement.sql
+├── V7__init_notifications.sql
+├── V8__init_ai_review.sql
+└── V9__seed_demo_data.sql
+```
+
+#### Seed data demo nên có
+
+| Dữ liệu mẫu | Mục đích |
+|---|---|
+| 1 Organizer | Đăng nhập quản trị. |
+| 2 Mentor | Demo phân công mentor. |
+| 3 Judge | Demo chấm điểm. |
+| 6–10 Team | Demo đăng ký, chia bảng và ranking. |
+| Team size 1–5 | Demo rule team size mới. |
+| 2 Round | Vòng bảng và chung kết. |
+| 2–3 Board | Bảng A, Bảng B, Bảng chung kết. |
+| Board slots | Demo random/manual assignment. |
+| Rubric mẫu | Demo score sheet. |
+| Problem mẫu | Demo mở đề đúng giờ. |
+| Repository mẫu | Demo AI Review định kỳ. |
+| AI Review mẫu | Demo xem nhận xét AI nếu API thật không chạy. |
+
+---
+
+### 8.6 File Storage
+
+Các loại file cần lưu:
+
+| Loại file | Ví dụ | Nơi lưu trong MVP |
+|---|---|---|
+| Ảnh check-in | `.jpg`, `.png` | Local folder hoặc cloud storage. |
+| File đề thi | `.pdf`, `.docx`, `.zip` | Local folder hoặc cloud storage. |
+| Attachment thông báo | `.pdf`, `.png` | Local folder hoặc cloud storage. |
+| File/log AI Review nếu cần | `.json`, `.txt` | Database hoặc local folder. |
+
+Trong MVP, có thể lưu ở local:
+
+```text
+/uploads/checkins
+/uploads/problems
+/uploads/announcements
+/uploads/ai-reviews
+```
+
+Nếu muốn triển khai tốt hơn, có thể dùng:
+
+```text
+Cloudinary
+Firebase Storage
+AWS S3
+```
+
+---
+
+### 8.7 Basic Monitoring
+
+Trong phạm vi đồ án, monitoring chỉ cần đơn giản.
+
+| Thành phần | Cách kiểm tra |
+|---|---|
+| Backend còn chạy không | Gọi endpoint `/actuator/health` hoặc `/health`. |
+| Database kết nối được không | Backend health check hoặc log. |
+| File upload có lỗi không | Kiểm tra log backend và thư mục upload. |
+| Email gửi được không | Kiểm tra log hoặc hộp thư nhận. |
+| AI Review scheduler có chạy không | Kiểm tra log scheduler hoặc thời gian `last_reviewed_at`. |
+| AI Review thành công/thất bại | Kiểm tra trạng thái `PENDING`, `COMPLETED`, `FAILED`. |
+| Ranking đúng không | Kiểm tra score sheet `SUBMITTED` và điểm trung bình. |
+
+Không bắt buộc dùng Prometheus/Grafana trong MVP.
+
+---
+
+### 8.8 Backup & Restore
+
+Với đồ án, chỉ cần backup đơn giản.
+
+#### Backup database
+
+```bash
+pg_dump -U seal_admin seal_hackathon > backup_seal_hackathon.sql
+```
+
+#### Restore database
+
+```bash
+psql -U seal_admin seal_hackathon < backup_seal_hackathon.sql
+```
+
+#### Backup file upload
+
+```bash
+zip -r uploads_backup.zip uploads/
+```
+
+Nên backup trước khi demo chính thức.
+
+---
+
+### 8.9 Demo Checklist
+
+Trước khi demo, cần kiểm tra:
+
+| Checklist | Trạng thái |
+|---|---|
+| Backend chạy được | ☐ |
+| Frontend chạy được | ☐ |
+| Database có seed data | ☐ |
+| Đăng nhập Google hoạt động | ☐ |
+| Organizer tạo event được | ☐ |
+| Organizer cấu hình quota được | ☐ |
+| Organizer cấu hình team size 1–5 được | ☐ |
+| Participant đăng ký nhóm được | ☐ |
+| Team 1 người đăng ký được | ☐ |
+| Team quá 5 người bị chặn | ☐ |
+| Email xác nhận hoạt động hoặc có log giả lập | ☐ |
+| Chia bảng random hoạt động | ☐ |
+| Chia bảng thủ công hoạt động | ☐ |
+| Upload đề hoạt động | ☐ |
+| Xem đề đúng giờ hoạt động | ☐ |
+| Check-in ảnh hoạt động | ☐ |
+| Countdown hiển thị đúng | ☐ |
+| Gán mentor/judge hoạt động | ☐ |
+| Judge chấm điểm được | ☐ |
+| Ranking tính điểm trung bình đúng | ☐ |
+| Ranking sort theo từng bảng đúng | ☐ |
+| Organizer tick chọn team vào chung kết được | ☐ |
+| Publish kết quả được | ☐ |
+| Lưu repository link được | ☐ |
+| AI Review scheduler chạy được hoặc có mock data | ☐ |
+| Participant/Mentor/Organizer xem AI Review được | ☐ |
+
+---
+
+### 8.10 Operation Notes
+
+Một số lưu ý khi vận hành demo:
+
+| Tình huống | Cách xử lý |
+|---|---|
+| Không gửi được email thật | Dùng Mailtrap hoặc ghi email ra log. |
+| Không gọi được AI API | Dùng mock AI response để demo. |
+| Scheduler AI Review chưa chạy kịp 30 phút | Đổi `AI_REVIEW_INTERVAL_MINUTES` xuống 1–5 phút trong môi trường demo. |
+| Google OAuth lỗi | Chuẩn bị sẵn tài khoản local/Organizer fallback nếu cần. |
+| Upload ảnh lỗi | Kiểm tra `FILE_STORAGE_PATH` và quyền ghi file. |
+| Participant không xem được đề | Kiểm tra `release_at`, server time và team đã được gán board chưa. |
+| Ranking sai | Kiểm tra score sheet đã `SUBMITTED` chưa và công thức tính điểm trung bình. |
+| Team không được chọn vào chung kết | Kiểm tra Organizer đã tick chọn từ ranking đúng board chưa. |
+| AI Review luôn `FAILED` | Kiểm tra `AI_API_KEY`, repository URL hoặc dùng mock response. |
+| AI Review không chạy lại | Kiểm tra `next_review_at` và scheduler log. |
+
+---
+
+### 8.11 Final Deployment Conclusion
+
+Deployment của hệ thống được thiết kế theo hướng đơn giản, phù hợp đồ án sinh viên.
+
+Mục tiêu không phải là triển khai production quy mô lớn, mà là đảm bảo:
+
+```text
+Dễ chạy
+Dễ demo
+Dễ cấu hình
+Dễ backup
+Dễ khôi phục
+Có thể demo AI Review định kỳ
+```
+
+Nếu có thêm thời gian, hệ thống có thể mở rộng sang cloud deployment, CI/CD, monitoring nâng cao, object storage chuyên nghiệp và queue/background worker cho AI Review.
+````
