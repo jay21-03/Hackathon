@@ -1,0 +1,491 @@
+CREATE TABLE users (
+  id BIGSERIAL PRIMARY KEY,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  google_sub VARCHAR(255) UNIQUE,
+  password_hash VARCHAR(255),
+  full_name VARCHAR(255) NOT NULL,
+  student_id VARCHAR(50),
+  university VARCHAR(255),
+  avatar_url TEXT,
+  status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE user_roles (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  role VARCHAR(30) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_user_roles_user
+    FOREIGN KEY (user_id) REFERENCES users(id),
+
+  CONSTRAINT uq_user_roles_user_role
+    UNIQUE (user_id, role)
+);
+
+-- =========================
+-- 2. EVENT STRUCTURE
+-- =========================
+
+CREATE TABLE events (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  registration_start_at TIMESTAMP,
+  registration_end_at TIMESTAMP,
+  max_teams INT NOT NULL,
+  min_team_size INT NOT NULL DEFAULT 1,
+  max_team_size INT NOT NULL DEFAULT 5,
+  status VARCHAR(30) NOT NULL DEFAULT 'DRAFT',
+  created_by BIGINT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_events_created_by
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE TABLE rounds (
+  id BIGSERIAL PRIMARY KEY,
+  event_id BIGINT NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  round_type VARCHAR(30) NOT NULL,
+  round_order INT NOT NULL,
+  start_at TIMESTAMP,
+  end_at TIMESTAMP,
+  status VARCHAR(30) NOT NULL DEFAULT 'UPCOMING',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_rounds_event
+    FOREIGN KEY (event_id) REFERENCES events(id),
+
+  CONSTRAINT uq_rounds_event_order
+    UNIQUE (event_id, round_order)
+);
+
+CREATE TABLE boards (
+  id BIGSERIAL PRIMARY KEY,
+  round_id BIGINT NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  board_order INT NOT NULL,
+  description TEXT,
+  status VARCHAR(30) NOT NULL DEFAULT 'DRAFT',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_boards_round
+    FOREIGN KEY (round_id) REFERENCES rounds(id),
+
+  CONSTRAINT uq_boards_round_name
+    UNIQUE (round_id, name),
+
+  CONSTRAINT uq_boards_round_order
+    UNIQUE (round_id, board_order)
+);
+
+-- =========================
+-- 3. TEAM REGISTRATION
+-- =========================
+
+CREATE TABLE teams (
+  id BIGSERIAL PRIMARY KEY,
+  event_id BIGINT NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  sequence_no INT,
+  contact_user_id BIGINT,
+  contact_email VARCHAR(255),
+  status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+  confirmed_at TIMESTAMP,
+  rejected_reason TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_teams_event
+    FOREIGN KEY (event_id) REFERENCES events(id),
+
+  CONSTRAINT fk_teams_contact_user
+    FOREIGN KEY (contact_user_id) REFERENCES users(id),
+
+  CONSTRAINT uq_teams_event_name
+    UNIQUE (event_id, name),
+
+  CONSTRAINT uq_teams_event_sequence
+    UNIQUE (event_id, sequence_no)
+);
+
+CREATE TABLE team_members (
+  id BIGSERIAL PRIMARY KEY,
+  event_id BIGINT NOT NULL,
+  team_id BIGINT NOT NULL,
+  user_id BIGINT,
+  email VARCHAR(255) NOT NULL,
+  full_name VARCHAR(255),
+  student_id VARCHAR(50),
+  university VARCHAR(255),
+  is_contact_person BOOLEAN NOT NULL DEFAULT FALSE,
+  status VARCHAR(30) NOT NULL DEFAULT 'INVITED',
+  invite_token VARCHAR(255),
+  invited_at TIMESTAMP,
+  confirmed_at TIMESTAMP,
+  declined_at TIMESTAMP,
+
+  CONSTRAINT fk_team_members_event
+    FOREIGN KEY (event_id) REFERENCES events(id),
+
+  CONSTRAINT fk_team_members_team
+    FOREIGN KEY (team_id) REFERENCES teams(id),
+
+  CONSTRAINT fk_team_members_user
+    FOREIGN KEY (user_id) REFERENCES users(id),
+
+  CONSTRAINT uq_team_members_event_email
+    UNIQUE (event_id, email)
+);
+
+CREATE TABLE check_ins (
+  id BIGSERIAL PRIMARY KEY,
+  event_id BIGINT NOT NULL,
+  team_id BIGINT NOT NULL,
+  team_member_id BIGINT NOT NULL,
+  user_id BIGINT,
+  photo_url TEXT NOT NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+  checked_in_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  verified_by BIGINT,
+  verified_at TIMESTAMP,
+  note TEXT,
+
+  CONSTRAINT fk_checkins_event
+    FOREIGN KEY (event_id) REFERENCES events(id),
+
+  CONSTRAINT fk_checkins_team
+    FOREIGN KEY (team_id) REFERENCES teams(id),
+
+  CONSTRAINT fk_checkins_team_member
+    FOREIGN KEY (team_member_id) REFERENCES team_members(id),
+
+  CONSTRAINT fk_checkins_user
+    FOREIGN KEY (user_id) REFERENCES users(id),
+
+  CONSTRAINT fk_checkins_verified_by
+    FOREIGN KEY (verified_by) REFERENCES users(id),
+
+  CONSTRAINT uq_checkins_event_member
+    UNIQUE (event_id, team_member_id)
+);
+
+-- =========================
+-- 4. BOARD SLOT & PROBLEM
+-- =========================
+
+CREATE TABLE board_slots (
+  id BIGSERIAL PRIMARY KEY,
+  round_id BIGINT NOT NULL,
+  board_id BIGINT NOT NULL,
+  team_number INT NOT NULL,
+  team_id BIGINT,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_board_slots_round
+    FOREIGN KEY (round_id) REFERENCES rounds(id),
+
+  CONSTRAINT fk_board_slots_board
+    FOREIGN KEY (board_id) REFERENCES boards(id),
+
+  CONSTRAINT fk_board_slots_team
+    FOREIGN KEY (team_id) REFERENCES teams(id),
+
+  CONSTRAINT uq_board_slots_board_number
+    UNIQUE (board_id, team_number),
+
+  CONSTRAINT uq_board_slots_round_team
+    UNIQUE (round_id, team_id)
+);
+
+CREATE TABLE problems (
+  id BIGSERIAL PRIMARY KEY,
+  board_id BIGINT NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  attachment_url TEXT,
+  external_link TEXT,
+  release_at TIMESTAMP NOT NULL,
+  created_by BIGINT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_problems_board
+    FOREIGN KEY (board_id) REFERENCES boards(id),
+
+  CONSTRAINT fk_problems_created_by
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+-- =========================
+-- 5. MENTOR & JUDGE ASSIGNMENT
+-- =========================
+
+CREATE TABLE mentor_assignments (
+  id BIGSERIAL PRIMARY KEY,
+  board_id BIGINT NOT NULL,
+  mentor_id BIGINT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_mentor_assignments_board
+    FOREIGN KEY (board_id) REFERENCES boards(id),
+
+  CONSTRAINT fk_mentor_assignments_mentor
+    FOREIGN KEY (mentor_id) REFERENCES users(id),
+
+  CONSTRAINT uq_mentor_assignments_board_mentor
+    UNIQUE (board_id, mentor_id)
+);
+
+CREATE TABLE judge_assignments (
+  id BIGSERIAL PRIMARY KEY,
+  board_id BIGINT NOT NULL,
+  judge_id BIGINT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_judge_assignments_board
+    FOREIGN KEY (board_id) REFERENCES boards(id),
+
+  CONSTRAINT fk_judge_assignments_judge
+    FOREIGN KEY (judge_id) REFERENCES users(id),
+
+  CONSTRAINT uq_judge_assignments_board_judge
+    UNIQUE (board_id, judge_id)
+);
+
+-- =========================
+-- 6. SCORING
+-- =========================
+
+CREATE TABLE score_criteria (
+  id BIGSERIAL PRIMARY KEY,
+  round_id BIGINT NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  weight DECIMAL(6,2) NOT NULL DEFAULT 1.00,
+  min_score DECIMAL(6,2) NOT NULL DEFAULT 0.00,
+  max_score DECIMAL(6,2) NOT NULL DEFAULT 10.00,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_score_criteria_round
+    FOREIGN KEY (round_id) REFERENCES rounds(id),
+
+  CONSTRAINT uq_score_criteria_round_name
+    UNIQUE (round_id, name)
+);
+
+CREATE TABLE score_sheets (
+  id BIGSERIAL PRIMARY KEY,
+  judge_assignment_id BIGINT NOT NULL,
+  board_id BIGINT NOT NULL,
+  team_id BIGINT NOT NULL,
+  judge_id BIGINT NOT NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'DRAFT',
+  general_feedback TEXT,
+  submitted_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_score_sheets_judge_assignment
+    FOREIGN KEY (judge_assignment_id) REFERENCES judge_assignments(id),
+
+  CONSTRAINT fk_score_sheets_board
+    FOREIGN KEY (board_id) REFERENCES boards(id),
+
+  CONSTRAINT fk_score_sheets_team
+    FOREIGN KEY (team_id) REFERENCES teams(id),
+
+  CONSTRAINT fk_score_sheets_judge
+    FOREIGN KEY (judge_id) REFERENCES users(id),
+
+  CONSTRAINT uq_score_sheets_board_team_judge
+    UNIQUE (board_id, team_id, judge_id)
+);
+
+CREATE TABLE score_items (
+  id BIGSERIAL PRIMARY KEY,
+  score_sheet_id BIGINT NOT NULL,
+  criteria_id BIGINT NOT NULL,
+  score_value DECIMAL(6,2) NOT NULL,
+  comment TEXT,
+
+  CONSTRAINT fk_score_items_score_sheet
+    FOREIGN KEY (score_sheet_id) REFERENCES score_sheets(id),
+
+  CONSTRAINT fk_score_items_criteria
+    FOREIGN KEY (criteria_id) REFERENCES score_criteria(id),
+
+  CONSTRAINT uq_score_items_sheet_criteria
+    UNIQUE (score_sheet_id, criteria_id)
+);
+
+-- =========================
+-- 7. RANKING & ADVANCEMENT
+-- =========================
+
+CREATE TABLE ranking_results (
+  id BIGSERIAL PRIMARY KEY,
+  round_id BIGINT NOT NULL,
+  board_id BIGINT NOT NULL,
+  team_id BIGINT NOT NULL,
+  rank INT NOT NULL,
+  average_score DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+  calculated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  published_at TIMESTAMP,
+
+  CONSTRAINT fk_ranking_results_round
+    FOREIGN KEY (round_id) REFERENCES rounds(id),
+
+  CONSTRAINT fk_ranking_results_board
+    FOREIGN KEY (board_id) REFERENCES boards(id),
+
+  CONSTRAINT fk_ranking_results_team
+    FOREIGN KEY (team_id) REFERENCES teams(id),
+
+  CONSTRAINT uq_ranking_results_board_team
+    UNIQUE (board_id, team_id)
+);
+
+CREATE TABLE advancements (
+  id BIGSERIAL PRIMARY KEY,
+  from_round_id BIGINT NOT NULL,
+  from_board_id BIGINT NOT NULL,
+  to_round_id BIGINT NOT NULL,
+  to_board_id BIGINT,
+  team_id BIGINT NOT NULL,
+  basis_rank INT,
+  basis_score DECIMAL(8,2),
+  created_by BIGINT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_advancements_from_round
+    FOREIGN KEY (from_round_id) REFERENCES rounds(id),
+
+  CONSTRAINT fk_advancements_from_board
+    FOREIGN KEY (from_board_id) REFERENCES boards(id),
+
+  CONSTRAINT fk_advancements_to_round
+    FOREIGN KEY (to_round_id) REFERENCES rounds(id),
+
+  CONSTRAINT fk_advancements_to_board
+    FOREIGN KEY (to_board_id) REFERENCES boards(id),
+
+  CONSTRAINT fk_advancements_team
+    FOREIGN KEY (team_id) REFERENCES teams(id),
+
+  CONSTRAINT fk_advancements_created_by
+    FOREIGN KEY (created_by) REFERENCES users(id),
+
+  CONSTRAINT uq_advancements_to_round_team
+    UNIQUE (to_round_id, team_id)
+);
+
+-- =========================
+-- 8. AI REVIEW EXTENSION
+-- =========================
+
+CREATE TABLE team_repositories (
+  id BIGSERIAL PRIMARY KEY,
+  team_id BIGINT NOT NULL UNIQUE,
+  repository_url TEXT NOT NULL,
+  repository_name VARCHAR(255),
+  last_reviewed_at TIMESTAMP,
+  next_review_at TIMESTAMP,
+  review_interval_minutes INT NOT NULL DEFAULT 30,
+  created_by BIGINT,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_team_repositories_team
+    FOREIGN KEY (team_id) REFERENCES teams(id),
+
+  CONSTRAINT fk_team_repositories_created_by
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE TABLE repo_commits (
+  id BIGSERIAL PRIMARY KEY,
+  team_repository_id BIGINT NOT NULL,
+  commit_sha VARCHAR(255) NOT NULL,
+  author_name VARCHAR(255),
+  author_email VARCHAR(255),
+  message TEXT,
+  committed_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_repo_commits_repository
+    FOREIGN KEY (team_repository_id) REFERENCES team_repositories(id),
+
+  CONSTRAINT uq_repo_commits_repository_sha
+    UNIQUE (team_repository_id, commit_sha)
+);
+
+CREATE TABLE ai_reviews (
+  id BIGSERIAL PRIMARY KEY,
+  team_id BIGINT NOT NULL,
+  round_id BIGINT,
+  repo_commit_id BIGINT,
+  status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+  review_score DECIMAL(6,2),
+  summary TEXT,
+  issues JSON,
+  suggestions TEXT,
+  ai_model VARCHAR(255),
+  reviewed_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_ai_reviews_team
+    FOREIGN KEY (team_id) REFERENCES teams(id),
+
+  CONSTRAINT fk_ai_reviews_round
+    FOREIGN KEY (round_id) REFERENCES rounds(id),
+
+  CONSTRAINT fk_ai_reviews_repo_commit
+    FOREIGN KEY (repo_commit_id) REFERENCES repo_commits(id)
+);
+
+-- =========================
+-- 9. COMMUNICATION
+-- =========================
+
+CREATE TABLE announcements (
+  id BIGSERIAL PRIMARY KEY,
+  event_id BIGINT NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  content TEXT,
+  published_at TIMESTAMP,
+  created_by BIGINT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_announcements_event
+    FOREIGN KEY (event_id) REFERENCES events(id),
+
+  CONSTRAINT fk_announcements_created_by
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE TABLE notifications (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT,
+  email VARCHAR(255),
+  event_id BIGINT,
+  title VARCHAR(255) NOT NULL,
+  content TEXT,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_notifications_user
+    FOREIGN KEY (user_id) REFERENCES users(id),
+
+  CONSTRAINT fk_notifications_event
+    FOREIGN KEY (event_id) REFERENCES events(id)
+);

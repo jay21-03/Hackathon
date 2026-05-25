@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: seal_postgres
+    environment:
+      POSTGRES_DB: seal_hackathon
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: seal_backend
+    depends_on:
+      - postgres
+    environment:
+      SERVER_PORT: ${SERVER_PORT:-8085}
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/seal_hackathon}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      JWT_SECRET: ${JWT_SECRET:-change_me}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_REVIEW_INTERVAL_MINUTES: ${AI_REVIEW_INTERVAL_MINUTES:-30}
+      FILE_STORAGE_PATH: ${FILE_STORAGE_PATH:-/app/storage}
+    ports:
+      - "8085:8085"
+    volumes:
+      - ./storage:${FILE_STORAGE_PATH:-/app/storage}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: seal_frontend
+    depends_on:
+      - backend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8085/api
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres_data:
