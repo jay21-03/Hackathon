@@ -1,9 +1,13 @@
 package com.seal.hackathon.registration.entity;
 
+import com.seal.hackathon.common.enums.TeamStatus;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
@@ -28,7 +32,9 @@ public class Team {
     private Integer sequenceNo;
     private Long contactUserId;
     private String contactEmail;
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private TeamStatus status;
     private OffsetDateTime confirmedAt;
     private String rejectedReason;
     private OffsetDateTime createdAt;

@@ -1,9 +1,13 @@
 package com.seal.hackathon.scoring.entity;
 
+import com.seal.hackathon.common.enums.ScoreSheetStatus;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
@@ -27,7 +31,9 @@ public class ScoreSheet {
     private Long boardId;
     private Long teamId;
     private Long judgeId;
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private ScoreSheetStatus status;
     private String generalFeedback;
     private OffsetDateTime submittedAt;
     private OffsetDateTime createdAt;
