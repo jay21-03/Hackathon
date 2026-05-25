@@ -5,12 +5,15 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.seal.hackathon.common.enums.UserStatus;
 
 @Data
 @Builder
@@ -33,7 +36,9 @@ public class User {
     private String studentId;
     private String university;
     private String avatarUrl;
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private UserStatus status;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

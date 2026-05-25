@@ -1,10 +1,13 @@
 package com.seal.hackathon.aireview.entity;
 
+import com.seal.hackathon.common.enums.AiReviewStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -28,7 +31,9 @@ public class AiReview {
     private Long teamId;
     private Long roundId;
     private Long repoCommitId;
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private AiReviewStatus status;
     private BigDecimal reviewScore;
 
     @Column(columnDefinition = "TEXT")

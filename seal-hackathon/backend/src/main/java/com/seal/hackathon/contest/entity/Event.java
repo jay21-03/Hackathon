@@ -1,9 +1,13 @@
 package com.seal.hackathon.contest.entity;
 
+import com.seal.hackathon.common.enums.EventStatus;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -33,7 +37,9 @@ public class Event {
     private Integer maxTeams;
     private Integer minTeamSize;
     private Integer maxTeamSize;
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private EventStatus status;
     private Long createdBy;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;

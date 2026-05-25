@@ -1,9 +1,13 @@
 package com.seal.hackathon.checkin.entity;
 
+import com.seal.hackathon.common.enums.CheckInStatus;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
@@ -28,7 +32,9 @@ public class CheckIn {
     private Long teamMemberId;
     private Long userId;
     private String photoUrl;
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private CheckInStatus status;
     private OffsetDateTime checkedInAt;
     private Long verifiedBy;
     private OffsetDateTime verifiedAt;
