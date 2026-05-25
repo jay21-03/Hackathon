@@ -6,4 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface BoardRepository extends JpaRepository<Board, Long> {
 	List<Board> findByRoundId(Long roundId);
+
+	boolean existsByRoundIdAndBoardOrder(Long roundId, Integer boardOrder);
+
+	boolean existsByRoundIdAndName(Long roundId, String name);
 }

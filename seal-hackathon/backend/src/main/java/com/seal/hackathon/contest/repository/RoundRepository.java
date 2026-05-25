@@ -6,4 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RoundRepository extends JpaRepository<Round, Long> {
 	List<Round> findByEventId(Long eventId);
+
+	boolean existsByEventIdAndRoundOrder(Long eventId, Integer roundOrder);
 }
