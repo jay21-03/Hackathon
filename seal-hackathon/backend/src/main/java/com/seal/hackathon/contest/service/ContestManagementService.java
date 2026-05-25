@@ -18,7 +18,11 @@ import com.seal.hackathon.contest.dto.EventListItemResponse;
 import com.seal.hackathon.contest.dto.EventResponse;
 import com.seal.hackathon.contest.dto.ProblemResponse;
 import com.seal.hackathon.contest.dto.RoundResponse;
+import com.seal.hackathon.contest.dto.UpdateBoardRequest;
+import com.seal.hackathon.contest.dto.UpdateBoardSlotRequest;
 import com.seal.hackathon.contest.dto.UpdateEventRequest;
+import com.seal.hackathon.contest.dto.UpdateProblemRequest;
+import com.seal.hackathon.contest.dto.UpdateRoundRequest;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Event;
@@ -31,6 +35,7 @@ import com.seal.hackathon.contest.repository.ProblemRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +50,9 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class ContestManagementService {
 
+    private static final int FIXED_MIN_TEAM_SIZE = 1;
+    private static final int FIXED_MAX_TEAM_SIZE = 5;
+
     private final EventRepository eventRepository;
     private final RoundRepository roundRepository;
     private final BoardRepository boardRepository;
@@ -54,6 +62,11 @@ public class ContestManagementService {
 
     @Transactional
     public EventResponse createEvent(CreateEventRequest request) {
+        if (request.hasForbiddenTeamSizeFields()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "minTeamSize and maxTeamSize are fixed in Phase 2 and must not be provided");
+        }
         String normalizedName = normalizeRequired(request.getName(), "name must not be blank");
         validateEventState(
                 normalizedName,
@@ -61,9 +74,7 @@ public class ContestManagementService {
                 request.getEndDate(),
                 request.getRegistrationStartAt(),
                 request.getRegistrationEndAt(),
-                request.getMaxTeams(),
-                request.getMinTeamSize(),
-                request.getMaxTeamSize());
+                request.getMaxTeams());
 
         CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
         OffsetDateTime now = OffsetDateTime.now();
@@ -75,8 +86,8 @@ public class ContestManagementService {
                 .registrationStartAt(request.getRegistrationStartAt())
                 .registrationEndAt(request.getRegistrationEndAt())
                 .maxTeams(request.getMaxTeams())
-                .minTeamSize(request.getMinTeamSize())
-                .maxTeamSize(request.getMaxTeamSize())
+                .minTeamSize(FIXED_MIN_TEAM_SIZE)
+                .maxTeamSize(FIXED_MAX_TEAM_SIZE)
                 .status(EventStatus.DRAFT)
                 .createdBy(principal.getUserId())
                 .createdAt(now)
@@ -88,6 +99,11 @@ public class ContestManagementService {
 
     @Transactional
     public EventResponse updateEvent(Long eventId, UpdateEventRequest request) {
+        if (request.hasForbiddenTeamSizeFields()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "minTeamSize and maxTeamSize are fixed in Phase 2 and must not be provided");
+        }
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
@@ -112,12 +128,6 @@ public class ContestManagementService {
         if (request.getMaxTeams() != null) {
             event.setMaxTeams(request.getMaxTeams());
         }
-        if (request.getMinTeamSize() != null) {
-            event.setMinTeamSize(request.getMinTeamSize());
-        }
-        if (request.getMaxTeamSize() != null) {
-            event.setMaxTeamSize(request.getMaxTeamSize());
-        }
 
         validateEventState(
                 event.getName(),
@@ -125,9 +135,9 @@ public class ContestManagementService {
                 event.getEndDate(),
                 event.getRegistrationStartAt(),
                 event.getRegistrationEndAt(),
-                event.getMaxTeams(),
-                event.getMinTeamSize(),
-                event.getMaxTeamSize());
+                event.getMaxTeams());
+        event.setMinTeamSize(FIXED_MIN_TEAM_SIZE);
+        event.setMaxTeamSize(FIXED_MAX_TEAM_SIZE);
         event.setUpdatedAt(OffsetDateTime.now());
 
         return toEventResponse(eventRepository.save(event));
@@ -146,6 +156,23 @@ public class ContestManagementService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
         return toEventDetailResponse(event);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RoundResponse> listRoundsByEvent(Long eventId) {
+        eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        return roundRepository.findByEventId(eventId).stream()
+                .sorted(
+                        Comparator.comparing(Round::getRoundOrder, Comparator.nullsLast(Integer::compareTo))
+                                .thenComparing(Round::getId, Comparator.nullsLast(Long::compareTo)))
+                .map(this::toRoundResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public RoundResponse getRound(Long roundId) {
+        return toRoundResponse(getRoundEntity(roundId));
     }
 
     @Transactional
@@ -180,6 +207,52 @@ public class ContestManagementService {
     }
 
     @Transactional
+    public RoundResponse updateRound(Long roundId, UpdateRoundRequest request) {
+        Round round = getRoundEntity(roundId);
+
+        if (request.getName() != null) {
+            round.setName(normalizeRequired(request.getName(), "name must not be blank"));
+        }
+        if (request.getRoundType() != null) {
+            validateRoundType(request.getRoundType());
+            round.setRoundType(request.getRoundType());
+        }
+        if (request.getRoundOrder() != null) {
+            if (roundRepository.existsByEventIdAndRoundOrderAndIdNot(round.getEventId(), request.getRoundOrder(), roundId)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "roundOrder already exists in this event");
+            }
+            round.setRoundOrder(request.getRoundOrder());
+        }
+        if (request.getStartAt() != null) {
+            round.setStartAt(request.getStartAt());
+        }
+        if (request.getEndAt() != null) {
+            round.setEndAt(request.getEndAt());
+        }
+
+        validateRoundTimeline(round.getStartAt(), round.getEndAt());
+        round.setUpdatedAt(OffsetDateTime.now());
+        return toRoundResponse(roundRepository.save(round));
+    }
+
+    @Transactional(readOnly = true)
+    public List<BoardResponse> listBoardsByRound(Long roundId) {
+        roundRepository.findById(roundId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Round not found"));
+        return boardRepository.findByRoundId(roundId).stream()
+                .sorted(
+                        Comparator.comparing(Board::getBoardOrder, Comparator.nullsLast(Integer::compareTo))
+                                .thenComparing(Board::getId, Comparator.nullsLast(Long::compareTo)))
+                .map(this::toBoardResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public BoardResponse getBoard(Long boardId) {
+        return toBoardResponse(getBoardEntity(boardId));
+    }
+
+    @Transactional
     public BoardResponse createBoard(Long roundId, CreateBoardRequest request) {
         roundRepository.findById(roundId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Round not found"));
@@ -207,8 +280,52 @@ public class ContestManagementService {
     }
 
     @Transactional
+    public BoardResponse updateBoard(Long boardId, UpdateBoardRequest request) {
+        Board board = getBoardEntity(boardId);
+
+        String mergedName = request.getName() == null
+                ? board.getName()
+                : normalizeRequired(request.getName(), "name must not be blank");
+        Integer mergedOrder = request.getBoardOrder() == null
+                ? board.getBoardOrder()
+                : request.getBoardOrder();
+
+        if (boardRepository.existsByRoundIdAndBoardOrderAndIdNot(board.getRoundId(), mergedOrder, board.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "boardOrder already exists in this round");
+        }
+        if (boardRepository.existsByRoundIdAndNameAndIdNot(board.getRoundId(), mergedName, board.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "board name already exists in this round");
+        }
+
+        board.setName(mergedName);
+        board.setBoardOrder(mergedOrder);
+        if (request.getDescription() != null) {
+            board.setDescription(normalizeNullable(request.getDescription()));
+        }
+        board.setUpdatedAt(OffsetDateTime.now());
+        return toBoardResponse(boardRepository.save(board));
+    }
+
+    @Transactional(readOnly = true)
+    public List<BoardSlotResponse> listBoardSlotsByBoard(Long boardId) {
+        boardRepository.findById(boardId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        return boardSlotRepository.findByBoardId(boardId).stream()
+                .sorted(
+                        Comparator.comparing(BoardSlot::getTeamNumber, Comparator.nullsLast(Integer::compareTo))
+                                .thenComparing(BoardSlot::getId, Comparator.nullsLast(Long::compareTo)))
+                .map(this::toBoardSlotResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public BoardSlotResponse getBoardSlot(Long slotId) {
+        return toBoardSlotResponse(getBoardSlotEntity(slotId));
+    }
+
+    @Transactional
     public BoardSlotResponse createBoardSlot(Long boardId, CreateBoardSlotRequest request) {
-        if (request.containsField("teamId")) {
+        if (request.containsField("teamId") || request.containsField("team_id")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "teamId is not supported in Phase 2");
         }
 
@@ -234,6 +351,39 @@ public class ContestManagementService {
     }
 
     @Transactional
+    public BoardSlotResponse updateBoardSlot(Long slotId, UpdateBoardSlotRequest request) {
+        if (request.containsField("teamId") || request.containsField("team_id")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "teamId is not supported in Phase 2");
+        }
+        BoardSlot slot = getBoardSlotEntity(slotId);
+
+        if (boardSlotRepository.existsByBoardIdAndTeamNumberAndIdNot(slot.getBoardId(), request.getTeamNumber(), slotId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "teamNumber already exists in this board");
+        }
+
+        slot.setTeamNumber(request.getTeamNumber());
+        slot.setTeamId(null);
+        return toBoardSlotResponse(boardSlotRepository.save(slot));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProblemResponse> listProblemsByBoard(Long boardId) {
+        boardRepository.findById(boardId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        return problemRepository.findByBoardId(boardId).stream()
+                .sorted(
+                        Comparator.comparing(Problem::getReleaseAt, Comparator.nullsLast(OffsetDateTime::compareTo))
+                                .thenComparing(Problem::getId, Comparator.nullsLast(Long::compareTo)))
+                .map(this::toProblemResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ProblemResponse getProblem(Long problemId) {
+        return toProblemResponse(getProblemEntity(problemId));
+    }
+
+    @Transactional
     public ProblemResponse createProblem(Long boardId, CreateProblemRequest request) {
         boardRepository.findById(boardId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
@@ -255,15 +405,46 @@ public class ContestManagementService {
         return toProblemResponse(problemRepository.save(problem));
     }
 
+    @Transactional
+    public ProblemResponse updateProblem(Long problemId, UpdateProblemRequest request) {
+        if (request.hasForbiddenImmutableFields()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "boardId and createdBy are immutable in Phase 2");
+        }
+        Problem problem = getProblemEntity(problemId);
+
+        if (request.getTitle() != null) {
+            problem.setTitle(normalizeRequired(request.getTitle(), "title must not be blank"));
+        }
+        if (request.getDescription() != null) {
+            problem.setDescription(normalizeNullable(request.getDescription()));
+        }
+        if (request.getAttachmentUrl() != null) {
+            problem.setAttachmentUrl(normalizeNullable(request.getAttachmentUrl()));
+        }
+        if (request.getExternalLink() != null) {
+            problem.setExternalLink(normalizeNullable(request.getExternalLink()));
+        }
+        if (request.getReleaseAt() != null) {
+            problem.setReleaseAt(request.getReleaseAt());
+        }
+
+        if (problem.getReleaseAt() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "releaseAt must not be null");
+        }
+        if (!StringUtils.hasText(problem.getTitle())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title must not be blank");
+        }
+        problem.setUpdatedAt(OffsetDateTime.now());
+        return toProblemResponse(problemRepository.save(problem));
+    }
+
     private void validateEventState(
             String name,
             LocalDate startDate,
             LocalDate endDate,
             OffsetDateTime registrationStartAt,
             OffsetDateTime registrationEndAt,
-            Integer maxTeams,
-            Integer minTeamSize,
-            Integer maxTeamSize) {
+            Integer maxTeams) {
         if (!StringUtils.hasText(name)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "name must not be blank");
         }
@@ -289,14 +470,20 @@ public class ContestManagementService {
         if (maxTeams == null || maxTeams <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "maxTeams must be greater than 0");
         }
-        if (minTeamSize == null || minTeamSize < 1) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "minTeamSize must be at least 1");
+    }
+
+    private void validateRoundType(RoundType roundType) {
+        if (!EnumSet.of(RoundType.GROUP_STAGE, RoundType.FINAL).contains(roundType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "roundType must be GROUP_STAGE or FINAL");
         }
-        if (maxTeamSize == null || maxTeamSize > 5) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "maxTeamSize must be at most 5");
+    }
+
+    private void validateRoundTimeline(OffsetDateTime startAt, OffsetDateTime endAt) {
+        if (startAt == null || endAt == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startAt and endAt must not be null");
         }
-        if (minTeamSize > maxTeamSize) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "minTeamSize must be less than or equal to maxTeamSize");
+        if (!startAt.isBefore(endAt)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startAt must be before endAt");
         }
     }
 
@@ -313,6 +500,26 @@ public class ContestManagementService {
             return null;
         }
         return value.trim();
+    }
+
+    private Round getRoundEntity(Long roundId) {
+        return roundRepository.findById(roundId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Round not found"));
+    }
+
+    private Board getBoardEntity(Long boardId) {
+        return boardRepository.findById(boardId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+    }
+
+    private BoardSlot getBoardSlotEntity(Long slotId) {
+        return boardSlotRepository.findById(slotId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board slot not found"));
+    }
+
+    private Problem getProblemEntity(Long problemId) {
+        return problemRepository.findById(problemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Problem not found"));
     }
 
     private EventResponse toEventResponse(Event event) {

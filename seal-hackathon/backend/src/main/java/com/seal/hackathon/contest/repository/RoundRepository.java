@@ -8,4 +8,6 @@ public interface RoundRepository extends JpaRepository<Round, Long> {
 	List<Round> findByEventId(Long eventId);
 
 	boolean existsByEventIdAndRoundOrder(Long eventId, Integer roundOrder);
+
+	boolean existsByEventIdAndRoundOrderAndIdNot(Long eventId, Integer roundOrder, Long id);
 }

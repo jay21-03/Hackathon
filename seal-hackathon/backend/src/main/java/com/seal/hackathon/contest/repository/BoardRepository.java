@@ -10,4 +10,8 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
 	boolean existsByRoundIdAndBoardOrder(Long roundId, Integer boardOrder);
 
 	boolean existsByRoundIdAndName(Long roundId, String name);
+
+	boolean existsByRoundIdAndBoardOrderAndIdNot(Long roundId, Integer boardOrder, Long id);
+
+	boolean existsByRoundIdAndNameAndIdNot(Long roundId, String name, Long id);
 }
