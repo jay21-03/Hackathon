@@ -7,12 +7,13 @@ export interface User {
   status?: string;
 }
 
-export interface Event {
+export interface EventListItem {
   id: number;
   name: string;
-  maxTeams: number;
-  minTeamSize: number;
-  maxTeamSize: number;
+  startDate: string;
+  endDate: string;
+  registrationStartAt: string;
+  registrationEndAt: string;
   status: string;
 }
 

@@ -18,7 +18,7 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: ./BE
       dockerfile: Dockerfile
     container_name: seal_backend
     depends_on:
@@ -50,7 +50,7 @@ services:
   frontend:
     profiles: ["frontend"]
     build:
-      context: ./frontend
+      context: ./FE
       dockerfile: Dockerfile
     container_name: seal_frontend
     depends_on:

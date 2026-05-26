@@ -14,7 +14,7 @@
 
 ## 3. Build backend image
 ```powershell
-cd D:\Bin\SWP391\Hackathon\seal-hackathon
+cd hackathon
 docker compose build --progress=plain backend
 ```
 

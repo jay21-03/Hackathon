@@ -223,7 +223,7 @@ Repository method shape to add or verify:
 
 ## 7. Validation Commands
 Run these after the mapping and repository changes are implemented:
-- `cd seal-hackathon/backend`
+- `cd BE`
 - `mvn -DskipTests compile`
 - `.\run-dev.ps1`
 - `docker compose exec postgres psql -U postgres -d seal_hackathon -c "\dt"`

@@ -2,7 +2,7 @@
 
 ## 1. Start services
 ```bash
-cd D:\Bin\SWP391\Hackathon\seal-hackathon
+cd hackathon
 docker compose up -d --build postgres backend
 docker compose logs --tail=150 backend
 ```
@@ -75,6 +75,6 @@ Verify no endpoint below exists in Swagger:
 
 ## 9. Compile check
 ```bash
-cd D:\Bin\SWP391\Hackathon\seal-hackathon\backend
+cd BE
 mvn -DskipTests compile
 ```

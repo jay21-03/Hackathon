@@ -1,11 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./AppLayout";
 import { PlaceholderPage } from "../components/PlaceholderPage";
+import { EventsPage } from "../pages/EventsPage";
+import { HomePage } from "../pages/HomePage";
 
-const routeDefinitions = [
-  "/",
+const placeholderRoutes = [
   "/login",
-  "/events",
   "/me/profile",
   "/me/team",
   "/me/check-in",
@@ -26,10 +26,12 @@ export function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<AppLayout />}>
-        {routeDefinitions.map((path) => (
+        <Route index element={<HomePage />} />
+        <Route path="events" element={<EventsPage />} />
+        {placeholderRoutes.map((path) => (
           <Route
             key={path}
-            path={path === "/" ? "" : path.slice(1)}
+            path={path.slice(1)}
             element={<PlaceholderPage title={path} />}
           />
         ))}
