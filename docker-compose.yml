@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: seal_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-seal_hackathon}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-seal_hackathon}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./BE
+      dockerfile: Dockerfile
+    container_name: seal_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8085
+      DB_URL: jdbc:postgresql://postgres:5432/seal_hackathon
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-REPLACE_WITH_REAL_GOOGLE_CLIENT_ID.apps.googleusercontent.com}
+      JWT_SECRET: ${JWT_SECRET:-local_dev_secret_change_me_please_32_chars_minimum}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-1440}
+      ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-fpt.edu.vn,fe.edu.vn,gmail.com}
+      APP_BOOTSTRAP_ORGANIZER_EMAIL: ${APP_BOOTSTRAP_ORGANIZER_EMAIL:-}
+      DEV_BOOTSTRAP_ORGANIZER_EMAIL: ${DEV_BOOTSTRAP_ORGANIZER_EMAIL:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_REVIEW_INTERVAL_MINUTES: ${AI_REVIEW_INTERVAL_MINUTES:-30}
+      FILE_STORAGE_PATH: /app/storage
+    ports:
+      - "8085:8085"
+    volumes:
+      - ./storage:/app/storage
+
+  frontend:
+    profiles: ["frontend"]
+    build:
+      context: ./FE
+      dockerfile: Dockerfile
+    container_name: seal_frontend
+    depends_on:
+      - backend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8085/api
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres_data:

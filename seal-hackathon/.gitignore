@@ -1,8 +1,0 @@
-.env
-.codegraph/
-node_modules/
-dist/
-target/
-.idea/
-.vscode/
-*.log
