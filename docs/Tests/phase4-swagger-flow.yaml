@@ -1,0 +1,194 @@
+openapi: 3.0.1
+info:
+  title: Hackathon - Phase 4 Board Assignment Flow (Test Flow)
+  version: 1.0.0
+  description: |
+    Minimal OpenAPI spec that describes and provides example payloads for the Phase 4 board assignment admin APIs.
+servers:
+  - url: http://localhost:8085/api/v1/admin
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    AssignRequest:
+      type: object
+      properties:
+        teamId:
+          type: integer
+        teamNumber:
+          type: integer
+        assignedBy:
+          type: integer
+      required: [teamId]
+      example: { teamId: 123, teamNumber: 1 }
+    AssignResponse:
+      type: object
+      properties:
+        slotId: { type: integer }
+        boardId: { type: integer }
+        teamId: { type: integer }
+        assignedAt: { type: string, format: date-time }
+      example: { slotId: 10, boardId: 2, teamId: 123, assignedAt: "2026-05-31T09:00:00Z" }
+
+    MoveRequest:
+      type: object
+      properties:
+        fromSlotId: { type: integer }
+        toSlotId: { type: integer }
+      required: [fromSlotId, toSlotId]
+      example: { fromSlotId: 11, toSlotId: 12 }
+    MoveResponse:
+      type: object
+      properties:
+        fromSlotId: { type: integer }
+        toSlotId: { type: integer }
+        movedTeamId: { type: integer }
+      example: { fromSlotId: 11, toSlotId: 12, movedTeamId: 123 }
+
+    SwapRequest:
+      type: object
+      properties:
+        slotAId: { type: integer }
+        slotBId: { type: integer }
+      required: [slotAId, slotBId]
+      example: { slotAId: 11, slotBId: 13 }
+    SwapResponse:
+      type: object
+      properties:
+        slotAId: { type: integer }
+        slotBId: { type: integer }
+        teamAId: { type: integer }
+        teamBId: { type: integer }
+      example: { slotAId: 11, slotBId: 13, teamAId: 123, teamBId: 456 }
+
+    RandomAssignRequest:
+      type: object
+      properties:
+        teamIds:
+          type: array
+          items: { type: integer }
+        seed:
+          type: string
+        chunkSize:
+          type: integer
+      required: [teamIds]
+      example: { teamIds: [101,102,103,104], seed: "run-20260531", chunkSize: 50 }
+
+    SlotAssignmentDetail:
+      type: object
+      properties:
+        slotId: { type: integer }
+        boardId: { type: integer }
+        teamId: { type: integer }
+      example: { slotId: 20, boardId: 3, teamId: 101 }
+
+    RandomAssignResponse:
+      type: object
+      properties:
+        assignedCount: { type: integer }
+        details:
+          type: array
+          items: { $ref: '#/components/schemas/SlotAssignmentDetail' }
+        unassignedTeamIds:
+          type: array
+          items: { type: integer }
+      example: { assignedCount: 3, details: [ { slotId: 20, boardId: 3, teamId: 101 } ], unassignedTeamIds: [104] }
+
+paths:
+  /rounds/{roundId}/boards/slots/{slotId}/assign:
+    post:
+      summary: Assign a team to a specific slot
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: slotId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignRequest'
+      responses:
+        '200':
+          description: Assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignResponse'
+
+  /rounds/{roundId}/boards/slots/move:
+    post:
+      summary: Move a team from one slot to another
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveRequest'
+      responses:
+        '200':
+          description: Moved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoveResponse'
+
+  /rounds/{roundId}/boards/slots/swap:
+    post:
+      summary: Swap two slots' teams
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwapRequest'
+      responses:
+        '200':
+          description: Swapped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwapResponse'
+
+  /rounds/{roundId}/boards/assign/random:
+    post:
+      summary: Randomly assign teams to available slots in the round
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RandomAssignRequest'
+      responses:
+        '200':
+          description: Random assignment result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RandomAssignResponse'
+

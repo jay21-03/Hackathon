@@ -27,19 +27,37 @@ public class TeamMember {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "event_id", nullable = false)
     private Long eventId;
+    @Column(name = "team_id", nullable = false)
     private Long teamId;
+    @Column(name = "user_id")
     private Long userId;
+    @Column(nullable = false)
     private String email;
+    @Column(name = "full_name", nullable = false)
     private String fullName;
+    @Column(name = "student_id")
     private String studentId;
+    @Column(name = "university")
     private String university;
-    private Boolean isContactPerson;
+    @Column(name = "is_contact_person", nullable = false)
+    private Boolean contactPerson;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private TeamMemberStatus status;
-    private String inviteToken;
+    @Column(name = "invite_token_hash")
+    private String inviteTokenHash;
+    @Column(name = "invite_nonce")
+    private String inviteNonce;
+    @Column(name = "invite_expires_at")
+    private OffsetDateTime inviteExpiresAt;
+    @Column(name = "invite_consumed_at")
+    private OffsetDateTime inviteConsumedAt;
+    @Column(name = "invited_at")
     private OffsetDateTime invitedAt;
+    @Column(name = "confirmed_at")
     private OffsetDateTime confirmedAt;
+    @Column(name = "declined_at")
     private OffsetDateTime declinedAt;
 }

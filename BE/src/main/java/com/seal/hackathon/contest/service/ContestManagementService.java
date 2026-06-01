@@ -28,17 +28,34 @@ import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Event;
 import com.seal.hackathon.contest.entity.Problem;
 import com.seal.hackathon.contest.entity.Round;
+import com.seal.hackathon.contest.entity.BoardSlotAssignmentAudit;
+import com.seal.hackathon.contest.dto.AssignRequest;
+import com.seal.hackathon.contest.dto.AssignResponse;
+import com.seal.hackathon.contest.dto.MoveResponse;
+import com.seal.hackathon.contest.dto.SwapResponse;
+import com.seal.hackathon.contest.dto.RandomAssignRequest;
+import com.seal.hackathon.contest.dto.RandomAssignResponse;
+import com.seal.hackathon.contest.dto.SlotAssignmentDetail;
 import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
+import com.seal.hackathon.contest.repository.BoardSlotAssignmentAuditRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.ProblemRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.registration.repository.TeamRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
-import java.util.EnumSet;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
+import java.util.Set;
+import java.util.EnumSet;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -57,7 +74,10 @@ public class ContestManagementService {
     private final RoundRepository roundRepository;
     private final BoardRepository boardRepository;
     private final BoardSlotRepository boardSlotRepository;
+    private final BoardSlotAssignmentAuditRepository auditRepository;
     private final ProblemRepository problemRepository;
+    private final TeamRepository teamRepository;
+    private final PlatformTransactionManager transactionManager;
     private final CurrentUserProvider currentUserProvider;
 
     @Transactional
@@ -348,6 +368,318 @@ public class ContestManagementService {
                 .build();
 
         return toBoardSlotResponse(boardSlotRepository.save(boardSlot));
+    }
+
+    @Transactional
+    public AssignResponse assignTeamToSlot(Long roundId, Long slotId, AssignRequest request) {
+        BoardSlot slot = getBoardSlotEntity(slotId);
+        if (!slot.getRoundId().equals(roundId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slot does not belong to round");
+        }
+        if (slot.getTeamId() != null && Boolean.FALSE.equals(request.getForceReplace())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "SLOT_OCCUPIED");
+        }
+
+        // validate team exists and is CONFIRMED
+        com.seal.hackathon.registration.entity.Team teamEntity =
+            teamRepository.findById(request.getTeamId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
+
+        if (teamEntity.getStatus() != com.seal.hackathon.common.enums.TeamStatus.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TEAM_NOT_CONFIRMED");
+        }
+
+        // check team not already assigned in this round
+        boolean alreadyAssigned = boardSlotRepository.findByRoundId(roundId).stream()
+                .anyMatch(bs -> request.getTeamId().equals(bs.getTeamId()));
+        if (alreadyAssigned && (slot.getTeamId() == null || !slot.getTeamId().equals(request.getTeamId()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "TEAM_ALREADY_ASSIGNED");
+        }
+
+        Long previous = slot.getTeamId();
+        slot.setTeamId(request.getTeamId());
+        slot.setAssignedAt(OffsetDateTime.now());
+        slot.setCreatedAt(slot.getCreatedAt());
+        boardSlotRepository.save(slot);
+
+        // write audit
+        BoardSlotAssignmentAudit audit = BoardSlotAssignmentAudit.builder()
+                .roundId(roundId)
+                .boardId(slot.getBoardId())
+                .slotId(slot.getId())
+                .teamIdBefore(previous)
+                .teamIdAfter(request.getTeamId())
+                .action(previous == null ? "assign" : "replace")
+                .performedBy(currentUserProvider.getCurrentUser().getUserId())
+                .performedAt(OffsetDateTime.now())
+                .build();
+        auditRepository.save(audit);
+
+        return AssignResponse.builder()
+                .slotId(slot.getId())
+                .boardId(slot.getBoardId())
+                .teamId(slot.getTeamId())
+                .previousTeamId(previous)
+                .assignedAt(slot.getAssignedAt())
+                .build();
+    }
+
+    @Transactional
+    public MoveResponse moveTeamBetweenSlots(Long roundId, Long fromSlotId, Long toSlotId) {
+        BoardSlot from = getBoardSlotEntity(fromSlotId);
+        BoardSlot to = getBoardSlotEntity(toSlotId);
+
+        if (!from.getRoundId().equals(roundId) || !to.getRoundId().equals(roundId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slots must belong to the same round");
+        }
+
+        if (from.getTeamId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "FROM_SLOT_EMPTY");
+        }
+        if (to.getTeamId() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "TO_SLOT_OCCUPIED");
+        }
+
+        Long teamId = from.getTeamId();
+        Long fromPrev = from.getTeamId();
+        Long toPrev = to.getTeamId();
+
+        OffsetDateTime now = OffsetDateTime.now();
+        from.setTeamId(null);
+        from.setAssignedAt(now);
+        from.setAssignedBy(currentUserProvider.getCurrentUser().getUserId());
+
+        to.setTeamId(teamId);
+        to.setAssignedAt(now);
+        to.setAssignedBy(currentUserProvider.getCurrentUser().getUserId());
+
+        boardSlotRepository.save(from);
+        boardSlotRepository.save(to);
+
+        // audit entries
+        BoardSlotAssignmentAudit auditOut = BoardSlotAssignmentAudit.builder()
+                .roundId(roundId)
+                .boardId(from.getBoardId())
+                .slotId(from.getId())
+                .teamIdBefore(fromPrev)
+                .teamIdAfter(null)
+                .action("move_out")
+                .performedBy(currentUserProvider.getCurrentUser().getUserId())
+                .performedAt(now)
+                .build();
+        BoardSlotAssignmentAudit auditIn = BoardSlotAssignmentAudit.builder()
+                .roundId(roundId)
+                .boardId(to.getBoardId())
+                .slotId(to.getId())
+                .teamIdBefore(toPrev)
+                .teamIdAfter(teamId)
+                .action("move_in")
+                .performedBy(currentUserProvider.getCurrentUser().getUserId())
+                .performedAt(now)
+                .build();
+        auditRepository.save(auditOut);
+        auditRepository.save(auditIn);
+
+        return MoveResponse.builder()
+                .fromSlotId(from.getId())
+                .toSlotId(to.getId())
+                .fromPreviousTeamId(fromPrev)
+                .toPreviousTeamId(toPrev)
+                .performedAt(now)
+                .build();
+    }
+
+    @Transactional
+    public SwapResponse swapSlots(Long roundId, Long slotAId, Long slotBId) {
+        BoardSlot a = getBoardSlotEntity(slotAId);
+        BoardSlot b = getBoardSlotEntity(slotBId);
+
+        if (!a.getRoundId().equals(roundId) || !b.getRoundId().equals(roundId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slots must belong to the same round");
+        }
+
+        Long aPrev = a.getTeamId();
+        Long bPrev = b.getTeamId();
+
+        OffsetDateTime now = OffsetDateTime.now();
+        a.setTeamId(bPrev);
+        a.setAssignedAt(now);
+        a.setAssignedBy(currentUserProvider.getCurrentUser().getUserId());
+
+        b.setTeamId(aPrev);
+        b.setAssignedAt(now);
+        b.setAssignedBy(currentUserProvider.getCurrentUser().getUserId());
+
+        boardSlotRepository.save(a);
+        boardSlotRepository.save(b);
+
+        BoardSlotAssignmentAudit auditA = BoardSlotAssignmentAudit.builder()
+                .roundId(roundId)
+                .boardId(a.getBoardId())
+                .slotId(a.getId())
+                .teamIdBefore(aPrev)
+                .teamIdAfter(bPrev)
+                .action("swap_a")
+                .performedBy(currentUserProvider.getCurrentUser().getUserId())
+                .performedAt(now)
+                .build();
+        BoardSlotAssignmentAudit auditB = BoardSlotAssignmentAudit.builder()
+                .roundId(roundId)
+                .boardId(b.getBoardId())
+                .slotId(b.getId())
+                .teamIdBefore(bPrev)
+                .teamIdAfter(aPrev)
+                .action("swap_b")
+                .performedBy(currentUserProvider.getCurrentUser().getUserId())
+                .performedAt(now)
+                .build();
+        auditRepository.save(auditA);
+        auditRepository.save(auditB);
+
+        return SwapResponse.builder()
+                .slotAId(a.getId())
+                .slotBId(b.getId())
+                .slotAPreviousTeamId(aPrev)
+                .slotBPreviousTeamId(bPrev)
+                .performedAt(now)
+                .build();
+    }
+
+    @Transactional
+    public RandomAssignResponse randomAssign(Long roundId, RandomAssignRequest request) {
+        Round round = getRoundEntity(roundId);
+        if (round.getStatus() != RoundStatus.DRAFT && round.getStatus() != RoundStatus.UPCOMING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ROUND_NOT_PLANNED");
+        }
+
+        // fetch confirmed teams for the event and exclude already assigned in this round
+        List<com.seal.hackathon.registration.entity.Team> confirmedTeams = teamRepository.findByEventIdAndStatus(round.getEventId(), com.seal.hackathon.common.enums.TeamStatus.CONFIRMED);
+        Set<Long> alreadyAssigned = new HashSet<>();
+        boardSlotRepository.findByRoundId(roundId).stream().filter(bs -> bs.getTeamId() != null).forEach(bs -> alreadyAssigned.add(bs.getTeamId()));
+        List<com.seal.hackathon.registration.entity.Team> eligibleTeams = new ArrayList<>();
+        for (com.seal.hackathon.registration.entity.Team t : confirmedTeams) {
+            if (!alreadyAssigned.contains(t.getId())) {
+                eligibleTeams.add(t);
+            }
+        }
+
+        // fetch target slots
+        List<BoardSlot> allSlots = boardSlotRepository.findByRoundId(roundId);
+        List<BoardSlot> targetSlots = new ArrayList<>();
+        Set<Long> boardIdFilter = request.getBoardIds() == null ? null : new HashSet<>(request.getBoardIds());
+        Set<Long> slotIdFilter = request.getSlotIds() == null ? null : new HashSet<>(request.getSlotIds());
+        for (BoardSlot s : allSlots) {
+            if (s.getTeamId() != null) continue; // only empty
+            if (boardIdFilter != null && !boardIdFilter.contains(s.getBoardId())) continue;
+            if (slotIdFilter != null && !slotIdFilter.contains(s.getId())) continue;
+            targetSlots.add(s);
+        }
+
+        if (eligibleTeams.isEmpty() || targetSlots.isEmpty()) {
+            return RandomAssignResponse.builder()
+                    .assignedCount(0)
+                    .details(Collections.emptyList())
+                    .unassignedTeamIds(eligibleTeams.stream().map(com.seal.hackathon.registration.entity.Team::getId).toList())
+                    .build();
+        }
+
+        // shuffle teams deterministically if seed provided
+        Random random = request.getSeed() == null ? new Random() : new Random((long) request.getSeed().hashCode());
+        List<com.seal.hackathon.registration.entity.Team> teamsToAssign = new ArrayList<>(eligibleTeams);
+        Collections.shuffle(teamsToAssign, random);
+
+        int mappingCount = Math.min(teamsToAssign.size(), targetSlots.size());
+        int chunkSize = request.getChunkSize() == null ? 200 : request.getChunkSize();
+        int threshold = 500;
+
+        List<SlotAssignmentDetail> details = new ArrayList<>();
+        List<Long> unassigned = new ArrayList<>();
+
+        if (mappingCount == 0) {
+            for (com.seal.hackathon.registration.entity.Team t : teamsToAssign) unassigned.add(t.getId());
+            return RandomAssignResponse.builder().assignedCount(0).details(details).unassignedTeamIds(unassigned).build();
+        }
+
+        // perform assignments
+        if (mappingCount <= threshold) {
+            OffsetDateTime now = OffsetDateTime.now();
+            Long performedBy = currentUserProvider.getCurrentUser().getUserId();
+            for (int i = 0; i < mappingCount; i++) {
+                BoardSlot slot = targetSlots.get(i);
+                com.seal.hackathon.registration.entity.Team team = teamsToAssign.get(i);
+                slot.setTeamId(team.getId());
+                slot.setAssignedAt(now);
+                slot.setAssignedBy(performedBy);
+            }
+            boardSlotRepository.saveAll(targetSlots.subList(0, mappingCount));
+            // audit
+            OffsetDateTime nowAudit = OffsetDateTime.now();
+            for (int i = 0; i < mappingCount; i++) {
+                BoardSlot slot = targetSlots.get(i);
+                SlotAssignmentDetail d = SlotAssignmentDetail.builder()
+                        .slotId(slot.getId())
+                        .boardId(slot.getBoardId())
+                        .teamId(slot.getTeamId())
+                        .build();
+                details.add(d);
+                BoardSlotAssignmentAudit audit = BoardSlotAssignmentAudit.builder()
+                        .roundId(roundId)
+                        .boardId(slot.getBoardId())
+                        .slotId(slot.getId())
+                        .teamIdBefore(null)
+                        .teamIdAfter(slot.getTeamId())
+                        .action("random_assign")
+                        .performedBy(currentUserProvider.getCurrentUser().getUserId())
+                        .performedAt(nowAudit)
+                        .build();
+                auditRepository.save(audit);
+            }
+            for (int i = mappingCount; i < teamsToAssign.size(); i++) unassigned.add(teamsToAssign.get(i).getId());
+        } else {
+            // chunked assignment using transaction template
+            TransactionTemplate tt = new TransactionTemplate(transactionManager);
+            for (int start = 0; start < mappingCount; start += chunkSize) {
+                int end = Math.min(start + chunkSize, mappingCount);
+                int s = start;
+                tt.execute(status -> {
+                    OffsetDateTime now = OffsetDateTime.now();
+                    Long performedBy = currentUserProvider.getCurrentUser().getUserId();
+                    List<BoardSlot> batch = new ArrayList<>();
+                    for (int i = s; i < end; i++) {
+                        BoardSlot slot = targetSlots.get(i);
+                        com.seal.hackathon.registration.entity.Team team = teamsToAssign.get(i);
+                        slot.setTeamId(team.getId());
+                        slot.setAssignedAt(now);
+                        slot.setAssignedBy(performedBy);
+                        batch.add(slot);
+                    }
+                    boardSlotRepository.saveAll(batch);
+                    // audit per batch
+                    for (BoardSlot slot : batch) {
+                        BoardSlotAssignmentAudit audit = BoardSlotAssignmentAudit.builder()
+                                .roundId(roundId)
+                                .boardId(slot.getBoardId())
+                                .slotId(slot.getId())
+                                .teamIdBefore(null)
+                                .teamIdAfter(slot.getTeamId())
+                                .action("random_assign")
+                                .performedBy(currentUserProvider.getCurrentUser().getUserId())
+                                .performedAt(now)
+                                .build();
+                        auditRepository.save(audit);
+                        details.add(SlotAssignmentDetail.builder().slotId(slot.getId()).boardId(slot.getBoardId()).teamId(slot.getTeamId()).build());
+                    }
+                    return null;
+                });
+            }
+            for (int i = mappingCount; i < teamsToAssign.size(); i++) unassigned.add(teamsToAssign.get(i).getId());
+        }
+
+        return RandomAssignResponse.builder()
+                .assignedCount(details.size())
+                .details(details)
+                .unassignedTeamIds(unassigned)
+                .build();
     }
 
     @Transactional

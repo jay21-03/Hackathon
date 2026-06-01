@@ -13,5 +13,14 @@ $env:DEV_AUTH_ENABLED = "false"
 
 $env:AI_REVIEW_INTERVAL_MINUTES = "30"
 $env:FILE_STORAGE_PATH = "../storage"
+$env:MAIL_USERNAME = "your_mail_username"
+$env:MAIL_PASSWORD = "your_mail_password"
+$env:MAIL_ENABLED = "false"
+$env:MAIL_HOST = "smtp.gmail.com"
+$env:MAIL_PORT = "587"
+$env:MAIL_SMTP_AUTH = "true"
+$env:MAIL_SMTP_STARTTLS_ENABLE = "true"
+$env:MAIL_FROM = "your_mail_username"
+$env:INVITATION_BASE_URL = "http://localhost:5173"
 
 mvn spring-boot:run

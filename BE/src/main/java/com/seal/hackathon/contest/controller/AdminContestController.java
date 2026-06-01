@@ -28,6 +28,14 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.seal.hackathon.contest.dto.AssignRequest;
+import com.seal.hackathon.contest.dto.AssignResponse;
+import com.seal.hackathon.contest.dto.MoveRequest;
+import com.seal.hackathon.contest.dto.MoveResponse;
+import com.seal.hackathon.contest.dto.SwapRequest;
+import com.seal.hackathon.contest.dto.SwapResponse;
+import com.seal.hackathon.contest.dto.RandomAssignRequest;
+import com.seal.hackathon.contest.dto.RandomAssignResponse;
 
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -119,6 +127,35 @@ public class AdminContestController {
             @PathVariable Long slotId,
             @Valid @RequestBody UpdateBoardSlotRequest request) {
         return ApiResponse.ok(contestManagementService.updateBoardSlot(slotId, request));
+    }
+
+    @PostMapping("/rounds/{roundId}/boards/slots/{slotId}/assign")
+    public ApiResponse<AssignResponse> assignTeamToSlot(
+            @PathVariable Long roundId,
+            @PathVariable Long slotId,
+            @Valid @RequestBody AssignRequest request) {
+        return ApiResponse.ok(contestManagementService.assignTeamToSlot(roundId, slotId, request));
+    }
+
+    @PostMapping("/rounds/{roundId}/boards/slots/move")
+    public ApiResponse<MoveResponse> moveTeamBetweenSlots(
+            @PathVariable Long roundId,
+            @Valid @RequestBody MoveRequest request) {
+        return ApiResponse.ok(contestManagementService.moveTeamBetweenSlots(roundId, request.getFromSlotId(), request.getToSlotId()));
+    }
+
+    @PostMapping("/rounds/{roundId}/boards/slots/swap")
+    public ApiResponse<SwapResponse> swapSlots(
+            @PathVariable Long roundId,
+            @Valid @RequestBody SwapRequest request) {
+        return ApiResponse.ok(contestManagementService.swapSlots(roundId, request.getSlotAId(), request.getSlotBId()));
+    }
+
+    @PostMapping("/rounds/{roundId}/boards/assign/random")
+    public ApiResponse<RandomAssignResponse> randomAssign(
+            @PathVariable Long roundId,
+            @Valid @RequestBody RandomAssignRequest request) {
+        return ApiResponse.ok(contestManagementService.randomAssign(roundId, request));
     }
 
     @GetMapping("/boards/{boardId}/problems")

@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Google Login Test</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #08111f;
+        --panel: #0f172a;
+        --panel-2: #111827;
+        --text: #e5eefc;
+        --muted: #94a3b8;
+        --line: rgba(148, 163, 184, 0.18);
+        --accent: #38bdf8;
+        --accent-2: #22c55e;
+        --danger: #fca5a5;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Inter, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 26%),
+          radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.12), transparent 24%),
+          linear-gradient(180deg, #020617, var(--bg));
+        color: var(--text);
+        padding: 24px;
+        display: grid;
+        place-items: center;
+      }
+
+      .shell {
+        width: min(920px, 100%);
+        background: rgba(15, 23, 42, 0.92);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        overflow: hidden;
+      }
+
+      .hero {
+        padding: 24px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(34, 197, 94, 0.08));
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(1.8rem, 3vw, 2.5rem);
+        letter-spacing: -0.03em;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .content {
+        display: grid;
+        gap: 16px;
+        padding: 20px;
+      }
+
+      @media (min-width: 840px) {
+        .content {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      .card {
+        background: rgba(17, 24, 39, 0.9);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 18px;
+      }
+
+      .label {
+        font-size: 0.92rem;
+        color: var(--muted);
+        margin-bottom: 10px;
+      }
+
+      input, textarea {
+        width: 100%;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 14px;
+        background: rgba(3, 10, 20, 0.75);
+        color: var(--text);
+        padding: 12px 14px;
+        font: inherit;
+        outline: none;
+      }
+
+      textarea {
+        min-height: 220px;
+        resize: vertical;
+        font-family: Consolas, Monaco, 'Courier New', monospace;
+        font-size: 0.88rem;
+        line-height: 1.5;
+      }
+
+      input:focus, textarea:focus {
+        border-color: rgba(56, 189, 248, 0.5);
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.15s ease, opacity 0.15s ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .primary {
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        color: #001018;
+      }
+
+      .secondary {
+        background: rgba(148, 163, 184, 0.12);
+        color: var(--text);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+      }
+
+      .status {
+        margin-top: 12px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .ok {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, 0.12);
+        border: 1px solid rgba(34, 197, 94, 0.22);
+        padding: 12px 14px;
+        border-radius: 12px;
+        white-space: pre-wrap;
+        margin-top: 12px;
+      }
+
+      .err {
+        color: var(--danger);
+        background: rgba(248, 113, 113, 0.12);
+        border: 1px solid rgba(248, 113, 113, 0.22);
+        padding: 12px 14px;
+        border-radius: 12px;
+        white-space: pre-wrap;
+        margin-top: 12px;
+      }
+
+      code {
+        padding: 0.12rem 0.35rem;
+        border-radius: 6px;
+        background: rgba(148, 163, 184, 0.12);
+        color: #d8ecff;
+      }
+    </style>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <h1>Google Login Test</h1>
+        <p>
+          Dùng trang này để lấy <code>id_token</code> từ Google rồi dán vào Swagger Bearer Authorization.
+        </p>
+      </section>
+
+      <section class="content">
+        <section class="card">
+          <div class="label">1. Google Client ID</div>
+          <input
+            id="clientId"
+            type="text"
+            value="375393891941-invk4kstp7pq1r1n2c9qspupn6hen025.apps.googleusercontent.com"
+            placeholder="xxxxx.apps.googleusercontent.com"
+          />
+          <div class="row">
+            <button id="initButton" class="primary" type="button">Khởi tạo Google Sign-In</button>
+            <button id="saveButton" class="secondary" type="button">Lưu client ID</button>
+            <button id="clearButton" class="secondary" type="button">Xóa token</button>
+          </div>
+          <div id="status" class="status">Nhập client ID đúng rồi bấm khởi tạo.</div>
+          <div id="errorBox" class="err" style="display:none"></div>
+          <div id="clientHint" class="ok" style="display:none"></div>
+        </section>
+
+        <section class="card">
+          <div class="label">2. Đăng nhập và lấy token</div>
+          <p>
+            Sau khi khởi tạo, nút Google sẽ xuất hiện bên dưới. Đăng nhập xong, token sẽ hiện trong ô textarea.
+          </p>
+          <div id="googleButton" style="margin-top: 12px;"></div>
+          <textarea id="token" style="margin-top: 12px;" readonly placeholder="id_token sẽ xuất hiện ở đây..."></textarea>
+          <div class="row">
+            <button id="copyButton" class="secondary" type="button" disabled>Copy token</button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "googleClientId";
+      const clientIdInput = document.getElementById("clientId");
+      const initButton = document.getElementById("initButton");
+      const saveButton = document.getElementById("saveButton");
+      const clearButton = document.getElementById("clearButton");
+      const copyButton = document.getElementById("copyButton");
+      const googleButton = document.getElementById("googleButton");
+      const tokenBox = document.getElementById("token");
+      const statusBox = document.getElementById("status");
+      const errorBox = document.getElementById("errorBox");
+      const clientHint = document.getElementById("clientHint");
+
+      let token = "";
+
+      function showError(message) {
+        if (!message) {
+          errorBox.style.display = "none";
+          errorBox.textContent = "";
+          return;
+        }
+        errorBox.style.display = "block";
+        errorBox.textContent = message;
+      }
+
+      function setStatus(message) {
+        statusBox.textContent = message;
+      }
+
+      function setClientHint(message) {
+        if (!message) {
+          clientHint.style.display = "none";
+          clientHint.textContent = "";
+          return;
+        }
+        clientHint.style.display = "block";
+        clientHint.textContent = message;
+      }
+
+      function setToken(value) {
+        token = value || "";
+        tokenBox.value = token;
+        copyButton.disabled = !token;
+      }
+
+      function getClientId() {
+        return clientIdInput.value.trim();
+      }
+
+      function persistClientId() {
+        const value = getClientId();
+        if (value) {
+          window.localStorage.setItem(STORAGE_KEY, value);
+        }
+      }
+
+      function loadClientId() {
+        const saved = window.localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          clientIdInput.value = saved;
+        }
+      }
+
+      function initializeGoogle() {
+        const clientId = getClientId();
+
+        if (!clientId) {
+          showError("Hãy nhập Google Client ID thật trước khi đăng nhập.");
+          setStatus("Thiếu client ID.");
+          return;
+        }
+
+        if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+          showError("Google Identity Services chưa load xong. Hãy chờ vài giây rồi bấm lại.");
+          setStatus("Đang chờ script Google.");
+          return;
+        }
+
+        persistClientId();
+        setClientHint(`Client ID đang dùng: ${clientId}`);
+        showError("");
+        setStatus("Đã sẵn sàng. Bấm nút Sign in with Google.");
+        googleButton.innerHTML = "";
+
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response) => {
+            if (!response || !response.credential) {
+              showError("Google trả về credential rỗng.");
+              setStatus("Đăng nhập thất bại.");
+              return;
+            }
+
+            setToken(response.credential);
+            showError("");
+            setStatus("Đăng nhập thành công. Copy token và dán vào Swagger Bearer Authorization.");
+            console.log("Google id_token:", response.credential);
+          },
+          auto_select: false,
+          cancel_on_tap_outside: true,
+          itp_support: true
+        });
+
+        window.google.accounts.id.renderButton(googleButton, {
+          theme: "outline",
+          size: "large",
+          text: "signin_with",
+          shape: "rectangular",
+          logo_alignment: "left"
+        });
+      }
+
+      initButton.addEventListener("click", initializeGoogle);
+
+      saveButton.addEventListener("click", () => {
+        persistClientId();
+        setClientHint(`Client ID đã lưu: ${getClientId()}`);
+        setStatus("Đã lưu client ID.");
+      });
+
+      clearButton.addEventListener("click", () => {
+        setToken("");
+        setStatus("Đã xóa token hiện tại.");
+      });
+
+      copyButton.addEventListener("click", async () => {
+        if (!token) return;
+        try {
+          await navigator.clipboard.writeText(token);
+          setStatus("Đã copy token vào clipboard.");
+        } catch (error) {
+          showError(`Không copy được token: ${error && error.message ? error.message : String(error)}`);
+        }
+      });
+
+      window.addEventListener("load", () => {
+        loadClientId();
+      });
+
+      window.addEventListener("error", (event) => {
+        if (event && event.message) {
+          showError(event.message);
+        }
+      });
+    </script>
+  </body>
+</html>

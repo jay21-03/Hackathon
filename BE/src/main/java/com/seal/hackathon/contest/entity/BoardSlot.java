@@ -27,5 +27,7 @@ public class BoardSlot {
     private Long boardId;
     private Integer teamNumber;
     private Long teamId;
+    private OffsetDateTime assignedAt;
+    private Long assignedBy;
     private OffsetDateTime createdAt;
 }

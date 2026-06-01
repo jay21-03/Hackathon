@@ -57,6 +57,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/api/v1/auth/google-login").permitAll()
+                .requestMatchers("/api/v1/team-invitations/confirm", "/api/v1/team-invitations/decline").authenticated()
                 .requestMatchers("/api/v1/admin/**").hasRole("ORGANIZER")
                 .requestMatchers("/api/v1/me", "/api/v1/me/profile").authenticated()
                 .anyRequest().permitAll())
