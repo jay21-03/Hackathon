@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AppRouter } from "./app/AppRouter";
 import { ToastProvider } from "./components/feedback/ToastProvider";
 import "./index.css";
@@ -10,6 +11,7 @@ import "./index.css";
 try {
   const _setItem = Storage.prototype.setItem;
   const _removeItem = Storage.prototype.removeItem;
+
   Storage.prototype.setItem = function (key: string, value: string) {
     _setItem.apply(this, [key, value]);
     try {
@@ -23,6 +25,7 @@ try {
       /* ignore */
     }
   };
+
   Storage.prototype.removeItem = function (key: string) {
     _removeItem.apply(this, [key]);
     try {
@@ -40,12 +43,16 @@ try {
   /* ignore */
 }
 
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ToastProvider>
-      <BrowserRouter>
-        <AppRouter />
-      </BrowserRouter>
-    </ToastProvider>
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppRouter />
+        </BrowserRouter>
+      </ToastProvider>
+    </GoogleOAuthProvider>
   </React.StrictMode>
 );
