@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
-import { Button } from "../../components/ui/Button";
+import { Button, ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
@@ -49,10 +48,9 @@ export function TeamInvitationConfirmationPage() {
           <Button variant="secondary" disabled={status === "REJECTED"} onClick={() => respond("REJECTED")}>
             Tu choi loi moi
           </Button>
-          <Link to="/team-invitations/status" className="btn-secondary inline-flex items-center gap-2">
-            <Icon name="fact_check" />
+          <ButtonLink to="/team-invitations/status" variant="secondary" icon={<Icon name="fact_check" />}>
             Xem trang thai
-          </Link>
+          </ButtonLink>
         </div>
       </section>
     </div>

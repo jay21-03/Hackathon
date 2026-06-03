@@ -65,11 +65,19 @@
   }
 
   .btn-primary {
-    @apply rounded-lg bg-primary-container px-md py-sm font-label-md text-on-primary-container shadow-sm transition-colors hover:bg-primary;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container px-md py-sm font-label-md text-on-primary-container shadow-sm transition-colors hover:bg-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
   }
 
   .btn-secondary {
-    @apply rounded-lg border border-outline-variant bg-surface px-md py-sm font-label-md text-on-surface shadow-sm transition-colors hover:bg-surface-container-high;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-outline-variant bg-surface px-md py-sm font-label-md text-on-surface shadow-sm transition-colors hover:bg-surface-container-high focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent px-md py-sm font-label-md text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-error/40 bg-error-container px-md py-sm font-label-md text-on-error-container shadow-sm transition-colors hover:bg-error/15 focus:outline-none focus:ring-2 focus:ring-error/20;
   }
 
   .table-divider {

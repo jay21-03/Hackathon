@@ -288,7 +288,7 @@ export const participantActivities: DemoActivity[] = [
   {
     id: 3,
     title: "Bai nop",
-    detail: "Repository da co link va san sang cho AI Review.",
+    detail: "Kho ma nguon da co link va san sang cho danh gia AI.",
     status: "SUBMITTED",
     time: "10:20"
   }
@@ -305,14 +305,14 @@ export const organizerActivities: DemoActivity[] = [
   {
     id: 2,
     title: "Cham diem",
-    detail: "6 score sheet da submit, 2 ban nhap chua tinh ranking.",
+    detail: "6 phieu cham da chot, 2 ban nhap chua tinh diem.",
     status: "SUBMITTED",
     time: "09:45"
   },
   {
     id: 3,
     title: "Ket qua",
-    detail: "Chua cong bo ra public portal.",
+    detail: "Chua cong bo ra cong ket qua cong khai.",
     status: "DRAFT",
     time: "10:30"
   }
@@ -388,8 +388,8 @@ export const demoProblem: DemoProblem = {
   requirements: [
     "Quan ly doi thi va thanh vien theo tung cuoc thi.",
     "Nop repository va hien thi trang thai danh gia AI.",
-    "Cham diem theo rubric, co ban nhap va submit chinh thuc.",
-    "Ranking chi tinh score sheet da submit."
+    "Cham diem theo tieu chi, co ban nhap va lan chot chinh thuc.",
+    "Xep hang chi tinh phieu cham da chot."
   ]
 };
 

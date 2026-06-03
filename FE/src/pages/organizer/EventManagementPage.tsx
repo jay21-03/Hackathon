@@ -1,6 +1,5 @@
-import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
-import { Button } from "../../components/ui/Button";
+import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
@@ -19,10 +18,9 @@ export function EventManagementPage() {
         title="Quan ly cau hinh cuoc thi"
         description="Theo doi thoi gian dang ky, quota, kich thuoc doi va trang thai cong bo cua tung cuoc thi."
         actions={
-          <Link to="/organizer/events/new" className="btn-primary inline-flex items-center gap-2">
-            <Icon name="add_circle" />
+          <ButtonLink to="/organizer/events/new" icon={<Icon name="add_circle" />}>
             Tao cuoc thi
-          </Link>
+          </ButtonLink>
         }
       />
 
@@ -54,10 +52,9 @@ export function EventManagementPage() {
                     <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
                   </td>
                   <td className="px-md py-md">
-                    <Link to="/organizer/events/basic-info" className="btn-secondary inline-flex items-center gap-2">
-                      <Icon name="edit" />
+                    <ButtonLink to="/organizer/events/basic-info" variant="secondary" icon={<Icon name="edit" />}>
                       Chinh sua
-                    </Link>
+                    </ButtonLink>
                   </td>
                 </tr>
               ))}

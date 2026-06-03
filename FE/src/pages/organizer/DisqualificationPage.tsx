@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { demoViolations, getTeamById, type DemoViolation } from "../../services/readModelService";
@@ -38,11 +39,11 @@ export function DisqualificationPage() {
                 <Badge tone={getStatusTone(row.status)}>{getStatusLabel(row.status)}</Badge>
                 <ConfirmAction
                   title="Xac nhan loai doi"
-                  message="Doi bi loai se khong duoc tinh ranking va khong hien trong ket qua hop le."
+                  message="Doi bi loai se khong duoc tinh xep hang va khong hien trong ket qua hop le."
                   confirmLabel="Loai doi"
                   onConfirm={() => disqualify(row.id)}
                 >
-                  <button className="btn-secondary" type="button">Loai doi</button>
+                  <Button variant="danger" type="button">Loai doi</Button>
                 </ConfirmAction>
               </div>
             </article>

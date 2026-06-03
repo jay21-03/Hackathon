@@ -55,7 +55,7 @@ test("organizer dashboard visual snapshot", async ({ page }) => {
 test("organizer scoring visual snapshot", async ({ page }) => {
   await useRole(page, "organizer");
   await page.goto("/organizer/scoring");
-  await expect(page.getByRole("heading", { name: "Theo doi score sheet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Theo doi phieu cham" })).toBeVisible();
   await expectStableScreenshot(page);
 });
 

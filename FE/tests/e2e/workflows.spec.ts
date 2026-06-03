@@ -74,13 +74,13 @@ test("judge validates rubric range before submitting score", async ({ page }) =>
   await page.getByTestId("rubric-score-0").fill("9");
   await page.getByTestId("submit-score").click();
   await page.getByTestId("confirm-action-submit").click();
-  await expect(page.locator("body")).toContainText("Da submit");
+  await expect(page.locator("body")).toContainText("Da chot");
 });
 
 test("organizer reviews ranking and manually chooses finalists", async ({ page }) => {
   await useRole(page, "organizer");
   await page.goto("/organizer/ranking");
-  await expect(page.locator("body")).toContainText("AI Review khong tinh diem");
+  await expect(page.locator("body")).toContainText("Danh gia AI khong tinh diem");
   await expect(page.getByTestId("rank-score-42")).toContainText("42.7");
 
   await page.getByTestId("finalist-87").click();
@@ -123,17 +123,19 @@ test("participant submits check-in and only sees problem after release time", as
   await expect(page.locator("body")).toContainText("De thi chua duoc mo");
   await page.getByTestId("toggle-release-time").click();
   await expect(page.locator("body")).toContainText("Noi dung de thi");
-  await expect(page.locator("body")).toContainText("Ranking chi tinh score sheet da submit");
+  await expect(page.locator("body")).toContainText("Xep hang chi tinh phieu cham da chot");
 });
 
 test("organizer configures problem and reviews scoring progress", async ({ page }) => {
   await useRole(page, "organizer");
   await page.goto("/organizer/problems");
   await page.getByTestId("publish-problem").click();
+  await expect(page.getByRole("heading", { name: "Cong bo de thi?" })).toBeVisible();
+  await page.getByTestId("confirm-action-submit").click();
   await expect(page.locator("body")).toContainText("Da cong bo");
 
   await page.goto("/organizer/scoring");
-  await expect(page.locator("body")).toContainText("Ranking chi tinh score sheet da submit");
+  await expect(page.locator("body")).toContainText("Xep hang chi tinh phieu cham da chot");
   await expect(page.locator("body")).toContainText("Ban nhap");
 });
 
@@ -176,14 +178,14 @@ test("full hackathon flow from registration to published results", async ({ page
   await expect(page.getByTestId("submission-status-message")).toContainText("Da nop");
 
   await page.goto("/me/ai-review");
-  await expect(page.locator("body")).toContainText("Khong tinh ranking");
+  await expect(page.locator("body")).toContainText("Khong tinh xep hang");
 
   await switchRole(page, "judge");
   await page.goto("/judge/scoring");
   await page.getByTestId("rubric-score-0").fill("9");
   await page.getByTestId("submit-score").click();
   await page.getByTestId("confirm-action-submit").click();
-  await expect(page.locator("body")).toContainText("Da submit");
+  await expect(page.locator("body")).toContainText("Da chot");
 
   await switchRole(page, "organizer");
   await page.goto("/organizer/ranking");

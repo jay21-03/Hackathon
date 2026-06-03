@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
+import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -33,13 +33,13 @@ export function JudgeDashboardPage() {
       <PageHeader
         eyebrow="Giam khao"
         title="Doi thi can cham"
-        description="Giam khao chi cham doi thuoc bang da phan cong. Diem phai duoc submit chinh thuc moi tinh ranking."
+        description="Giam khao chi cham doi thuoc bang da phan cong. Diem phai duoc chot chinh thuc moi tinh xep hang."
         actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
       <section className="grid gap-md md:grid-cols-3">
         <StatCard label="Doi trong bang" value={data.teams.length} helper="Duoc phep cham" icon="groups" />
-        <StatCard label="Da submit" value={submitted} helper="Tinh ranking" icon="task_alt" tone="success" />
+        <StatCard label="Da chot" value={submitted} helper="Tinh xep hang" icon="task_alt" tone="success" />
         <StatCard label="Ban nhap" value={draft} helper="Chua tinh diem" icon="edit_note" tone="warning" />
       </section>
 
@@ -65,10 +65,9 @@ export function JudgeDashboardPage() {
                     <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
                   </td>
                   <td className="px-md py-md">
-                    <Link to="/judge/scoring" className="btn-secondary inline-flex items-center gap-2">
-                      <Icon name="gavel" />
+                    <ButtonLink to="/judge/scoring" variant="secondary" icon={<Icon name="gavel" />}>
                       Cham diem
-                    </Link>
+                    </ButtonLink>
                   </td>
                 </tr>
               ))}

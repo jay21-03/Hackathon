@@ -53,7 +53,7 @@ export function SubmissionPage() {
           <p className="font-label-sm normal-case text-primary">Bai nop</p>
           <h1 className="font-headline-lg text-on-surface">{team.name}</h1>
           <p className="mt-xs font-body-md text-on-surface-variant">
-            Cap nhat kho ma nguon de ban to chuc, mentor va AI Review theo doi tien do.
+            Cap nhat kho ma nguon de ban to chuc, mentor va danh gia AI theo doi tien do.
           </p>
         </div>
         <Badge tone={getStatusTone(status)}>{getStatusLabel(status)}</Badge>
@@ -95,7 +95,7 @@ export function SubmissionPage() {
           <div className="rounded-lg border border-outline-variant bg-surface-container-low p-md">
             <p className="font-label-md text-on-surface">Trang thai danh gia AI</p>
             <p className="mt-xs font-body-sm text-on-surface-variant">
-              AI Review chi dung de tham khao va khong anh huong den ranking.
+              Danh gia AI chi dung de tham khao va khong anh huong den xep hang.
             </p>
             <div className="mt-md flex items-center gap-sm">
               <Icon name="psychology" className="text-primary" />
@@ -115,15 +115,14 @@ export function SubmissionPage() {
               confirmLabel="Nop chinh thuc"
               onConfirm={submitFinal}
             >
-              <button
+              <Button
                 type="button"
                 data-testid="submit-submission"
                 disabled={!validRepo}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-2.5 font-label-md text-on-primary-container transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 Nop chinh thuc
                 <Icon name="send" className="text-[18px]" />
-              </button>
+              </Button>
             </ConfirmAction>
           </div>
         </section>
@@ -133,8 +132,8 @@ export function SubmissionPage() {
           <div className="mt-md space-y-sm font-body-sm text-on-surface-variant">
             <p>Check-in khong chan quyen xem de thi.</p>
             <p>De thi chi mo theo thoi gian ban to chuc cau hinh.</p>
-            <p>Repository dung de chay AI Review va ho tro mentor.</p>
-            <p>Ranking chi tinh diem judge da submit.</p>
+            <p>Repository dung de chay danh gia AI va ho tro mentor.</p>
+            <p>Xep hang chi tinh diem giam khao da chot.</p>
           </div>
         </aside>
       </div>

@@ -2,14 +2,14 @@ import { NavLink, Outlet } from "react-router-dom";
 import { Icon } from "../ui/Icon";
 import type { NavItem } from "../../config/navigation";
 import { RoleSwitcher } from "../auth/RoleSwitcher";
-import { ConfirmAction } from "../feedback/ConfirmAction";
 import { useToast } from "../feedback/ToastProvider";
+import { ButtonLink, buttonClassName } from "../ui/Button";
 
 interface WorkspaceShellProps {
   navItems: NavItem[];
   title?: string;
   subtitle?: string;
-  primaryAction?: { label: string; icon: string };
+  primaryAction?: { label: string; icon: string; to?: string };
 }
 
 export function WorkspaceShell({
@@ -19,16 +19,21 @@ export function WorkspaceShell({
   primaryAction
 }: WorkspaceShellProps) {
   const { notify } = useToast();
-  const needsConfirm = Boolean(primaryAction?.label.includes("Cong bo"));
-  const primaryButton = primaryAction ? (
+  const primaryButton = primaryAction?.to ? (
+    <ButtonLink
+      to={primaryAction.to}
+      className="mb-lg w-full"
+      icon={<Icon name={primaryAction.icon} className="text-[18px]" />}
+    >
+      {primaryAction.label}
+    </ButtonLink>
+  ) : primaryAction ? (
     <button
       type="button"
       onClick={() => {
-        if (!needsConfirm) {
-          notify(`${primaryAction.label} da duoc ghi nhan trong phien lam viec nay.`, "success");
-        }
+        notify(`${primaryAction.label} da duoc ghi nhan trong phien lam viec nay.`, "success");
       }}
-      className="mb-lg flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-2.5 font-label-md text-on-primary-container shadow-sm transition-colors hover:bg-primary"
+      className={buttonClassName({ className: "mb-lg w-full" })}
     >
       <Icon name={primaryAction.icon} className="text-[18px]" />
       {primaryAction.label}
@@ -54,41 +59,39 @@ export function WorkspaceShell({
           <RoleSwitcher compact />
         </div>
 
-        {needsConfirm && primaryAction ? (
-          <ConfirmAction
-            title="Xac nhan thao tac"
-            message="Thao tac cong bo anh huong den man hinh ket qua cua thi sinh va cong khai. Hay kiem tra ranking truoc khi tiep tuc."
-            confirmLabel={primaryAction.label}
-            onConfirm={() => notify(`${primaryAction.label} thanh cong trong phien lam viec nay.`, "success")}
-          >
-            {primaryButton}
-          </ConfirmAction>
-        ) : (
-          primaryButton
-        )}
+        {primaryButton}
 
         <nav className="flex flex-grow flex-col gap-1 overflow-y-auto pr-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/me" || item.to === "/organizer/dashboard"}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-sm py-2.5 font-label-md transition-colors ${
-                  isActive
-                    ? "bg-primary-container text-on-primary-container shadow-sm"
-                    : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon name={item.icon} filled={isActive} className="text-[20px]" />
-                  {item.label}
-                </>
-              )}
-            </NavLink>
-          ))}
+          {navItems.map((item, index) => {
+            const showGroup = item.group && item.group !== navItems[index - 1]?.group;
+            return (
+              <div key={item.to} className={showGroup && index > 0 ? "mt-sm" : undefined}>
+                {showGroup ? (
+                  <p className="px-sm pb-1 pt-2 font-label-sm normal-case tracking-normal text-outline">
+                    {item.group}
+                  </p>
+                ) : null}
+                <NavLink
+                  to={item.to}
+                  end={item.to === "/me" || item.to === "/organizer/dashboard"}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-lg px-sm py-2.5 font-label-md transition-colors ${
+                      isActive
+                        ? "bg-primary-container text-on-primary-container shadow-sm"
+                        : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon name={item.icon} filled={isActive} className="text-[20px]" />
+                      {item.label}
+                    </>
+                  )}
+                </NavLink>
+              </div>
+            );
+          })}
         </nav>
 
         <div className="mt-auto flex flex-col gap-1 border-t border-outline-variant pt-4">

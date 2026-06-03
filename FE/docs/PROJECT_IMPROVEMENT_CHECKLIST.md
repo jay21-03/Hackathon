@@ -49,6 +49,13 @@ Trang thai sau dot nang cap FE hien tai.
 - [x] Xoa legacy page khong dung: HomePage, EventsPage cu, dashboard prototype cu va PlaceholderPage.
 - [x] Doi service fallback thanh read model service de page khong import demo/mocks truc tiep.
 - [x] Them architecture E2E test chan page import mock/demo va chan cau hinh thiet bi app quay lai.
+- [x] Nhom sidebar theo dung luong nghiep vu: thiet lap, dang ky/phan cong, van hanh, cham diem, ket qua.
+- [x] Them workflow steps cho dashboard participant va organizer de cac man lien quan duoc sap theo thu tu thuc hien.
+- [x] Dong bo action button/link qua primitive dung chung va bo class nut cu trong page.
+- [x] Them confirm cho cong bo de, chot chung ket, tu choi dang ky va lam lai form dang ky.
+- [x] Siết quota khi duyet dang ky: khong cho confirmed vuot gioi han doi.
+- [x] Chuan hoa copy hien thi: thay AI Review/score sheet/public portal/ranking bang ngon ngu nghiep vu.
+- [x] Them E2E chan cac thuat ngu prototype/ky thuat noi bo hien lai tren route trong yeu.
 
 ## Nen lam tiep khi noi dich vu he thong
 

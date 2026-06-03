@@ -1,9 +1,10 @@
-import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
+import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { ProgressBar } from "../../components/ui/ProgressBar";
 import { StatCard } from "../../components/ui/StatCard";
+import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import {
   demoEvent,
@@ -31,14 +32,13 @@ export function ParticipantOverviewPage() {
       <PageHeader
         eyebrow="Tong quan thi sinh"
         title={team.name}
-        description="Theo doi trang thai doi, bang thi, check-in, bai nop va nhan xet AI trong mot man hinh gon."
+        description="Theo doi trang thai doi, bang thi, check-in, bai nop va danh gia AI trong mot man hinh gon."
         actions={
           <>
             <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
-            <Link to="/me/submission" className="btn-primary inline-flex items-center gap-2">
-              <Icon name="upload" className="text-[18px]" />
+            <ButtonLink to="/me/submission" icon={<Icon name="upload" className="text-[18px]" />}>
               Nop bai
-            </Link>
+            </ButtonLink>
           </>
         }
       />
@@ -53,20 +53,57 @@ export function ParticipantOverviewPage() {
           tone="success"
         />
         <StatCard
-          label="AI Review"
+          label="Danh gia AI"
           value={`${team.aiReviewScore}/100`}
           helper="Chi dung de tham khao"
           icon="psychology"
           tone="warning"
         />
         <StatCard
-          label="Phieu cham submit"
+          label="Phieu cham da chot"
           value={`${submittedSheets}/3`}
-          helper="Ranking chi tinh diem da submit"
+          helper="Xep hang chi tinh diem da chot"
           icon="gavel"
           tone="primary"
         />
       </section>
+
+      <WorkflowSteps
+        title="Thu tu can hoan thanh"
+        description="Cac moc duoc sap theo dung luong thi sinh: doi thi, check-in, xem de, nop bai va xem ket qua."
+        steps={[
+          {
+            label: "Doi thi",
+            detail: "Xac nhan thanh vien va trang thai dang ky.",
+            to: "/me/team",
+            state: team.status === "CONFIRMED" ? "done" : "active"
+          },
+          {
+            label: "Check-in",
+            detail: "Nop anh tham du, khong khoa quyen xem de.",
+            to: "/me/check-in",
+            state: team.checkInStatus === "CONFIRMED" ? "done" : "active"
+          },
+          {
+            label: "De thi",
+            detail: "Noi dung mo theo thoi gian ban to chuc cau hinh.",
+            to: "/me/problem",
+            state: "next"
+          },
+          {
+            label: "Bai nop",
+            detail: "Cap nhat link GitHub/GitLab hop le.",
+            to: "/me/submission",
+            state: team.repoUrl ? "done" : "active"
+          },
+          {
+            label: "Ket qua",
+            detail: "Chi hien sau khi ban to chuc cong bo.",
+            to: "/me/results",
+            state: "next"
+          }
+        ]}
+      />
 
       <section className="grid gap-lg xl:grid-cols-[1.2fr_0.8fr]">
         <article className="rounded-xl border border-outline-variant bg-surface-container p-lg">
@@ -74,7 +111,7 @@ export function ParticipantOverviewPage() {
             <div>
               <h2 className="font-headline-sm text-on-surface">Tien do san sang</h2>
               <p className="font-body-sm text-on-surface-variant">
-                Cac moc can hoan thanh truoc khi ban to chuc tinh ranking.
+                Cac moc can hoan thanh truoc khi ban to chuc tinh xep hang.
               </p>
             </div>
             <Badge tone="success">{readiness}% san sang</Badge>

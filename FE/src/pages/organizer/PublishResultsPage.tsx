@@ -39,15 +39,15 @@ export function PublishResultsPage() {
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Cong bo ket qua"
-        title="Xac nhan public ket qua"
-        description="Ket qua chi hien tren public portal sau khi ban to chuc xac nhan cong bo. Ranking chi lay score sheet da submit."
+        title="Xac nhan cong khai ket qua"
+        description="Ket qua chi hien tren cong ket qua cong khai sau khi ban to chuc xac nhan cong bo. Xep hang chi lay phieu cham da chot."
         actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Doi co diem hop le" value={readyTeams.length} helper="Co score sheet da submit" icon="verified" tone="success" />
-        <StatCard label="Phieu da submit" value={preview.submittedSheets.length} helper="Duoc tinh ranking" icon="task_alt" />
-        <StatCard label="Hang 1 tam thoi" value={topTeam} helper="Truoc khi public" icon="leaderboard" tone="warning" />
+        <StatCard label="Doi co diem hop le" value={readyTeams.length} helper="Co phieu cham da chot" icon="verified" tone="success" />
+        <StatCard label="Phieu da chot" value={preview.submittedSheets.length} helper="Duoc tinh xep hang" icon="task_alt" />
+        <StatCard label="Hang 1 tam thoi" value={topTeam} helper="Truoc khi cong khai" icon="leaderboard" tone="warning" />
       </section>
 
       <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
@@ -55,14 +55,14 @@ export function PublishResultsPage() {
           <div>
             <h2 className="font-headline-sm text-on-surface">Trang thai cong bo</h2>
             <p className="mt-xs font-body-sm text-on-surface-variant">
-              {published ? "Ket qua da san sang hien thi ngoai public portal." : "Ket qua van dang o ban nhap noi bo."}
+              {published ? "Ket qua da san sang hien thi cong khai." : "Ket qua van dang o ban nhap noi bo."}
             </p>
           </div>
           <Badge tone={published ? "active" : "neutral"}>{published ? "Da cong bo" : "Ban nhap"}</Badge>
         </div>
         <ConfirmAction
           title="Cong bo ket qua?"
-          message="Sau khi cong bo, public portal va thi sinh se xem duoc bang xep hang hien tai."
+          message="Sau khi cong bo, cong ket qua cong khai va thi sinh se xem duoc bang xep hang hien tai."
           confirmLabel="Cong bo"
           onConfirm={() => {
             setPublished(true);

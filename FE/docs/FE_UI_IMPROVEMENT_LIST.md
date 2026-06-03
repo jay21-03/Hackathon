@@ -48,6 +48,12 @@ Tap trung vao giao dien demo, tinh dung nghiep vu va kha nang test.
 - [x] Lam lai event card va login de bot cam giac giao dien sinh tu template.
 - [x] Xoa cac legacy page khong con route/import de giam no ky thuat va tranh UI cu bi dung lai.
 - [x] Doi service du lieu minh hoa thanh read model service va them test kien truc de page khong import mock/demo truc tiep.
+- [x] Sap lai sidebar theo nhom luong nghiep vu va dua action chinh den dung man lien quan.
+- [x] Them workflow timeline cho dashboard de nguoi dung thay thu tu viec can lam.
+- [x] Dong bo link dang nut sang ButtonLink va them variant danger/loading/size cho Button.
+- [x] Bo cac copy con tinh prototype: AI Review, score sheet, public portal, ranking tren UI hien thi.
+- [x] Them confirm cho cac thao tac anh huong du lieu: cong bo de, tu choi dang ky, chot chung ket, lam lai form.
+- [x] Them E2E kiem tra UI khong hien lai thuat ngu prototype/ky thuat noi bo.
 
 ## Nen lam tiep
 

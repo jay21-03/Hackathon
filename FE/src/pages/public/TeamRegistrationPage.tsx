@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
@@ -163,18 +164,21 @@ export function TeamRegistrationPage() {
               Dang ky doi
               <Icon name="arrow_forward" className="text-[18px]" />
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
+            <ConfirmAction
+              title="Lam lai ho so?"
+              message="Thong tin doi dang nhap se bi xoa khoi form hien tai."
+              confirmLabel="Lam lai"
+              onConfirm={() => {
                 setTeamName("");
                 setMemberEmails(["", "", "", "", ""]);
                 setErrors([]);
                 setSubmittedStatus(null);
               }}
             >
-              Lam lai
-            </Button>
+              <Button type="button" variant="ghost">
+                Lam lai
+              </Button>
+            </ConfirmAction>
           </div>
         </form>
 

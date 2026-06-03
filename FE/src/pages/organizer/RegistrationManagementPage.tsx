@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -41,6 +42,17 @@ export function RegistrationManagementPage() {
   );
 
   function updateStatus(id: number, status: string) {
+    const currentRegistration = registrations.find((registration) => registration.id === id);
+    const confirmedCount = registrations.filter((item) => item.status === "CONFIRMED").length;
+    if (
+      status === "CONFIRMED" &&
+      currentRegistration?.status !== "CONFIRMED" &&
+      confirmedCount >= demoEvent.quota
+    ) {
+      notify("Quota da day, hay dua doi vao danh sach cho hoac mo them quota truoc khi duyet.", "warning");
+      return;
+    }
+
     setRegistrations((current) =>
       current.map((registration) =>
         registration.id === id ? { ...registration, status } : registration
@@ -126,13 +138,16 @@ export function RegistrationManagementPage() {
                     >
                       Cho
                     </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => updateStatus(registration.id, "REJECTED")}
+                    <ConfirmAction
+                      title="Tu choi ho so?"
+                      message="Doi se khong duoc tinh vao danh sach tham gia hop le. Hay chac chan da lien he doi truoc khi tu choi."
+                      confirmLabel="Tu choi"
+                      onConfirm={() => updateStatus(registration.id, "REJECTED")}
                     >
-                      Tu choi
-                    </Button>
+                      <Button type="button" variant="danger">
+                        Tu choi
+                      </Button>
+                    </ConfirmAction>
                   </div>
                 </td>
               </tr>

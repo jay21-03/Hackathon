@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
+import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 
@@ -36,10 +36,9 @@ export function EventWizardPage() {
                 {step.status === "CONFIRMED" ? "Da san sang" : "Can cau hinh"}
               </Badge>
             </div>
-            <Link to={step.path} className="btn-secondary mt-md inline-flex items-center gap-2">
-              <Icon name="arrow_forward" />
+            <ButtonLink to={step.path} variant="secondary" className="mt-md" icon={<Icon name="arrow_forward" />}>
               Mo buoc nay
-            </Link>
+            </ButtonLink>
           </article>
         ))}
       </section>

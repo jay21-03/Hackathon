@@ -85,7 +85,7 @@ export function ProfilePage() {
           <h2 className="mt-md font-headline-sm text-on-surface">{fullName}</h2>
           <p className="break-all font-body-sm text-on-surface-variant">{email}</p>
           <p className="mt-md font-body-sm text-on-surface-variant">
-            Ho so nay chi dung cho lien he trong cuoc thi. Diem va ranking khong bi anh huong boi thong tin ca nhan.
+            Ho so nay chi dung cho lien he trong cuoc thi. Diem va xep hang khong bi anh huong boi thong tin ca nhan.
           </p>
         </aside>
       </section>

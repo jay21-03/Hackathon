@@ -36,8 +36,8 @@ test("participant dashboard shows actionable overview UI", async ({ page }) => {
   await page.goto("/me");
   await expect(page.getByRole("heading", { name: "Quantum Nexus" })).toBeVisible();
   await expect(page.locator("body")).toContainText("Tien do san sang");
-  await expect(page.locator("body")).toContainText("AI Review");
-  await expect(page.locator("body")).toContainText("Ranking chi tinh diem da submit");
+  await expect(page.locator("body")).toContainText("Danh gia AI");
+  await expect(page.locator("body")).toContainText("Xep hang chi tinh diem da chot");
 });
 
 test("team page shows member confirmation and submission entry point", async ({ page }) => {
@@ -54,7 +54,10 @@ test("organizer dashboard shows operational cards and next actions", async ({ pa
   await expect(page.getByRole("heading", { name: "SEAL Hackathon 2026" })).toBeVisible();
   await expect(page.locator("body")).toContainText("Quota dang ky");
   await expect(page.locator("body")).toContainText("Can xu ly tiep");
-  await expect(page.locator("body")).toContainText("Ket qua chua public");
+  await expect(page.locator("body")).toContainText("Thu tu van hanh cuoc thi");
+  await expect(page.locator("body")).toContainText("Ket qua chua cong khai");
+  await expect(page.locator("body")).toContainText("Dang ky va phan cong");
+  await expect(page.getByRole("link", { name: /Cong bo ket qua/i }).first()).toHaveAttribute("href", "/organizer/publish-results");
 });
 
 test("workspace shell exposes full participant navigation", async ({ page }) => {
@@ -88,7 +91,7 @@ test("participant remaining React pages render key UI", async ({ page }) => {
   const checks: Array<[string, string]> = [
     ["/me/status", "Trang thai doi"],
     ["/me/board", "Bang thi"],
-    ["/me/ai-review", "Khong tinh ranking"]
+    ["/me/ai-review", "Khong tinh xep hang"]
   ];
 
   for (const [path, text] of checks) {
@@ -119,5 +122,31 @@ test("role pages do not create horizontal overflow", async ({ page }) => {
     await page.goto(path);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, `${path} should not overflow horizontally`).toBeLessThanOrEqual(2);
+  }
+});
+
+test("core routes avoid prototype and internal wording", async ({ page }) => {
+  const checks: Array<[Role | "public", string]> = [
+    ["public", "/events/1/results"],
+    ["participant", "/me"],
+    ["participant", "/me/submission"],
+    ["organizer", "/organizer/dashboard"],
+    ["organizer", "/organizer/scoring"],
+    ["organizer", "/organizer/publish-results"],
+    ["mentor", "/mentor/dashboard"],
+    ["judge", "/judge/scoring"]
+  ];
+
+  for (const [role, path] of checks) {
+    if (role !== "public") {
+      await page.goto("/events");
+      await page.evaluate((profile) => {
+        window.localStorage.setItem("seal.demo.session", JSON.stringify(profile));
+      }, roleProfiles[role]);
+    }
+    await page.goto(path);
+    await expect(page.locator("body")).not.toContainText(
+      /AI Review|score sheet|public portal|backend|mock|pipeline|gateway|operator|telemetry/i
+    );
   }
 });

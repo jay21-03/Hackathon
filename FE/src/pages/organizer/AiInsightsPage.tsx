@@ -32,14 +32,14 @@ export function AiInsightsPage() {
     <div className="space-y-lg">
       <PageHeader
         eyebrow="AI Insights"
-        title="Tong hop ket qua AI Review"
-        description="Hien thi tin hieu ky thuat de mentor va ban to chuc tham khao. Diem AI khong duoc cong vao ranking."
+        title="Tong hop ket qua danh gia AI"
+        description="Hien thi nhan xet de mentor va ban to chuc tham khao. Diem AI khong duoc cong vao xep hang."
         actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
       <section className="grid gap-md md:grid-cols-3">
         <StatCard label="Doi co kho ma nguon" value={teams.filter((team) => team.repoUrl).length} helper="San sang danh gia" icon="code" />
-        <StatCard label="Diem AI trung binh" value={`${average}/100`} helper="Khong tinh ranking" icon="analytics" tone="warning" />
+        <StatCard label="Diem AI trung binh" value={`${average}/100`} helper="Khong tinh xep hang" icon="analytics" tone="warning" />
         <StatCard label="Bang thi" value={new Set(teams.map((team) => team.board)).size} helper="Da phan bo" icon="view_module" tone="success" />
       </section>
 

@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
-import { Button } from "../../components/ui/Button";
+import { Button, ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { canViewProblem } from "../../domain/businessRules";
@@ -78,10 +77,9 @@ export function ProblemPage() {
               <p>Thoi luong: {demoProblem.durationHours} gio</p>
               <p>Doi thi: {team.name}</p>
             </div>
-            <Link to="/me/submission" className="btn-primary mt-lg inline-flex w-full items-center justify-center gap-2">
-              <Icon name="upload" className="text-[18px]" />
+            <ButtonLink to="/me/submission" className="mt-lg w-full" icon={<Icon name="upload" className="text-[18px]" />}>
               Nop link Git
-            </Link>
+            </ButtonLink>
           </aside>
         </section>
       )}

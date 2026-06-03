@@ -12,9 +12,9 @@ export function AiReviewPage() {
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Danh gia AI"
-        title={`AI Review - ${team.name}`}
-        description="AI Review chi la tham khao, khong anh huong ranking va diem chinh thuc."
-        actions={<Badge tone="ai">Khong tinh ranking</Badge>}
+        title={`Danh gia AI - ${team.name}`}
+        description="Danh gia AI chi la tham khao, khong anh huong xep hang va diem chinh thuc."
+        actions={<Badge tone="ai">Khong tinh xep hang</Badge>}
       />
       <section className="grid gap-md md:grid-cols-3">
         <StatCard label="Diem goi y" value={`${team.aiReviewScore}/100`} helper="Tham khao" icon="psychology" tone="warning" />

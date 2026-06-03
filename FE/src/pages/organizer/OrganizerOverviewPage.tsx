@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
+import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { ProgressBar } from "../../components/ui/ProgressBar";
 import { StatCard } from "../../components/ui/StatCard";
+import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import {
   demoEvent,
@@ -24,14 +26,13 @@ export function OrganizerOverviewPage() {
       <PageHeader
         eyebrow="Tong quan ban to chuc"
         title={demoEvent.name}
-        description="Theo doi dang ky, check-in, cham diem, ranking va cong bo ket qua trong mot dashboard gon."
+        description="Theo doi dang ky, check-in, cham diem, xep hang va cong bo ket qua trong mot dashboard gon."
         actions={
           <>
             <Badge tone={getStatusTone(demoEvent.status)}>{getStatusLabel(demoEvent.status)}</Badge>
-            <Link to="/organizer/ranking" className="btn-primary inline-flex items-center gap-2">
-              <Icon name="leaderboard" className="text-[18px]" />
-              Xem ranking
-            </Link>
+            <ButtonLink to="/organizer/ranking" icon={<Icon name="leaderboard" className="text-[18px]" />}>
+              Xem xep hang
+            </ButtonLink>
           </>
         }
       />
@@ -56,20 +57,57 @@ export function OrganizerOverviewPage() {
         <StatCard
           label="Cham diem"
           value={`${submittedScores}/${demoScoreSheets.length}`}
-          helper={`${draftScores} ban nhap chua tinh ranking`}
+          helper={`${draftScores} ban nhap chua tinh diem`}
           icon="gavel"
           tone="primary"
         >
           <ProgressBar value={scoringProgress} />
         </StatCard>
         <StatCard
-          label="AI Review"
+          label="Danh gia AI"
           value="Tham khao"
-          helper="Khong anh huong ranking"
+          helper="Khong anh huong xep hang"
           icon="psychology"
           tone="warning"
         />
       </section>
+
+      <WorkflowSteps
+        title="Thu tu van hanh cuoc thi"
+        description="Cac man lien quan duoc xep theo dung dong nghiep vu de ban to chuc khong phai nhay qua lai."
+        steps={[
+          {
+            label: "Thiet lap",
+            detail: "Cau hinh cuoc thi, de thi va tieu chi cham.",
+            to: "/organizer/events",
+            state: "done"
+          },
+          {
+            label: "Dang ky",
+            detail: "Duyet doi, loi moi thanh vien va danh sach cho.",
+            to: "/organizer/registrations",
+            state: waitlistTeams > 0 ? "active" : "done"
+          },
+          {
+            label: "Phan cong",
+            detail: "Tao bang thi, gan mentor va giam khao.",
+            to: "/organizer/assignments",
+            state: "active"
+          },
+          {
+            label: "Cham diem",
+            detail: "Theo doi phieu cham da chot, bo qua ban nhap.",
+            to: "/organizer/scoring",
+            state: draftScores > 0 ? "active" : "done"
+          },
+          {
+            label: "Cong bo",
+            detail: "Chon chung ket, xu ly vi pham va cong khai ket qua.",
+            to: "/organizer/publish-results",
+            state: submittedScores > 0 ? "next" : "blocked"
+          }
+        ]}
+      />
 
       <section className="grid gap-lg xl:grid-cols-[1.1fr_0.9fr]">
         <article className="rounded-xl border border-outline-variant bg-surface-container p-lg">
@@ -89,7 +127,7 @@ export function OrganizerOverviewPage() {
               ["Duyet dang ky", `${waitlistTeams} doi trong danh sach cho`, "/organizer/registrations"],
               ["Check-in", "1 doi can xem lai anh check-in", "/organizer/check-ins"],
               ["Cham diem", `${draftScores} phieu dang luu nhap`, "/organizer/scoring"],
-              ["Cong bo", "Ket qua chua public", "/organizer/publish-results"]
+              ["Cong bo", "Ket qua chua cong khai", "/organizer/publish-results"]
             ].map(([title, detail, to]) => (
               <Link
                 key={title}
@@ -104,7 +142,7 @@ export function OrganizerOverviewPage() {
         </article>
 
         <article className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-          <h2 className="font-headline-sm text-on-surface">Hoat dong he thong</h2>
+          <h2 className="font-headline-sm text-on-surface">Hoat dong gan day</h2>
           <div className="mt-md space-y-sm">
             {organizerActivities.map((activity) => (
               <div

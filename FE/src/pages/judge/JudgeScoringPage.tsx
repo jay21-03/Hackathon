@@ -46,7 +46,7 @@ export function JudgeScoringPage() {
   function submitScore() {
     if (!validate()) return;
     setStatus("SUBMITTED");
-    notify("Da submit diem chinh thuc.", "success");
+    notify("Da chot diem chinh thuc.", "success");
   }
 
   return (
@@ -119,19 +119,15 @@ export function JudgeScoringPage() {
               Luu nhap
             </Button>
             <ConfirmAction
-              title="Submit diem chinh thuc"
-              message="Ranking chi tinh cac score sheet da submit. Hay kiem tra rubric truoc khi xac nhan."
-              confirmLabel="Submit diem"
+              title="Chot diem chinh thuc"
+              message="Xep hang chi tinh cac phieu cham da chot. Hay kiem tra tieu chi truoc khi xac nhan."
+              confirmLabel="Chot diem"
               onConfirm={submitScore}
             >
-              <button
-                type="button"
-                data-testid="submit-score"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-2.5 font-label-md text-on-primary-container transition-opacity hover:opacity-90"
-              >
-                Submit diem
+              <Button type="button" data-testid="submit-score">
+                Chot diem
                 <Icon name="gavel" className="text-[18px]" />
-              </button>
+              </Button>
             </ConfirmAction>
           </div>
         </section>
@@ -143,9 +139,9 @@ export function JudgeScoringPage() {
           </p>
           <p className="font-body-sm text-on-surface-variant">Toi da 50 diem</p>
           <div className="mt-lg space-y-sm font-body-sm text-on-surface-variant">
-            <p>Ban nhap khong duoc tinh ranking.</p>
-            <p>Chi diem submit moi duoc tong hop.</p>
-            <p>AI Review chi la tham khao.</p>
+            <p>Ban nhap khong duoc tinh xep hang.</p>
+            <p>Chi diem da chot moi duoc tong hop.</p>
+            <p>Danh gia AI chi la tham khao.</p>
           </div>
         </aside>
       </div>

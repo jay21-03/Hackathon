@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
+import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
@@ -57,10 +57,9 @@ export function InvitationStatusPage() {
         </div>
       </section>
 
-      <Link to="/team-invitation" className="btn-secondary inline-flex items-center gap-2">
-        <Icon name="mail" />
+      <ButtonLink to="/team-invitation" variant="secondary" icon={<Icon name="mail" />}>
         Mo loi moi
-      </Link>
+      </ButtonLink>
     </div>
   );
 }

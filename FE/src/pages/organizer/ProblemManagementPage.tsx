@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
+import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -6,6 +8,7 @@ import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { demoProblem } from "../../services/readModelService";
 
 export function ProblemManagementPage() {
+  const { notify } = useToast();
   const [title, setTitle] = useState(demoProblem.title);
   const [releaseAt, setReleaseAt] = useState(demoProblem.releaseAt.slice(0, 16));
   const [status, setStatus] = useState(demoProblem.status);
@@ -26,7 +29,7 @@ export function ProblemManagementPage() {
             <input value={title} onChange={(event) => setTitle(event.target.value)} className="form-input" />
           </label>
           <label className="flex flex-col gap-xs">
-            <span className="font-label-sm normal-case text-on-surface-variant">Release at</span>
+            <span className="font-label-sm normal-case text-on-surface-variant">Thoi gian mo de</span>
             <input
               value={releaseAt}
               onChange={(event) => setReleaseAt(event.target.value)}
@@ -40,12 +43,29 @@ export function ProblemManagementPage() {
             <textarea defaultValue={demoProblem.summary} className="form-input min-h-32" />
           </label>
           <div className="flex flex-wrap gap-sm">
-            <Button type="button" variant="ghost" onClick={() => setStatus("DRAFT")}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setStatus("DRAFT");
+                notify("Da luu ban nhap de thi.", "success");
+              }}
+            >
               Luu ban nhap
             </Button>
-            <Button type="button" onClick={() => setStatus("PUBLISHED")} data-testid="publish-problem">
-              Cong bo de
-            </Button>
+            <ConfirmAction
+              title="Cong bo de thi?"
+              message="Sau khi cong bo, thi sinh se xem duoc de khi den thoi gian mo de. Check-in khong duoc dung de khoa quyen xem de."
+              confirmLabel="Cong bo de"
+              onConfirm={() => {
+                setStatus("PUBLISHED");
+                notify("Da cong bo de thi.", "success");
+              }}
+            >
+              <Button type="button" data-testid="publish-problem">
+                Cong bo de
+              </Button>
+            </ConfirmAction>
           </div>
         </form>
 

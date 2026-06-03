@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
+import { ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -21,10 +21,9 @@ export function TeamOverviewPage() {
         actions={
           <>
             <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
-            <Link to="/team-invitations/status" className="btn-secondary inline-flex items-center gap-2">
-              <Icon name="mail" className="text-[18px]" />
+            <ButtonLink to="/team-invitations/status" variant="secondary" icon={<Icon name="mail" className="text-[18px]" />}>
               Xem loi moi
-            </Link>
+            </ButtonLink>
           </>
         }
       />
@@ -79,12 +78,11 @@ export function TeamOverviewPage() {
             <p>Bang thi: {team.board}</p>
             <p>Track: {team.track}</p>
             <p>Repository: {team.repoUrl ? "Da cap nhat" : "Chua cap nhat"}</p>
-            <p>AI Review: {team.aiReviewScore}/100</p>
+            <p>Danh gia AI: {team.aiReviewScore}/100</p>
           </div>
-          <Link to="/me/submission" className="btn-primary inline-flex w-full items-center justify-center gap-2">
-            <Icon name="upload" className="text-[18px]" />
+          <ButtonLink to="/me/submission" className="w-full" icon={<Icon name="upload" className="text-[18px]" />}>
             Cap nhat bai nop
-          </Link>
+          </ButtonLink>
         </aside>
       </section>
     </div>

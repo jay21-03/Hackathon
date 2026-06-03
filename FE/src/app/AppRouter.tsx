@@ -95,7 +95,7 @@ export function AppRouter() {
               navItems={participantWorkspaceNav}
               title="Khu vuc thi sinh"
               subtitle="Theo doi doi thi"
-              primaryAction={{ label: "Nop bai", icon: "upload" }}
+              primaryAction={{ label: "Nop bai", icon: "upload", to: "/me/submission" }}
             />
           }
         >
@@ -121,7 +121,7 @@ export function AppRouter() {
               navItems={organizerNav}
               title="Ban to chuc"
               subtitle="Quan ly cuoc thi"
-              primaryAction={{ label: "Cong bo ket qua", icon: "campaign" }}
+              primaryAction={{ label: "Cong bo ket qua", icon: "campaign", to: "/organizer/publish-results" }}
             />
           }
         >

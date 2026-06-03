@@ -1,6 +1,5 @@
-import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
-import { Button } from "../../components/ui/Button";
+import { Button, ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
@@ -15,7 +14,7 @@ export function ExportSuccessPage() {
       <PageHeader
         eyebrow="Xuat ket qua"
         title="Da tao file export"
-        description="Ban export duoc tao tu ranking hien tai, chi tinh score sheet da submit."
+        description="Ban xuat du lieu duoc tao tu xep hang hien tai, chi tinh phieu cham da chot."
         actions={<Badge tone="success">Hoan tat</Badge>}
       />
 
@@ -35,10 +34,9 @@ export function ExportSuccessPage() {
           </div>
           <div className="flex flex-wrap gap-sm">
             <Button icon={<Icon name="download" />}>Tai file</Button>
-            <Link to="/organizer/ranking" className="btn-secondary inline-flex items-center gap-2">
-              <Icon name="leaderboard" />
-              Ve ranking
-            </Link>
+            <ButtonLink to="/organizer/ranking" variant="secondary" icon={<Icon name="leaderboard" />}>
+              Ve xep hang
+            </ButtonLink>
           </div>
         </div>
       </section>

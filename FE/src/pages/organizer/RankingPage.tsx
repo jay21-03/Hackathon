@@ -1,12 +1,16 @@
 import { useMemo, useState } from "react";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
+import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { demoScoreSheets, getRankingRows } from "../../services/readModelService";
 import { formatNumber } from "../../utils/validation";
 
 export function RankingPage() {
+  const { notify } = useToast();
   const rows = useMemo(() => getRankingRows(), []);
   const [finalistIds, setFinalistIds] = useState<number[]>([42]);
   const submittedSheets = demoScoreSheets.filter((sheet) => sheet.status === "SUBMITTED").length;
@@ -21,20 +25,17 @@ export function RankingPage() {
 
   return (
     <div className="space-y-lg">
-      <section className="flex flex-col gap-md border-b border-outline-variant pb-lg md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="font-label-sm normal-case text-primary">Ranking va chung ket</p>
-          <h1 className="font-headline-lg text-on-surface">Bang xep hang theo bang thi</h1>
-          <p className="mt-xs max-w-2xl font-body-md text-on-surface-variant">
-            Ranking chi tinh score sheet da submit. Ban to chuc chon doi vao chung ket thu cong,
-            khong tu dong lay top N.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-sm">
-          <Badge tone="success">{submittedSheets} phieu da submit</Badge>
-          <Badge tone="ai">AI Review khong tinh diem</Badge>
-        </div>
-      </section>
+      <PageHeader
+        eyebrow="Xep hang va chung ket"
+        title="Bang xep hang theo bang thi"
+        description="Xep hang chi tinh phieu cham da chot. Ban to chuc chon doi vao chung ket thu cong, khong tu dong lay top N."
+        actions={
+          <>
+          <Badge tone="success">{submittedSheets} phieu da chot</Badge>
+            <Badge tone="ai">Danh gia AI khong tinh diem</Badge>
+          </>
+        }
+      />
 
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
         <div className="overflow-x-auto">
@@ -45,7 +46,7 @@ export function RankingPage() {
                 <th className="px-md py-sm">Doi thi</th>
                 <th className="px-md py-sm">Bang</th>
                 <th className="px-md py-sm">Diem TB</th>
-                <th className="px-md py-sm">Phieu submit</th>
+                <th className="px-md py-sm">Phieu da chot</th>
                 <th className="px-md py-sm">Trang thai</th>
                 <th className="px-md py-sm">Chung ket</th>
               </tr>
@@ -75,7 +76,7 @@ export function RankingPage() {
                         type="button"
                         data-testid={`finalist-${row.team.id}`}
                         onClick={() => toggleFinalist(row.team.id)}
-                        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 font-label-md ${
+                        className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 font-label-md transition-colors ${
                           selected
                             ? "border-secondary/40 bg-secondary-container text-on-secondary-container"
                             : "border-outline-variant text-on-surface-variant hover:bg-surface-variant"
@@ -99,12 +100,19 @@ export function RankingPage() {
             Da chon {finalistIds.length} doi vao chung ket
           </p>
           <p className="font-body-sm text-on-surface-variant">
-            Ket qua chi public sau khi ban to chuc thuc hien cong bo.
+            Ket qua chi hien cong khai sau khi ban to chuc thuc hien cong bo.
           </p>
         </div>
-        <Button type="button" disabled={finalistIds.length === 0}>
-          Luu danh sach chung ket
-        </Button>
+        <ConfirmAction
+          title="Chot danh sach chung ket?"
+          message="Danh sach nay se duoc dung cho man cong bo ket qua. Hay kiem tra cac doi bi loai truoc khi tiep tuc."
+          confirmLabel="Chot danh sach"
+          onConfirm={() => notify(`Da chot ${finalistIds.length} doi vao chung ket.`, "success")}
+        >
+          <Button type="button" disabled={finalistIds.length === 0}>
+            Chot danh sach chung ket
+          </Button>
+        </ConfirmAction>
       </section>
     </div>
   );

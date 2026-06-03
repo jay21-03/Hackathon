@@ -74,7 +74,7 @@ export function RubricSetupPage() {
           <p className="font-label-md text-on-surface">Tong diem toi da</p>
           <p className="mt-xs font-headline-lg text-primary">{totalMax}</p>
           <p className="mt-sm font-body-sm text-on-surface-variant">
-            Ranking chi tinh score sheet da submit. AI Review chi la thong tin tham khao.
+            Xep hang chi tinh phieu cham da chot. Danh gia AI chi la thong tin tham khao.
           </p>
           <Button className="mt-lg w-full" onClick={() => notify("Da luu cau hinh rubric.", "success")}>
             Luu rubric

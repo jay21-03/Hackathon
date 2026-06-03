@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
+import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { ProgressBar } from "../../components/ui/ProgressBar";
@@ -16,13 +16,13 @@ export function ScoringProgressPage() {
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Tien do cham diem"
-        title="Theo doi score sheet"
-        description="Ranking chi tinh score sheet da submit. Ban nhap khong duoc tinh vao diem trung binh."
-        actions={<Link to="/organizer/ranking" className="btn-primary inline-flex items-center gap-2"><Icon name="leaderboard" />Xem ranking</Link>}
+        title="Theo doi phieu cham"
+        description="Xep hang chi tinh phieu cham da chot. Ban nhap khong duoc tinh vao diem trung binh."
+        actions={<ButtonLink to="/organizer/ranking" icon={<Icon name="leaderboard" />}>Xem xep hang</ButtonLink>}
       />
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Da submit" value={submitted} helper="Duoc tinh ranking" icon="task_alt" tone="success" />
+        <StatCard label="Da chot" value={submitted} helper="Duoc tinh xep hang" icon="task_alt" tone="success" />
         <StatCard label="Ban nhap" value={demoScoreSheets.length - submitted} helper="Chua tinh diem" icon="edit_note" tone="warning" />
         <StatCard label="Tien do" value={`${progress}%`} helper="Theo tat ca phieu cham" icon="donut_large" tone="primary">
           <ProgressBar value={progress} />
@@ -36,7 +36,7 @@ export function ScoringProgressPage() {
               <tr className="font-label-sm text-on-surface-variant">
                 <th className="px-md py-sm">Doi thi</th>
                 <th className="px-md py-sm">Bang</th>
-                <th className="px-md py-sm">Submit</th>
+                <th className="px-md py-sm">Da chot</th>
                 <th className="px-md py-sm">Ban nhap</th>
                 <th className="px-md py-sm">Trang thai</th>
               </tr>

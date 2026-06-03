@@ -38,12 +38,12 @@ export function AiAuditorPage() {
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Danh gia AI"
-        title="Giam sat hang doi AI Review"
-        description="AI Review chi dung de ho tro phat hien rui ro, khong tu dong anh huong ranking."
+        title="Giam sat hang doi danh gia AI"
+        description="Danh gia AI chi dung de ho tro phat hien rui ro, khong tu dong anh huong xep hang."
         actions={
           <>
             {usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
-            <Button onClick={() => notify("Da yeu cau chay lai AI Review.", "success")}>Chay lai hang doi</Button>
+            <Button onClick={() => notify("Da yeu cau chay lai danh gia AI.", "success")}>Chay lai hang doi</Button>
           </>
         }
       />
