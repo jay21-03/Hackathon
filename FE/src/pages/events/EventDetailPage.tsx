@@ -2,36 +2,35 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { Icon } from "../../components/ui/Icon";
-import { apiClient } from "../../services/apiClient";
-import type { ApiResponse } from "../../types/api";
+import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
+import { getStatusLabel, getStatusTone } from "../../domain/status";
+import { fetchEventDetail, type EventDetail } from "../../services/eventsApi";
 
-interface EventDetail {
-  id: number;
-  name: string;
-  status: string;
-  startDate: string;
-  endDate: string;
-  minTeamSize: number;
-  maxTeamSize: number;
-  maxTeams: number;
+function formatDateTime(value: string) {
+  try {
+    return new Date(value).toLocaleString("vi-VN", {
+      dateStyle: "medium",
+      timeStyle: "short"
+    });
+  } catch {
+    return value;
+  }
 }
 
 export function EventDetailPage() {
   const { eventId } = useParams();
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [usingFallback, setUsingFallback] = useState(false);
 
   useEffect(() => {
     if (!eventId) return;
     let cancelled = false;
-    apiClient
-      .get<ApiResponse<EventDetail>>(`/v1/events/${eventId}`)
-      .then((res) => {
-        if (!cancelled) setEvent(res.data.data);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Không tải được chi tiết sự kiện.");
+    fetchEventDetail(eventId)
+      .then((result) => {
+        if (cancelled) return;
+        setEvent(result.data);
+        setUsingFallback(result.usingFallback);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -42,60 +41,79 @@ export function EventDetailPage() {
   }, [eventId]);
 
   if (loading) {
-    return <p className="font-body-md text-on-surface-variant py-8">Đang tải...</p>;
+    return <ModuleSkeleton rows={3} />;
   }
 
-  if (error || !event) {
+  if (!event) {
     return (
       <div className="glass-panel rounded-xl p-lg">
-        <p className="text-error font-body-md">{error ?? "Sự kiện không tồn tại."}</p>
+        <p className="text-error font-body-md">Khong tim thay cuoc thi.</p>
         <Link to="/events" className="text-primary font-label-md mt-md inline-block">
-          ← Quay lại danh sách
+          Quay lai danh sach
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="space-y-lg max-w-2xl mx-auto">
+    <div className="space-y-lg max-w-3xl mx-auto">
       <Link to="/events" className="inline-flex items-center gap-1 text-primary font-label-md">
         <Icon name="arrow_back" className="text-[18px]" />
-        Events
+        Danh sach cuoc thi
       </Link>
 
-      <article className="glass-panel rounded-xl p-lg space-y-md">
-        <div className="flex items-start justify-between gap-md">
-          <h1 className="font-headline-md text-on-surface">{event.name}</h1>
-          <Badge tone="active">{event.status}</Badge>
+      {usingFallback && (
+        <div className="glass-panel rounded-xl p-md border border-primary/20">
+          <p className="font-body-sm text-on-surface-variant">
+            Dang hien thi thong tin mau de xem luong dang ky.
+          </p>
+        </div>
+      )}
+
+      <article className="glass-panel rounded-xl p-lg space-y-lg">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-md">
+          <div>
+            <h1 className="font-headline-lg text-on-surface">{event.name}</h1>
+            <p className="font-body-md text-on-surface-variant mt-xs">
+              Tao doi thi, moi thanh vien va theo doi cac moc thoi gian cua cuoc thi.
+            </p>
+          </div>
+          <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
         </div>
 
-        <div className="grid grid-cols-2 gap-md font-body-sm text-on-surface-variant">
-          <div className="flex items-center gap-2">
-            <Icon name="calendar_today" className="text-primary" />
-            {event.startDate} → {event.endDate}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-md font-body-sm text-on-surface-variant">
+          <div className="bg-surface-container-low border border-outline-variant/40 rounded-xl p-md">
+            <Icon name="calendar_today" className="text-primary mb-sm" />
+            <p className="font-label-sm normal-case text-on-surface">Thoi gian thi</p>
+            <p>{formatDateTime(event.startDate)}</p>
+            <p>{formatDateTime(event.endDate)}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Icon name="groups" className="text-primary" />
-            Team {event.minTeamSize}–{event.maxTeamSize}
+          <div className="bg-surface-container-low border border-outline-variant/40 rounded-xl p-md">
+            <Icon name="groups" className="text-primary mb-sm" />
+            <p className="font-label-sm normal-case text-on-surface">Quy mo doi</p>
+            <p>
+              {event.minTeamSize} - {event.maxTeamSize} thanh vien
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Icon name="grid_view" className="text-primary" />
-            Max {event.maxTeams} teams
+          <div className="bg-surface-container-low border border-outline-variant/40 rounded-xl p-md">
+            <Icon name="emoji_events" className="text-primary mb-sm" />
+            <p className="font-label-sm normal-case text-on-surface">So doi toi da</p>
+            <p>{event.maxTeams} doi</p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-sm pt-md border-t border-outline-variant/30">
           <Link
-            to="/login"
+            to="/register"
             className="bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
           >
-            Đăng ký tham gia
+            Dang ky tham gia
           </Link>
           <Link
             to="/me/team"
             className="border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-variant"
           >
-            My Team
+            Xem doi cua toi
           </Link>
         </div>
       </article>

@@ -136,7 +136,7 @@ export function ParticipantDashboardPage() {
             <div className="border-l-2 border-outline-variant pl-md opacity-70">
               <p className="font-label-sm text-on-surface mb-xs normal-case">Commit Review: 45m ago</p>
               <p className="font-body-sm text-on-surface-variant">
-                Consider refactoring nested loops in NodeMatrix.
+                Review nested loops in the scoring calculation module.
               </p>
             </div>
           </div>

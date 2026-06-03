@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import { getDemoSession, getRoleHome } from "../../auth/demoSession";
+import { RoleSwitcher } from "../../components/auth/RoleSwitcher";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 
@@ -33,9 +35,9 @@ export function LoginPage() {
           <div className="w-12 h-12 rounded-lg bg-surface flex items-center justify-center border border-outline-variant mb-lg">
             <Icon name="shield_person" filled className="text-primary text-3xl" />
           </div>
-          <h1 className="font-headline-md text-primary mb-sm">SEAL Command</h1>
+          <h1 className="font-headline-md text-primary mb-sm">SEAL Hackathon</h1>
           <p className="font-body-md text-on-surface-variant max-w-[280px]">
-            Enterprise-grade operations and live judging for modern hackathons.
+            Quan ly dang ky, cham diem va cong bo ket qua hackathon trong mot noi.
           </p>
         </div>
 
@@ -46,7 +48,7 @@ export function LoginPage() {
 
           <div className="flex items-center gap-md">
             <div className="h-px bg-outline-variant flex-1" />
-            <span className="font-label-sm text-outline">System Access</span>
+            <span className="font-label-sm text-outline">Dang nhap he thong</span>
             <div className="h-px bg-outline-variant flex-1" />
           </div>
 
@@ -54,12 +56,13 @@ export function LoginPage() {
             className="flex flex-col gap-md"
             onSubmit={(e) => {
               e.preventDefault();
-              window.location.href = "/events";
+              window.location.href = getRoleHome(getDemoSession().role);
             }}
           >
+            <RoleSwitcher compact />
             <div className="flex flex-col gap-xs">
               <label htmlFor="email" className="font-label-sm text-on-surface-variant normal-case">
-                Operator Email
+                Email dang nhap
               </label>
               <input
                 id="email"
@@ -69,7 +72,7 @@ export function LoginPage() {
               />
             </div>
             <Button variant="secondary" className="w-full mt-sm" type="submit">
-              Initiate Session
+              Tiep tuc
               <Icon name="arrow_forward" className="text-sm" />
             </Button>
           </form>
@@ -77,22 +80,22 @@ export function LoginPage() {
 
         <div className="p-md bg-surface-container-high border-t border-outline-variant flex justify-center gap-lg">
           <a href="#" className="font-label-sm text-on-surface-variant hover:text-primary normal-case">
-            Documentation
+            Huong dan
           </a>
           <a href="#" className="font-label-sm text-on-surface-variant hover:text-primary normal-case">
-            Support
+            Ho tro
           </a>
         </div>
       </div>
 
       <div className="mt-lg text-center flex items-center justify-center gap-xs text-outline font-label-sm normal-case">
         <Icon name="lock" className="text-[14px]" />
-        <span>Secure Enterprise Connection</span>
+        <span>Ket noi an toan</span>
       </div>
 
       <p className="mt-md text-center font-body-sm text-on-surface-variant">
         <Link to="/events" className="text-primary hover:underline">
-          Browse events without signing in
+          Xem danh sach cuoc thi
         </Link>
       </p>
     </main>

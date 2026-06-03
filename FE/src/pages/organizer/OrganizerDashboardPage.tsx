@@ -67,7 +67,7 @@ export function OrganizerDashboardPage() {
         </div>
 
         <div className="md:col-span-6 bg-surface-container rounded-xl p-md border border-outline-variant/50">
-          <h3 className="font-label-sm text-on-surface-variant mb-sm">Event Telemetry</h3>
+          <h3 className="font-label-sm text-on-surface-variant mb-sm">Tong quan cuoc thi</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-sm">
             {[
               { label: "Registered", value: "156", sub: "+12%" },
