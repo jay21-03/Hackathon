@@ -18,6 +18,7 @@ const roleProfiles: Record<Role, { role: Role; email: string; name: string }> = 
 async function useRole(page: Page, role: Role) {
   await page.addInitScript((profile: (typeof roleProfiles)[Role]) => {
     window.localStorage.setItem("seal.demo.session", JSON.stringify(profile));
+    window.localStorage.setItem("seal.demo.authenticated", "true");
   }, roleProfiles[role]);
 }
 
@@ -66,7 +67,8 @@ test("organizer ranking visual snapshot", async ({ page }) => {
   await expectStableScreenshot(page);
 });
 
-test("public results visual snapshot", async ({ page }) => {
+test("results visual snapshot", async ({ page }) => {
+  await useRole(page, "participant");
   await page.goto("/events/1/results");
   await expect(page.getByRole("heading", { name: "Ket qua SEAL Hackathon 2026" })).toBeVisible();
   await expectStableScreenshot(page);

@@ -28,6 +28,7 @@ const roleProfiles: Record<Role, { role: Role; email: string; name: string }> = 
 async function useRole(page: Page, role: Role) {
   await page.addInitScript((profile: (typeof roleProfiles)[Role]) => {
     window.localStorage.setItem("seal.demo.session", JSON.stringify(profile));
+    window.localStorage.setItem("seal.demo.authenticated", "true");
   }, roleProfiles[role]);
 }
 
@@ -127,7 +128,7 @@ test("role pages do not create horizontal overflow", async ({ page }) => {
 
 test("core routes avoid prototype and internal wording", async ({ page }) => {
   const checks: Array<[Role | "public", string]> = [
-    ["public", "/events/1/results"],
+    ["participant", "/events/1/results"],
     ["participant", "/me"],
     ["participant", "/me/submission"],
     ["organizer", "/organizer/dashboard"],
@@ -142,6 +143,7 @@ test("core routes avoid prototype and internal wording", async ({ page }) => {
       await page.goto("/events");
       await page.evaluate((profile) => {
         window.localStorage.setItem("seal.demo.session", JSON.stringify(profile));
+        window.localStorage.setItem("seal.demo.authenticated", "true");
       }, roleProfiles[role]);
     }
     await page.goto(path);

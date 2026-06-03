@@ -34,6 +34,15 @@ export function AssignmentManagementPage() {
         actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
+      {usingFallback ? (
+        <div className="rounded-xl border border-primary/20 bg-primary-fixed p-md">
+          <p className="font-body-sm text-on-surface-variant">
+            Muc phan cong nay hien dang hien thi du lieu minh hoa. Khi backend assignment san sang, trang nay se tu dong
+            doi sang du lieu he thong.
+          </p>
+        </div>
+      ) : null}
+
       <section className="grid gap-md md:grid-cols-3">
         <StatCard label="Bang thi" value={boards.length} helper="Theo vong so loai" icon="view_module" />
         <StatCard label="Mentor" value={new Set(boards.map((board) => board.mentor)).size} helper="Da phan cong" icon="groups" tone="success" />

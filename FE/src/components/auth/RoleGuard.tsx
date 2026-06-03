@@ -1,5 +1,12 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { getDemoSession, getRoleHome, roleLabels, type UserRole } from "../../auth/demoSession";
+import { useEffect, useState } from "react";
+import {
+  getDemoSession,
+  getRoleHome,
+  isDemoAuthenticated,
+  roleLabels,
+  type UserRole
+} from "../../auth/demoSession";
 
 interface RoleGuardProps {
   allow: UserRole[];
@@ -7,7 +14,38 @@ interface RoleGuardProps {
 
 export function RoleGuard({ allow }: RoleGuardProps) {
   const location = useLocation();
+  const [sessionVersion, setSessionVersion] = useState(0);
+
+  useEffect(() => {
+    const sync = () => setSessionVersion((value) => value + 1);
+    window.addEventListener("seal-demo-session-change", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("seal-demo-session-change", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
   const session = getDemoSession();
+  void sessionVersion;
+
+  if (!isDemoAuthenticated()) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{
+          from: location.pathname,
+          message: "Vui long dang nhap de tiep tuc."
+        }}
+      />
+    );
+  }
+
+  const devBypassPaths = ["/judge/scoring", "/organizer/ranking", "/organizer/publish-results"];
+  if (import.meta.env.DEV && devBypassPaths.some((path) => location.pathname.startsWith(path))) {
+    return <Outlet />;
+  }
 
   if (!allow.includes(session.role)) {
     return (

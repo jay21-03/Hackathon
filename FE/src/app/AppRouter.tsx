@@ -1,5 +1,5 @@
-import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { lazy, Suspense, type ComponentType, type ReactNode, useEffect } from "react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { RoleGuard } from "../components/auth/RoleGuard";
 import { AuthLayout } from "../components/layout/AuthLayout";
 import { PublicShell } from "../components/layout/PublicShell";
@@ -70,6 +70,17 @@ function routeElement(component: ReactNode) {
 }
 
 export function AppRouter() {
+  const location = useLocation();
+
+  useEffect(() => {
+    // notify listeners that demo session may have changed on navigation
+    try {
+      window.dispatchEvent(new Event("seal-demo-session-change"));
+    } catch {
+      /* ignore */
+    }
+  }, [location.pathname]);
+
   return (
     <Routes>
       <Route path="/login" element={<AuthLayout />}>
@@ -80,11 +91,21 @@ export function AppRouter() {
 
       <Route element={<PublicShell />}>
         <Route path="events" element={routeElement(<EventsDiscoveryPage />)} />
-        <Route path="events/:eventId" element={routeElement(<EventDetailPage />)} />
-        <Route path="events/:eventId/results" element={routeElement(<ResultsPortalPage />)} />
-        <Route path="register" element={routeElement(<TeamRegistrationPage />)} />
-        <Route path="team-invitation" element={routeElement(<TeamInvitationConfirmationPage />)} />
-        <Route path="team-invitations/status" element={routeElement(<InvitationStatusPage />)} />
+      </Route>
+
+      <Route element={<RoleGuard allow={["participant", "organizer", "mentor", "judge"]} />}>
+        <Route element={<PublicShell />}>
+          <Route path="events/:eventId" element={routeElement(<EventDetailPage />)} />
+          <Route path="events/:eventId/results" element={routeElement(<ResultsPortalPage />)} />
+        </Route>
+      </Route>
+
+      <Route element={<RoleGuard allow={["participant"]} />}>
+        <Route element={<PublicShell />}>
+          <Route path="register" element={routeElement(<TeamRegistrationPage />)} />
+          <Route path="team-invitation" element={routeElement(<TeamInvitationConfirmationPage />)} />
+          <Route path="team-invitations/status" element={routeElement(<InvitationStatusPage />)} />
+        </Route>
       </Route>
 
       <Route element={<RoleGuard allow={["participant"]} />}>

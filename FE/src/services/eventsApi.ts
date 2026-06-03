@@ -42,3 +42,13 @@ export async function fetchEventDetail(
     return data.data ?? null;
   }, fallback);
 }
+
+export interface UpdateEventPayload {
+  name: string;
+  maxTeams: number;
+}
+
+export async function updateEvent(eventId: string, payload: UpdateEventPayload) {
+  const { data } = await apiClient.put<ApiResponse<EventDetail>>(`/v1/admin/events/${eventId}`, payload);
+  return data.data;
+}

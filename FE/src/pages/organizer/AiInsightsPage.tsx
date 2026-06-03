@@ -37,6 +37,15 @@ export function AiInsightsPage() {
         actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
+      {usingFallback ? (
+        <div className="rounded-xl border border-primary/20 bg-primary-fixed p-md">
+          <p className="font-body-sm text-on-surface-variant">
+            AI insights hien dang duoc day tu du lieu minh hoa. Khi backend co du lieu that, cac nhan xet nay se tu
+            dong cap nhat.
+          </p>
+        </div>
+      ) : null}
+
       <section className="grid gap-md md:grid-cols-3">
         <StatCard label="Doi co kho ma nguon" value={teams.filter((team) => team.repoUrl).length} helper="San sang danh gia" icon="code" />
         <StatCard label="Diem AI trung binh" value={`${average}/100`} helper="Khong tinh xep hang" icon="analytics" tone="warning" />

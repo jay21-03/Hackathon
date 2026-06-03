@@ -1,3 +1,5 @@
+import { getAccessToken } from "./tokenStorage";
+
 export type UserRole = "participant" | "organizer" | "mentor" | "judge";
 
 export interface DemoSession {
@@ -7,6 +9,7 @@ export interface DemoSession {
 }
 
 const storageKey = "seal.demo.session";
+const authKey = "seal.demo.authenticated";
 
 const roleProfiles: Record<UserRole, DemoSession> = {
   participant: {
@@ -40,6 +43,29 @@ export function getDemoSession(): DemoSession {
     return parsed.role in roleProfiles ? parsed : roleProfiles.participant;
   } catch {
     return roleProfiles.participant;
+  }
+}
+
+export function isDemoAuthenticated(): boolean {
+  if (typeof window === "undefined") return false;
+  if (getAccessToken()) return true;
+  if (window.localStorage.getItem(authKey) !== "true") return false;
+  const raw = window.localStorage.getItem(storageKey);
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as DemoSession;
+    return parsed.role in roleProfiles;
+  } catch {
+    return false;
+  }
+}
+
+export function setDemoAuthenticated(value: boolean) {
+  if (typeof window === "undefined") return;
+  if (value) {
+    window.localStorage.setItem(authKey, "true");
+  } else {
+    window.localStorage.removeItem(authKey);
   }
 }
 

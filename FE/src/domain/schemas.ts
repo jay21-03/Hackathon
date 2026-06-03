@@ -12,7 +12,8 @@ export const repositoryUrlSchema = z
 export const profileSchema = z.object({
   fullName: z.string().trim().min(2, "Ho va ten can it nhat 2 ky tu."),
   email: z.string().trim().email("Email chua dung dinh dang."),
-  skill: z.string().trim().min(2, "Hay nhap it nhat mot ky nang.")
+  studentId: z.string().trim().optional(),
+  university: z.string().trim().optional()
 });
 
 export const eventConfigSchema = z

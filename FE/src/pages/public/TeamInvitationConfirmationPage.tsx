@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button, ButtonLink } from "../../components/ui/Button";
@@ -6,16 +7,52 @@ import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { demoTeamMembers, getTeamById } from "../../services/readModelService";
+import { confirmInvitation, declineInvitation } from "../../services/registrationService";
 
 export function TeamInvitationConfirmationPage() {
   const { notify } = useToast();
-  const member = demoTeamMembers.find((item) => item.status === "PENDING") ?? demoTeamMembers[0];
-  const team = getTeamById(member.teamId);
-  const [status, setStatus] = useState(member.status);
+  const [searchParams] = useSearchParams();
+  const invitationToken = searchParams.get("token");
+  const member = invitationToken ? demoTeamMembers.find((item) => item.status === "PENDING") ?? null : null;
+  const team = member ? getTeamById(member.teamId) : null;
+  const [status, setStatus] = useState(member?.status ?? "PENDING");
+  const [submitting, setSubmitting] = useState(false);
 
-  function respond(nextStatus: "CONFIRMED" | "REJECTED") {
-    setStatus(nextStatus);
-    notify(nextStatus === "CONFIRMED" ? "Da xac nhan tham gia doi." : "Da tu choi loi moi.", "success");
+  async function respond(nextStatus: "CONFIRMED" | "REJECTED") {
+    if (!invitationToken) {
+      notify("Lien ket loi moi khong hop le.", "danger");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const response = nextStatus === "CONFIRMED"
+        ? await confirmInvitation(invitationToken)
+        : await declineInvitation(invitationToken);
+      setStatus(nextStatus);
+      if (!response.usingFallback && response.data?.status) {
+        setStatus(response.data.status);
+      }
+      notify(nextStatus === "CONFIRMED" ? "Da xac nhan tham gia doi." : "Da tu choi loi moi.", "success");
+    } catch {
+      notify("Khong the xu ly loi moi.", "danger");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!member) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-lg">
+        <PageHeader
+          eyebrow="Loi moi tham gia doi"
+          title="Lien ket khong hop le"
+          description="Vui long mo loi moi tu email hoac trang thai loi moi co token hop le."
+        />
+        <ButtonLink to="/events" variant="secondary">
+          Quay lai danh sach cuoc thi
+        </ButtonLink>
+      </div>
+    );
   }
 
   return (
@@ -42,10 +79,10 @@ export function TeamInvitationConfirmationPage() {
         </div>
 
         <div className="mt-lg flex flex-wrap gap-sm border-t border-outline-variant pt-md">
-          <Button disabled={status === "CONFIRMED"} onClick={() => respond("CONFIRMED")}>
+          <Button disabled={status === "CONFIRMED" || submitting} onClick={() => respond("CONFIRMED")}>
             Xac nhan tham gia
           </Button>
-          <Button variant="secondary" disabled={status === "REJECTED"} onClick={() => respond("REJECTED")}>
+          <Button variant="secondary" disabled={status === "REJECTED" || submitting} onClick={() => respond("REJECTED")}>
             Tu choi loi moi
           </Button>
           <ButtonLink to="/team-invitations/status" variant="secondary" icon={<Icon name="fact_check" />}>

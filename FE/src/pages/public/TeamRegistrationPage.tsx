@@ -11,6 +11,7 @@ import {
 import { teamRegistrationSchema } from "../../domain/schemas";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { demoEvent, existingTeamMembers } from "../../services/readModelService";
+import { registerTeam } from "../../services/registrationService";
 
 const initialMembers = ["captain@seal.edu.vn", "", "", "", ""];
 
@@ -21,6 +22,7 @@ export function TeamRegistrationPage() {
   const [memberEmails, setMemberEmails] = useState(initialMembers);
   const [errors, setErrors] = useState<string[]>([]);
   const [submittedStatus, setSubmittedStatus] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const memberCount = useMemo(
     () => memberEmails.filter((email) => email.trim()).length,
@@ -31,7 +33,16 @@ export function TeamRegistrationPage() {
     setMemberEmails((current) => current.map((email, i) => (i === index ? value : email)));
   }
 
-  function submitRegistration() {
+  function buildMemberName(email: string) {
+    const local = email.split("@")[0] ?? "";
+    if (!local) return "Thanh vien";
+    return local
+      .split(/[._-]+/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+
+  async function submitRegistration() {
     const schemaResult = teamRegistrationSchema.safeParse({
       teamName,
       memberEmails: memberEmails.filter((email) => email.trim())
@@ -55,6 +66,24 @@ export function TeamRegistrationPage() {
     setErrors(result.errors);
     if (!result.valid) {
       notify("Kiem tra lai thong tin dang ky doi.", "warning");
+      return;
+    }
+    setSubmitting(true);
+    const filteredEmails = memberEmails.filter((email) => email.trim());
+    const payload = {
+      name: teamName.trim(),
+      members: filteredEmails.map((email) => ({
+        email: email.trim(),
+        fullName: buildMemberName(email)
+      }))
+    };
+
+    const response = await registerTeam(demoEvent.id, payload);
+    setSubmitting(false);
+    if (!response.usingFallback && response.data) {
+      const status = response.data.status ?? "PENDING";
+      setSubmittedStatus(status);
+      notify(`Dang ky thanh cong: ${getStatusLabel(status)}.`, "success");
       return;
     }
 
@@ -160,8 +189,8 @@ export function TeamRegistrationPage() {
           )}
 
           <div className="flex flex-wrap gap-sm pt-sm">
-            <Button type="submit" data-testid="submit-registration">
-              Dang ky doi
+            <Button type="submit" data-testid="submit-registration" disabled={submitting}>
+              {submitting ? "Dang gui" : "Dang ky doi"}
               <Icon name="arrow_forward" className="text-[18px]" />
             </Button>
             <ConfirmAction

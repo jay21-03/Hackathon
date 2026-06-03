@@ -36,6 +36,15 @@ export function MentorAiReviewPage() {
         actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
+      {usingFallback ? (
+        <div className="rounded-xl border border-primary/20 bg-primary-fixed p-md">
+          <p className="font-body-sm text-on-surface-variant">
+            Man hinh nay dang doc du lieu minh hoa. Khi backend AI review san sang, mentor se xem duoc ket qua thuc
+            thay cho mock.
+          </p>
+        </div>
+      ) : null}
+
       <section className="space-y-md">
         {data.findings.map((finding) => {
           const team = data.teams.find((item) => item.id === finding.teamId);

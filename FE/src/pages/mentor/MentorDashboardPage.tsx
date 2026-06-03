@@ -44,6 +44,15 @@ export function MentorDashboardPage() {
         }
       />
 
+      {usingFallback ? (
+        <div className="rounded-xl border border-primary/20 bg-primary-fixed p-md">
+          <p className="font-body-sm text-on-surface-variant">
+            Dashboard mentor hien dang hien thi du lieu minh hoa. Khi backend mentor san sang, cac card va kho ma nguon
+            se lay truc tiep tu he thong.
+          </p>
+        </div>
+      ) : null}
+
       <section className="grid gap-md md:grid-cols-3">
         <StatCard label="Bang phu trach" value={data.boards.length} helper="Theo phan cong BTC" icon="view_module" />
         <StatCard label="Doi thi" value={data.teams.length} helper="Can theo doi" icon="groups" tone="success" />

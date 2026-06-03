@@ -25,16 +25,20 @@ const roleProfiles: Record<Role, { role: Role; email: string; name: string }> = 
   }
 };
 
-const publicRoutes = [
-  "/events",
-  "/events/1",
-  "/events/1/results",
-  "/register",
-  "/team-invitation",
-  "/team-invitations/status"
-];
+const publicRoutes = ["/events", "/login"];
 
 const protectedRoutes: Array<{ role: Role; path: string }> = [
+  { role: "participant", path: "/events/1" },
+  { role: "participant", path: "/events/1/results" },
+  { role: "organizer", path: "/events/1" },
+  { role: "organizer", path: "/events/1/results" },
+  { role: "mentor", path: "/events/1" },
+  { role: "mentor", path: "/events/1/results" },
+  { role: "judge", path: "/events/1" },
+  { role: "judge", path: "/events/1/results" },
+  { role: "participant", path: "/register" },
+  { role: "participant", path: "/team-invitation" },
+  { role: "participant", path: "/team-invitations/status" },
   { role: "participant", path: "/me" },
   { role: "participant", path: "/me/team" },
   { role: "participant", path: "/me/status" },
@@ -73,12 +77,6 @@ const protectedRoutes: Array<{ role: Role; path: string }> = [
   { role: "judge", path: "/judge/scoring" }
 ];
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript((profile) => {
-    window.localStorage.setItem("seal.demo.session", JSON.stringify(profile));
-  }, roleProfiles.participant);
-});
-
 for (const path of publicRoutes) {
   test(`public route renders ${path}`, async ({ page }) => {
     await page.goto(path);
@@ -91,6 +89,7 @@ for (const route of protectedRoutes) {
   test(`${route.role} route renders ${route.path}`, async ({ page }) => {
     await page.addInitScript((profile) => {
       window.localStorage.setItem("seal.demo.session", JSON.stringify(profile));
+      window.localStorage.setItem("seal.demo.authenticated", "true");
     }, roleProfiles[route.role]);
     await page.goto(route.path);
     await expect(page.locator("body")).toContainText(/SEAL|Thi sinh|Ban to chuc|Mentor|Giam khao|Danh|Dang|Bang/i);
@@ -99,6 +98,10 @@ for (const route of protectedRoutes) {
 }
 
 test("role guard redirects wrong role to own dashboard", async ({ page }) => {
+  await page.addInitScript((profile) => {
+    window.localStorage.setItem("seal.demo.session", JSON.stringify(profile));
+    window.localStorage.setItem("seal.demo.authenticated", "true");
+  }, roleProfiles.participant);
   await page.goto("/organizer/dashboard");
   await expect(page).toHaveURL(/\/me$/);
 });

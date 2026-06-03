@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
@@ -8,7 +7,6 @@ import type { RubricCriterion } from "../../domain/businessRules";
 import { fetchRubricConfig } from "../../services/hackathonApi";
 
 export function RubricSetupPage() {
-  const { notify } = useToast();
   const [criteria, setCriteria] = useState<RubricCriterion[]>([]);
   const [usingFallback, setUsingFallback] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -66,6 +64,9 @@ export function RubricSetupPage() {
                   <Badge tone="neutral">/{criterion.max}</Badge>
                 </div>
               </div>
+              <p className="mt-sm font-body-sm text-on-surface-variant">
+                Cai dat nay hien chi dang doc tu he thong; chua co API de luu rubric.
+              </p>
             </article>
           ))}
         </div>
@@ -76,7 +77,7 @@ export function RubricSetupPage() {
           <p className="mt-sm font-body-sm text-on-surface-variant">
             Xep hang chi tinh phieu cham da chot. Danh gia AI chi la thong tin tham khao.
           </p>
-          <Button className="mt-lg w-full" onClick={() => notify("Da luu cau hinh rubric.", "success")}>
+          <Button className="mt-lg w-full" disabled title="Backend luu rubric chua san sang">
             Luu rubric
           </Button>
         </aside>

@@ -35,6 +35,15 @@ export function NotificationCenterPage() {
         actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
+      {usingFallback ? (
+        <div className="rounded-xl border border-primary/20 bg-primary-fixed p-md">
+          <p className="font-body-sm text-on-surface-variant">
+            Trung tam thong bao hien dang doc tu du lieu minh hoa. Khi backend notification san sang, noi dung se duoc
+            lay tu he thong thay vi mock.
+          </p>
+        </div>
+      ) : null}
+
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
         <div className="overflow-x-auto">
           <table className="min-w-full text-left">

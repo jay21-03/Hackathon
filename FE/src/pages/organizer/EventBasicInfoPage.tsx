@@ -1,21 +1,46 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "../../components/feedback/ToastProvider";
+import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { eventConfigSchema } from "../../domain/schemas";
-import { demoEvent } from "../../services/readModelService";
+import { fetchEventDetail, updateEvent, type EventDetail } from "../../services/eventsApi";
 
 export function EventBasicInfoPage() {
   const { notify } = useToast();
-  const [name, setName] = useState(demoEvent.name);
-  const [quota, setQuota] = useState(demoEvent.quota);
-  const [minTeamSize, setMinTeamSize] = useState(demoEvent.minTeamSize);
-  const [maxTeamSize, setMaxTeamSize] = useState(demoEvent.maxTeamSize);
+  const eventId = "1";
+  const [event, setEvent] = useState<EventDetail | null>(null);
+  const [name, setName] = useState("");
+  const [quota, setQuota] = useState(0);
+  const [minTeamSize, setMinTeamSize] = useState(1);
+  const [maxTeamSize, setMaxTeamSize] = useState(1);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  function save() {
+  useEffect(() => {
+    let cancelled = false;
+    fetchEventDetail(eventId)
+      .then((result) => {
+        if (cancelled || !result.data) return;
+        setEvent(result.data);
+        setName(result.data.name);
+        setQuota(result.data.maxTeams);
+        setMinTeamSize(result.data.minTeamSize);
+        setMaxTeamSize(result.data.maxTeamSize);
+      })
+      .finally(() => {
+        if (!cancelled && !event) {
+          setSaving(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function save() {
     const parsed = eventConfigSchema.safeParse({ name, quota, minTeamSize, maxTeamSize });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Cau hinh cuoc thi chua hop le.");
@@ -23,10 +48,25 @@ export function EventBasicInfoPage() {
     }
     setError("");
     setSaving(true);
-    window.setTimeout(() => {
-      setSaving(false);
+    try {
+      const updated = await updateEvent(eventId, { name, maxTeams: quota });
+      if (updated) {
+        setEvent(updated);
+        setName(updated.name);
+        setQuota(updated.maxTeams);
+        setMinTeamSize(updated.minTeamSize);
+        setMaxTeamSize(updated.maxTeamSize);
+      }
       notify("Da luu thong tin cuoc thi.", "success");
-    }, 350);
+    } catch {
+      notify("Khong the luu cau hinh cuoc thi.", "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!event) {
+    return <ModuleSkeleton rows={5} />;
   }
 
   return (
@@ -66,7 +106,7 @@ export function EventBasicInfoPage() {
                 min={1}
                 max={5}
                 value={minTeamSize}
-                onChange={(event) => setMinTeamSize(Number(event.target.value))}
+                disabled
               />
             </label>
             <label className="grid gap-xs font-label-md text-on-surface">
@@ -77,11 +117,14 @@ export function EventBasicInfoPage() {
                 min={1}
                 max={5}
                 value={maxTeamSize}
-                onChange={(event) => setMaxTeamSize(Number(event.target.value))}
+                disabled
               />
             </label>
           </div>
         </div>
+        <p className="mt-md font-body-sm text-on-surface-variant">
+          Kich thuoc doi hien dang doc tu cau hinh he thong; trang nay chi cap nhat ten cuoc thi va quota toi da.
+        </p>
         {error && <p className="mt-md rounded-lg border border-error/40 bg-error-container p-sm font-body-sm text-on-error-container">{error}</p>}
         <Button className="mt-lg" disabled={saving} icon={<Icon name={saving ? "sync" : "save"} />} onClick={save}>
           {saving ? "Dang luu" : "Luu cau hinh"}

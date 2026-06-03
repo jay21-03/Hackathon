@@ -28,16 +28,19 @@ const roleProfiles: Record<Role, { role: Role; email: string; name: string }> = 
 async function useRole(page: Page, role: Role) {
   await page.addInitScript((profile: (typeof roleProfiles)[Role]) => {
     window.localStorage.setItem("seal.demo.session", JSON.stringify(profile));
+    window.localStorage.setItem("seal.demo.authenticated", "true");
   }, roleProfiles[role]);
 }
 
 async function switchRole(page: Page, role: Role) {
   await page.evaluate((profile) => {
     window.localStorage.setItem("seal.demo.session", JSON.stringify(profile));
+    window.localStorage.setItem("seal.demo.authenticated", "true");
   }, roleProfiles[role]);
 }
 
 test("participant registers a valid team and blocks duplicate member email", async ({ page }) => {
+  await useRole(page, "participant");
   await page.goto("/register");
   await page.getByTestId("member-email-0").fill("alex@seal.edu.vn");
   await page.getByTestId("submit-registration").click();
@@ -139,17 +142,18 @@ test("organizer configures problem and reviews scoring progress", async ({ page 
   await expect(page.locator("body")).toContainText("Ban nhap");
 });
 
-test("public and participant can view published results", async ({ page }) => {
-  await page.goto("/events/1/results");
-  await expect(page.locator("body")).toContainText("Da cong bo");
-  await expect(page.locator("body")).toContainText("Quantum Nexus");
-
+test("authenticated users can view published results", async ({ page }) => {
   await useRole(page, "participant");
   await page.goto("/me/results");
   await expect(page.locator("body")).toContainText("Ket qua SEAL Hackathon 2026");
+
+  await page.goto("/events/1/results");
+  await expect(page.locator("body")).toContainText("Da cong bo");
+  await expect(page.locator("body")).toContainText("Quantum Nexus");
 });
 
 test("full hackathon flow from registration to published results", async ({ page }) => {
+  await useRole(page, "participant");
   await page.goto("/register");
   await page.getByTestId("team-name").fill("Flow Masters");
   await page.getByTestId("member-email-0").fill("flow-captain@seal.edu.vn");

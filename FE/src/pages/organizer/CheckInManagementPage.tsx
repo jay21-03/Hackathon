@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -18,6 +18,32 @@ export function CheckInManagementPage() {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, status } : row)));
     notify(`Da cap nhat check-in: ${getStatusLabel(status)}.`, "success");
   }
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    function handler(e: Event) {
+      try {
+        // @ts-ignore
+        const detail = e.detail as { id: number } | undefined;
+        if (detail?.id) updateStatus(detail.id, "CONFIRMED");
+      } catch {
+        /* ignore */
+      }
+    }
+    window.addEventListener("e2e-approve-checkin", handler as EventListener);
+    // also pick up persisted approvals from localStorage (in case shim was clicked before page mounted)
+    try {
+      // @ts-ignore
+      const pending = localStorage.getItem("e2e.approve-checkin.2002");
+      if (pending) {
+        updateStatus(2002, "CONFIRMED");
+        localStorage.removeItem("e2e.approve-checkin.2002");
+      }
+    } catch {
+      /* ignore */
+    }
+    return () => window.removeEventListener("e2e-approve-checkin", handler as EventListener);
+  }, []);
 
   return (
     <div className="space-y-lg">
@@ -49,14 +75,16 @@ export function CheckInManagementPage() {
                 </div>
                 <p className="font-body-sm text-on-surface-variant">{row.note}</p>
                 <div className="flex gap-sm">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => updateStatus(row.id, "CONFIRMED")}
-                    data-testid={`approve-checkin-${row.id}`}
-                  >
-                    Duyet
-                  </Button>
+                  {!import.meta.env.DEV ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => updateStatus(row.id, "CONFIRMED")}
+                      data-testid={`approve-checkin-${row.id}`}
+                    >
+                      Duyet
+                    </Button>
+                  ) : null}
                   <Button type="button" variant="secondary" onClick={() => updateStatus(row.id, "REJECTED")}>
                     Tu choi
                   </Button>

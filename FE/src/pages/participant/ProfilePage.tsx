@@ -1,34 +1,56 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { profileSchema } from "../../domain/schemas";
-import { demoTeamMembers } from "../../services/readModelService";
+import { fetchMyProfile, updateMyProfile } from "../../services/profileService";
 
 export function ProfilePage() {
   const { notify } = useToast();
-  const member = demoTeamMembers[0];
-  const [fullName, setFullName] = useState(member.fullName);
-  const [email, setEmail] = useState(member.email);
-  const [skill, setSkill] = useState("Frontend, UX, React");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [university, setUniversity] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const valid = useMemo(() => fullName.trim().length >= 2 && email.includes("@"), [email, fullName]);
 
-  function saveProfile() {
-    const parsed = profileSchema.safeParse({ fullName, email, skill });
+  useEffect(() => {
+    let active = true;
+    fetchMyProfile().then((result) => {
+      if (!active) return;
+      setFullName(result.data.fullName ?? "");
+      setEmail(result.data.email ?? "");
+      setStudentId(result.data.studentId ?? "");
+      setUniversity(result.data.university ?? "");
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function saveProfile() {
+    const parsed = profileSchema.safeParse({ fullName, email, studentId, university });
     if (!parsed.success) {
       setFormError(parsed.error.issues[0]?.message ?? "Ho so chua hop le.");
       return;
     }
     setFormError("");
     setSaving(true);
-    window.setTimeout(() => {
-      setSaving(false);
-      notify("Da luu ho so ca nhan.", "success");
-    }, 350);
+    const result = await updateMyProfile({
+      fullName,
+      studentId: studentId || undefined,
+      university: university || undefined
+    });
+    setFullName(result.data.fullName ?? fullName);
+    setStudentId(result.data.studentId ?? studentId);
+    setUniversity(result.data.university ?? university);
+    setSaving(false);
+    notify("Da luu ho so ca nhan.", "success");
   }
 
   return (
@@ -48,6 +70,7 @@ export function ProfilePage() {
                 className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
+                disabled={loading}
               />
             </label>
             <label className="grid gap-xs font-label-md text-on-surface">
@@ -56,21 +79,34 @@ export function ProfilePage() {
                 className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
+                disabled
               />
             </label>
           </div>
-          <label className="mt-md grid gap-xs font-label-md text-on-surface">
-            Ky nang chinh
-            <textarea
-              className="min-h-28 rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
-              value={skill}
-              onChange={(event) => setSkill(event.target.value)}
-            />
-          </label>
+          <div className="mt-md grid gap-md md:grid-cols-2">
+            <label className="grid gap-xs font-label-md text-on-surface">
+              Ma so sinh vien
+              <input
+                className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
+                value={studentId}
+                onChange={(event) => setStudentId(event.target.value)}
+                disabled={loading}
+              />
+            </label>
+            <label className="grid gap-xs font-label-md text-on-surface">
+              Truong
+              <input
+                className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
+                value={university}
+                onChange={(event) => setUniversity(event.target.value)}
+                disabled={loading}
+              />
+            </label>
+          </div>
           {formError && <p className="mt-md font-body-sm text-error">{formError}</p>}
           <Button
             className="mt-lg"
-            disabled={!valid || saving}
+            disabled={!valid || saving || loading}
             icon={<Icon name={saving ? "sync" : "save"} />}
             onClick={saveProfile}
           >
@@ -82,8 +118,8 @@ export function ProfilePage() {
           <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary-container text-on-primary-container">
             <Icon name="person" filled className="text-[32px]" />
           </div>
-          <h2 className="mt-md font-headline-sm text-on-surface">{fullName}</h2>
-          <p className="break-all font-body-sm text-on-surface-variant">{email}</p>
+          <h2 className="mt-md font-headline-sm text-on-surface">{fullName || "Thi sinh"}</h2>
+          <p className="break-all font-body-sm text-on-surface-variant">{email || ""}</p>
           <p className="mt-md font-body-sm text-on-surface-variant">
             Ho so nay chi dung cho lien he trong cuoc thi. Diem va xep hang khong bi anh huong boi thong tin ca nhan.
           </p>

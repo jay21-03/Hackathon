@@ -9,45 +9,34 @@ import {
   getRankingRows
 } from "../mocks/hackathonDemoData";
 import { withApiFallback } from "./apiFallback";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8085/api";
-
-async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`);
-  if (!response.ok) throw new Error(`API ${path} failed`);
-  return response.json() as Promise<T>;
-}
+import { apiClient } from "./apiClient";
 
 export function fetchRubricConfig() {
-  return withApiFallback(() => getJson<typeof baseRubric>(`/events/${demoEvent.id}/rubric`), baseRubric);
+  return withApiFallback(() => apiClient.get<typeof baseRubric>(`/events/${demoEvent.id}/rubric`).then((r) => r.data), baseRubric);
 }
 
 export function fetchBoardAssignments() {
-  return withApiFallback(() => getJson<typeof demoBoards>(`/events/${demoEvent.id}/boards`), demoBoards);
+  return withApiFallback(() => apiClient.get<typeof demoBoards>(`/events/${demoEvent.id}/boards`).then((r) => r.data), demoBoards);
 }
 
 export function fetchAiReviewQueue() {
-  return withApiFallback(() => getJson<typeof demoAiFindings>(`/events/${demoEvent.id}/ai-review/findings`), demoAiFindings);
+  return withApiFallback(() => apiClient.get<typeof demoAiFindings>(`/events/${demoEvent.id}/ai-review/findings`).then((r) => r.data), demoAiFindings);
 }
 
 export function fetchAiReviewInsights() {
-  return withApiFallback(() => getJson<typeof demoTeams>(`/events/${demoEvent.id}/ai-review/teams`), demoTeams);
+  return withApiFallback(() => apiClient.get<typeof demoTeams>(`/events/${demoEvent.id}/ai-review/teams`).then((r) => r.data), demoTeams);
 }
 
 export function fetchNotifications() {
-  return withApiFallback(
-    () => getJson<typeof demoAnnouncements>(`/events/${demoEvent.id}/notifications`),
-    demoAnnouncements
-  );
+  return withApiFallback(() => apiClient.get<typeof demoAnnouncements>(`/events/${demoEvent.id}/notifications`).then((r) => r.data), demoAnnouncements);
 }
 
 export function fetchPublishPreview() {
   return withApiFallback(
-    () =>
-      getJson<{
-        rankings: ReturnType<typeof getRankingRows>;
-        submittedSheets: typeof demoScoreSheets;
-      }>(`/events/${demoEvent.id}/results/preview`),
+    () => apiClient.get<{
+      rankings: ReturnType<typeof getRankingRows>;
+      submittedSheets: typeof demoScoreSheets;
+    }>(`/events/${demoEvent.id}/results/preview`).then((r) => r.data),
     {
       rankings: getRankingRows(),
       submittedSheets: demoScoreSheets.filter((sheet) => sheet.status === "SUBMITTED")
@@ -57,7 +46,7 @@ export function fetchPublishPreview() {
 
 export function fetchMentorDashboard() {
   return withApiFallback(
-    () => getJson<{ boards: typeof demoBoards; teams: typeof demoTeams; findings: typeof demoAiFindings }>(`/mentor/dashboard`),
+    () => apiClient.get<{ boards: typeof demoBoards; teams: typeof demoTeams; findings: typeof demoAiFindings }>(`/mentor/dashboard`).then((r) => r.data),
     {
       boards: demoBoards.filter((board) => board.mentor === "An Le"),
       teams: demoTeams.filter((team) => team.board === "Bang Alpha"),
@@ -68,7 +57,7 @@ export function fetchMentorDashboard() {
 
 export function fetchJudgeDashboard() {
   return withApiFallback(
-    () => getJson<{ teams: typeof demoTeams; scoreSheets: typeof demoScoreSheets }>(`/judge/dashboard`),
+    () => apiClient.get<{ teams: typeof demoTeams; scoreSheets: typeof demoScoreSheets }>(`/judge/dashboard`).then((r) => r.data),
     {
       teams: demoTeams.filter((team) => team.board === "Bang Alpha"),
       scoreSheets: demoScoreSheets.filter((sheet) => ["Dr. Chen", "S. Malik"].includes(sheet.judge))

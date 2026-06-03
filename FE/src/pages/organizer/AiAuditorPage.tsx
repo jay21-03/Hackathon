@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
@@ -16,7 +15,6 @@ const severityTone = {
 } as const;
 
 export function AiAuditorPage() {
-  const { notify } = useToast();
   const [findings, setFindings] = useState<DemoAiFinding[]>([]);
   const [usingFallback, setUsingFallback] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -43,7 +41,9 @@ export function AiAuditorPage() {
         actions={
           <>
             {usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
-            <Button onClick={() => notify("Da yeu cau chay lai danh gia AI.", "success")}>Chay lai hang doi</Button>
+            <Button disabled title="Backend cho chu de nay chua san sang">
+              Chay lai hang doi
+            </Button>
           </>
         }
       />
@@ -51,7 +51,13 @@ export function AiAuditorPage() {
       <section className="grid gap-md md:grid-cols-3">
         <StatCard label="Finding" value={findings.length} helper="Can doc ket luan" icon="psychology" />
         <StatCard label="Rui ro cao" value={highRisk} helper="Can review thu cong" icon="warning" tone="danger" />
-        <StatCard label="Trang thai" value="San sang" helper="Tu dong hien thi du lieu minh hoa khi he thong chua co ket qua" icon="task_alt" tone="success" />
+        <StatCard
+          label="Trang thai"
+          value={usingFallback ? "Minh hoa" : "He thong"}
+          helper="AI review hien chi la so lieu tham khao"
+          icon="task_alt"
+          tone={usingFallback ? "warning" : "success"}
+        />
       </section>
 
       <section className="grid gap-md lg:grid-cols-2">

@@ -1,8 +1,10 @@
-import { Link } from "react-router-dom";
-import { getDemoSession, getRoleHome } from "../../auth/demoSession";
-import { RoleSwitcher } from "../../components/auth/RoleSwitcher";
+import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { getRoleHome, setDemoAuthenticated, setDemoRole } from "../../auth/demoSession";
+import { setAccessToken } from "../../auth/tokenStorage";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
+import { googleLogin } from "../../services/authService";
 
 function GoogleIcon() {
   return (
@@ -28,6 +30,30 @@ function GoogleIcon() {
 }
 
 export function LoginPage() {
+  const location = useLocation();
+  const message = (location.state as { message?: string } | null)?.message;
+  const from = (location.state as { from?: string } | null)?.from;
+  const [email, setEmail] = useState("admin@hackathon.org");
+  const [loading, setLoading] = useState(false);
+
+  function resolveRole(input: string) {
+    const value = input.trim().toLowerCase();
+    if (value.includes("organizer")) return "organizer";
+    if (value.includes("mentor")) return "mentor";
+    if (value.includes("judge")) return "judge";
+    return "participant";
+  }
+
+  async function handleLogin(idToken: string) {
+    setLoading(true);
+    const role = resolveRole(email);
+    const result = await googleLogin(idToken, email);
+    setAccessToken(result.data.accessToken);
+    setDemoRole(role);
+    setDemoAuthenticated(true);
+    window.location.href = from ?? getRoleHome(role);
+  }
+
   return (
     <main className="relative z-10 w-full max-w-md px-page">
       <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
@@ -42,7 +68,19 @@ export function LoginPage() {
         </div>
 
         <div className="p-xl flex flex-col gap-lg">
-          <Button variant="google" className="w-full" icon={<GoogleIcon />}>
+          {message ? (
+            <div className="rounded-lg border border-warning/40 bg-warning-container/60 px-md py-sm text-on-surface">
+              <p className="font-body-sm">{message}</p>
+            </div>
+          ) : null}
+
+          <Button
+            variant="google"
+            className="w-full"
+            icon={<GoogleIcon />}
+            onClick={() => handleLogin(`google-demo-${Date.now()}`)}
+            disabled={loading}
+          >
             Dang nhap bang Google
           </Button>
 
@@ -54,12 +92,11 @@ export function LoginPage() {
 
           <form
             className="flex flex-col gap-md"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              window.location.href = getRoleHome(getDemoSession().role);
+              await handleLogin(email.trim() || `email-demo-${Date.now()}`);
             }}
           >
-            <RoleSwitcher compact />
             <div className="flex flex-col gap-xs">
               <label htmlFor="email" className="font-label-sm text-on-surface-variant normal-case">
                 Email dang nhap
@@ -69,6 +106,8 @@ export function LoginPage() {
                 type="email"
                 placeholder="admin@hackathon.org"
                 className="form-input w-full"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
               />
             </div>
             <Button variant="secondary" className="w-full mt-sm" type="submit">

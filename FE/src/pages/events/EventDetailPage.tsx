@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
+import { getDemoSession, getRoleHome, isDemoAuthenticated, roleLabels } from "../../auth/demoSession";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { fetchEventDetail, type EventDetail } from "../../services/eventsApi";
 
@@ -18,6 +19,10 @@ function formatDateTime(value: string) {
 }
 
 export function EventDetailPage() {
+  const authenticated = isDemoAuthenticated();
+  const session = getDemoSession();
+  const roleHome = getRoleHome(session.role);
+  const roleLabel = roleLabels[session.role];
   const { eventId } = useParams();
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,18 +108,36 @@ export function EventDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-sm pt-md border-t border-outline-variant/30">
-          <Link
-            to="/register"
-            className="bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
-          >
-            Dang ky tham gia
-          </Link>
-          <Link
-            to="/me/team"
-            className="border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-variant"
-          >
-            Xem doi cua toi
-          </Link>
+          {!authenticated ? (
+            <Link
+              to="/login"
+              className="bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
+            >
+              Dang nhap de dang ky
+            </Link>
+          ) : session.role === "participant" ? (
+            <>
+              <Link
+                to="/register"
+                className="bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
+              >
+                Dang ky tham gia
+              </Link>
+              <Link
+                to="/me/team"
+                className="border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-variant"
+              >
+                Xem doi cua toi
+              </Link>
+            </>
+          ) : (
+            <Link
+              to={roleHome}
+              className="bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
+            >
+              Vao {roleLabel}
+            </Link>
+          )}
         </div>
       </article>
     </div>

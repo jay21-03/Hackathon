@@ -3,12 +3,17 @@ import { Link } from "react-router-dom";
 import { EventCard } from "../../components/events/EventCard";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { Icon } from "../../components/ui/Icon";
+import { getDemoSession, getRoleHome, isDemoAuthenticated, roleLabels } from "../../auth/demoSession";
 import { fetchPublicEvents } from "../../services/eventsApi";
 import type { EventListItem } from "../../types/entities";
 
 type Filter = "all" | "upcoming" | "active";
 
 export function EventsDiscoveryPage() {
+  const authenticated = isDemoAuthenticated();
+  const session = getDemoSession();
+  const roleHome = getRoleHome(session.role);
+  const roleLabel = roleLabels[session.role];
   const [events, setEvents] = useState<EventListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [usingFallback, setUsingFallback] = useState(false);
@@ -56,6 +61,12 @@ export function EventsDiscoveryPage() {
     { id: "active", label: "Dang mo" }
   ];
 
+  const primaryAction = authenticated
+    ? session.role === "participant"
+      ? { to: "/register", label: "Dang ky doi", icon: "group_add" }
+      : { to: roleHome, label: `Vao ${roleLabel}`, icon: "dashboard" }
+    : null;
+
   return (
     <div className="space-y-lg">
       <section className="flex flex-col md:flex-row md:items-end justify-between gap-md border-b border-outline-variant pb-lg">
@@ -65,13 +76,15 @@ export function EventsDiscoveryPage() {
             Tim cuoc thi phu hop, xem thoi gian dang ky va bat dau tao doi.
           </p>
         </div>
-        <Link
-          to="/register"
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-2 font-label-md text-on-primary-container shadow-sm hover:bg-primary"
-        >
-          <Icon name="group_add" className="text-[18px]" />
-          Dang ky doi
-        </Link>
+        {primaryAction ? (
+          <Link
+            to={primaryAction.to}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-2 font-label-md text-on-primary-container shadow-sm hover:bg-primary"
+          >
+            <Icon name={primaryAction.icon} className="text-[18px]" />
+            {primaryAction.label}
+          </Link>
+        ) : null}
       </section>
 
       <section className="space-y-md">
@@ -125,8 +138,11 @@ export function EventsDiscoveryPage() {
           <p className="font-body-sm text-on-surface-variant mb-md">
             Hay thu doi bo loc hoac quay lai danh sach tat ca cuoc thi.
           </p>
-          <Link to="/organizer/dashboard" className="text-primary font-label-md">
-            Mo trang Ban to chuc
+          <Link
+            to={authenticated ? roleHome : "/login"}
+            className="text-primary font-label-md"
+          >
+            {authenticated ? `Vao ${roleLabel}` : "Dang nhap de bat dau"}
           </Link>
         </div>
       )}
