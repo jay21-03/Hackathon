@@ -1,32 +1,24 @@
 import { apiClient } from "./apiClient";
 import { withApiFallback } from "./apiFallback";
-import { demoScoreSheets } from "../mocks/hackathonDemoData";
-
-export async function fetchScoreSheets(eventId: string) {
-  return withApiFallback(() => apiClient.get(`/events/${eventId}/scores`).then((r) => r.data), demoScoreSheets);
-}
-
-export async function submitScore(eventId: string, sheet: any) {
-  try {
-    const res = await apiClient.post(`/events/${eventId}/scores`, sheet);
-    return { data: res.data, usingFallback: false };
-  } catch {
-    return { data: sheet, usingFallback: true };
-  }
-}
 import { baseRubric, demoScoreSheets } from "../mocks/hackathonDemoData";
-import { apiClient } from "./apiClient";
-import { withApiFallback } from "./apiFallback";
 
-export function fetchScoreSheets() {
+export function fetchScoreSheets(eventId?: string) {
   return withApiFallback(
-    async () => (await apiClient.get<typeof demoScoreSheets>("/score-sheets")).data,
+    () =>
+      eventId
+        ? apiClient.get(`/events/${eventId}/scores`).then((response) => response.data)
+        : apiClient.get<typeof demoScoreSheets>("/score-sheets").then((response) => response.data),
     demoScoreSheets
   );
 }
 
 export function fetchRubric() {
-  return withApiFallback(async () => (await apiClient.get<typeof baseRubric>("/rubric")).data, baseRubric);
+  return withApiFallback(() => apiClient.get<typeof baseRubric>("/rubric").then((response) => response.data), baseRubric);
+}
+
+export async function submitScore(eventId: string, sheet: unknown) {
+  const { data } = await apiClient.post(`/events/${eventId}/scores`, sheet);
+  return data;
 }
 
 export async function submitScoreSheet(teamId: number, scores: Record<string, number>) {

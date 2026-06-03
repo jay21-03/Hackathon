@@ -2,16 +2,12 @@ import { apiClient } from "./apiClient";
 import { withApiFallback } from "./apiFallback";
 import { getRankingRows } from "../mocks/hackathonDemoData";
 
-export async function fetchRankings(eventId: string) {
-  return withApiFallback(() => apiClient.get(`/events/${eventId}/results`).then((r) => r.data), getRankingRows());
-}
-import { getRankingRows } from "../mocks/hackathonDemoData";
-import { apiClient } from "./apiClient";
-import { withApiFallback } from "./apiFallback";
-
-export function fetchRanking() {
+export function fetchRankings(eventId?: string) {
   return withApiFallback(
-    async () => (await apiClient.get<ReturnType<typeof getRankingRows>>("/ranking")).data,
+    () =>
+      eventId
+        ? apiClient.get(`/events/${eventId}/results`).then((response) => response.data)
+        : apiClient.get<ReturnType<typeof getRankingRows>>("/ranking").then((response) => response.data),
     getRankingRows()
   );
 }
