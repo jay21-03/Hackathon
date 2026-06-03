@@ -1,4 +1,4 @@
-import { getAccessToken } from "./tokenStorage";
+import { clearAccessToken, getAccessToken, setAccessToken } from "./tokenStorage";
 
 export type UserRole = "participant" | "organizer" | "mentor" | "judge";
 
@@ -10,6 +10,7 @@ export interface DemoSession {
 
 const storageKey = "seal.demo.session";
 const authKey = "seal.demo.authenticated";
+const devAuthBypassEnabled = import.meta.env.DEV && import.meta.env.VITE_DEV_AUTH_BYPASS === "true";
 
 const roleProfiles: Record<UserRole, DemoSession> = {
   participant: {
@@ -66,12 +67,23 @@ export function setDemoAuthenticated(value: boolean) {
     window.localStorage.setItem(authKey, "true");
   } else {
     window.localStorage.removeItem(authKey);
+    if (devAuthBypassEnabled) {
+      clearAccessToken();
+    }
   }
+}
+
+function buildDevToken(role: UserRole, email: string) {
+  return `dev:${role}:${email.trim().toLowerCase()}`;
 }
 
 export function setDemoRole(role: UserRole) {
   const next = roleProfiles[role];
   window.localStorage.setItem(storageKey, JSON.stringify(next));
+  if (devAuthBypassEnabled) {
+    setAccessToken(buildDevToken(role, next.email));
+    setDemoAuthenticated(true);
+  }
   window.dispatchEvent(new Event("seal-demo-session-change"));
   return next;
 }

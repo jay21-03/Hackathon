@@ -4,8 +4,7 @@ export async function withApiFallback<T>(
 ): Promise<{ data: T; usingFallback: boolean }> {
   try {
     const data = await request();
-    const emptyArray = Array.isArray(data) && data.length === 0;
-    return { data: emptyArray ? fallback : data, usingFallback: emptyArray };
+    return { data, usingFallback: false };
   } catch {
     return { data: fallback, usingFallback: true };
   }

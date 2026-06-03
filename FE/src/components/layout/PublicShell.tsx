@@ -15,10 +15,10 @@ export function PublicShell() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="sticky top-0 z-50 w-full border-b border-outline-variant bg-surface/95 shadow-sm backdrop-blur-md">
+      <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-surface/90 shadow-ambient backdrop-blur-xl">
         <div className="mx-auto flex min-h-16 max-w-workspace flex-wrap items-center justify-between gap-sm px-page py-sm md:px-margin-desktop">
           <NavLink to="/events" className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-container">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-container shadow-[0_0_0_1px_rgba(173,198,255,0.1)]">
               <Icon name="shield" filled className="text-[18px] text-on-primary-container" />
             </div>
             <div>
@@ -33,7 +33,7 @@ export function PublicShell() {
             {authenticated && session.role === "participant" ? (
               <NavLink
                 to="/register"
-                className="rounded-lg px-3 py-2 font-label-md text-on-surface-variant hover:bg-surface-variant hover:text-on-surface"
+                className="rounded-lg px-3 py-2 font-label-md text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
               >
                 Dang ky doi
               </NavLink>
@@ -66,6 +66,7 @@ export function PublicShell() {
       </header>
 
       <main className="mx-auto w-full max-w-workspace flex-grow px-page py-lg md:px-margin-desktop md:py-xl md:pb-margin-desktop">
+        <div className="pointer-events-none fixed inset-0 -z-10 bg-grid-pattern opacity-80" />
         <Outlet />
         {/* Test shim: expose an organizer approve button so E2E flow can proceed even if role sync is delayed */}
         <button

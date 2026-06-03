@@ -29,6 +29,19 @@ export interface TeamDetailResponse {
   rejectedReason?: string | null;
 }
 
+export async function fetchEventTeams(eventId: number) {
+  const { data } = await apiClient.get<ApiResponse<TeamDetailResponse[]>>(`/v1/events/${eventId}/teams`);
+  return data.data ?? [];
+}
+
+export async function updateTeamStatus(teamId: number, status: string, reason?: string) {
+  const { data } = await apiClient.patch<ApiResponse<TeamDetailResponse>>(`/v1/teams/${teamId}/status`, {
+    status,
+    reason
+  });
+  return data.data;
+}
+
 export function fetchRegistrations() {
   return withApiFallback(
     async () => (await apiClient.get<typeof demoRegistrations>("/registrations")).data,
@@ -41,31 +54,39 @@ export async function updateRegistrationStatus(id: number, status: string) {
 }
 
 export async function registerTeam(eventId: number, payload: RegisterTeamPayload) {
-  return withApiFallback(async () => {
-    const { data } = await apiClient.post<ApiResponse<TeamDetailResponse>>(
-      `/v1/events/${eventId}/teams`,
-      payload
-    );
-    return data.data;
-  }, null);
+  const { data } = await apiClient.post<ApiResponse<TeamDetailResponse>>(
+    `/v1/events/${eventId}/teams`,
+    payload
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Dang ky doi that bai");
+  }
+  return data.data;
 }
 
 export async function confirmInvitation(token: string) {
-  return withApiFallback(async () => {
-    const { data } = await apiClient.post<ApiResponse<TeamDetailResponse>>(
-      "/v1/team-invitations/confirm",
-      { token }
-    );
-    return data.data;
-  }, null);
+  const { data } = await apiClient.post<ApiResponse<TeamDetailResponse>>(
+    "/v1/team-invitations/confirm",
+    { token }
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Xac nhan loi moi that bai");
+  }
+  return data.data;
 }
 
 export async function declineInvitation(token: string) {
-  return withApiFallback(async () => {
-    const { data } = await apiClient.post<ApiResponse<TeamDetailResponse>>(
-      "/v1/team-invitations/decline",
-      { token }
-    );
-    return data.data;
-  }, null);
+  const { data } = await apiClient.post<ApiResponse<TeamDetailResponse>>(
+    "/v1/team-invitations/decline",
+    { token }
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Tu choi loi moi that bai");
+  }
+  return data.data;
+}
+
+export async function fetchMyTeams(eventId: number) {
+  const { data } = await apiClient.get<ApiResponse<TeamDetailResponse[]>>(`/v1/my/teams?eventId=${eventId}`);
+  return data.data ?? [];
 }

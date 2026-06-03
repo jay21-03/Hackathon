@@ -1,7 +1,5 @@
 import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
-import { ButtonLink } from "../../components/ui/Button";
-import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { ProgressBar } from "../../components/ui/ProgressBar";
 import { StatCard } from "../../components/ui/StatCard";
@@ -30,9 +28,6 @@ export function OrganizerOverviewPage() {
         actions={
           <>
             <Badge tone={getStatusTone(demoEvent.status)}>{getStatusLabel(demoEvent.status)}</Badge>
-            <ButtonLink to="/organizer/ranking" icon={<Icon name="leaderboard" className="text-[18px]" />}>
-              Xem xep hang
-            </ButtonLink>
           </>
         }
       />
@@ -79,32 +74,12 @@ export function OrganizerOverviewPage() {
           {
             label: "Thiet lap",
             detail: "Cau hinh cuoc thi, de thi va tieu chi cham.",
-            to: "/organizer/events",
             state: "done"
           },
           {
             label: "Dang ky",
             detail: "Duyet doi, loi moi thanh vien va danh sach cho.",
-            to: "/organizer/registrations",
             state: waitlistTeams > 0 ? "active" : "done"
-          },
-          {
-            label: "Phan cong",
-            detail: "Tao bang thi, gan mentor va giam khao.",
-            to: "/organizer/assignments",
-            state: "active"
-          },
-          {
-            label: "Cham diem",
-            detail: "Theo doi phieu cham da chot, bo qua ban nhap.",
-            to: "/organizer/scoring",
-            state: draftScores > 0 ? "active" : "done"
-          },
-          {
-            label: "Cong bo",
-            detail: "Chon chung ket, xu ly vi pham va cong khai ket qua.",
-            to: "/organizer/publish-results",
-            state: submittedScores > 0 ? "next" : "blocked"
           }
         ]}
       />
@@ -124,19 +99,16 @@ export function OrganizerOverviewPage() {
           </div>
           <div className="mt-md grid gap-sm md:grid-cols-2">
             {[
-              ["Duyet dang ky", `${waitlistTeams} doi trong danh sach cho`, "/organizer/registrations"],
-              ["Check-in", "1 doi can xem lai anh check-in", "/organizer/check-ins"],
-              ["Cham diem", `${draftScores} phieu dang luu nhap`, "/organizer/scoring"],
-              ["Cong bo", "Ket qua chua cong khai", "/organizer/publish-results"]
-            ].map(([title, detail, to]) => (
-              <Link
+              ["Duyet dang ky", `${waitlistTeams} doi trong danh sach cho`],
+              ["Quan ly cuoc thi", "Cuoc thi va danh sach nguoi dung da giong api" ]
+            ].map(([title, detail]) => (
+              <div
                 key={title}
-                to={to}
-                className="rounded-lg border border-outline-variant bg-surface-container-low p-md hover:bg-surface-variant"
+                className="rounded-lg border border-outline-variant bg-surface-container-low p-md"
               >
                 <p className="font-label-md text-on-surface">{title}</p>
                 <p className="mt-xs font-body-sm text-on-surface-variant">{detail}</p>
-              </Link>
+              </div>
             ))}
           </div>
         </article>

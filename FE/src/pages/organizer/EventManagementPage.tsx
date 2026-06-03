@@ -1,16 +1,36 @@
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
+import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoEvent, demoPublicEvents } from "../../services/readModelService";
+import { fetchPublicEvents } from "../../services/eventsApi";
+import type { EventListItem } from "../../types/entities";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("vi-VN", { dateStyle: "medium" });
 }
 
 export function EventManagementPage() {
+  const [events, setEvents] = useState<EventListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchPublicEvents()
+      .then((result) => setEvents(result))
+      .catch(() => setError("Khong tai duoc danh sach cuoc thi."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const primaryEvent = useMemo(() => events[0] ?? null, [events]);
+
+  if (loading) {
+    return <ModuleSkeleton rows={4} />;
+  }
+
   return (
     <div className="space-y-lg">
       <PageHeader
@@ -25,10 +45,26 @@ export function EventManagementPage() {
       />
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Quota" value={`${demoEvent.confirmedTeams}/${demoEvent.quota}`} helper="Doi da xac nhan" icon="groups" />
-        <StatCard label="Kich thuoc doi" value={`${demoEvent.minTeamSize}-${demoEvent.maxTeamSize}`} helper="Thanh vien moi doi" icon="group" tone="success" />
-        <StatCard label="Mo de" value={formatDate(demoEvent.releaseAt)} helper="Theo gio mo de" icon="schedule" tone="warning" />
+        <StatCard label="Tong cuoc thi" value={events.length} helper="Doc tu he thong" icon="groups" />
+        <StatCard
+          label="Trang thai dau tien"
+          value={primaryEvent ? getStatusLabel(primaryEvent.status) : "-"}
+          helper={primaryEvent ? primaryEvent.name : "Chua co du lieu"}
+          icon="group"
+          tone="success"
+        />
+        <StatCard
+          label="Ngay bat dau"
+          value={primaryEvent ? formatDate(primaryEvent.startDate) : "-"}
+          helper="Theo event dau tien"
+          icon="schedule"
+          tone="warning"
+        />
       </section>
+
+      {error ? (
+        <p className="rounded-lg border border-error/40 bg-error-container/40 p-md font-body-sm text-on-surface">{error}</p>
+      ) : null}
 
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
         <div className="overflow-x-auto">
@@ -43,7 +79,7 @@ export function EventManagementPage() {
               </tr>
             </thead>
             <tbody className="table-divider">
-              {demoPublicEvents.map((event) => (
+              {events.map((event) => (
                 <tr key={event.id} className="font-body-sm text-on-surface">
                   <td className="px-md py-md font-label-md">{event.name}</td>
                   <td className="px-md py-md">{formatDate(event.registrationStartAt)} - {formatDate(event.registrationEndAt)}</td>

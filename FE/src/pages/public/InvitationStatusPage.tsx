@@ -1,32 +1,69 @@
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
+import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoTeamMembers, getTeamById } from "../../services/readModelService";
+import { fetchMyTeams } from "../../services/registrationService";
 
-const invitationRows = demoTeamMembers.map((member, index) => ({
-  ...member,
-  status: index === 3 ? "PENDING" : member.status,
-  expiresAt: index === 3 ? "2026-07-05T23:59:00+07:00" : "2026-07-01T23:59:00+07:00"
-}));
+interface InvitationRow {
+  id: number;
+  fullName: string;
+  email: string;
+  status: string;
+}
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" });
 }
 
 export function InvitationStatusPage() {
-  const team = getTeamById(invitationRows[0].teamId);
+  const eventId = 11;
+  const [rows, setRows] = useState<InvitationRow[]>([]);
+  const [teamName, setTeamName] = useState<string>("Doi thi");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchMyTeams(eventId)
+      .then((teams) => {
+        const team = teams[0];
+        if (!team) {
+          setRows([]);
+          return;
+        }
+        setTeamName(team.name);
+        setRows(
+          (team.members ?? []).map((member) => ({
+            id: member.id,
+            fullName: member.fullName,
+            email: member.email,
+            status: member.status
+          }))
+        );
+      })
+      .catch(() => setError("Khong tai duoc trang thai loi moi tu he thong."))
+      .finally(() => setLoading(false));
+  }, [eventId]);
+
+  const invitationRows = useMemo(() => rows, [rows]);
   const confirmed = invitationRows.filter((row) => row.status === "CONFIRMED").length;
+
+  if (loading) {
+    return <ModuleSkeleton rows={4} />;
+  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-lg">
       <PageHeader
         eyebrow="Trang thai loi moi"
-        title={team?.name ?? "Doi thi"}
+        title={teamName}
         description="Theo doi thanh vien da xac nhan, dang cho phan hoi hoac da tu choi loi moi."
         actions={<Badge tone={confirmed === invitationRows.length ? "success" : "warning"}>{confirmed}/{invitationRows.length} da xac nhan</Badge>}
       />
+
+      {error ? <p className="rounded-lg border border-error/40 bg-error-container/40 p-md font-body-sm text-on-surface">{error}</p> : null}
 
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
         <div className="overflow-x-auto">
@@ -35,8 +72,6 @@ export function InvitationStatusPage() {
               <tr className="font-label-sm text-on-surface-variant">
                 <th className="px-md py-sm">Thanh vien</th>
                 <th className="px-md py-sm">Email</th>
-                <th className="px-md py-sm">Vai tro</th>
-                <th className="px-md py-sm">Han phan hoi</th>
                 <th className="px-md py-sm">Trang thai</th>
               </tr>
             </thead>
@@ -45,8 +80,6 @@ export function InvitationStatusPage() {
                 <tr key={row.id} className="font-body-sm text-on-surface">
                   <td className="px-md py-md font-label-md">{row.fullName}</td>
                   <td className="px-md py-md break-all">{row.email}</td>
-                  <td className="px-md py-md">{row.role}</td>
-                  <td className="px-md py-md">{formatDate(row.expiresAt)}</td>
                   <td className="px-md py-md">
                     <Badge tone={getStatusTone(row.status)}>{getStatusLabel(row.status)}</Badge>
                   </td>

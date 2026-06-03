@@ -1,33 +1,27 @@
 import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
-import { ButtonLink } from "../../components/ui/Button";
-import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { ProgressBar } from "../../components/ui/ProgressBar";
 import { StatCard } from "../../components/ui/StatCard";
-import { fetchMentorDashboard } from "../../services/hackathonApi";
-import type { DemoAiFinding, DemoBoard, DemoTeam } from "../../services/readModelService";
+import { fetchMentorAssignments, type AssignmentResponse } from "../../services/assignmentService";
 
 export function MentorDashboardPage() {
-  const [data, setData] = useState<{
-    boards: DemoBoard[];
-    teams: DemoTeam[];
-    findings: DemoAiFinding[];
-  } | null>(null);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const [assignments, setAssignments] = useState<AssignmentResponse[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchMentorDashboard()
+    fetchMentorAssignments()
       .then((result) => {
-        setData(result.data);
-        setUsingFallback(result.usingFallback);
+        setAssignments(result);
+      })
+      .catch(() => {
+        setError("Khong tai duoc danh sach phan cong mentor.");
       })
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading || !data) return <ModuleSkeleton rows={4} />;
+  if (loading) return <ModuleSkeleton rows={4} />;
 
   return (
     <div className="space-y-lg">
@@ -35,61 +29,45 @@ export function MentorDashboardPage() {
         eyebrow="Mentor"
         title="Doi thi duoc phu trach"
         description="Mentor theo doi tien do kho ma nguon, danh gia AI va ho tro doi trong bang duoc phan cong."
-        actions={
-          usingFallback ? (
-            <Badge tone="warning">Du lieu minh hoa</Badge>
-          ) : (
-            <Badge tone="success">Du lieu he thong</Badge>
-          )
-        }
+        actions={<Badge tone={error ? "danger" : "success"}>{error ? "Loi API" : "Du lieu he thong"}</Badge>}
       />
 
-      {usingFallback ? (
-        <div className="rounded-xl border border-primary/20 bg-primary-fixed p-md">
-          <p className="font-body-sm text-on-surface-variant">
-            Dashboard mentor hien dang hien thi du lieu minh hoa. Khi backend mentor san sang, cac card va kho ma nguon
-            se lay truc tiep tu he thong.
-          </p>
+      {error ? (
+        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
+          <p className="font-body-sm text-on-surface-variant">{error}</p>
         </div>
       ) : null}
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Bang phu trach" value={data.boards.length} helper="Theo phan cong BTC" icon="view_module" />
-        <StatCard label="Doi thi" value={data.teams.length} helper="Can theo doi" icon="groups" tone="success" />
-        <StatCard
-          label="Can xem AI"
-          value={data.findings.filter((item) => item.severity === "HIGH").length}
-          helper="Rui ro cao"
-          icon="psychology"
-          tone="warning"
-        />
+        <StatCard label="Phan cong" value={assignments.length} helper="Tu BE /mentors/assignments" icon="view_module" />
+        <StatCard label="Bang da gan" value={new Set(assignments.map((item) => item.boardId)).size} helper="Moi board mot phan cong" icon="groups" tone="success" />
+        <StatCard label="Mentor ID" value={assignments[0]?.assigneeId ?? "-"} helper="Tai khoan hien tai" icon="badge" tone="warning" />
       </section>
 
-      <section className="grid gap-md lg:grid-cols-2">
-        {data.teams.map((team) => (
-          <article key={team.id} className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-            <div className="flex flex-col gap-sm md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="font-headline-sm text-on-surface">{team.name}</h2>
-                <p className="font-body-sm text-on-surface-variant">
-                  {team.board} - {team.track}
-                </p>
-              </div>
-              <Badge tone="ai">AI {team.aiReviewScore ?? 0}/100</Badge>
-            </div>
-            <div className="mt-md">
-              <ProgressBar value={team.aiReviewScore ?? 0} />
-            </div>
-            <p className="mt-sm break-all font-body-sm text-on-surface-variant">
-              {team.repoUrl ?? "Chua co kho ma nguon"}
-            </p>
-          </article>
-        ))}
+      <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left">
+            <thead className="table-header-bg">
+              <tr className="font-label-sm text-on-surface-variant">
+                <th className="px-md py-sm">Board</th>
+                <th className="px-md py-sm">Assignee</th>
+                <th className="px-md py-sm">Assigned at</th>
+                <th className="px-md py-sm">Created by</th>
+              </tr>
+            </thead>
+            <tbody className="table-divider">
+              {assignments.map((assignment) => (
+                <tr key={assignment.id} className="font-body-sm text-on-surface">
+                  <td className="px-md py-md font-label-md">#{assignment.boardId}</td>
+                  <td className="px-md py-md">#{assignment.assigneeId}</td>
+                  <td className="px-md py-md">{new Date(assignment.createdAt).toLocaleString("vi-VN")}</td>
+                  <td className="px-md py-md">#{assignment.createdBy}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
-
-      <ButtonLink to="/mentor/ai-review" variant="secondary" icon={<Icon name="psychology" />}>
-        Xem chi tiet danh gia AI
-      </ButtonLink>
     </div>
   );
 }

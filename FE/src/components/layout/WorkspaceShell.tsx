@@ -22,6 +22,7 @@ export function WorkspaceShell({
   primaryAction
 }: WorkspaceShellProps) {
   const { notify } = useToast();
+  const visibleNavItems = navItems.filter((item) => !item.hidden);
   const [showShimRegistration, setShowShimRegistration] = useState(false);
   const [showShimCheckin, setShowShimCheckin] = useState(false);
 
@@ -92,9 +93,9 @@ export function WorkspaceShell({
 
   return (
     <div className="flex min-h-screen overflow-x-hidden bg-background text-on-background">
-      <aside className="fixed left-0 top-0 z-40 flex h-screen w-[264px] flex-col gap-sm border-r border-outline-variant bg-surface p-md shadow-[8px_0_24px_rgba(15,23,42,0.04)]">
-        <div className="mb-lg flex items-center gap-sm rounded-xl border border-outline-variant bg-surface-container-low p-sm">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-container">
+      <aside className="fixed left-0 top-0 z-40 flex h-screen w-[264px] flex-col gap-sm border-r border-white/5 bg-surface/95 p-md shadow-ambient backdrop-blur-xl">
+        <div className="mb-lg flex items-center gap-sm rounded-xl border border-white/5 bg-surface-container-low p-sm shadow-glow">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-container shadow-[0_0_0_1px_rgba(173,198,255,0.1)]">
             <Icon name="shield" filled className="text-on-primary-container text-[20px]" />
           </div>
           <div className="min-w-0">
@@ -112,8 +113,8 @@ export function WorkspaceShell({
         {primaryButton}
 
         <nav className="flex flex-grow flex-col gap-1 overflow-y-auto pr-1">
-          {navItems.map((item, index) => {
-            const showGroup = item.group && item.group !== navItems[index - 1]?.group;
+          {visibleNavItems.map((item, index) => {
+            const showGroup = item.group && item.group !== visibleNavItems[index - 1]?.group;
             return (
               <div key={item.to} className={showGroup && index > 0 ? "mt-sm" : undefined}>
                 {showGroup ? (
@@ -144,7 +145,7 @@ export function WorkspaceShell({
           })}
         </nav>
 
-        <div className="mt-auto flex flex-col gap-1 border-t border-outline-variant pt-4">
+        <div className="mt-auto flex flex-col gap-1 border-t border-white/5 pt-4">
           <button
             type="button"
             onClick={() => {
@@ -176,6 +177,7 @@ export function WorkspaceShell({
 
       <main className="ml-[264px] min-h-screen w-full min-w-0 flex-1 overflow-x-hidden">
         <div className="mx-auto min-w-0 max-w-workspace overflow-x-hidden p-page md:p-margin-desktop">
+          <div className="pointer-events-none fixed inset-0 -z-10 bg-grid-pattern opacity-100" />
           <Outlet />
           {import.meta.env.DEV && showShimRegistration ? (
             <button

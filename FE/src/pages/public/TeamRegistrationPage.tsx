@@ -1,22 +1,21 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { useToast } from "../../components/feedback/ToastProvider";
-import {
-  decideRegistrationStatus,
-  validateTeamRegistration
-} from "../../domain/businessRules";
 import { teamRegistrationSchema } from "../../domain/schemas";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoEvent, existingTeamMembers } from "../../services/readModelService";
+import { fetchEventDetail, type EventDetail } from "../../services/eventsApi";
 import { registerTeam } from "../../services/registrationService";
 
 const initialMembers = ["captain@seal.edu.vn", "", "", "", ""];
 
 export function TeamRegistrationPage() {
   const { notify } = useToast();
+  const eventId = 11;
+  const [eventInfo, setEventInfo] = useState<EventDetail | null>(null);
+  const [loadingEvent, setLoadingEvent] = useState(true);
   const [teamName, setTeamName] = useState("CodeStorm");
   const [track, setTrack] = useState("AI / LLM Tooling");
   const [memberEmails, setMemberEmails] = useState(initialMembers);
@@ -28,6 +27,13 @@ export function TeamRegistrationPage() {
     () => memberEmails.filter((email) => email.trim()).length,
     [memberEmails]
   );
+
+  useEffect(() => {
+    fetchEventDetail(String(eventId))
+      .then((result) => setEventInfo(result))
+      .catch(() => notify("Khong tai duoc thong tin cuoc thi.", "danger"))
+      .finally(() => setLoadingEvent(false));
+  }, [eventId, notify]);
 
   function updateMember(index: number, value: string) {
     setMemberEmails((current) => current.map((email, i) => (i === index ? value : email)));
@@ -54,20 +60,6 @@ export function TeamRegistrationPage() {
       return;
     }
 
-    const result = validateTeamRegistration(
-      {
-        eventId: demoEvent.id,
-        name: teamName,
-        memberEmails
-      },
-      existingTeamMembers
-    );
-
-    setErrors(result.errors);
-    if (!result.valid) {
-      notify("Kiem tra lai thong tin dang ky doi.", "warning");
-      return;
-    }
     setSubmitting(true);
     const filteredEmails = memberEmails.filter((email) => email.trim());
     const payload = {
@@ -78,18 +70,17 @@ export function TeamRegistrationPage() {
       }))
     };
 
-    const response = await registerTeam(demoEvent.id, payload);
-    setSubmitting(false);
-    if (!response.usingFallback && response.data) {
-      const status = response.data.status ?? "PENDING";
+    try {
+      const response = await registerTeam(eventId, payload);
+      const status = response.status ?? "PENDING";
       setSubmittedStatus(status);
       notify(`Dang ky thanh cong: ${getStatusLabel(status)}.`, "success");
       return;
+    } catch {
+      notify("Dang ky doi that bai. Vui long thu lai.", "danger");
+    } finally {
+      setSubmitting(false);
     }
-
-    const nextStatus = decideRegistrationStatus(demoEvent.confirmedTeams, demoEvent.quota);
-    setSubmittedStatus(nextStatus);
-    notify(`Dang ky thanh cong: ${getStatusLabel(nextStatus)}.`, "success");
   }
 
   return (
@@ -97,12 +88,12 @@ export function TeamRegistrationPage() {
       <section className="flex flex-col gap-md border-b border-outline-variant pb-lg md:flex-row md:items-end md:justify-between">
         <div>
           <p className="font-label-sm normal-case text-primary">Dang ky tham gia</p>
-          <h1 className="font-headline-lg text-on-surface">{demoEvent.name}</h1>
+          <h1 className="font-headline-lg text-on-surface">{eventInfo?.name ?? "Dang tai cuoc thi..."}</h1>
           <p className="mt-xs max-w-2xl font-body-md text-on-surface-variant">
             Tao doi thi 1-5 thanh vien. Moi email chi duoc thuoc mot doi trong cung cuoc thi.
           </p>
         </div>
-        <Badge tone={getStatusTone(demoEvent.status)}>{getStatusLabel(demoEvent.status)}</Badge>
+        <Badge tone={getStatusTone(eventInfo?.status ?? "PENDING")}>{getStatusLabel(eventInfo?.status ?? "PENDING")}</Badge>
       </section>
 
       <div className="grid gap-lg lg:grid-cols-[1fr_320px]">
@@ -190,7 +181,7 @@ export function TeamRegistrationPage() {
 
           <div className="flex flex-wrap gap-sm pt-sm">
             <Button type="submit" data-testid="submit-registration" disabled={submitting}>
-              {submitting ? "Dang gui" : "Dang ky doi"}
+              {submitting || loadingEvent ? "Dang gui" : "Dang ky doi"}
               <Icon name="arrow_forward" className="text-[18px]" />
             </Button>
             <ConfirmAction
@@ -214,8 +205,8 @@ export function TeamRegistrationPage() {
         <aside className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
           <h2 className="font-headline-sm text-on-surface">Quy tac dang ky</h2>
           <div className="space-y-sm font-body-sm text-on-surface-variant">
-            <p>Quy mo doi: {demoEvent.minTeamSize}-{demoEvent.maxTeamSize} thanh vien.</p>
-            <p>Quota: {demoEvent.confirmedTeams}/{demoEvent.quota} doi da xac nhan.</p>
+            <p>Quy mo doi: {eventInfo?.minTeamSize ?? 1}-{eventInfo?.maxTeamSize ?? 5} thanh vien.</p>
+            <p>Quota: toi da {eventInfo?.maxTeams ?? "-"} doi.</p>
             <p>Quota day thi doi moi vao danh sach cho.</p>
             <p>Mot email khong duoc nam trong hai doi cua cung mot cuoc thi.</p>
           </div>

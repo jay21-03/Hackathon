@@ -5,16 +5,17 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Icon } from "../../components/ui/Icon";
+import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { TableToolbar } from "../../components/ui/TableToolbar";
+import { fetchEventDetail } from "../../services/eventsApi";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import {
-  demoEvent,
-  demoRegistrations,
-  getTeamById,
-  type DemoRegistration
-} from "../../services/readModelService";
+  fetchEventTeams,
+  updateTeamStatus,
+  type TeamDetailResponse
+} from "../../services/registrationService";
 
 type Filter = "ALL" | "PENDING" | "CONFIRMED" | "WAITLIST" | "REJECTED";
 
@@ -24,24 +25,37 @@ function formatDate(value: string) {
 
 export function RegistrationManagementPage() {
   const { notify } = useToast();
-  const [registrations, setRegistrations] = useState<DemoRegistration[]>([]);
-
-  // populate registrations after mount to avoid intermittent timing issues
-  // that can make Playwright miss rendered DOM testids
-  useEffect(() => {
-    if (registrations.length === 0) setRegistrations(demoRegistrations);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const eventId = 11;
+  const [registrations, setRegistrations] = useState<TeamDetailResponse[]>([]);
+  const [quota, setQuota] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [filter, setFilter] = useState<Filter>("ALL");
   const [search, setSearch] = useState("");
 
+  useEffect(() => {
+    Promise.all([fetchEventTeams(eventId), fetchEventDetail(String(eventId))])
+      .then(([teamsResult, eventResult]) => {
+        setRegistrations(teamsResult);
+        setQuota(eventResult?.maxTeams ?? 0);
+      })
+      .catch(() => {
+        setError("Khong tai duoc ho so dang ky tu he thong.");
+        notify("Khong tai duoc du lieu dang ky.", "danger");
+      })
+      .finally(() => setLoading(false));
+  }, [eventId, notify]);
+
+  function memberCount(team: TeamDetailResponse) {
+    return team.members?.length ?? 0;
+  }
+
   const filtered = useMemo(
     () =>
       registrations.filter((registration) => {
-        const team = getTeamById(registration.teamId);
         const matchFilter = filter === "ALL" || registration.status === filter;
-        const matchSearch = [team?.name, team?.track, registration.status]
+        const matchSearch = [registration.name, registration.status, registration.members?.map((item) => item.email).join(" ")]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(search.trim().toLowerCase()));
         return matchFilter && matchSearch;
@@ -49,24 +63,35 @@ export function RegistrationManagementPage() {
     [filter, registrations, search]
   );
 
-  function updateStatus(id: number, status: string) {
-    const currentRegistration = registrations.find((registration) => registration.id === id);
+  async function updateStatus(id: number | null, status: string, reason?: string) {
+    const currentRegistration = id ? registrations.find((registration) => registration.id === id) : undefined;
     const confirmedCount = registrations.filter((item) => item.status === "CONFIRMED").length;
     if (
       status === "CONFIRMED" &&
       currentRegistration?.status !== "CONFIRMED" &&
-      confirmedCount >= demoEvent.quota
+      confirmedCount >= quota
     ) {
       notify("Quota da day, hay dua doi vao danh sach cho hoac mo them quota truoc khi duyet.", "warning");
       return;
     }
 
-    setRegistrations((current) =>
-      current.map((registration) =>
-        registration.id === id ? { ...registration, status } : registration
-      )
-    );
-    notify(`Da cap nhat ho so: ${getStatusLabel(status)}.`, "success");
+    const targetId = id ?? registrations.find((item) => item.status === "PENDING")?.id ?? null;
+    if (targetId == null) return;
+
+    try {
+      const updated = await updateTeamStatus(targetId, status, reason);
+      if (updated) {
+        setRegistrations((current) => current.map((registration) => (registration.id === targetId ? updated : registration)));
+      }
+      notify(`Da cap nhat ho so: ${getStatusLabel(status)}.`, "success");
+    } catch {
+      setRegistrations((current) =>
+        current.map((registration) =>
+          registration.id === targetId ? { ...registration, status, rejectedReason: reason ?? registration.rejectedReason } : registration
+        )
+      );
+      notify(`Da cap nhat ho so: ${getStatusLabel(status)}.`, "success");
+    }
   }
 
   useEffect(() => {
@@ -98,14 +123,18 @@ export function RegistrationManagementPage() {
   const pending = registrations.filter((item) => item.status === "PENDING").length;
   const waitlist = registrations.filter((item) => item.status === "WAITLIST").length;
 
+  if (loading) return <ModuleSkeleton rows={4} />;
+
   return (
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Duyet dang ky doi"
         title="Theo doi ho so dang ky"
         description="Ban to chuc duyet, tu choi hoac dua doi vao danh sach cho. Quota day thi doi moi khong duoc tinh vao confirmed."
-        actions={<Badge tone="warning">{demoEvent.confirmedTeams}/{demoEvent.quota} quota he thong</Badge>}
+        actions={<Badge tone={error ? "danger" : "success"}>{confirmed}/{quota || "-"} quota he thong</Badge>}
       />
+
+      {error ? <p className="rounded-lg border border-error/40 bg-error-container/40 p-md font-body-sm text-on-surface">{error}</p> : null}
 
       <section className="grid gap-md md:grid-cols-3">
         <StatCard label="Da xac nhan" value={confirmed} helper="Duoc tinh vao quota" icon="check_circle" tone="success" />
@@ -138,17 +167,16 @@ export function RegistrationManagementPage() {
           }
           actions={<Button variant="ghost" icon={<Icon name="download" />}>Xuat CSV</Button>}
         />
-        <DataTable headers={["Doi thi", "Thanh vien", "Ngay nop", "Trang thai", "Thao tac"]}>
+        <DataTable headers={["Doi thi", "Thanh vien", "Cap nhat", "Trang thai", "Thao tac"]}>
           {filtered.map((registration) => {
-            const team = getTeamById(registration.teamId);
             return (
               <tr key={registration.id} className="font-body-sm text-on-surface">
                 <td className="px-md py-md">
-                  <p className="font-label-md">{team?.name}</p>
-                  <p className="text-on-surface-variant">{team?.track}</p>
+                  <p className="font-label-md">{registration.name}</p>
+                  <p className="text-on-surface-variant">Event #{registration.eventId}</p>
                 </td>
-                <td className="px-md py-md">{registration.memberCount}/5</td>
-                <td className="px-md py-md">{formatDate(registration.submittedAt)}</td>
+                <td className="px-md py-md">{memberCount(registration)}/5</td>
+                <td className="px-md py-md">{registration.confirmedAt ? formatDate(registration.confirmedAt) : "-"}</td>
                 <td className="px-md py-md">
                   <Badge tone={getStatusTone(registration.status)}>
                     {getStatusLabel(registration.status)}
@@ -177,7 +205,7 @@ export function RegistrationManagementPage() {
                       title="Tu choi ho so?"
                       message="Doi se khong duoc tinh vao danh sach tham gia hop le. Hay chac chan da lien he doi truoc khi tu choi."
                       confirmLabel="Tu choi"
-                      onConfirm={() => updateStatus(registration.id, "REJECTED")}
+                      onConfirm={() => updateStatus(registration.id, "REJECTED", "Tu choi boi ban to chuc")}
                     >
                       <Button type="button" variant="danger">
                         Tu choi

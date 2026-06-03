@@ -6,16 +6,14 @@ import { Button, ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoTeamMembers, getTeamById } from "../../services/readModelService";
-import { confirmInvitation, declineInvitation } from "../../services/registrationService";
+import { confirmInvitation, declineInvitation, type TeamDetailResponse } from "../../services/registrationService";
 
 export function TeamInvitationConfirmationPage() {
   const { notify } = useToast();
   const [searchParams] = useSearchParams();
   const invitationToken = searchParams.get("token");
-  const member = invitationToken ? demoTeamMembers.find((item) => item.status === "PENDING") ?? null : null;
-  const team = member ? getTeamById(member.teamId) : null;
-  const [status, setStatus] = useState(member?.status ?? "PENDING");
+  const [status, setStatus] = useState("PENDING");
+  const [team, setTeam] = useState<TeamDetailResponse | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function respond(nextStatus: "CONFIRMED" | "REJECTED") {
@@ -28,10 +26,8 @@ export function TeamInvitationConfirmationPage() {
       const response = nextStatus === "CONFIRMED"
         ? await confirmInvitation(invitationToken)
         : await declineInvitation(invitationToken);
-      setStatus(nextStatus);
-      if (!response.usingFallback && response.data?.status) {
-        setStatus(response.data.status);
-      }
+      setTeam(response);
+      setStatus(response.status ?? nextStatus);
       notify(nextStatus === "CONFIRMED" ? "Da xac nhan tham gia doi." : "Da tu choi loi moi.", "success");
     } catch {
       notify("Khong the xu ly loi moi.", "danger");
@@ -40,7 +36,7 @@ export function TeamInvitationConfirmationPage() {
     }
   }
 
-  if (!member) {
+  if (!invitationToken) {
     return (
       <div className="mx-auto max-w-3xl space-y-lg">
         <PageHeader
@@ -59,7 +55,7 @@ export function TeamInvitationConfirmationPage() {
     <div className="mx-auto max-w-3xl space-y-lg">
       <PageHeader
         eyebrow="Loi moi tham gia doi"
-        title={team?.name ?? "Doi thi"}
+        title={team?.name ?? "Xac nhan loi moi"}
         description="Xac nhan hoac tu choi loi moi. Moi email chi duoc thuoc mot doi trong cung cuoc thi."
         actions={<Badge tone={getStatusTone(status)}>{getStatusLabel(status)}</Badge>}
       />
@@ -67,16 +63,26 @@ export function TeamInvitationConfirmationPage() {
       <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
         <div className="grid gap-md md:grid-cols-2">
           <div>
-            <p className="font-label-sm normal-case text-on-surface-variant">Thanh vien</p>
-            <p className="font-headline-sm text-on-surface">{member.fullName}</p>
-            <p className="break-all font-body-sm text-on-surface-variant">{member.email}</p>
+            <p className="font-label-sm normal-case text-on-surface-variant">Token loi moi</p>
+            <p className="break-all font-body-sm text-on-surface">{invitationToken}</p>
           </div>
           <div>
-            <p className="font-label-sm normal-case text-on-surface-variant">Vai tro trong doi</p>
-            <p className="font-headline-sm text-on-surface">{member.role}</p>
+            <p className="font-label-sm normal-case text-on-surface-variant">Doi thi</p>
+            <p className="font-headline-sm text-on-surface">{team?.name ?? "Se hien sau khi xu ly"}</p>
             <p className="font-body-sm text-on-surface-variant">Trang thai hien tai: {getStatusLabel(status)}</p>
           </div>
         </div>
+
+        {team?.members?.length ? (
+          <div className="mt-md rounded-lg border border-outline-variant p-md">
+            <p className="mb-sm font-label-md text-on-surface">Thanh vien trong doi</p>
+            <ul className="space-y-1 font-body-sm text-on-surface-variant">
+              {team.members.map((member) => (
+                <li key={member.id}>{member.fullName} - {member.email} ({getStatusLabel(member.status)})</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="mt-lg flex flex-wrap gap-sm border-t border-outline-variant pt-md">
           <Button disabled={status === "CONFIRMED" || submitting} onClick={() => respond("CONFIRMED")}>

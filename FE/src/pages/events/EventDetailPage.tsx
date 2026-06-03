@@ -26,7 +26,7 @@ export function EventDetailPage() {
   const { eventId } = useParams();
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!eventId) return;
@@ -34,8 +34,11 @@ export function EventDetailPage() {
     fetchEventDetail(eventId)
       .then((result) => {
         if (cancelled) return;
-        setEvent(result.data);
-        setUsingFallback(result.usingFallback);
+        setEvent(result);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError("Khong tai duoc thong tin cuoc thi.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -67,11 +70,9 @@ export function EventDetailPage() {
         Danh sach cuoc thi
       </Link>
 
-      {usingFallback && (
-        <div className="rounded-xl border border-primary/20 bg-primary-fixed p-md">
-          <p className="font-body-sm text-on-surface-variant">
-            Dang hien thi thong tin minh hoa de xem luong dang ky.
-          </p>
+      {error && (
+        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
+          <p className="font-body-sm text-on-surface-variant">{error}</p>
         </div>
       )}
 

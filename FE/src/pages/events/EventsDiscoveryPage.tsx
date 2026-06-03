@@ -16,7 +16,7 @@ export function EventsDiscoveryPage() {
   const roleLabel = roleLabels[session.role];
   const [events, setEvents] = useState<EventListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -25,8 +25,11 @@ export function EventsDiscoveryPage() {
     fetchPublicEvents()
       .then((result) => {
         if (cancelled) return;
-        setEvents(result.data);
-        setUsingFallback(result.usingFallback);
+        setEvents(result);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError("Khong tai duoc danh sach cuoc thi tu he thong.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -122,11 +125,10 @@ export function EventsDiscoveryPage() {
 
       {loading && <ModuleSkeleton rows={3} />}
 
-      {!loading && usingFallback && (
-        <div className="rounded-xl border border-primary/20 bg-primary-fixed p-md">
+      {!loading && error && (
+        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
           <p className="font-body-sm text-on-surface-variant">
-            Dang hien thi du lieu minh hoa de xem nhanh giao dien. Khi co du lieu tu he thong,
-            danh sach se tu cap nhat theo cac cuoc thi da tao.
+            {error}
           </p>
         </div>
       )}

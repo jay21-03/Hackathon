@@ -365,3 +365,35 @@ Acceptance criteria:
 - Full-flow pass: dang ky -> duyet -> check-in -> mo de -> nop bai -> danh gia AI -> cham diem -> xep hang -> chon chung ket -> cong bo.
 - Visual smoke pass cho dashboard, scoring, ranking, results.
 - Khong co skipped test trong web-only suite.
+
+## 8. Luong test thu API
+
+### Thu tu test
+
+1. Chay backend va frontend, dam bao FE dang goi dung base URL API.
+2. Test public API truoc: danh sach cuoc thi, chi tiet cuoc thi, ket qua cong khai.
+3. Test auth: dang nhap participant/organizer/mentor/judge, kiem tra token duoc luu va header Authorization duoc gan.
+4. Test participant flow: dang ky doi, xac nhan loi moi, xem dashboard, check-in, xem de, nop bai, xem ket qua.
+5. Test organizer flow: cap nhat event, duyet dang ky, duyet check-in, cau hinh de, xem scoring/ranking, chon finalist, cong bo ket qua.
+6. Test mentor/judge flow: xem dashboard, xem man duoc phan cong, test scoring/review neu backend da co contract.
+7. Test negative cases: token thieu/het han, role sai, payload sai schema, event khong ton tai, action vuot quota/ngoai range.
+
+### Mau test nhanh
+
+- GET `/events` -> tra ve danh sach cong khai, 200.
+- GET `/events/:id` -> tra ve chi tiet event, 200 hoac 404 neu khong ton tai.
+- POST `/login` hoac endpoint auth tuong ung -> tra ve access token, role, thong tin nguoi dung.
+- POST `/register` -> tao ho so dang ky, validate email/team size/quota.
+- POST/PUT `/team-invitations` hoac `/team-invitations/:id/confirm` -> cap nhat trang thai loi moi.
+- POST/PATCH `/check-ins` hoac `/check-ins/:id` -> cap nhat trang thai check-in.
+- PUT `/admin/events/:id` -> cap nhat thong tin event.
+- GET `/events/:id/results` va POST `/events/:id/results/publish` -> test preview va cong bo ket qua.
+
+### Checklist khi test API bang Postman/curl
+
+- [ ] Co base URL dung cho moi moi truong.
+- [ ] Co header `Authorization: Bearer <token>` voi endpoint can auth.
+- [ ] Co test voi user dung role va sai role.
+- [ ] Co test success va fail cho moi endpoint ghi du lieu.
+- [ ] Co test response schema va HTTP status.
+- [ ] Co test fallback neu API that chua san sang.

@@ -16,18 +16,24 @@ export function EventBasicInfoPage() {
   const [minTeamSize, setMinTeamSize] = useState(1);
   const [maxTeamSize, setMaxTeamSize] = useState(1);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     fetchEventDetail(eventId)
       .then((result) => {
-        if (cancelled || !result.data) return;
-        setEvent(result.data);
-        setName(result.data.name);
-        setQuota(result.data.maxTeams);
-        setMinTeamSize(result.data.minTeamSize);
-        setMaxTeamSize(result.data.maxTeamSize);
+        if (cancelled || !result) return;
+        setEvent(result);
+        setName(result.name);
+        setQuota(result.maxTeams);
+        setMinTeamSize(result.minTeamSize);
+        setMaxTeamSize(result.maxTeamSize);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadError("Khong tai duoc thong tin cuoc thi.");
+        }
       })
       .finally(() => {
         if (!cancelled && !event) {
@@ -66,6 +72,9 @@ export function EventBasicInfoPage() {
   }
 
   if (!event) {
+    if (loadError) {
+      return <p className="rounded-lg border border-error/40 bg-error-container/40 p-md font-body-sm text-on-surface">{loadError}</p>;
+    }
     return <ModuleSkeleton rows={5} />;
   }
 

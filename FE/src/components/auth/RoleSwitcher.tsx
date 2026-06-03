@@ -4,6 +4,7 @@ import { getDemoSession, roleLabels, setDemoRole, type UserRole } from "../../au
 const roles: UserRole[] = ["participant", "organizer", "mentor", "judge"];
 
 export function RoleSwitcher({ compact = false }: { compact?: boolean }) {
+  const enabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_ROLE_SWITCHER === "true";
   const [role, setRole] = useState<UserRole>(() => getDemoSession().role);
 
   useEffect(() => {
@@ -15,6 +16,10 @@ export function RoleSwitcher({ compact = false }: { compact?: boolean }) {
       window.removeEventListener("storage", sync);
     };
   }, []);
+
+  if (!enabled) {
+    return null;
+  }
 
   return (
     <label className={`flex items-center gap-2 ${compact ? "w-full" : ""}`}>

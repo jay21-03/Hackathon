@@ -1,32 +1,27 @@
 import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
-import { ButtonLink } from "../../components/ui/Button";
-import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
-import { getStatusLabel, getStatusTone } from "../../domain/status";
-import type { DemoScoreSheet, DemoTeam } from "../../services/readModelService";
-import { fetchJudgeDashboard } from "../../services/hackathonApi";
+import { fetchJudgeAssignments, type AssignmentResponse } from "../../services/assignmentService";
 
 export function JudgeDashboardPage() {
-  const [data, setData] = useState<{ teams: DemoTeam[]; scoreSheets: DemoScoreSheet[] } | null>(null);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const [assignments, setAssignments] = useState<AssignmentResponse[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchJudgeDashboard()
+    fetchJudgeAssignments()
       .then((result) => {
-        setData(result.data);
-        setUsingFallback(result.usingFallback);
+        setAssignments(result);
+      })
+      .catch(() => {
+        setError("Khong tai duoc danh sach phan cong giam khao.");
       })
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading || !data) return <ModuleSkeleton rows={4} />;
-
-  const submitted = data.scoreSheets.filter((sheet) => sheet.status === "SUBMITTED").length;
-  const draft = data.scoreSheets.filter((sheet) => sheet.status === "DRAFT").length;
+  if (loading) return <ModuleSkeleton rows={4} />;
 
   return (
     <div className="space-y-lg">
@@ -34,13 +29,13 @@ export function JudgeDashboardPage() {
         eyebrow="Giam khao"
         title="Doi thi can cham"
         description="Giam khao chi cham doi thuoc bang da phan cong. Diem phai duoc chot chinh thuc moi tinh xep hang."
-        actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
+        actions={<Badge tone={error ? "danger" : "success"}>{error ? "Loi API" : "Du lieu he thong"}</Badge>}
       />
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Doi trong bang" value={data.teams.length} helper="Duoc phep cham" icon="groups" />
-        <StatCard label="Da chot" value={submitted} helper="Tinh xep hang" icon="task_alt" tone="success" />
-        <StatCard label="Ban nhap" value={draft} helper="Chua tinh diem" icon="edit_note" tone="warning" />
+        <StatCard label="Phan cong" value={assignments.length} helper="Tu BE /judges/assignments" icon="groups" />
+        <StatCard label="Board" value={new Set(assignments.map((item) => item.boardId)).size} helper="Moi board mot judge" icon="view_module" tone="success" />
+        <StatCard label="Judge ID" value={assignments[0]?.assigneeId ?? "-"} helper="Tai khoan hien tai" icon="badge" tone="warning" />
       </section>
 
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
@@ -48,33 +43,27 @@ export function JudgeDashboardPage() {
           <table className="min-w-full text-left">
             <thead className="table-header-bg">
               <tr className="font-label-sm text-on-surface-variant">
-                <th className="px-md py-sm">Doi thi</th>
-                <th className="px-md py-sm">Bang</th>
-                <th className="px-md py-sm">Track</th>
-                <th className="px-md py-sm">Trang thai doi</th>
-                <th className="px-md py-sm">Thao tac</th>
+                <th className="px-md py-sm">Board</th>
+                <th className="px-md py-sm">Assignee</th>
+                <th className="px-md py-sm">Assigned at</th>
+                <th className="px-md py-sm">Created by</th>
               </tr>
             </thead>
             <tbody className="table-divider">
-              {data.teams.map((team) => (
-                <tr key={team.id} className="font-body-sm text-on-surface">
-                  <td className="px-md py-md font-label-md">{team.name}</td>
-                  <td className="px-md py-md">{team.board}</td>
-                  <td className="px-md py-md">{team.track}</td>
-                  <td className="px-md py-md">
-                    <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
-                  </td>
-                  <td className="px-md py-md">
-                    <ButtonLink to="/judge/scoring" variant="secondary" icon={<Icon name="gavel" />}>
-                      Cham diem
-                    </ButtonLink>
-                  </td>
+              {assignments.map((assignment) => (
+                <tr key={assignment.id} className="font-body-sm text-on-surface">
+                  <td className="px-md py-md font-label-md">#{assignment.boardId}</td>
+                  <td className="px-md py-md">#{assignment.assigneeId}</td>
+                  <td className="px-md py-md">{new Date(assignment.createdAt).toLocaleString("vi-VN")}</td>
+                  <td className="px-md py-md">#{assignment.createdBy}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </section>
+
+      {error ? <Badge tone="danger">{error}</Badge> : null}
     </div>
   );
 }
