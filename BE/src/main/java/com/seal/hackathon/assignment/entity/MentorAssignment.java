@@ -26,4 +26,5 @@ public class MentorAssignment {
     private Long boardId;
     private Long mentorId;
     private OffsetDateTime createdAt;
+    private Long createdBy;
 }

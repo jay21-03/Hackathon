@@ -13,7 +13,7 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
 
 	List<TeamMember> findByTeamIdAndStatus(Long teamId, com.seal.hackathon.common.enums.TeamMemberStatus status);
 
-	Optional<TeamMember> findByEventIdAndEmail1(Long eventId, String email);
+	Optional<TeamMember> findByEventIdAndEmail(Long eventId, String email);
 
 	Optional<TeamMember> findByEventIdAndUserId(Long eventId, Long userId);
 
@@ -28,6 +28,5 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
 	Optional<TeamMember> findByInviteTokenHashAndInviteNonce(String inviteTokenHash, String inviteNonce);
 
 	long countByTeamIdAndStatus(Long teamId, com.seal.hackathon.common.enums.TeamMemberStatus status);
-	Optional<TeamMember> findByEventIdAndEmail(Long eventId, String email);
 
 }

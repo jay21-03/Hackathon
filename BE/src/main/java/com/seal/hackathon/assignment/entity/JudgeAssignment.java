@@ -26,4 +26,5 @@ public class JudgeAssignment {
     private Long boardId;
     private Long judgeId;
     private OffsetDateTime createdAt;
+    private Long createdBy;
 }

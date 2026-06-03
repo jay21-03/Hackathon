@@ -74,6 +74,7 @@ public class ContestManagementService {
     private final RoundRepository roundRepository;
     private final BoardRepository boardRepository;
     private final BoardSlotRepository boardSlotRepository;
+    private final com.seal.hackathon.registration.repository.TeamMemberRepository teamMemberRepository;
     private final BoardSlotAssignmentAuditRepository auditRepository;
     private final ProblemRepository problemRepository;
     private final TeamRepository teamRepository;
@@ -712,7 +713,28 @@ public class ContestManagementService {
 
     @Transactional(readOnly = true)
     public ProblemResponse getProblem(Long problemId) {
-        return toProblemResponse(getProblemEntity(problemId));
+        Problem problem = getProblemEntity(problemId);
+        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
+
+        // organizers can view any problem
+        if (principal.getRoles() == null || !principal.getRoles().contains("ORGANIZER")) {
+            // check release time
+            OffsetDateTime now = OffsetDateTime.now();
+            if (problem.getReleaseAt() == null || now.isBefore(problem.getReleaseAt())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PROBLEM_NOT_RELEASED");
+            }
+
+            // verify current user belongs to a team assigned to this board
+            boolean memberAssigned = boardSlotRepository.findByBoardId(problem.getBoardId()).stream()
+                    .map(bs -> bs.getTeamId())
+                    .filter(tid -> tid != null)
+                    .anyMatch(tid -> teamMemberRepository.existsByTeamIdAndUserId(tid, principal.getUserId()));
+            if (!memberAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NOT_ASSIGNED_TO_BOARD");
+            }
+        }
+
+        return toProblemResponse(problem);
     }
 
     @Transactional
