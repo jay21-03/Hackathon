@@ -15,14 +15,14 @@ Tap trung vao giao dien demo, tinh dung nghiep vu va kha nang test.
 - [x] Thay trang organizer scoring progress prototype bang React page that.
 - [x] Thay trang public/participant results prototype bang React page that.
 - [x] Them UI component dung chung: page header, stat card, progress bar, empty state.
-- [x] Them mobile workspace navigation day du cac route, khong chi 4 item o bottom nav.
+- [x] Chuan hoa workspace navigation cho giao dien web, khong dung bottom nav kieu app.
 - [x] Dung cung lop du lieu mau cho dashboard, team, ranking, scoring, submission.
-- [x] Bo sung E2E kiem tra UI dashboard va mobile navigation.
-- [x] Build va E2E desktop/mobile sau khi nang cap UI.
+- [x] Bo sung E2E kiem tra UI dashboard va workspace navigation.
+- [x] Build va E2E web sau khi nang cap UI.
 - [x] Chuyen cac man organizer con lai tu prototype sang React that: users, boards, invitations, finals, disqualifications, announcements.
 - [x] Chuyen cac man participant con lai tu prototype sang React that: status, board, AI review.
 - [x] Them skeleton loading theo tung module thay vi loading text.
-- [x] Them visual regression snapshot cho dashboard desktop/mobile.
+- [x] Them visual smoke test cho dashboard web.
 - [x] Them table density mode cho organizer.
 - [x] Noi API co du lieu mau du phong khi API he thong chua chay.
 - [x] Chuyen tiep cac route phu con dang dung prototype: rubric, assignments, ai-auditor, ai-insights, notifications, publish-results, export-success.

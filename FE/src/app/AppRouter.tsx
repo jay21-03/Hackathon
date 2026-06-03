@@ -2,7 +2,7 @@ import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { RoleGuard } from "../components/auth/RoleGuard";
 import { AuthLayout } from "../components/layout/AuthLayout";
-import { MobileDiscoveryShell } from "../components/layout/MobileDiscoveryShell";
+import { PublicShell } from "../components/layout/PublicShell";
 import { WorkspaceShell } from "../components/layout/WorkspaceShell";
 import { ModuleSkeleton } from "../components/ui/ModuleSkeleton";
 import {
@@ -78,7 +78,7 @@ export function AppRouter() {
 
       <Route path="/" element={<Navigate to="/events" replace />} />
 
-      <Route element={<MobileDiscoveryShell />}>
+      <Route element={<PublicShell />}>
         <Route path="events" element={routeElement(<EventsDiscoveryPage />)} />
         <Route path="events/:eventId" element={routeElement(<EventDetailPage />)} />
         <Route path="events/:eventId/results" element={routeElement(<ResultsPortalPage />)} />

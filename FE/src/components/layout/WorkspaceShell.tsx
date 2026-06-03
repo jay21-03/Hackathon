@@ -37,7 +37,7 @@ export function WorkspaceShell({
 
   return (
     <div className="flex min-h-screen overflow-x-hidden bg-background text-on-background">
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[264px] flex-col gap-sm border-r border-outline-variant bg-surface p-md shadow-[8px_0_24px_rgba(15,23,42,0.04)] md:flex">
+      <aside className="fixed left-0 top-0 z-40 flex h-screen w-[264px] flex-col gap-sm border-r border-outline-variant bg-surface p-md shadow-[8px_0_24px_rgba(15,23,42,0.04)]">
         <div className="mb-lg flex items-center gap-sm rounded-xl border border-outline-variant bg-surface-container-low p-sm">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-container">
             <Icon name="shield" filled className="text-on-primary-container text-[20px]" />
@@ -109,58 +109,11 @@ export function WorkspaceShell({
         </div>
       </aside>
 
-      <main className="min-h-screen w-full min-w-0 flex-1 overflow-x-hidden pb-24 md:ml-[264px] md:pb-0">
-        <div className="mx-auto min-w-0 max-w-workspace overflow-x-hidden p-margin-mobile md:p-margin-desktop">
-          <nav className="md:hidden mb-md flex max-w-full gap-2 overflow-x-auto no-scrollbar border-b border-outline-variant pb-sm">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/me" || item.to === "/organizer/dashboard"}
-                className={({ isActive }) =>
-                  `flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-label-sm normal-case ${
-                    isActive
-                      ? "bg-primary-container text-on-primary-container shadow-sm"
-                      : "bg-surface-container text-on-surface-variant"
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <Icon name={item.icon} filled={isActive} className="text-[18px]" />
-                    {item.label}
-                  </>
-                )}
-              </NavLink>
-            ))}
-          </nav>
+      <main className="ml-[264px] min-h-screen w-full min-w-0 flex-1 overflow-x-hidden">
+        <div className="mx-auto min-w-0 max-w-workspace overflow-x-hidden p-page md:p-margin-desktop">
           <Outlet />
         </div>
       </main>
-
-      <nav className="fixed bottom-0 left-0 z-50 flex w-full items-center justify-around border-t border-outline-variant bg-surface px-2 py-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] md:hidden">
-        {navItems.slice(0, 4).map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/me" || item.to === "/organizer/dashboard"}
-            className={({ isActive }) =>
-              `flex flex-col items-center justify-center rounded-lg px-3 py-1 transition-colors ${
-                isActive
-                  ? "bg-secondary-container text-on-secondary-container"
-                  : "text-on-surface-variant"
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <Icon name={item.icon} filled={isActive} className="text-[24px]" />
-                <span className="font-label-sm mt-1 normal-case">{item.label}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
-      </nav>
     </div>
   );
 }

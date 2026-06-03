@@ -1,13 +1,12 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { participantMobileNav } from "../../config/navigation";
 import { RoleSwitcher } from "../auth/RoleSwitcher";
 import { Icon } from "../ui/Icon";
 
-export function MobileDiscoveryShell() {
+export function PublicShell() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="sticky top-0 z-50 w-full border-b border-outline-variant bg-surface/95 shadow-sm backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-workspace items-center justify-between px-margin-mobile md:px-margin-desktop">
+        <div className="mx-auto flex min-h-16 max-w-workspace flex-wrap items-center justify-between gap-sm px-page py-sm md:px-margin-desktop">
           <NavLink to="/events" className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-container">
               <Icon name="shield" filled className="text-[18px] text-on-primary-container" />
@@ -20,7 +19,7 @@ export function MobileDiscoveryShell() {
             </div>
           </NavLink>
 
-          <nav className="hidden items-center gap-sm md:flex">
+          <nav className="flex items-center gap-sm">
             <NavLink
               to="/events"
               className={({ isActive }) =>
@@ -58,32 +57,9 @@ export function MobileDiscoveryShell() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-workspace flex-grow px-margin-mobile py-lg pb-24 md:px-margin-desktop md:py-xl md:pb-margin-desktop">
+      <main className="mx-auto w-full max-w-workspace flex-grow px-page py-lg md:px-margin-desktop md:py-xl md:pb-margin-desktop">
         <Outlet />
       </main>
-
-      <nav className="fixed bottom-0 z-50 flex h-20 w-full items-center justify-around border-t border-outline-variant bg-surface px-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] md:hidden">
-        {participantMobileNav.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              `flex flex-col items-center justify-center rounded-full px-4 py-1 transition-all duration-200 ${
-                isActive
-                  ? "bg-secondary-container text-on-secondary-container"
-                  : "text-on-surface-variant hover:bg-surface-container-high hover:text-primary"
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <Icon name={item.icon} filled={isActive} />
-                <span className="mt-0.5 font-label-sm normal-case">{item.label}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
-      </nav>
     </div>
   );
 }

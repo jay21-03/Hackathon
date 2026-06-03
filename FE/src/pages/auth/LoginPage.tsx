@@ -29,7 +29,7 @@ function GoogleIcon() {
 
 export function LoginPage() {
   return (
-    <main className="relative z-10 w-full max-w-md px-margin-mobile">
+    <main className="relative z-10 w-full max-w-md px-page">
       <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
         <div className="flex flex-col items-center border-b border-outline-variant bg-surface-container-low p-xl text-center">
           <div className="mb-lg flex h-12 w-12 items-center justify-center rounded-lg border border-outline-variant bg-surface">

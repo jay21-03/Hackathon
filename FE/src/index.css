@@ -24,10 +24,6 @@
     @apply font-geist text-[32px] leading-[40px] font-semibold tracking-normal;
   }
 
-  .font-headline-lg-mobile {
-    @apply font-geist text-2xl leading-8 font-semibold tracking-normal;
-  }
-
   .font-headline-md {
     @apply font-geist text-2xl leading-8 font-semibold;
   }

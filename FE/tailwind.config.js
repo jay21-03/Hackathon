@@ -68,13 +68,12 @@ export default {
         "2xl": "48px",
         unit: "4px",
         gutter: "16px",
-        "margin-mobile": "16px",
+        "page": "16px",
         "margin-desktop": "32px"
       },
       fontSize: {
         "display-lg": ["48px", { lineHeight: "56px", letterSpacing: "0", fontWeight: "700" }],
         "headline-lg": ["32px", { lineHeight: "40px", letterSpacing: "0", fontWeight: "600" }],
-        "headline-lg-mobile": ["24px", { lineHeight: "32px", letterSpacing: "0", fontWeight: "600" }],
         "headline-md": ["24px", { lineHeight: "32px", letterSpacing: "0", fontWeight: "600" }],
         "headline-sm": ["20px", { lineHeight: "28px", letterSpacing: "0", fontWeight: "600" }],
         "body-lg": ["18px", { lineHeight: "28px", letterSpacing: "0", fontWeight: "400" }],

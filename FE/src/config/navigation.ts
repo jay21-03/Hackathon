@@ -4,13 +4,6 @@ export type NavItem = {
   icon: string;
 };
 
-export const participantMobileNav: NavItem[] = [
-  { to: "/events", label: "Cuoc thi", icon: "event_note" },
-  { to: "/me/team", label: "Doi thi", icon: "groups" },
-  { to: "/me/check-in", label: "Check-in", icon: "how_to_reg" },
-  { to: "/me/profile", label: "Ho so", icon: "person" }
-];
-
 export const organizerNav: NavItem[] = [
   { to: "/organizer/dashboard", label: "Tong quan", icon: "dashboard" },
   { to: "/organizer/events", label: "Cuoc thi", icon: "event" },

@@ -19,14 +19,14 @@ Trang thai sau dot nang cap FE hien tai.
 - [x] Chuyen scoring progress sang React component chi ro draft/submitted.
 - [x] Chuyen public results va participant results sang React component.
 - [x] Them toast va confirm modal cho thao tac quan trong.
-- [x] Them Playwright E2E cho route desktop/mobile.
+- [x] Them Playwright E2E cho cac route web.
 - [x] Them Playwright E2E cho luong dang ky, nop bai, cham diem, ranking.
 - [x] Tach chunk man hinh prototype de giam bundle chinh.
 - [x] Chuyen cac man organizer users, boards, invitations, finals, disqualifications, announcements sang React component that.
 - [x] Chuyen cac man participant status, board, AI review sang React component that.
 - [x] Them skeleton loading theo module cho public event, event detail va dashboard.
 - [x] Them table density mode cho cac bang organizer.
-- [x] Them visual regression snapshot cho dashboard desktop/mobile.
+- [x] Them visual smoke test cho cac man dashboard web.
 - [x] Them API fallback layer: uu tien API that, tu dong dung du lieu mau khi API he thong chua chay.
 - [x] Chuyen rubric, assignments, ai-auditor, ai-insights, notifications, publish-results, export-success sang React component that.
 - [x] Hoan thien mentor dashboard, mentor AI review va judge dashboard bang React component rieng.
