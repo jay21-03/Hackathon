@@ -1,6 +1,9 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { Icon } from "../ui/Icon";
 import type { NavItem } from "../../config/navigation";
+import { RoleSwitcher } from "../auth/RoleSwitcher";
+import { ConfirmAction } from "../feedback/ConfirmAction";
+import { useToast } from "../feedback/ToastProvider";
 
 interface CommandShellProps {
   navItems: NavItem[];
@@ -11,12 +14,29 @@ interface CommandShellProps {
 
 export function CommandShell({
   navItems,
-  title = "SEAL Command",
-  subtitle = "Hackathon Ops",
+  title = "SEAL Hackathon",
+  subtitle = "Quan ly cuoc thi",
   primaryAction
 }: CommandShellProps) {
+  const { notify } = useToast();
+  const needsConfirm = Boolean(primaryAction?.label.includes("Cong bo"));
+  const primaryButton = primaryAction ? (
+    <button
+      type="button"
+      onClick={() => {
+        if (!needsConfirm) {
+          notify(`${primaryAction.label} da duoc ghi nhan trong ban demo.`, "success");
+        }
+      }}
+      className="mb-lg flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-2 font-label-md text-on-primary-container transition-opacity hover:opacity-90"
+    >
+      <Icon name={primaryAction.icon} className="text-[18px]" />
+      {primaryAction.label}
+    </button>
+  ) : null;
+
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="min-h-screen flex overflow-x-hidden bg-background">
       <aside className="hidden md:flex flex-col fixed left-0 top-0 z-40 h-screen w-[240px] p-md gap-sm bg-surface-container border-r border-outline-variant">
         <div className="flex items-center gap-sm mb-lg px-sm">
           <div className="w-8 h-8 rounded bg-primary-container flex items-center justify-center shrink-0">
@@ -30,14 +50,21 @@ export function CommandShell({
           </div>
         </div>
 
-        {primaryAction && (
-          <button
-            type="button"
-            className="w-full py-2 px-4 bg-primary-container text-on-primary-container font-label-md rounded-lg mb-lg hover:opacity-90 transition-opacity flex justify-center items-center gap-2"
+        <div className="mb-md px-sm">
+          <RoleSwitcher compact />
+        </div>
+
+        {needsConfirm && primaryAction ? (
+          <ConfirmAction
+            title="Xac nhan thao tac"
+            message="Thao tac cong bo anh huong den man hinh ket qua cua thi sinh va cong khai. Hay kiem tra ranking truoc khi tiep tuc."
+            confirmLabel={primaryAction.label}
+            onConfirm={() => notify(`${primaryAction.label} thanh cong trong ban demo.`, "success")}
           >
-            <Icon name={primaryAction.icon} className="text-[18px]" />
-            {primaryAction.label}
-          </button>
+            {primaryButton}
+          </ConfirmAction>
+        ) : (
+          primaryButton
         )}
 
         <nav className="flex flex-col gap-1 flex-grow">
@@ -70,20 +97,43 @@ export function CommandShell({
             className="flex items-center gap-3 px-sm py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg font-label-md"
           >
             <Icon name="description" className="text-[20px]" />
-            Documentation
+            Tai lieu
           </a>
           <a
             href="#"
             className="flex items-center gap-3 px-sm py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg font-label-md"
           >
             <Icon name="help" className="text-[20px]" />
-            Support
+            Ho tro
           </a>
         </div>
       </aside>
 
-      <main className="flex-1 w-full md:ml-[240px] pb-24 md:pb-0 min-h-screen">
-        <div className="max-w-command mx-auto p-margin-mobile md:p-margin-desktop">
+      <main className="min-w-0 flex-1 w-full overflow-x-hidden md:ml-[240px] pb-24 md:pb-0 min-h-screen">
+        <div className="min-w-0 max-w-command mx-auto overflow-x-hidden p-margin-mobile md:p-margin-desktop">
+          <nav className="md:hidden mb-md flex max-w-full gap-2 overflow-x-auto no-scrollbar border-b border-outline-variant pb-sm">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/me" || item.to === "/organizer/dashboard"}
+                className={({ isActive }) =>
+                  `flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-label-sm normal-case ${
+                    isActive
+                      ? "bg-primary-container text-on-primary-container"
+                      : "bg-surface-container text-on-surface-variant"
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <Icon name={item.icon} filled={isActive} className="text-[18px]" />
+                    {item.label}
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </nav>
           <Outlet />
         </div>
       </main>

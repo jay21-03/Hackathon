@@ -1,33 +1,74 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Icon } from "../ui/Icon";
 import { participantMobileNav } from "../../config/navigation";
+import { RoleSwitcher } from "../auth/RoleSwitcher";
+import { Icon } from "../ui/Icon";
 
 export function MobileDiscoveryShell() {
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <header className="fixed top-0 w-full z-50 border-b border-outline-variant bg-surface-container-low flex justify-between items-center h-16 px-margin-mobile">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center">
-            <Icon name="shield" filled className="text-on-primary-container text-[18px]" />
-          </div>
-          <h1 className="font-headline-md text-primary tracking-tight">HACKCOMMAND</h1>
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="sticky top-0 z-50 w-full border-b border-outline-variant bg-surface-container-low/95 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-command items-center justify-between px-margin-mobile md:px-margin-desktop">
+          <NavLink to="/events" className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container">
+              <Icon name="shield" filled className="text-[18px] text-on-primary-container" />
+            </div>
+            <div>
+              <h1 className="font-headline-sm tracking-normal text-primary">SEAL Hackathon</h1>
+              <p className="hidden font-label-sm normal-case text-on-surface-variant md:block">
+                Cong quan ly cuoc thi
+              </p>
+            </div>
+          </NavLink>
+
+          <nav className="hidden items-center gap-sm md:flex">
+            <NavLink
+              to="/events"
+              className={({ isActive }) =>
+                `rounded-lg px-3 py-2 font-label-md ${
+                  isActive
+                    ? "bg-primary-container text-on-primary-container"
+                    : "text-on-surface-variant hover:bg-surface-variant hover:text-on-surface"
+                }`
+              }
+            >
+              Cuoc thi
+            </NavLink>
+            <NavLink
+              to="/register"
+              className="rounded-lg px-3 py-2 font-label-md text-on-surface-variant hover:bg-surface-variant hover:text-on-surface"
+            >
+              Dang ky doi
+            </NavLink>
+            <NavLink
+              to="/organizer/dashboard"
+              className="rounded-lg px-3 py-2 font-label-md text-on-surface-variant hover:bg-surface-variant hover:text-on-surface"
+            >
+              Ban to chuc
+            </NavLink>
+            <RoleSwitcher />
+          </nav>
+
+          <NavLink
+            to="/login"
+            className="flex items-center gap-2 rounded-lg p-2 font-label-md text-primary hover:bg-surface-variant/50 md:px-4 md:py-2"
+          >
+            <Icon name="login" />
+            <span className="hidden md:inline">Dang nhap</span>
+          </NavLink>
         </div>
-        <NavLink to="/login" className="p-2 text-primary hover:bg-surface-variant/50 rounded-lg">
-          <Icon name="login" />
-        </NavLink>
       </header>
 
-      <main className="flex-grow pt-20 pb-24 px-margin-mobile">
+      <main className="mx-auto w-full max-w-command flex-grow px-margin-mobile py-lg pb-24 md:px-margin-desktop md:py-xl md:pb-margin-desktop">
         <Outlet />
       </main>
 
-      <nav className="fixed bottom-0 w-full z-50 border-t border-outline-variant bg-surface-container-high flex justify-around items-center h-20 px-2">
+      <nav className="fixed bottom-0 z-50 flex h-20 w-full items-center justify-around border-t border-outline-variant bg-surface-container-high px-2 md:hidden">
         {participantMobileNav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center px-4 py-1 rounded-full transition-all duration-200 ${
+              `flex flex-col items-center justify-center rounded-full px-4 py-1 transition-all duration-200 ${
                 isActive
                   ? "bg-secondary-container text-on-secondary-container"
                   : "text-on-surface-variant hover:text-primary"
@@ -37,7 +78,7 @@ export function MobileDiscoveryShell() {
             {({ isActive }) => (
               <>
                 <Icon name={item.icon} filled={isActive} />
-                <span className="font-label-sm mt-0.5 normal-case">{item.label}</span>
+                <span className="mt-0.5 font-label-sm normal-case">{item.label}</span>
               </>
             )}
           </NavLink>

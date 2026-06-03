@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type BadgeTone = "success" | "warning" | "neutral" | "active" | "ai";
+export type BadgeTone = "success" | "warning" | "neutral" | "active" | "ai" | "danger";
 
 const toneClasses: Record<BadgeTone, string> = {
   success:
@@ -9,7 +9,8 @@ const toneClasses: Record<BadgeTone, string> = {
     "bg-tertiary-container/20 text-tertiary border-tertiary-container/30",
   neutral: "bg-surface-variant text-on-surface-variant border-outline-variant",
   active: "bg-secondary-container/90 text-on-secondary-container",
-  ai: "bg-tertiary-container/90 text-on-secondary-container"
+  ai: "bg-tertiary-container/90 text-on-secondary-container",
+  danger: "bg-error-container/80 text-on-error-container border-error/40"
 };
 
 interface BadgeProps {

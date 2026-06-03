@@ -14,7 +14,6 @@
 
 // import { Link } from "react-router-dom";
 // import { Icon } from "./ui/Icon";
-// import { stitchScreenMap } from "../config/navigation";
 
 // interface PlaceholderPageProps {
 //   title: string;
@@ -22,7 +21,6 @@
 // }
 
 // export function PlaceholderPage({ title, description }: PlaceholderPageProps) {
-//   const stitchRef = stitchScreenMap[title];
 
 //   return (
 //     <div className="glass-panel rounded-xl p-lg max-w-2xl">

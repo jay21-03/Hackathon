@@ -5,54 +5,48 @@ export type NavItem = {
 };
 
 export const participantMobileNav: NavItem[] = [
-  { to: "/events", label: "Events", icon: "event_note" },
-  { to: "/me/team", label: "Team", icon: "groups" },
+  { to: "/events", label: "Cuoc thi", icon: "event_note" },
+  { to: "/me/team", label: "Doi thi", icon: "groups" },
   { to: "/me/check-in", label: "Check-in", icon: "how_to_reg" },
-  { to: "/me/profile", label: "Profile", icon: "person" }
+  { to: "/me/profile", label: "Ho so", icon: "person" }
 ];
 
 export const organizerNav: NavItem[] = [
-  { to: "/organizer/dashboard", label: "Overview", icon: "dashboard" },
-  { to: "/organizer/events", label: "Events", icon: "event" },
-  { to: "/organizer/boards", label: "Board Logic", icon: "grid_view" },
+  { to: "/organizer/dashboard", label: "Tong quan", icon: "dashboard" },
+  { to: "/organizer/events", label: "Cuoc thi", icon: "event" },
+  { to: "/organizer/registrations", label: "Dang ky doi", icon: "fact_check" },
+  { to: "/organizer/users", label: "Nguoi dung", icon: "manage_accounts" },
+  { to: "/organizer/problems", label: "De thi", icon: "code_blocks" },
+  { to: "/organizer/rubric", label: "Tieu chi cham", icon: "data_object" },
+  { to: "/organizer/boards", label: "Bang cham", icon: "grid_view" },
+  { to: "/organizer/assignments", label: "Phan cong", icon: "supervisor_account" },
+  { to: "/organizer/invitations", label: "Loi moi", icon: "mail" },
   { to: "/organizer/check-ins", label: "Check-ins", icon: "group_add" },
-  { to: "/organizer/scoring", label: "Live Judging", icon: "gavel" },
-  { to: "/organizer/ranking", label: "Leaderboard", icon: "leaderboard" }
+  { to: "/organizer/scoring", label: "Cham diem", icon: "gavel" },
+  { to: "/organizer/ai-auditor", label: "Danh gia AI", icon: "psychology" },
+  { to: "/organizer/ranking", label: "Xep hang", icon: "leaderboard" },
+  { to: "/organizer/announcements", label: "Thong bao", icon: "campaign" }
 ];
 
 export const judgeNav: NavItem[] = [
-  { to: "/judge/dashboard", label: "Assigned Teams", icon: "assignment" },
-  { to: "/judge/scoring", label: "Score Sheet", icon: "gavel" }
+  { to: "/judge/dashboard", label: "Doi duoc cham", icon: "assignment" },
+  { to: "/judge/scoring", label: "Phieu cham", icon: "gavel" }
 ];
 
 export const mentorNav: NavItem[] = [
-  { to: "/mentor/dashboard", label: "My Teams", icon: "groups" }
+  { to: "/mentor/dashboard", label: "Doi phu trach", icon: "groups" },
+  { to: "/mentor/ai-review", label: "Danh gia AI", icon: "psychology" }
 ];
 
 export const participantCommandNav: NavItem[] = [
-  { to: "/me", label: "Overview", icon: "dashboard" },
-  { to: "/me/team", label: "My Team", icon: "groups" },
+  { to: "/me", label: "Tong quan", icon: "dashboard" },
+  { to: "/me/team", label: "Doi cua toi", icon: "groups" },
+  { to: "/me/status", label: "Trang thai doi", icon: "fact_check" },
+  { to: "/me/board", label: "Bang thi", icon: "grid_view" },
+  { to: "/me/profile", label: "Ho so", icon: "person" },
   { to: "/me/check-in", label: "Check-in", icon: "how_to_reg" },
-  { to: "/me/problem", label: "Problem", icon: "code" },
-  { to: "/me/results", label: "Results", icon: "leaderboard" }
+  { to: "/me/problem", label: "De thi", icon: "code" },
+  { to: "/me/submission", label: "Bai nop", icon: "upload" },
+  { to: "/me/ai-review", label: "Danh gia AI", icon: "psychology" },
+  { to: "/me/results", label: "Ket qua", icon: "leaderboard" }
 ];
-
-export const stitchScreenMap: Record<string, string> = {
-  "/login": "login_google_sign_in",
-  "/events": "hackathon_discovery",
-  "/me": "participant_dashboard",
-  "/me/team": "my_team_hub",
-  "/me/profile": "user_profile_edit_profile",
-  "/me/check-in": "check_in_gateway",
-  "/me/problem": "participant_live_contest_view",
-  "/me/results": "final_results_standings",
-  "/organizer/dashboard": "organizer_dashboard",
-  "/organizer/events": "event_configuration",
-  "/organizer/boards": "board_management_assignment",
-  "/organizer/check-ins": "check_in_management",
-  "/organizer/scoring": "scoring_progress_monitor",
-  "/organizer/ranking": "ranking_advancement",
-  "/judge/dashboard": "assigned_teams_for_judging",
-  "/judge/scoring": "judge_score_sheet",
-  "/mentor/dashboard": "mentor_dashboard_assigned_teams"
-};
