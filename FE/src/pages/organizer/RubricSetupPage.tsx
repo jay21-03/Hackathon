@@ -39,8 +39,8 @@ export function RubricSetupPage() {
       <PageHeader
         eyebrow="Tieu chi cham"
         title="Cau hinh rubric"
-        description="Moi tieu chi co min/max ro rang. Judge chi nhap diem nam trong gioi han da cau hinh."
-        actions={usingFallback ? <Badge tone="warning">Dang dung demo data</Badge> : <Badge tone="success">Da noi API</Badge>}
+        description="Moi tieu chi co min/max ro rang. Giam khao chi nhap diem nam trong gioi han da cau hinh."
+        actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
       <section className="grid gap-md md:grid-cols-[1fr_280px]">

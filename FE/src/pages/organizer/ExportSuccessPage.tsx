@@ -30,7 +30,7 @@ export function ExportSuccessPage() {
           <div>
             <h2 className="font-headline-sm text-on-surface">results-seal-hackathon-2026.csv</h2>
             <p className="mt-xs font-body-sm text-on-surface-variant">
-              Ban xem truoc san sang cho luong export. Khi noi API he thong, nut tai se lay file CSV/PDF that.
+              Ban xem truoc san sang cho luong export. Khi co du lieu he thong, nut tai se lay file CSV/PDF that.
             </p>
           </div>
           <div className="flex flex-wrap gap-sm">

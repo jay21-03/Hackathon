@@ -22,7 +22,7 @@ test("event list uses API data when system API responds", async ({ page }) => {
 
   await page.goto("/events");
   await expect(page.locator("body")).toContainText("API Challenge");
-  await expect(page.locator("body")).not.toContainText("Dang hien thi du lieu mau");
+  await expect(page.locator("body")).not.toContainText("Dang hien thi du lieu minh hoa");
 });
 
 test("event list falls back when system API is unavailable", async ({ page }) => {
@@ -32,5 +32,5 @@ test("event list falls back when system API is unavailable", async ({ page }) =>
 
   await page.goto("/events");
   await expect(page.locator("body")).toContainText("SEAL Hackathon 2026");
-  await expect(page.locator("body")).toContainText("Dang hien thi du lieu mau");
+  await expect(page.locator("body")).toContainText("Dang hien thi du lieu minh hoa");
 });

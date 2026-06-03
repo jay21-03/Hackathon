@@ -32,7 +32,7 @@ export function NotificationCenterPage() {
         eyebrow="Thong bao he thong"
         title="Trung tam thong bao"
         description="Theo doi cac thong bao se gui cho thi sinh, mentor, judge va finalist."
-        actions={usingFallback ? <Badge tone="warning">Dang dung demo data</Badge> : <Badge tone="success">Da noi API</Badge>}
+        actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">

@@ -23,7 +23,7 @@ export function ProblemPage() {
       <PageHeader
         eyebrow="De thi"
         title={demoProblem.title}
-        description="De chi hien noi dung sau release_at. Check-in khong chan quyen xem de."
+        description="De chi hien noi dung sau thoi gian mo de. Check-in khong chan quyen xem de."
         actions={
           <>
             <Badge tone={released ? "success" : "warning"}>
@@ -35,7 +35,7 @@ export function ProblemPage() {
               onClick={() => setDemoAfterRelease((value) => !value)}
               data-testid="toggle-release-time"
             >
-              {demoAfterRelease ? "Xem truoc release_at" : "Xem sau release_at"}
+              {demoAfterRelease ? "Xem truoc gio mo de" : "Xem sau gio mo de"}
             </Button>
           </>
         }
@@ -80,7 +80,7 @@ export function ProblemPage() {
             </div>
             <Link to="/me/submission" className="btn-primary mt-lg inline-flex w-full items-center justify-center gap-2">
               <Icon name="upload" className="text-[18px]" />
-              Nop repository
+              Nop link Git
             </Link>
           </aside>
         </section>

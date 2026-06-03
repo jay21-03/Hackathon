@@ -15,7 +15,7 @@ export function ProblemManagementPage() {
       <PageHeader
         eyebrow="Cau hinh de thi"
         title="Upload va hen gio mo de"
-        description="Participant chi xem duoc noi dung khi den release_at. Check-in khong chan quyen xem de."
+        description="Thi sinh chi xem duoc noi dung khi den thoi gian mo de. Check-in khong chan quyen xem de."
         actions={<Badge tone={getStatusTone(status)}>{getStatusLabel(status)}</Badge>}
       />
 
@@ -52,7 +52,7 @@ export function ProblemManagementPage() {
         <aside className="rounded-xl border border-outline-variant bg-surface-container p-lg">
           <h2 className="font-headline-sm text-on-surface">Quy tac can giu</h2>
           <div className="mt-md space-y-sm font-body-sm text-on-surface-variant">
-            <p>De chi hien sau release_at.</p>
+            <p>De chi hien sau thoi gian mo de.</p>
             <p>Ban nhap khong hien cho participant.</p>
             <p>Check-in khong duoc dung de khoa de thi.</p>
             <p>Moi bang co the co de rieng khi noi he thong that.</p>

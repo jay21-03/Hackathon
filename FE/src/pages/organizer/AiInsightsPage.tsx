@@ -34,11 +34,11 @@ export function AiInsightsPage() {
         eyebrow="AI Insights"
         title="Tong hop ket qua AI Review"
         description="Hien thi tin hieu ky thuat de mentor va ban to chuc tham khao. Diem AI khong duoc cong vao ranking."
-        actions={usingFallback ? <Badge tone="warning">Dang dung demo data</Badge> : <Badge tone="success">Da noi API</Badge>}
+        actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Doi co repository" value={teams.filter((team) => team.repoUrl).length} helper="San sang review" icon="code" />
+        <StatCard label="Doi co kho ma nguon" value={teams.filter((team) => team.repoUrl).length} helper="San sang danh gia" icon="code" />
         <StatCard label="Diem AI trung binh" value={`${average}/100`} helper="Khong tinh ranking" icon="analytics" tone="warning" />
         <StatCard label="Bang thi" value={new Set(teams.map((team) => team.board)).size} helper="Da phan bo" icon="view_module" tone="success" />
       </section>
@@ -56,7 +56,7 @@ export function AiInsightsPage() {
             <div className="mt-md">
               <ProgressBar value={team.aiReviewScore ?? 0} />
             </div>
-            <p className="mt-sm break-all font-body-sm text-on-surface-variant">{team.repoUrl ?? "Chua co repository"}</p>
+            <p className="mt-sm break-all font-body-sm text-on-surface-variant">{team.repoUrl ?? "Chua co kho ma nguon"}</p>
           </article>
         ))}
       </section>

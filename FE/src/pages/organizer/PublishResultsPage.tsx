@@ -41,7 +41,7 @@ export function PublishResultsPage() {
         eyebrow="Cong bo ket qua"
         title="Xac nhan public ket qua"
         description="Ket qua chi hien tren public portal sau khi ban to chuc xac nhan cong bo. Ranking chi lay score sheet da submit."
-        actions={usingFallback ? <Badge tone="warning">Dang dung demo data</Badge> : <Badge tone="success">Da noi API</Badge>}
+        actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
       <section className="grid gap-md md:grid-cols-3">

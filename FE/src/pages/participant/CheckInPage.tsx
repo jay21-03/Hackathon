@@ -71,7 +71,7 @@ export function CheckInPage() {
             <p>Doi: {team.name}</p>
             <p>Bang: {team.board}</p>
             <p>Ghi chu: {existing?.note ?? "Chua co ghi chu."}</p>
-            <p>De thi van mo theo release_at, khong phu thuoc check-in.</p>
+            <p>De thi van mo theo thoi gian cau hinh, khong phu thuoc check-in.</p>
           </div>
         </aside>
       </section>

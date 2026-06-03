@@ -46,7 +46,7 @@ export function EventDetailPage() {
 
   if (!event) {
     return (
-      <div className="glass-panel rounded-xl p-lg">
+      <div className="rounded-xl border border-outline-variant bg-surface p-lg shadow-sm">
         <p className="text-error font-body-md">Khong tim thay cuoc thi.</p>
         <Link to="/events" className="text-primary font-label-md mt-md inline-block">
           Quay lai danh sach
@@ -63,14 +63,14 @@ export function EventDetailPage() {
       </Link>
 
       {usingFallback && (
-        <div className="glass-panel rounded-xl p-md border border-primary/20">
+        <div className="rounded-xl border border-primary/20 bg-primary-fixed p-md">
           <p className="font-body-sm text-on-surface-variant">
-            Dang hien thi thong tin mau de xem luong dang ky.
+            Dang hien thi thong tin minh hoa de xem luong dang ky.
           </p>
         </div>
       )}
 
-      <article className="glass-panel rounded-xl p-lg space-y-lg">
+      <article className="space-y-lg rounded-xl border border-outline-variant bg-surface p-lg shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-md">
           <div>
             <h1 className="font-headline-lg text-on-surface">{event.name}</h1>

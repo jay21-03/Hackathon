@@ -3,14 +3,12 @@ import type { ReactNode } from "react";
 export type BadgeTone = "success" | "warning" | "neutral" | "active" | "ai" | "danger";
 
 const toneClasses: Record<BadgeTone, string> = {
-  success:
-    "bg-secondary-container/20 text-secondary border-secondary-container/30",
-  warning:
-    "bg-tertiary-container/20 text-tertiary border-tertiary-container/30",
-  neutral: "bg-surface-variant text-on-surface-variant border-outline-variant",
-  active: "bg-secondary-container/90 text-on-secondary-container",
-  ai: "bg-tertiary-container/90 text-on-secondary-container",
-  danger: "bg-error-container/80 text-on-error-container border-error/40"
+  success: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  warning: "border-amber-200 bg-amber-50 text-amber-700",
+  neutral: "border-outline-variant bg-surface-container-high text-on-surface-variant",
+  active: "border-primary/20 bg-primary-fixed text-on-primary-fixed",
+  ai: "border-violet-200 bg-violet-50 text-violet-700",
+  danger: "border-red-200 bg-red-50 text-red-700"
 };
 
 interface BadgeProps {
@@ -22,7 +20,7 @@ interface BadgeProps {
 export function Badge({ children, tone = "neutral", className = "" }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded font-label-sm border backdrop-blur-md ${toneClasses[tone]} ${className}`}
+      className={`inline-flex items-center rounded px-2 py-0.5 font-label-sm border ${toneClasses[tone]} ${className}`}
     >
       {children}
     </span>

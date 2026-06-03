@@ -77,7 +77,7 @@ export function OrganizerOverviewPage() {
             <div>
               <h2 className="font-headline-sm text-on-surface">Can xu ly tiep</h2>
               <p className="font-body-sm text-on-surface-variant">
-                Cac khu vuc nghiep vu can ban to chuc theo doi khi demo.
+                Cac khu vuc nghiep vu can ban to chuc theo doi trong ngay thi.
               </p>
             </div>
             <Link to="/organizer/registrations" className="font-label-md text-primary">

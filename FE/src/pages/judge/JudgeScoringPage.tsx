@@ -56,7 +56,7 @@ export function JudgeScoringPage() {
           <p className="font-label-sm normal-case text-primary">Phieu cham diem</p>
           <h1 className="font-headline-lg text-on-surface">{selectedTeam.name}</h1>
           <p className="mt-xs font-body-md text-on-surface-variant">
-            Judge chi cham cac doi thuoc bang duoc phan cong. Diem phai nam trong min/max rubric.
+            Giam khao chi cham cac doi thuoc bang duoc phan cong. Diem phai nam trong min/max rubric.
           </p>
         </div>
         <Badge tone={getStatusTone(status)}>{getStatusLabel(status)}</Badge>

@@ -18,7 +18,7 @@ export function BoardManagementPage() {
       <PageHeader
         eyebrow="Bang thi va phan cong"
         title="Quan ly bang cham"
-        description="Moi team chi nam trong mot bang cua cung mot round. Judge chi cham team trong bang duoc phan cong."
+        description="Moi doi chi nam trong mot bang cua cung mot vong. Giam khao chi cham doi trong bang duoc phan cong."
         actions={<TableDensityToggle value={density} onChange={setDensity} />}
       />
       <section className="grid gap-md lg:grid-cols-2">
@@ -35,7 +35,7 @@ export function BoardManagementPage() {
               <table className="min-w-full text-left">
                 <tbody className="table-divider font-body-sm text-on-surface">
                   <tr><td className={cell}>Mentor</td><td className={cell}>{board.mentor}</td></tr>
-                  <tr><td className={cell}>Judge</td><td className={cell}>{board.judges.join(", ")}</td></tr>
+                  <tr><td className={cell}>Giam khao</td><td className={cell}>{board.judges.join(", ")}</td></tr>
                   <tr>
                     <td className={cell}>Doi thi</td>
                     <td className={cell}>

@@ -30,8 +30,8 @@ export function AssignmentManagementPage() {
       <PageHeader
         eyebrow="Phan cong"
         title="Mentor va giam khao theo bang"
-        description="Moi bang co mentor phu trach va danh sach giam khao rieng. Judge chi cham doi thuoc bang duoc phan cong."
-        actions={usingFallback ? <Badge tone="warning">Dang dung demo data</Badge> : <Badge tone="success">Da noi API</Badge>}
+        description="Moi bang co mentor phu trach va danh sach giam khao rieng. Giam khao chi cham doi thuoc bang duoc phan cong."
+        actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
       <section className="grid gap-md md:grid-cols-3">

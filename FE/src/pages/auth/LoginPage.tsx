@@ -30,12 +30,12 @@ function GoogleIcon() {
 export function LoginPage() {
   return (
     <main className="relative z-10 w-full max-w-md px-margin-mobile">
-      <div className="bg-surface-container border border-outline-variant rounded-xl ambient-glow overflow-hidden">
-        <div className="p-xl border-b border-outline-variant/50 flex flex-col items-center text-center">
-          <div className="w-12 h-12 rounded-lg bg-surface flex items-center justify-center border border-outline-variant mb-lg">
+      <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
+        <div className="flex flex-col items-center border-b border-outline-variant bg-surface-container-low p-xl text-center">
+          <div className="mb-lg flex h-12 w-12 items-center justify-center rounded-lg border border-outline-variant bg-surface">
             <Icon name="shield_person" filled className="text-primary text-3xl" />
           </div>
-          <h1 className="font-headline-md text-primary mb-sm">SEAL Hackathon</h1>
+          <h1 className="mb-sm font-headline-md text-on-surface">SEAL Hackathon</h1>
           <p className="font-body-md text-on-surface-variant max-w-[280px]">
             Quan ly dang ky, cham diem va cong bo ket qua hackathon trong mot noi.
           </p>
@@ -43,7 +43,7 @@ export function LoginPage() {
 
         <div className="p-xl flex flex-col gap-lg">
           <Button variant="google" className="w-full" icon={<GoogleIcon />}>
-            Continue with Google
+            Dang nhap bang Google
           </Button>
 
           <div className="flex items-center gap-md">
@@ -68,7 +68,7 @@ export function LoginPage() {
                 id="email"
                 type="email"
                 placeholder="admin@hackathon.org"
-                className="w-full bg-surface border border-outline-variant rounded px-md py-2.5 font-mono-data text-on-surface placeholder:text-outline focus:outline-none focus:border-b-2 focus:border-b-primary"
+                className="form-input w-full"
               />
             </div>
             <Button variant="secondary" className="w-full mt-sm" type="submit">

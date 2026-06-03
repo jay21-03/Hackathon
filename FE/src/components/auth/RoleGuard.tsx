@@ -16,7 +16,7 @@ export function RoleGuard({ allow }: RoleGuardProps) {
         replace
         state={{
           from: location.pathname,
-          message: `Tai khoan demo hien la ${roleLabels[session.role]}, khong co quyen vao man nay.`
+          message: `Tai khoan hien tai la ${roleLabels[session.role]}, khong co quyen vao man nay.`
         }}
       />
     );

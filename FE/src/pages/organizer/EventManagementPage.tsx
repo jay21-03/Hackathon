@@ -29,7 +29,7 @@ export function EventManagementPage() {
       <section className="grid gap-md md:grid-cols-3">
         <StatCard label="Quota" value={`${demoEvent.confirmedTeams}/${demoEvent.quota}`} helper="Doi da xac nhan" icon="groups" />
         <StatCard label="Kich thuoc doi" value={`${demoEvent.minTeamSize}-${demoEvent.maxTeamSize}`} helper="Thanh vien moi doi" icon="group" tone="success" />
-        <StatCard label="Mo de" value={formatDate(demoEvent.releaseAt)} helper="Theo release_at" icon="schedule" tone="warning" />
+        <StatCard label="Mo de" value={formatDate(demoEvent.releaseAt)} helper="Theo gio mo de" icon="schedule" tone="warning" />
       </section>
 
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">

@@ -57,8 +57,7 @@ test("organizer dashboard shows operational cards and next actions", async ({ pa
   await expect(page.locator("body")).toContainText("Ket qua chua public");
 });
 
-test("mobile command shell exposes full participant navigation", async ({ page, isMobile }) => {
-  test.skip(!isMobile, "mobile navigation check");
+test("workspace shell exposes full participant navigation", async ({ page }) => {
   await useRole(page, "participant");
   await page.goto("/me");
   await expect(page.getByRole("link", { name: /Bai nop/i }).first()).toBeVisible();
@@ -106,8 +105,7 @@ test("organizer table density mode switches labels", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Gon" })).toHaveClass(/bg-primary-container/);
 });
 
-test("mobile pages do not create horizontal overflow", async ({ page, isMobile }) => {
-  test.skip(!isMobile, "mobile layout check");
+test("role pages do not create horizontal overflow", async ({ page }) => {
   await useRole(page, "organizer");
   const paths = [
     "/organizer/events",

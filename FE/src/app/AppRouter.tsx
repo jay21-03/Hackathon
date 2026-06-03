@@ -2,14 +2,14 @@ import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { RoleGuard } from "../components/auth/RoleGuard";
 import { AuthLayout } from "../components/layout/AuthLayout";
-import { CommandShell } from "../components/layout/CommandShell";
 import { MobileDiscoveryShell } from "../components/layout/MobileDiscoveryShell";
+import { WorkspaceShell } from "../components/layout/WorkspaceShell";
 import { ModuleSkeleton } from "../components/ui/ModuleSkeleton";
 import {
   judgeNav,
   mentorNav,
   organizerNav,
-  participantCommandNav
+  participantWorkspaceNav
 } from "../config/navigation";
 
 function lazyPage<T extends Record<string, unknown>, K extends keyof T>(
@@ -91,8 +91,8 @@ export function AppRouter() {
         <Route
           path="/me"
           element={
-            <CommandShell
-              navItems={participantCommandNav}
+            <WorkspaceShell
+              navItems={participantWorkspaceNav}
               title="Khu vuc thi sinh"
               subtitle="Theo doi doi thi"
               primaryAction={{ label: "Nop bai", icon: "upload" }}
@@ -117,7 +117,7 @@ export function AppRouter() {
         <Route
           path="/organizer"
           element={
-            <CommandShell
+            <WorkspaceShell
               navItems={organizerNav}
               title="Ban to chuc"
               subtitle="Quan ly cuoc thi"
@@ -153,7 +153,7 @@ export function AppRouter() {
       <Route element={<RoleGuard allow={["judge"]} />}>
         <Route
           path="/judge"
-          element={<CommandShell navItems={judgeNav} title="Giam khao" subtitle="Cham diem theo rubric" />}
+          element={<WorkspaceShell navItems={judgeNav} title="Giam khao" subtitle="Cham diem theo rubric" />}
         >
           <Route path="dashboard" element={routeElement(<JudgeDashboardPage />)} />
           <Route path="scoring" element={routeElement(<JudgeScoringPage />)} />
@@ -163,7 +163,7 @@ export function AppRouter() {
       <Route element={<RoleGuard allow={["mentor"]} />}>
         <Route
           path="/mentor"
-          element={<CommandShell navItems={mentorNav} title="Mentor" subtitle="Theo doi doi phu trach" />}
+          element={<WorkspaceShell navItems={mentorNav} title="Mentor" subtitle="Theo doi doi phu trach" />}
         >
           <Route path="dashboard" element={routeElement(<MentorDashboardPage />)} />
           <Route path="ai-review" element={routeElement(<MentorAiReviewPage />)} />

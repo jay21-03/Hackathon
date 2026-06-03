@@ -20,7 +20,7 @@ export function FinalsPage() {
       <PageHeader
         eyebrow="Chung ket"
         title="Chon doi vao chung ket"
-        description="Organizer chon finalist thu cong, khong tu dong lay top N."
+        description="Ban to chuc chon doi vao chung ket thu cong, khong tu dong lay top N."
         actions={<Badge tone="active">{finalistIds.length} doi da chon</Badge>}
       />
       <section className="grid gap-md lg:grid-cols-2">

@@ -12,7 +12,7 @@ export function AssignedBoardPage() {
       <PageHeader
         eyebrow="Bang thi"
         title={board.name}
-        description="Doi thi chi thuoc mot bang trong cung round. Judge chi cham cac doi trong bang duoc phan cong."
+        description="Doi thi chi thuoc mot bang trong cung vong. Giam khao chi cham cac doi trong bang duoc phan cong."
         actions={<Badge tone={getStatusTone(board.status)}>{getStatusLabel(board.status)}</Badge>}
       />
       <section className="grid gap-lg lg:grid-cols-[1fr_320px]">
@@ -40,7 +40,7 @@ export function AssignedBoardPage() {
           <div className="mt-md space-y-sm font-body-sm text-on-surface-variant">
             <p>Round: {board.round}</p>
             <p>Mentor: {board.mentor}</p>
-            <p>Judge: {board.judges.join(", ")}</p>
+            <p>Giam khao: {board.judges.join(", ")}</p>
           </div>
         </aside>
       </section>

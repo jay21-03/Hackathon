@@ -27,29 +27,29 @@ interface EventCardProps {
 export function EventCard({ event, highlight }: EventCardProps) {
   return (
     <article
-      className={`glass-panel rounded-xl overflow-hidden flex flex-col transition-transform active:scale-[0.98] ${
-        highlight ? "ai-accent" : ""
+      className={`flex flex-col overflow-hidden rounded-xl border bg-surface shadow-sm transition-colors hover:border-primary/50 ${
+        highlight ? "border-primary" : "border-outline-variant"
       }`}
     >
-      <div className="relative h-40 w-full bg-surface-container-highest bg-gradient-to-br from-primary-container/30 to-surface-container">
-        <div className="absolute inset-0 flex items-center justify-center opacity-20">
-          <Icon name="emoji_events" className="text-[80px] text-primary" />
+      <div className="flex items-start justify-between gap-md border-b border-outline-variant bg-surface-container-low p-md">
+        <div className="min-w-0">
+          <p className="font-label-sm normal-case text-on-surface-variant">
+            Ma cuoc thi #{event.id}
+          </p>
+          <h2 className="mt-xs line-clamp-2 font-headline-sm text-on-surface">{event.name}</h2>
         </div>
-        <div className="absolute top-3 right-3">
-          <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
-        </div>
+        <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
         {highlight && (
-          <div className="absolute top-3 left-3">
+          <div className="hidden sm:block">
             <Badge tone="ai">Noi bat</Badge>
           </div>
         )}
       </div>
 
-      <div className="p-md space-y-md flex-1 flex flex-col">
+      <div className="flex flex-1 flex-col space-y-md p-md">
         <div className="space-y-1">
-          <h2 className="font-headline-sm text-on-surface">{event.name}</h2>
           <p className="font-body-sm text-on-surface-variant line-clamp-2">
-            Cuoc thi hackathon danh cho cac doi thi, mentor, giam khao va ban to chuc.
+            Dang ky doi, theo doi lich thi, nhan de va xem ket qua cong bo.
           </p>
         </div>
 
@@ -66,13 +66,13 @@ export function EventCard({ event, highlight }: EventCardProps) {
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-sm mt-auto border-t border-outline-variant/30">
-          <span className="font-label-sm text-on-surface-variant normal-case">
-            Ma cuoc thi #{event.id}
+        <div className="mt-auto flex items-center justify-between border-t border-outline-variant pt-sm">
+          <span className="font-label-sm normal-case text-on-surface-variant">
+            Mo dang ky theo lich
           </span>
           <Link
             to={`/events/${event.id}`}
-            className="bg-primary text-on-primary px-4 py-2 rounded font-label-md hover:brightness-110 transition-all"
+            className="rounded-lg bg-primary-container px-4 py-2 font-label-md text-on-primary-container transition-colors hover:bg-primary"
           >
             Xem chi tiet
           </Link>

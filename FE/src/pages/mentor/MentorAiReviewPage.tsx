@@ -30,10 +30,10 @@ export function MentorAiReviewPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Mentor AI Review"
+        eyebrow="Danh gia AI cua mentor"
         title="Tin hieu AI cua doi phu trach"
         description="Mentor dung ket qua AI de goi y cai thien ky thuat. Ket qua nay khong thay the diem judge."
-        actions={usingFallback ? <Badge tone="warning">Dang dung demo data</Badge> : <Badge tone="success">Da noi API</Badge>}
+        actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
       <section className="space-y-md">

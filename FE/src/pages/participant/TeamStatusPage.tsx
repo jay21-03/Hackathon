@@ -15,7 +15,7 @@ export function TeamStatusPage() {
     { label: "Dang ky doi", status: team.status, to: "/me/team" },
     { label: "Thanh vien xac nhan", status: confirmedMembers === members.length ? "CONFIRMED" : "PENDING", to: "/me/team" },
     { label: "Check-in", status: checkIn?.status ?? "DRAFT", to: "/me/check-in" },
-    { label: "Cap nhat repository", status: team.repoUrl ? "SUBMITTED" : "DRAFT", to: "/me/submission" },
+    { label: "Cap nhat kho ma nguon", status: team.repoUrl ? "SUBMITTED" : "DRAFT", to: "/me/submission" },
     { label: "Xem ket qua", status: "PUBLISHED", to: "/me/results" }
   ];
   const completed = steps.filter((step) => ["CONFIRMED", "SUBMITTED", "PUBLISHED"].includes(step.status)).length;

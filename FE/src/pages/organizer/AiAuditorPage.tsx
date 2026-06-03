@@ -42,7 +42,7 @@ export function AiAuditorPage() {
         description="AI Review chi dung de ho tro phat hien rui ro, khong tu dong anh huong ranking."
         actions={
           <>
-            {usingFallback ? <Badge tone="warning">Dang dung demo data</Badge> : <Badge tone="success">Da noi API</Badge>}
+            {usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
             <Button onClick={() => notify("Da yeu cau chay lai AI Review.", "success")}>Chay lai hang doi</Button>
           </>
         }
@@ -51,7 +51,7 @@ export function AiAuditorPage() {
       <section className="grid gap-md md:grid-cols-3">
         <StatCard label="Finding" value={findings.length} helper="Can doc ket luan" icon="psychology" />
         <StatCard label="Rui ro cao" value={highRisk} helper="Can review thu cong" icon="warning" tone="danger" />
-        <StatCard label="Trang thai" value="San sang" helper="Tu dong dung du lieu mau khi API chua san sang" icon="task_alt" tone="success" />
+        <StatCard label="Trang thai" value="San sang" helper="Tu dong hien thi du lieu minh hoa khi he thong chua co ket qua" icon="task_alt" tone="success" />
       </section>
 
       <section className="grid gap-md lg:grid-cols-2">

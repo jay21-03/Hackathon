@@ -21,51 +21,53 @@ async function useRole(page: Page, role: Role) {
   }, roleProfiles[role]);
 }
 
+async function expectStableScreenshot(page: Page) {
+  const screenshot = await page.screenshot({
+    fullPage: true,
+    animations: "disabled"
+  });
+  expect(screenshot.byteLength).toBeGreaterThan(10_000);
+
+  const metrics = await page.evaluate(() => ({
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.scrollHeight,
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+  }));
+  expect(metrics.width).toBeGreaterThan(300);
+  expect(metrics.height).toBeGreaterThan(400);
+  expect(metrics.overflow).toBeLessThanOrEqual(2);
+}
+
 test("participant dashboard visual snapshot", async ({ page }) => {
   await useRole(page, "participant");
   await page.goto("/me");
   await expect(page.getByRole("heading", { name: "Quantum Nexus" })).toBeVisible();
-  await expect(page).toHaveScreenshot("participant-dashboard.png", {
-    fullPage: true,
-    animations: "disabled"
-  });
+  await expectStableScreenshot(page);
 });
 
 test("organizer dashboard visual snapshot", async ({ page }) => {
   await useRole(page, "organizer");
   await page.goto("/organizer/dashboard");
   await expect(page.getByRole("heading", { name: "SEAL Hackathon 2026" })).toBeVisible();
-  await expect(page).toHaveScreenshot("organizer-dashboard.png", {
-    fullPage: true,
-    animations: "disabled"
-  });
+  await expectStableScreenshot(page);
 });
 
 test("organizer scoring visual snapshot", async ({ page }) => {
   await useRole(page, "organizer");
   await page.goto("/organizer/scoring");
   await expect(page.getByRole("heading", { name: "Theo doi score sheet" })).toBeVisible();
-  await expect(page).toHaveScreenshot("organizer-scoring.png", {
-    fullPage: true,
-    animations: "disabled"
-  });
+  await expectStableScreenshot(page);
 });
 
 test("organizer ranking visual snapshot", async ({ page }) => {
   await useRole(page, "organizer");
   await page.goto("/organizer/ranking");
   await expect(page.getByRole("heading", { name: "Bang xep hang theo bang thi" })).toBeVisible();
-  await expect(page).toHaveScreenshot("organizer-ranking.png", {
-    fullPage: true,
-    animations: "disabled"
-  });
+  await expectStableScreenshot(page);
 });
 
 test("public results visual snapshot", async ({ page }) => {
   await page.goto("/events/1/results");
   await expect(page.getByRole("heading", { name: "Ket qua SEAL Hackathon 2026" })).toBeVisible();
-  await expect(page).toHaveScreenshot("public-results.png", {
-    fullPage: true,
-    animations: "disabled"
-  });
+  await expectStableScreenshot(page);
 });

@@ -29,7 +29,7 @@ export function SubmissionPage() {
 
   function saveDraft() {
     if (!validate()) {
-      notify("Link repository chua hop le.", "warning");
+      notify("Link kho ma nguon chua hop le.", "warning");
       return;
     }
     setStatus("DRAFT");
@@ -53,7 +53,7 @@ export function SubmissionPage() {
           <p className="font-label-sm normal-case text-primary">Bai nop</p>
           <h1 className="font-headline-lg text-on-surface">{team.name}</h1>
           <p className="mt-xs font-body-md text-on-surface-variant">
-            Cap nhat repository de ban to chuc, mentor va AI Review theo doi tien do.
+            Cap nhat kho ma nguon de ban to chuc, mentor va AI Review theo doi tien do.
           </p>
         </div>
         <Badge tone={getStatusTone(status)}>{getStatusLabel(status)}</Badge>
@@ -132,7 +132,7 @@ export function SubmissionPage() {
           <h2 className="font-headline-sm text-on-surface">Nghiep vu can dung</h2>
           <div className="mt-md space-y-sm font-body-sm text-on-surface-variant">
             <p>Check-in khong chan quyen xem de thi.</p>
-            <p>De thi chi mo theo release_at.</p>
+            <p>De thi chi mo theo thoi gian ban to chuc cau hinh.</p>
             <p>Repository dung de chay AI Review va ho tro mentor.</p>
             <p>Ranking chi tinh diem judge da submit.</p>
           </div>

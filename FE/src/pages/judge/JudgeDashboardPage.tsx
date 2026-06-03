@@ -34,7 +34,7 @@ export function JudgeDashboardPage() {
         eyebrow="Giam khao"
         title="Doi thi can cham"
         description="Giam khao chi cham doi thuoc bang da phan cong. Diem phai duoc submit chinh thuc moi tinh ranking."
-        actions={usingFallback ? <Badge tone="warning">Dang dung demo data</Badge> : <Badge tone="success">Da noi API</Badge>}
+        actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
       <section className="grid gap-md md:grid-cols-3">

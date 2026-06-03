@@ -7,7 +7,7 @@ const steps = [
   { title: "Thong tin co ban", detail: "Ten cuoc thi, thoi gian va mo ta ngan.", path: "/organizer/events/basic-info", status: "CONFIRMED" },
   { title: "Dang ky doi", detail: "Quota, kich thuoc doi va han dang ky.", path: "/organizer/registrations", status: "PENDING" },
   { title: "Bang thi", detail: "Tao bang, phan mentor va giam khao.", path: "/organizer/boards", status: "PENDING" },
-  { title: "De thi va rubric", detail: "Cau hinh release_at va tieu chi cham.", path: "/organizer/problems", status: "PENDING" }
+  { title: "De thi va rubric", detail: "Cau hinh thoi gian mo de va tieu chi cham.", path: "/organizer/problems", status: "PENDING" }
 ];
 
 export function EventWizardPage() {

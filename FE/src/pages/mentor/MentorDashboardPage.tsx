@@ -30,8 +30,8 @@ export function MentorDashboardPage() {
       <PageHeader
         eyebrow="Mentor"
         title="Doi thi duoc phu trach"
-        description="Mentor theo doi tien do repository, tin hieu AI Review va ho tro doi trong bang duoc phan cong."
-        actions={usingFallback ? <Badge tone="warning">Dang dung demo data</Badge> : <Badge tone="success">Da noi API</Badge>}
+        description="Mentor theo doi tien do kho ma nguon, tin hieu AI Review va ho tro doi trong bang duoc phan cong."
+        actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
       />
 
       <section className="grid gap-md md:grid-cols-3">
@@ -53,7 +53,7 @@ export function MentorDashboardPage() {
             <div className="mt-md">
               <ProgressBar value={team.aiReviewScore ?? 0} />
             </div>
-            <p className="mt-sm break-all font-body-sm text-on-surface-variant">{team.repoUrl ?? "Chua co repository"}</p>
+            <p className="mt-sm break-all font-body-sm text-on-surface-variant">{team.repoUrl ?? "Chua co kho ma nguon"}</p>
           </article>
         ))}
       </section>

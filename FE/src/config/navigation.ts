@@ -38,7 +38,7 @@ export const mentorNav: NavItem[] = [
   { to: "/mentor/ai-review", label: "Danh gia AI", icon: "psychology" }
 ];
 
-export const participantCommandNav: NavItem[] = [
+export const participantWorkspaceNav: NavItem[] = [
   { to: "/me", label: "Tong quan", icon: "dashboard" },
   { to: "/me/team", label: "Doi cua toi", icon: "groups" },
   { to: "/me/status", label: "Trang thai doi", icon: "fact_check" },

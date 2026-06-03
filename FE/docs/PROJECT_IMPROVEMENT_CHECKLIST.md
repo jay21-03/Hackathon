@@ -15,13 +15,13 @@ Trang thai sau dot nang cap FE hien tai.
 - [x] Chuyen ranking organizer sang React component, chi tinh score sheet da submit va finalist chon thu cong.
 - [x] Chuyen quan ly dang ky organizer sang React component co approve/waitlist/reject.
 - [x] Chuyen check-in participant va organizer sang React component co approve/reject.
-- [x] Chuyen cau hinh de va man xem de sang React component co release_at.
+- [x] Chuyen cau hinh de va man xem de sang React component co thoi gian mo de.
 - [x] Chuyen scoring progress sang React component chi ro draft/submitted.
 - [x] Chuyen public results va participant results sang React component.
 - [x] Them toast va confirm modal cho thao tac quan trong.
 - [x] Them Playwright E2E cho route desktop/mobile.
 - [x] Them Playwright E2E cho luong dang ky, nop bai, cham diem, ranking.
-- [x] Tach chunk man hinh Stitch de giam bundle chinh.
+- [x] Tach chunk man hinh prototype de giam bundle chinh.
 - [x] Chuyen cac man organizer users, boards, invitations, finals, disqualifications, announcements sang React component that.
 - [x] Chuyen cac man participant status, board, AI review sang React component that.
 - [x] Them skeleton loading theo module cho public event, event detail va dashboard.
@@ -31,7 +31,7 @@ Trang thai sau dot nang cap FE hien tai.
 - [x] Chuyen rubric, assignments, ai-auditor, ai-insights, notifications, publish-results, export-success sang React component that.
 - [x] Hoan thien mentor dashboard, mentor AI review va judge dashboard bang React component rieng.
 - [x] Them service API cho cac module moi de doc du lieu tu API that va du phong bang du lieu mau khi API he thong chua san sang.
-- [x] Bo hoan toan cac route con dung Stitch va xoa file prototype Stitch khoi bundle.
+- [x] Bo hoan toan cac route con dung prototype cu va xoa file prototype khoi bundle.
 - [x] Them Zod schema validation cho repository, ho so, cau hinh event va dang ky doi.
 - [x] Them service rieng cho registration, team, check-in, scoring, ranking va result.
 - [x] Them hooks dung chung cho tai du lieu async va role guard.
@@ -44,10 +44,13 @@ Trang thai sau dot nang cap FE hien tai.
 - [x] Lazy-load cac route de toi uu bundle chinh.
 - [x] Them script lint/typecheck/test:ci va workflow FE CI.
 - [x] Kiem tra audit: production dependencies sach loi; advisory con lai nam o dev dependency Vite/esbuild.
+- [x] Nang cap UI extra high: palette sang/trung tinh, sidebar workspace, primitive UI giam glow/template.
+- [x] Chuan hoa copy nguoi dung: thay cac tu noi bo bang ngon ngu nghiep vu.
+- [x] Xoa legacy page khong dung: HomePage, EventsPage cu, dashboard prototype cu va PlaceholderPage.
 
-## Nen lam tiep khi noi backend
+## Nen lam tiep khi noi dich vu he thong
 
-- [ ] Noi API ghi thuc cho dang ky doi, loi moi, check-in, repository, AI review, scoring va publish results.
+- [ ] Noi endpoint ghi thuc cho dang ky doi, loi moi, check-in, repository, AI review, scoring va publish results.
 - [ ] Them refresh token/session thuc thay cho demo localStorage.
 - [ ] Luu draft score sheet va submission len server.
 - [ ] Them audit log cho publish, disqualify, reject, delete.

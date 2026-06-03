@@ -10,13 +10,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "bg-primary-container text-on-primary-container hover:opacity-90 shadow-[0_0_15px_rgba(77,142,255,0.2)]",
+    "bg-primary-container text-on-primary-container shadow-sm hover:bg-primary",
   secondary:
-    "bg-transparent border border-primary text-primary hover:bg-primary/10",
+    "border border-outline-variant bg-surface text-on-surface shadow-sm hover:bg-surface-container-high",
   ghost:
-    "bg-surface-bright hover:bg-surface-variant border border-outline-variant text-on-surface",
+    "border border-transparent bg-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
   google:
-    "bg-surface-bright hover:bg-surface-variant border border-outline-variant text-on-surface"
+    "border border-outline-variant bg-surface text-on-surface shadow-sm hover:bg-surface-container-high"
 };
 
 export function Button({
@@ -29,7 +29,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-label-md transition-colors duration-200 disabled:opacity-50 ${variants[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-label-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}
       {...props}
     >
       {icon}

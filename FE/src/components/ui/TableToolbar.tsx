@@ -17,7 +17,7 @@ export function TableToolbar({
   actions
 }: TableToolbarProps) {
   return (
-    <div className="flex flex-col gap-md border-b border-outline-variant p-md lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-md border-b border-outline-variant bg-surface-container-low p-md lg:flex-row lg:items-center lg:justify-between">
       <label className="relative min-w-0 flex-1 lg:max-w-md">
         <span className="sr-only">{searchPlaceholder}</span>
         <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant" />
@@ -28,7 +28,7 @@ export function TableToolbar({
           placeholder={searchPlaceholder}
         />
       </label>
-      <div className="flex min-w-0 flex-wrap items-center gap-sm">
+      <div className="flex min-w-0 flex-wrap items-center gap-sm lg:justify-end">
         {filters}
         {actions}
       </div>

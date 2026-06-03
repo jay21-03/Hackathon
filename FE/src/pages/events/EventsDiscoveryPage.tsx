@@ -67,7 +67,7 @@ export function EventsDiscoveryPage() {
         </div>
         <Link
           to="/register"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary-container text-on-primary-container rounded-lg font-label-md hover:opacity-90"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-2 font-label-md text-on-primary-container shadow-sm hover:bg-primary"
         >
           <Icon name="group_add" className="text-[18px]" />
           Dang ky doi
@@ -85,7 +85,7 @@ export function EventsDiscoveryPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Tim kiem theo ten cuoc thi..."
-            className="w-full bg-surface-container-highest border border-outline-variant rounded-lg py-3 pl-10 pr-4 font-body-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            className="form-input w-full py-3 pl-10 pr-4"
           />
         </div>
 
@@ -95,10 +95,10 @@ export function EventsDiscoveryPage() {
               key={chip.id}
               type="button"
               onClick={() => setFilter(chip.id)}
-              className={`flex-shrink-0 px-4 py-1.5 rounded-full font-label-sm normal-case transition-transform active:scale-95 ${
+              className={`flex-shrink-0 rounded-lg px-4 py-1.5 font-label-sm normal-case transition-colors ${
                 filter === chip.id
-                  ? "bg-secondary-container text-on-secondary-container"
-                  : "bg-surface-variant text-on-surface-variant hover:bg-surface-container-highest"
+                  ? "bg-primary-container text-on-primary-container"
+                  : "border border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-high"
               }`}
             >
               {chip.label}
@@ -110,16 +110,16 @@ export function EventsDiscoveryPage() {
       {loading && <ModuleSkeleton rows={3} />}
 
       {!loading && usingFallback && (
-        <div className="glass-panel rounded-xl p-md border border-primary/20">
+        <div className="rounded-xl border border-primary/20 bg-primary-fixed p-md">
           <p className="font-body-sm text-on-surface-variant">
-            Dang hien thi du lieu mau de xem giao dien. Khi he thong co du lieu that,
+            Dang hien thi du lieu minh hoa de xem nhanh giao dien. Khi co du lieu tu he thong,
             danh sach se tu cap nhat theo cac cuoc thi da tao.
           </p>
         </div>
       )}
 
       {!loading && filtered.length === 0 && (
-        <div className="glass-panel rounded-xl p-lg text-center">
+        <div className="rounded-xl border border-outline-variant bg-surface p-lg text-center shadow-sm">
           <Icon name="event_busy" className="text-4xl text-outline mb-md mx-auto" />
           <p className="font-headline-sm mb-sm">Chua co cuoc thi phu hop</p>
           <p className="font-body-sm text-on-surface-variant mb-md">
