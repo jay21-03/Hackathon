@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { repositoryUrlSchema } from "../../domain/schemas";
-import { demoTeams } from "../../services/demoDataService";
+import { demoTeams } from "../../services/readModelService";
 import { isValidRepositoryUrl } from "../../utils/validation";
 
 export function SubmissionPage() {

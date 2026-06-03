@@ -4,7 +4,7 @@ import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoViolations, getTeamById, type DemoViolation } from "../../services/demoDataService";
+import { demoViolations, getTeamById, type DemoViolation } from "../../services/readModelService";
 
 export function DisqualificationPage() {
   const { notify } = useToast();

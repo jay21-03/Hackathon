@@ -1,7 +1,7 @@
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoBoards, demoTeams, getTeamById } from "../../services/demoDataService";
+import { demoBoards, demoTeams, getTeamById } from "../../services/readModelService";
 
 export function AssignedBoardPage() {
   const team = demoTeams[0];

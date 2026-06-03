@@ -5,7 +5,7 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoCheckIns, demoTeams } from "../../services/demoDataService";
+import { demoCheckIns, demoTeams } from "../../services/readModelService";
 
 export function CheckInPage() {
   const { notify } = useToast();

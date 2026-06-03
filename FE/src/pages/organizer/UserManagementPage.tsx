@@ -11,7 +11,7 @@ import {
   type TableDensity
 } from "../../components/ui/TableDensityToggle";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoUsers } from "../../services/demoDataService";
+import { demoUsers } from "../../services/readModelService";
 
 export function UserManagementPage() {
   const [density, setDensity] = useState<TableDensity>("comfortable");

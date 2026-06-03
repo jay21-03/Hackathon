@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { profileSchema } from "../../domain/schemas";
-import { demoTeamMembers } from "../../services/demoDataService";
+import { demoTeamMembers } from "../../services/readModelService";
 
 export function ProfilePage() {
   const { notify } = useToast();

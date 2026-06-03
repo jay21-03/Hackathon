@@ -5,7 +5,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { ProgressBar } from "../../components/ui/ProgressBar";
 import { StatCard } from "../../components/ui/StatCard";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoScoreSheets, getScoringProgressRows } from "../../services/demoDataService";
+import { demoScoreSheets, getScoringProgressRows } from "../../services/readModelService";
 
 export function ScoringProgressPage() {
   const rows = getScoringProgressRows();

@@ -6,7 +6,7 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { ProgressBar } from "../../components/ui/ProgressBar";
 import { StatCard } from "../../components/ui/StatCard";
-import type { DemoAiFinding, DemoBoard, DemoTeam } from "../../services/demoDataService";
+import type { DemoAiFinding, DemoBoard, DemoTeam } from "../../services/readModelService";
 import { fetchMentorDashboard } from "../../services/hackathonApi";
 
 export function MentorDashboardPage() {

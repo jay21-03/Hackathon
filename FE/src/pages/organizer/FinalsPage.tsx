@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { getRankingRows } from "../../services/demoDataService";
+import { getRankingRows } from "../../services/readModelService";
 import { formatNumber } from "../../utils/validation";
 
 export function FinalsPage() {

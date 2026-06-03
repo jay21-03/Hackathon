@@ -9,7 +9,7 @@ import {
 } from "../../domain/businessRules";
 import { teamRegistrationSchema } from "../../domain/schemas";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoEvent, existingTeamMembers } from "../../services/demoDataService";
+import { demoEvent, existingTeamMembers } from "../../services/readModelService";
 
 const initialMembers = ["captain@seal.edu.vn", "", "", "", ""];
 

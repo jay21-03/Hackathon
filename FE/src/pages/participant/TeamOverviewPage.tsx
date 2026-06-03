@@ -5,7 +5,7 @@ import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { ProgressBar } from "../../components/ui/ProgressBar";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoTeamMembers, demoTeams } from "../../services/demoDataService";
+import { demoTeamMembers, demoTeams } from "../../services/readModelService";
 
 export function TeamOverviewPage() {
   const team = demoTeams[0];

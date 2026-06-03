@@ -3,7 +3,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoTeamMembers, getTeamById } from "../../services/demoDataService";
+import { demoTeamMembers, getTeamById } from "../../services/readModelService";
 
 const invitationRows = demoTeamMembers.map((member, index) => ({
   ...member,

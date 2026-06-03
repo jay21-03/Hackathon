@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { eventConfigSchema } from "../../domain/schemas";
-import { demoEvent } from "../../services/demoDataService";
+import { demoEvent } from "../../services/readModelService";
 
 export function EventBasicInfoPage() {
   const { notify } = useToast();

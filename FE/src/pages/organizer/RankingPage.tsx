@@ -3,7 +3,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoScoreSheets, getRankingRows } from "../../services/demoDataService";
+import { demoScoreSheets, getRankingRows } from "../../services/readModelService";
 import { formatNumber } from "../../utils/validation";
 
 export function RankingPage() {

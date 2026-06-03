@@ -2,7 +2,7 @@ import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoAiFindings, demoTeams, getTeamById } from "../../services/demoDataService";
+import { demoAiFindings, demoTeams, getTeamById } from "../../services/readModelService";
 
 export function AiReviewPage() {
   const team = demoTeams[0];

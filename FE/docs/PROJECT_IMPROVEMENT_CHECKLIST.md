@@ -47,6 +47,8 @@ Trang thai sau dot nang cap FE hien tai.
 - [x] Nang cap UI extra high: palette sang/trung tinh, sidebar workspace, primitive UI giam glow/template.
 - [x] Chuan hoa copy nguoi dung: thay cac tu noi bo bang ngon ngu nghiep vu.
 - [x] Xoa legacy page khong dung: HomePage, EventsPage cu, dashboard prototype cu va PlaceholderPage.
+- [x] Doi service fallback thanh read model service de page khong import demo/mocks truc tiep.
+- [x] Them architecture E2E test chan page import mock/demo va chan cau hinh thiet bi app quay lai.
 
 ## Nen lam tiep khi noi dich vu he thong
 

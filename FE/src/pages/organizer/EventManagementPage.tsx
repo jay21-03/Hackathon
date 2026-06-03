@@ -5,7 +5,7 @@ import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoEvent, demoPublicEvents } from "../../services/demoDataService";
+import { demoEvent, demoPublicEvents } from "../../services/readModelService";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("vi-VN", { dateStyle: "medium" });

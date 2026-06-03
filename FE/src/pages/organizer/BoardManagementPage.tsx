@@ -7,7 +7,7 @@ import {
   type TableDensity
 } from "../../components/ui/TableDensityToggle";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoBoards, getTeamById } from "../../services/demoDataService";
+import { demoBoards, getTeamById } from "../../services/readModelService";
 
 export function BoardManagementPage() {
   const [density, setDensity] = useState<TableDensity>("comfortable");

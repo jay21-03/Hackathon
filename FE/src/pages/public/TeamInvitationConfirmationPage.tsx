@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoTeamMembers, getTeamById } from "../../services/demoDataService";
+import { demoTeamMembers, getTeamById } from "../../services/readModelService";
 
 export function TeamInvitationConfirmationPage() {
   const { notify } = useToast();

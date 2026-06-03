@@ -6,7 +6,7 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import type { DemoScoreSheet, DemoTeam } from "../../services/demoDataService";
+import type { DemoScoreSheet, DemoTeam } from "../../services/readModelService";
 import { fetchJudgeDashboard } from "../../services/hackathonApi";
 
 export function JudgeDashboardPage() {

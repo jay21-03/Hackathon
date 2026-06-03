@@ -3,7 +3,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoProblem } from "../../services/demoDataService";
+import { demoProblem } from "../../services/readModelService";
 
 export function ProblemManagementPage() {
   const [title, setTitle] = useState(demoProblem.title);

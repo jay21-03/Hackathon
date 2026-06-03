@@ -4,7 +4,7 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { ProgressBar } from "../../components/ui/ProgressBar";
 import { StatCard } from "../../components/ui/StatCard";
-import type { DemoTeam } from "../../services/demoDataService";
+import type { DemoTeam } from "../../services/readModelService";
 import { fetchAiReviewInsights } from "../../services/hackathonApi";
 
 export function AiInsightsPage() {

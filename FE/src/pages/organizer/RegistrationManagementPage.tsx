@@ -13,7 +13,7 @@ import {
   demoRegistrations,
   getTeamById,
   type DemoRegistration
-} from "../../services/demoDataService";
+} from "../../services/readModelService";
 
 type Filter = "ALL" | "PENDING" | "CONFIRMED" | "WAITLIST" | "REJECTED";
 

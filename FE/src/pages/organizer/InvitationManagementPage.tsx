@@ -9,7 +9,7 @@ import {
   type TableDensity
 } from "../../components/ui/TableDensityToggle";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoInvitations, type DemoInvitation } from "../../services/demoDataService";
+import { demoInvitations, type DemoInvitation } from "../../services/readModelService";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" });

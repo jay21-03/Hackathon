@@ -6,7 +6,7 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import type { DemoAiFinding } from "../../services/demoDataService";
+import type { DemoAiFinding } from "../../services/readModelService";
 import { fetchAiReviewQueue } from "../../services/hackathonApi";
 
 const severityTone = {

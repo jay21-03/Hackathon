@@ -3,7 +3,7 @@ import { Badge } from "../../components/ui/Badge";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import type { DemoAnnouncement } from "../../services/demoDataService";
+import type { DemoAnnouncement } from "../../services/readModelService";
 import { fetchNotifications } from "../../services/hackathonApi";
 
 function formatDate(value: string) {

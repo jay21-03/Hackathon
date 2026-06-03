@@ -10,7 +10,7 @@ import {
   demoScoreSheets,
   demoTeams,
   participantActivities
-} from "../../services/demoDataService";
+} from "../../services/readModelService";
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("vi-VN", {

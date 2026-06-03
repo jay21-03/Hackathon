@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
-import type { DemoAiFinding, DemoBoard, DemoTeam } from "../../services/demoDataService";
+import type { DemoAiFinding, DemoBoard, DemoTeam } from "../../services/readModelService";
 import { fetchMentorDashboard } from "../../services/hackathonApi";
 
 const severityTone = {

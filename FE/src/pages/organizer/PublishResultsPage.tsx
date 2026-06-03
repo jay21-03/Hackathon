@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
-import type { demoScoreSheets, getRankingRows } from "../../services/demoDataService";
+import type { demoScoreSheets, getRankingRows } from "../../services/readModelService";
 import { fetchPublishPreview } from "../../services/hackathonApi";
 
 type PublishPreview = {

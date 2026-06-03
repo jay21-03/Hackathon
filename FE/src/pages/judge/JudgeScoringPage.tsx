@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { validateRubricScores, type RubricCriterion } from "../../domain/businessRules";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { baseRubric, demoTeams } from "../../services/demoDataService";
+import { baseRubric, demoTeams } from "../../services/readModelService";
 
 export function JudgeScoringPage() {
   const { notify } = useToast();

@@ -4,7 +4,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoAnnouncements, type DemoAnnouncement } from "../../services/demoDataService";
+import { demoAnnouncements, type DemoAnnouncement } from "../../services/readModelService";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" });

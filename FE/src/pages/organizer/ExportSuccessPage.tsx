@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
-import { demoEvent, getRankingRows } from "../../services/demoDataService";
+import { demoEvent, getRankingRows } from "../../services/readModelService";
 
 export function ExportSuccessPage() {
   const rows = getRankingRows();

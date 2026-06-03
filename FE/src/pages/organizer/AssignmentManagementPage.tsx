@@ -4,7 +4,7 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import type { DemoBoard } from "../../services/demoDataService";
+import type { DemoBoard } from "../../services/readModelService";
 import { fetchBoardAssignments } from "../../services/hackathonApi";
 
 export function AssignmentManagementPage() {

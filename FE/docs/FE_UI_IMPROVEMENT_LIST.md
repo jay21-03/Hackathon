@@ -47,6 +47,7 @@ Tap trung vao giao dien demo, tinh dung nghiep vu va kha nang test.
 - [x] Viet hoa copy hien thi con sot, thay cac cum noi bo bang ngon ngu nghiep vu.
 - [x] Lam lai event card va login de bot cam giac giao dien sinh tu template.
 - [x] Xoa cac legacy page khong con route/import de giam no ky thuat va tranh UI cu bi dung lai.
+- [x] Doi service du lieu minh hoa thanh read model service va them test kien truc de page khong import mock/demo truc tiep.
 
 ## Nen lam tiep
 

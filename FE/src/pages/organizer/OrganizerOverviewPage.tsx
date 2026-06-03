@@ -10,7 +10,7 @@ import {
   demoScoreSheets,
   demoTeams,
   organizerActivities
-} from "../../services/demoDataService";
+} from "../../services/readModelService";
 
 export function OrganizerOverviewPage() {
   const confirmedTeams = demoTeams.filter((team) => team.status === "CONFIRMED").length;
