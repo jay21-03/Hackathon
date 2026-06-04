@@ -38,7 +38,13 @@ export function setStoredActiveEventId(id: number) {
 
 
 
-export function useActiveEvent() {
+type UseActiveEventOptions = {
+  /** BTC: tự chọn cuộc thi đầu khi chưa lưu. Thí sinh: false — phải chọn từ /events. */
+  autoSelectFirst?: boolean;
+};
+
+export function useActiveEvent(options?: UseActiveEventOptions) {
+  const autoSelectFirst = options?.autoSelectFirst ?? false;
 
   const [manualEventId, setManualEventId] = useState<number | null>(readStoredEventId);
 
@@ -71,18 +77,13 @@ export function useActiveEvent() {
 
 
   const eventId = useMemo(() => {
-
-    if (!events.length) return manualEventId;
-
-    if (manualEventId != null && events.some((item) => item.id === manualEventId)) {
-
-      return manualEventId;
-
+    if (manualEventId != null) {
+      if (!events.length) return manualEventId;
+      return events.some((item) => item.id === manualEventId) ? manualEventId : null;
     }
-
-    return events[0]?.id ?? null;
-
-  }, [events, manualEventId]);
+    if (autoSelectFirst && events.length) return events[0]?.id ?? null;
+    return null;
+  }, [events, manualEventId, autoSelectFirst]);
 
 
 

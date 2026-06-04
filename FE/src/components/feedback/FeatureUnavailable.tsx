@@ -1,3 +1,4 @@
+import { ButtonLink } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
 import { PageHeader } from "../ui/PageHeader";
 
@@ -17,7 +18,12 @@ export function FeatureUnavailable({ eyebrow, title, description, beNote }: Feat
         title="Chưa kết nối API"
         description={
           beNote ??
-          "Chức năng này cần backend bổ sung. Giao diện đã sẵn sàng, dữ liệu sẽ hiển thị khi API được triển khai."
+          "Chức năng này cần backend bổ sung. Giao diện đã sẵn sàng — dữ liệu sẽ hiển thị khi API được triển khai (phase 7+)."
+        }
+        action={
+          <ButtonLink to="/organizer/dashboard" variant="secondary" className="mt-md">
+            Về tổng quan
+          </ButtonLink>
         }
       />
     </div>

@@ -50,10 +50,19 @@ export async function resendTeamInvitation(teamMemberId: number) {
   return data.data;
 }
 
-export async function registerTeam(eventId: number, payload: RegisterTeamPayload) {
+export async function registerTeam(
+  eventId: number,
+  payload: RegisterTeamPayload,
+  options?: { idempotencyKey?: string }
+) {
+  const headers: Record<string, string> = {};
+  if (options?.idempotencyKey) {
+    headers["Idempotency-Key"] = options.idempotencyKey;
+  }
   const { data } = await apiClient.post<ApiResponse<TeamDetailResponse>>(
     `/v1/events/${eventId}/teams`,
-    payload
+    payload,
+    Object.keys(headers).length ? { headers } : undefined
   );
   if (!data.data) {
     throw new Error(data.message || "Đăng ký đội thất bại");

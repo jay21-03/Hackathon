@@ -4,8 +4,17 @@ import { Badge } from "../../components/ui/Badge";
 import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { getAuthSession, getRoleHome, isAuthenticated, roleLabels } from "../../auth/authSession";
+import { resolveEventCardAction } from "../../domain/eventParticipantFlow";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
+import { useMyTeam } from "../../hooks/useMyTeam";
 import { fetchEventDetail, type EventDetail } from "../../services/eventsApi";
+import type { EventListItem } from "../../types/entities";
+import { rememberActiveEvent } from "../../utils/enterEvent";
+import {
+  canRegisterForEvent,
+  isRegistrationStatusOpen,
+  registrationWindowHint
+} from "../../utils/registrationErrors";
 
 function formatDateTime(value: string) {
   try {
@@ -23,15 +32,19 @@ export function EventDetailPage() {
   const session = getAuthSession();
   const roleHome = getRoleHome(session.role);
   const roleLabel = roleLabels[session.role];
-  const { eventId } = useParams();
+  const { eventId: eventIdParam } = useParams();
+  const eventIdNum = eventIdParam ? Number(eventIdParam) : null;
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { team, loading: teamLoading } = useMyTeam(
+    authenticated && session.role === "participant" ? eventIdNum : null
+  );
 
   useEffect(() => {
-    if (!eventId) return;
+    if (!eventIdParam) return;
     let cancelled = false;
-    fetchEventDetail(eventId)
+    fetchEventDetail(eventIdParam)
       .then((result) => {
         if (cancelled) return;
         setEvent(result);
@@ -46,9 +59,9 @@ export function EventDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [eventId]);
+  }, [eventIdParam]);
 
-  if (loading) {
+  if (loading || (authenticated && session.role === "participant" && teamLoading)) {
     return <ModuleSkeleton rows={3} />;
   }
 
@@ -57,17 +70,52 @@ export function EventDetailPage() {
       <div className="rounded-xl border border-outline-variant bg-surface p-lg shadow-sm">
         <p className="text-error font-body-md">Không tìm thấy cuộc thi.</p>
         <Link to="/events" className="text-primary font-label-md mt-md inline-block">
-          Quay lai danh sach
+          Quay lại danh sách
         </Link>
       </div>
     );
+  }
+
+  const listItem: EventListItem = {
+    id: event.id,
+    name: event.name,
+    startDate: event.startDate,
+    endDate: event.endDate,
+    registrationStartAt: event.registrationStartAt ?? "",
+    registrationEndAt: event.registrationEndAt ?? "",
+    status: event.status
+  };
+
+  const primaryAction = resolveEventCardAction({
+    authenticated,
+    role: session.role,
+    event: listItem,
+    team: team ?? null,
+    surface: "detail"
+  });
+
+  const statusOpen = isRegistrationStatusOpen(event.status);
+  const registrationOpen = canRegisterForEvent(
+    event.status,
+    event.registrationStartAt,
+    event.registrationEndAt
+  );
+  const windowHint = registrationWindowHint(
+    event.registrationStartAt,
+    event.registrationEndAt
+  );
+
+  function handlePrimaryClick() {
+    if (eventIdNum != null && !Number.isNaN(eventIdNum)) {
+      rememberActiveEvent(eventIdNum);
+    }
   }
 
   return (
     <div className="space-y-lg max-w-3xl mx-auto">
       <Link to="/events" className="inline-flex items-center gap-1 text-primary font-label-md">
         <Icon name="arrow_back" className="text-[18px]" />
-        Danh sach cuộc thi
+        Danh sách các cuộc thi
       </Link>
 
       {error && (
@@ -81,66 +129,94 @@ export function EventDetailPage() {
           <div>
             <h1 className="font-headline-lg text-on-surface">{event.name}</h1>
             <p className="font-body-md text-on-surface-variant mt-xs">
-              Tạo đội thi, mời thành viên và theo dõi các mốc thời gian của cuộc thi.
+              {team
+                ? `Bạn đã có đội trong cuộc thi này: ${team.name} (${getStatusLabel(team.status)}).`
+                : "Mỗi cuộc thi một đội riêng — bạn vẫn có thể đăng ký các cuộc thi khác nếu chưa có đội ở đó."}
             </p>
           </div>
-          <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
+          <div className="flex flex-col items-end gap-1">
+            <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
+            {team ? (
+              <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
+            ) : null}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-md font-body-sm text-on-surface-variant">
           <div className="bg-surface-container-low border border-outline-variant/40 rounded-xl p-md">
             <Icon name="calendar_today" className="text-primary mb-sm" />
-            <p className="font-label-sm normal-case text-on-surface">Thoi gian thi</p>
+            <p className="font-label-sm normal-case text-on-surface">Thời gian thi</p>
             <p>{formatDateTime(event.startDate)}</p>
             <p>{formatDateTime(event.endDate)}</p>
           </div>
           <div className="bg-surface-container-low border border-outline-variant/40 rounded-xl p-md">
             <Icon name="groups" className="text-primary mb-sm" />
-            <p className="font-label-sm normal-case text-on-surface">Quy mo doi</p>
+            <p className="font-label-sm normal-case text-on-surface">Quy mô đội</p>
             <p>
-              {event.minTeamSize} - {event.maxTeamSize} thành viên
+              {event.minTeamSize} – {event.maxTeamSize} thành viên
             </p>
           </div>
           <div className="bg-surface-container-low border border-outline-variant/40 rounded-xl p-md">
             <Icon name="emoji_events" className="text-primary mb-sm" />
-            <p className="font-label-sm normal-case text-on-surface">So doi toi da</p>
-            <p>{event.maxTeams} doi</p>
+            <p className="font-label-sm normal-case text-on-surface">Số đội tối đa</p>
+            <p>{event.maxTeams} đội</p>
           </div>
         </div>
+
+        {event.registrationStartAt && event.registrationEndAt ? (
+          <div className="space-y-xs font-body-sm text-on-surface-variant">
+            <p>
+              Khung đăng ký: {formatDateTime(event.registrationStartAt)} –{" "}
+              {formatDateTime(event.registrationEndAt)}
+            </p>
+            {statusOpen && !registrationOpen && windowHint ? (
+              <p className="text-on-tertiary-container">{windowHint}</p>
+            ) : null}
+            {registrationOpen ? (
+              <p className="text-secondary">Đang trong khung đăng ký — có thể gửi hồ sơ đội.</p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap gap-sm pt-md border-t border-outline-variant/30">
           {!authenticated ? (
             <Link
               to="/login"
-              className="inline-flex items-center gap-2 bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
+              state={{ from: `/events/${event.id}` }}
+              className="inline-flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md"
             >
               <Icon name="account_circle" className="text-[18px]" />
-              Đăng nhập de đăng ký
+              Đăng nhập để tham gia
             </Link>
           ) : session.role === "participant" ? (
             <>
               <Link
-                to="/register"
-                className="inline-flex items-center gap-2 bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
+                to={primaryAction.to}
+                onClick={handlePrimaryClick}
+                className="inline-flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md"
               >
-                <Icon name="group_add" className="text-[18px]" />
-                Đăng ký tham gia
+                <Icon name={primaryAction.icon} className="text-[18px]" />
+                {primaryAction.label}
               </Link>
-              <Link
-                to="/me/team"
-                className="inline-flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-variant"
-              >
-                <Icon name="groups" className="text-[18px]" />
-                Xem đội của tôi
-              </Link>
+              {team ? (
+                <Link
+                  to="/me"
+                  onClick={handlePrimaryClick}
+                  className="inline-flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-container-high"
+                >
+                  <Icon name="dashboard" className="text-[18px]" />
+                  Tiếp tục không gian thi
+                </Link>
+              ) : null}
             </>
           ) : (
             <Link
               to={roleHome}
+              onClick={handlePrimaryClick}
               className="inline-flex items-center gap-2 bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
             >
               <Icon name="dashboard" className="text-[18px]" />
-              Vao {roleLabel}
+              Vào {roleLabel}
             </Link>
           )}
         </div>

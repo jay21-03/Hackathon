@@ -1,35 +1,32 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "../../components/ui/Badge";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
-import { fetchMentorAssignments, type AssignmentResponse } from "../../services/assignmentService";
+import { fetchMentorAssignments } from "../../services/assignmentService";
+import { getApiErrorMessage } from "../../utils/apiError";
 
 export function MentorDashboardPage() {
-  const [assignments, setAssignments] = useState<AssignmentResponse[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery({
+    queryKey: ["assignments", "mentor"],
+    queryFn: fetchMentorAssignments
+  });
 
-  useEffect(() => {
-    fetchMentorAssignments()
-      .then((result) => {
-        setAssignments(result);
-      })
-      .catch(() => {
-        setError("Không tải được danh sach phân công mentor.");
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const assignments = query.data ?? [];
+  const error = query.isError
+    ? getApiErrorMessage(query.error, "Không tải được danh sách phân công mentor.")
+    : null;
 
-  if (loading) return <ModuleSkeleton rows={4} />;
+  if (query.isLoading) return <ModuleSkeleton rows={4} />;
 
   return (
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Mentor"
-        title="Đội thi duoc phu trach"
-        description="Mentor theo dõi tien do kho ma nguon, danh gia AI va ho tro doi trong bang duoc phân công."
-        actions={<Badge tone={error ? "danger" : "success"}>{error ? "Loi API" : "Du lieu he thong"}</Badge>}
+        title="Bảng được phân công"
+        description="Theo dõi các bảng bạn phụ trách. Chi tiết đội và AI review sẽ mở khi backend bổ sung API."
+        actions={<Badge tone={error ? "danger" : "success"}>{error ? "Lỗi tải dữ liệu" : "Dữ liệu hệ thống"}</Badge>}
       />
 
       {error ? (
@@ -38,36 +35,54 @@ export function MentorDashboardPage() {
         </div>
       ) : null}
 
-      <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Phân công" value={assignments.length} helper="Từ BE /mentors/assignments" icon="view_module" />
-        <StatCard label="Bang da gan" value={new Set(assignments.map((item) => item.boardId)).size} helper="Moi board mot phân công" icon="groups" tone="success" />
-        <StatCard label="Mentor ID" value={assignments[0]?.assigneeId ?? "-"} helper="Tài khoản hien tai" icon="badge" tone="warning" />
+      <section className="grid gap-md md:grid-cols-2">
+        <StatCard
+          label="Phân công"
+          value={assignments.length}
+          helper="Từ API /mentors/assignments"
+          icon="view_module"
+        />
+        <StatCard
+          label="Bảng khác nhau"
+          value={new Set(assignments.map((item) => item.boardId)).size}
+          helper="Mỗi bảng một phân công"
+          icon="groups"
+          tone="success"
+        />
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left">
-            <thead className="table-header-bg">
-              <tr className="font-label-sm text-on-surface-variant">
-                <th className="px-md py-sm">Board</th>
-                <th className="px-md py-sm">Assignee</th>
-                <th className="px-md py-sm">Assigned at</th>
-                <th className="px-md py-sm">Created by</th>
-              </tr>
-            </thead>
-            <tbody className="table-divider">
-              {assignments.map((assignment) => (
-                <tr key={assignment.id} className="font-body-sm text-on-surface">
-                  <td className="px-md py-md font-label-md">#{assignment.boardId}</td>
-                  <td className="px-md py-md">#{assignment.assigneeId}</td>
-                  <td className="px-md py-md">{new Date(assignment.createdAt).toLocaleString("vi-VN")}</td>
-                  <td className="px-md py-md">#{assignment.createdBy}</td>
+      {assignments.length === 0 && !error ? (
+        <EmptyState
+          icon="view_module"
+          title="Chưa có phân công"
+          description="Ban tổ chức sẽ gán mentor cho bảng tại trang Phân công."
+        />
+      ) : (
+        <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left">
+              <thead className="table-header-bg">
+                <tr className="font-label-sm text-on-surface-variant">
+                  <th className="px-md py-sm">Bảng</th>
+                  <th className="px-md py-sm">Gán lúc</th>
+                  <th className="px-md py-sm">Gán bởi</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody className="table-divider">
+                {assignments.map((assignment) => (
+                  <tr key={assignment.id} className="font-body-sm text-on-surface">
+                    <td className="px-md py-md font-label-md">Bảng #{assignment.boardId}</td>
+                    <td className="px-md py-md">
+                      {new Date(assignment.createdAt).toLocaleString("vi-VN")}
+                    </td>
+                    <td className="px-md py-md">BTC #{assignment.createdBy}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

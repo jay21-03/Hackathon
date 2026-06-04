@@ -47,7 +47,7 @@ export function validateTeamRegistration(
 
   if (duplicatedInEvent) {
     errors.push(
-      `${duplicatedInEvent.email} da thuoc doi ${duplicatedInEvent.teamName} trong cuộc thi nay.`
+      `${duplicatedInEvent.email} đã thuộc đội ${duplicatedInEvent.teamName} trong cuộc thi này.`
     );
   }
 
@@ -59,8 +59,15 @@ export function decideRegistrationStatus(confirmedTeams: number, quota: number) 
   return confirmedTeams < quota ? "PENDING" : "WAITLIST";
 }
 
-export function canViewProblem(now: Date, releaseAt: string | Date) {
-  return now.getTime() >= new Date(releaseAt).getTime();
+export function canViewProblem(
+  now: Date,
+  releaseAt: string | Date,
+  closeAt?: string | Date | null
+) {
+  const open = now.getTime() >= new Date(releaseAt).getTime();
+  if (!open) return false;
+  if (!closeAt) return true;
+  return now.getTime() < new Date(closeAt).getTime();
 }
 
 export function validateRubricScores(criteria: RubricCriterion[]) {

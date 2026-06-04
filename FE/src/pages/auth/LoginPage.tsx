@@ -113,14 +113,14 @@ export function LoginPage() {
         </div>
 
         <div className="flex justify-center gap-lg border-t border-outline-variant bg-surface-container-high p-md">
-          <a
-            href="#"
+          <Link
+            to="/events"
             className="font-label-sm normal-case text-on-surface-variant hover:text-primary"
           >
             Hướng dẫn
-          </a>
+          </Link>
           <a
-            href="#"
+            href="mailto:support@seal.edu.vn"
             className="font-label-sm normal-case text-on-surface-variant hover:text-primary"
           >
             Hỗ trợ

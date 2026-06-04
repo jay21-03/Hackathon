@@ -67,9 +67,9 @@ export function ProfilePage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Hồ sơ ca nhan"
-        title="Thông tin thi sinh"
-        description="Cập nhật thông tin liên hệ và kỹ năng để ban tổ chức, mentor và đội thi theo dõi đúng người."
+        eyebrow="Tài khoản"
+        title="Hồ sơ cá nhân"
+        description="Cập nhật thông tin liên hệ để ban tổ chức, mentor và đội thi nhận diện đúng bạn."
       />
 
       <section className="grid gap-md lg:grid-cols-[1fr_320px]">

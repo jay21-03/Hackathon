@@ -8,6 +8,8 @@ export interface EventDetail {
   status: string;
   startDate: string;
   endDate: string;
+  registrationStartAt?: string;
+  registrationEndAt?: string;
   minTeamSize: number;
   maxTeamSize: number;
   maxTeams: number;
@@ -26,10 +28,24 @@ export async function fetchEventDetail(eventId: string): Promise<EventDetail | n
 export interface UpdateEventPayload {
   name: string;
   maxTeams: number;
+  startDate?: string;
+  endDate?: string;
+  registrationStartAt?: string;
+  registrationEndAt?: string;
 }
 
 export async function updateEvent(eventId: string, payload: UpdateEventPayload) {
   const { data } = await apiClient.put<ApiResponse<EventDetail>>(`/v1/admin/events/${eventId}`, payload);
+  return data.data;
+}
+
+export async function openEventRegistration(eventId: string) {
+  const { data } = await apiClient.post<ApiResponse<EventDetail>>(
+    `/v1/admin/events/${eventId}/open-registration`
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Không mở được đăng ký");
+  }
   return data.data;
 }
 

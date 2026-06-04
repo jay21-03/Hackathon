@@ -1,16 +1,20 @@
 import { lazy, Suspense, type ComponentType, type ReactNode, useEffect } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { SESSION_CHANGE_EVENT } from "../auth/authSession";
 import { RoleGuard } from "../components/auth/RoleGuard";
+import { ParticipantEventGate } from "../components/participant/ParticipantEventGate";
+import { OrganizerApiGate } from "../components/auth/OrganizerApiGate";
 import { AuthLayout } from "../components/layout/AuthLayout";
+import { ParticipantAwareShell, ParticipantShell } from "../components/layout/ParticipantShell";
 import { PublicShell } from "../components/layout/PublicShell";
 import { WorkspaceShell } from "../components/layout/WorkspaceShell";
 import { ModuleSkeleton } from "../components/ui/ModuleSkeleton";
+import { FeatureRouteGate } from "../components/routing/FeatureRouteGate";
+import { enablePhase7 } from "../config/features";
 import {
   judgeNav,
   mentorNav,
-  organizerNav,
-  participantWorkspaceNav
+  organizerNav
 } from "../config/navigation";
 
 function lazyPage<T extends Record<string, unknown>, K extends keyof T>(
@@ -73,11 +77,24 @@ function routeElement(component: ReactNode) {
   return <Suspense fallback={<ModuleSkeleton rows={4} />}>{component}</Suspense>;
 }
 
+/** Phase 7+ tắt → redirect, không hiện FeatureUnavailable */
+function gatedRoute(redirectTo: string, component: ReactNode) {
+  return routeElement(
+    <FeatureRouteGate enabled={enablePhase7} redirectTo={redirectTo}>
+      {component}
+    </FeatureRouteGate>
+  );
+}
+
+function EventResultsRedirect() {
+  const { eventId } = useParams();
+  return <Navigate to={eventId ? `/events/${eventId}` : "/events"} replace />;
+}
+
 export function AppRouter() {
   const location = useLocation();
 
   useEffect(() => {
-    // notify listeners that demo session may have changed on navigation
     try {
       window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
     } catch {
@@ -93,14 +110,22 @@ export function AppRouter() {
 
       <Route path="/" element={<Navigate to="/events" replace />} />
 
-      <Route element={<PublicShell />}>
+      {/* Trang chủ + trang công khai: thí sinh → ParticipantShell, khách → PublicShell */}
+      <Route element={<ParticipantAwareShell />}>
         <Route path="events" element={routeElement(<EventsDiscoveryPage />)} />
       </Route>
 
       <Route element={<RoleGuard allow={["participant", "organizer", "mentor", "judge"]} />}>
-        <Route element={<PublicShell />}>
+        <Route element={<ParticipantAwareShell />}>
           <Route path="events/:eventId" element={routeElement(<EventDetailPage />)} />
-          <Route path="events/:eventId/results" element={routeElement(<ResultsPortalPage />)} />
+          <Route
+            path="events/:eventId/results"
+            element={
+              enablePhase7
+                ? routeElement(<ResultsPortalPage />)
+                : routeElement(<EventResultsRedirect />)
+            }
+          />
         </Route>
       </Route>
 
@@ -118,52 +143,46 @@ export function AppRouter() {
       </Route>
 
       <Route element={<RoleGuard allow={["participant"]} />}>
-        <Route element={<PublicShell />}>
-          <Route path="register" element={routeElement(<TeamRegistrationPage />)} />
+        <Route element={<ParticipantShell />}>
+          <Route path="register" element={<Navigate to="/events" replace />} />
+          <Route path="events/:eventId/register" element={routeElement(<TeamRegistrationPage />)} />
           <Route path="team-invitation" element={routeElement(<TeamInvitationLegacyRedirect />)} />
           <Route
             path="team-invitation/manual"
             element={routeElement(<TeamInvitationConfirmationPage />)}
           />
           <Route path="team-invitations/status" element={routeElement(<InvitationStatusPage />)} />
-        </Route>
-      </Route>
-
-      <Route element={<RoleGuard allow={["participant"]} />}>
-        <Route
-          path="/me"
-          element={
-            <WorkspaceShell
-              navItems={participantWorkspaceNav}
-              title="Khu vực thí sinh"
-              subtitle="Theo dõi đội thi"
-              primaryAction={{ label: "Đăng ký đội", icon: "group_add", to: "/register" }}
-            />
-          }
-        >
-          <Route index element={routeElement(<ParticipantOverviewPage />)} />
-          <Route path="team" element={routeElement(<TeamOverviewPage />)} />
-          <Route path="status" element={routeElement(<TeamStatusPage />)} />
-          <Route path="board" element={routeElement(<AssignedBoardPage />)} />
           <Route path="profile" element={routeElement(<ProfilePage />)} />
-          <Route path="check-in" element={routeElement(<CheckInPage />)} />
-          <Route path="problem" element={routeElement(<ProblemPage />)} />
-          <Route path="countdown" element={routeElement(<ProblemPage />)} />
-          <Route path="submission" element={routeElement(<SubmissionPage />)} />
-          <Route path="ai-review" element={routeElement(<AiReviewPage />)} />
-          <Route path="results" element={routeElement(<ResultsPortalPage participantView />)} />
+          <Route path="me" element={<ParticipantEventGate />}>
+            <Route index element={routeElement(<ParticipantOverviewPage />)} />
+            <Route path="team" element={routeElement(<TeamOverviewPage />)} />
+            <Route path="status" element={routeElement(<TeamStatusPage />)} />
+            <Route path="board" element={routeElement(<AssignedBoardPage />)} />
+            <Route path="profile" element={<Navigate to="/profile" replace />} />
+            <Route path="check-in" element={gatedRoute("/me", <CheckInPage />)} />
+            <Route path="problem" element={routeElement(<ProblemPage />)} />
+            <Route path="countdown" element={routeElement(<ProblemPage />)} />
+            <Route path="submission" element={gatedRoute("/me", <SubmissionPage />)} />
+            <Route path="ai-review" element={gatedRoute("/me", <AiReviewPage />)} />
+            <Route
+              path="results"
+              element={gatedRoute("/me", <ResultsPortalPage participantView />)}
+            />
+          </Route>
         </Route>
       </Route>
 
       <Route element={<RoleGuard allow={["organizer"]} />}>
+        <Route element={<OrganizerApiGate />}>
         <Route
           path="/organizer"
           element={
             <WorkspaceShell
               navItems={organizerNav}
               title="Ban tổ chức"
-              subtitle="Quản lý cuộc thi"
-              primaryAction={{ label: "Công bố kết quả", icon: "campaign", to: "/organizer/publish-results" }}
+              subtitle="Vận hành theo cuộc thi"
+              showActiveEventSubtitle
+              primaryAction={{ label: "Danh sách cuộc thi", icon: "event", to: "/organizer/events" }}
             />
           }
         >
@@ -175,21 +194,31 @@ export function AppRouter() {
           <Route path="registrations" element={routeElement(<RegistrationManagementPage />)} />
           <Route path="users" element={routeElement(<UserManagementPage />)} />
           <Route path="problems" element={routeElement(<ProblemManagementPage />)} />
-          <Route path="rubric" element={routeElement(<RubricSetupPage />)} />
           <Route path="boards" element={routeElement(<BoardManagementPage />)} />
           <Route path="assignments" element={routeElement(<AssignmentManagementPage />)} />
           <Route path="invitations" element={routeElement(<InvitationManagementPage />)} />
-          <Route path="check-ins" element={routeElement(<CheckInManagementPage />)} />
-          <Route path="scoring" element={routeElement(<ScoringProgressPage />)} />
-          <Route path="ranking" element={routeElement(<RankingPage />)} />
-          <Route path="finals" element={routeElement(<FinalsPage />)} />
-          <Route path="disqualifications" element={routeElement(<DisqualificationPage />)} />
-          <Route path="ai-auditor" element={routeElement(<AiAuditorPage />)} />
-          <Route path="ai-insights" element={routeElement(<AiInsightsPage />)} />
-          <Route path="announcements" element={routeElement(<AnnouncementPage />)} />
-          <Route path="notifications" element={routeElement(<NotificationCenterPage />)} />
-          <Route path="publish-results" element={routeElement(<PublishResultsPage />)} />
-          <Route path="export-success" element={routeElement(<ExportSuccessPage />)} />
+          <Route path="rubric" element={gatedRoute("/organizer/dashboard", <RubricSetupPage />)} />
+          <Route path="check-ins" element={gatedRoute("/organizer/dashboard", <CheckInManagementPage />)} />
+          <Route path="scoring" element={gatedRoute("/organizer/dashboard", <ScoringProgressPage />)} />
+          <Route path="ranking" element={gatedRoute("/organizer/dashboard", <RankingPage />)} />
+          <Route path="finals" element={gatedRoute("/organizer/dashboard", <FinalsPage />)} />
+          <Route
+            path="disqualifications"
+            element={gatedRoute("/organizer/dashboard", <DisqualificationPage />)}
+          />
+          <Route path="ai-auditor" element={gatedRoute("/organizer/dashboard", <AiAuditorPage />)} />
+          <Route path="ai-insights" element={gatedRoute("/organizer/dashboard", <AiInsightsPage />)} />
+          <Route path="announcements" element={gatedRoute("/organizer/dashboard", <AnnouncementPage />)} />
+          <Route
+            path="notifications"
+            element={gatedRoute("/organizer/dashboard", <NotificationCenterPage />)}
+          />
+          <Route
+            path="publish-results"
+            element={gatedRoute("/organizer/dashboard", <PublishResultsPage />)}
+          />
+          <Route path="export-success" element={gatedRoute("/organizer/dashboard", <ExportSuccessPage />)} />
+        </Route>
         </Route>
       </Route>
 
@@ -199,7 +228,7 @@ export function AppRouter() {
           element={<WorkspaceShell navItems={judgeNav} title="Giám khảo" subtitle="Chấm điểm theo rubric" />}
         >
           <Route path="dashboard" element={routeElement(<JudgeDashboardPage />)} />
-          <Route path="scoring" element={routeElement(<JudgeScoringPage />)} />
+          <Route path="scoring" element={gatedRoute("/judge/dashboard", <JudgeScoringPage />)} />
         </Route>
       </Route>
 
@@ -209,7 +238,7 @@ export function AppRouter() {
           element={<WorkspaceShell navItems={mentorNav} title="Mentor" subtitle="Theo dõi đội phụ trách" />}
         >
           <Route path="dashboard" element={routeElement(<MentorDashboardPage />)} />
-          <Route path="ai-review" element={routeElement(<MentorAiReviewPage />)} />
+          <Route path="ai-review" element={gatedRoute("/mentor/dashboard", <MentorAiReviewPage />)} />
         </Route>
       </Route>
 

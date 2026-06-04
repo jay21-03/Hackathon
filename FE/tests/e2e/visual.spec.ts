@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mockCoreApis } from "./helpers/mockApi";
 import { seedAuth } from "./helpers/auth";
+import { waitForWorkspace } from "./helpers/waitForApp";
 
 async function expectStableScreenshot(page: Page) {
   const screenshot = await page.screenshot({
@@ -37,5 +38,6 @@ test("login layout is stable", async ({ page }) => {
 test("organizer dashboard layout is stable", async ({ page }) => {
   await seedAuth(page, "organizer");
   await page.goto("/organizer/dashboard");
+  await waitForWorkspace(page, "Việc cần làm");
   await expectStableScreenshot(page);
 });

@@ -6,6 +6,7 @@ import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { fetchPublicEvents } from "../../services/eventsApi";
@@ -29,7 +30,8 @@ export function EventManagementPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const primaryEvent = events[0] ?? null;
+  const openRegistrationCount = events.filter((e) => e.status === "REGISTRATION_OPEN").length;
+  const draftCount = events.filter((e) => e.status === "DRAFT").length;
 
   function openEvent(event: EventListItem) {
     setEventId(event.id);
@@ -45,33 +47,33 @@ export function EventManagementPage() {
       <PageHeader
         eyebrow="Cuộc thi"
         title="Quản lý cấu hình cuộc thi"
-        description="Theo dõi thời gian đăng ký, quota, kích thước đội và trạng thái từng cuộc thi."
+        description="Chọn cuộc thi để chỉnh sửa và hoàn tất thiết lập theo từng bước."
         actions={
-          <>
-            <ButtonLink to="/organizer/events/wizard" variant="ghost" icon={<Icon name="route" />}>
-              Quy trình
-            </ButtonLink>
-            <ButtonLink to="/organizer/events/new" icon={<Icon name="add_circle" />}>
-              Tạo cuộc thi
-            </ButtonLink>
-          </>
+          <ButtonLink to="/organizer/events/new" icon={<Icon name="add_circle" />}>
+            Tạo cuộc thi
+          </ButtonLink>
         }
       />
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Tổng cuộc thi" value={events.length} helper="Đọc từ hệ thống" icon="groups" />
         <StatCard
-          label="Trạng thái đầu tiên"
-          value={primaryEvent ? getStatusLabel(primaryEvent.status) : "—"}
-          helper={primaryEvent ? primaryEvent.name : "Chưa có dữ liệu"}
-          icon="group"
+          label="Tổng cuộc thi"
+          value={events.length}
+          helper="Tất cả cuộc thi trong hệ thống"
+          icon="event"
+        />
+        <StatCard
+          label="Đang mở đăng ký"
+          value={openRegistrationCount}
+          helper="BTC đã bật trạng thái nhận đội"
+          icon="how_to_reg"
           tone="success"
         />
         <StatCard
-          label="Ngày bắt đầu"
-          value={primaryEvent ? formatDate(primaryEvent.startDate) : "—"}
-          helper="Theo cuộc thi đầu tiên"
-          icon="schedule"
+          label="Bản nháp"
+          value={draftCount}
+          helper="Chưa mở cho thí sinh đăng ký"
+          icon="edit_note"
           tone="warning"
         />
       </section>
@@ -82,6 +84,18 @@ export function EventManagementPage() {
         </p>
       ) : null}
 
+      {events.length === 0 ? (
+        <EmptyState
+          icon="event_busy"
+          title="Chưa có cuộc thi"
+          description="Tạo cuộc thi mới để bắt đầu thiết lập đăng ký, bảng thi và đề."
+          action={
+            <ButtonLink to="/organizer/events/new" icon={<Icon name="add_circle" />}>
+              Tạo cuộc thi
+            </ButtonLink>
+          }
+        />
+      ) : (
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
         <div className="overflow-x-auto">
           <table className="min-w-full text-left">
@@ -123,6 +137,7 @@ export function EventManagementPage() {
           </table>
         </div>
       </section>
+      )}
     </div>
   );
 }

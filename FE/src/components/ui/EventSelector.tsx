@@ -5,16 +5,24 @@ interface EventSelectorProps {
   eventId: number | null;
   onChange: (eventId: number) => void;
   className?: string;
+  /** Nhãn dropdown — mặc định dùng cho BTC */
+  label?: string;
 }
 
-export function EventSelector({ events, eventId, onChange, className = "" }: EventSelectorProps) {
+export function EventSelector({
+  events,
+  eventId,
+  onChange,
+  className = "",
+  label = "Hackathon"
+}: EventSelectorProps) {
   if (events.length <= 1) {
     return null;
   }
 
   return (
     <label className={`flex items-center gap-2 ${className}`}>
-      <span className="font-label-sm normal-case text-on-surface-variant">Cuộc thi</span>
+      <span className="font-label-sm normal-case text-on-surface-variant">{label}</span>
       <select
         value={eventId ?? ""}
         onChange={(event) => onChange(Number(event.target.value))}

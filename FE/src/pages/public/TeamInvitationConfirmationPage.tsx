@@ -4,6 +4,7 @@ import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button, ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
+import { InvitationPanel } from "../../components/layout/InvitationPanel";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { confirmInvitation, declineInvitation, type TeamDetailResponse } from "../../services/registrationService";
@@ -18,7 +19,7 @@ export function TeamInvitationConfirmationPage() {
 
   async function respond(nextStatus: "CONFIRMED" | "REJECTED") {
     if (!invitationToken) {
-      notify("Lien ket lời mời khong hop le.", "danger");
+      notify("Liên kết lời mời không hợp lệ.", "danger");
       return;
     }
     setSubmitting(true);
@@ -38,24 +39,24 @@ export function TeamInvitationConfirmationPage() {
 
   if (!invitationToken) {
     return (
-      <div className="mx-auto max-w-3xl space-y-lg">
+      <InvitationPanel>
         <PageHeader
-          eyebrow="Lời mời tham gia doi"
-          title="Lien ket khong hop le"
-          description="Vui lòng mo lời mời tu email hoac trạng thái lời mời co token hop le."
+          eyebrow="Lời mời tham gia đội"
+          title="Liên kết không hợp lệ"
+          description="Vui lòng mở lời mời từ email hoặc trang trạng thái lời mời có token hợp lệ."
         />
         <ButtonLink to="/events" variant="secondary">
           Quay lại danh sách cuộc thi
         </ButtonLink>
-      </div>
+      </InvitationPanel>
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-lg">
+    <InvitationPanel>
       <PageHeader
-        eyebrow="Lời mời tham gia doi"
-        title={team?.name ?? "Xac nhan lời mời"}
+        eyebrow="Lời mời tham gia đội"
+        title={team?.name ?? "Xác nhận lời mời"}
         description="Xác nhận hoặc từ chối lời mời. Mỗi email chỉ được thuộc một đội trong cùng cuộc thi."
         actions={<Badge tone={getStatusTone(status)}>{getStatusLabel(status)}</Badge>}
       />
@@ -69,13 +70,13 @@ export function TeamInvitationConfirmationPage() {
           <div>
             <p className="font-label-sm normal-case text-on-surface-variant">Đội thi</p>
             <p className="font-headline-sm text-on-surface">{team?.name ?? "Sẽ hiện sau khi xử lý"}</p>
-            <p className="font-body-sm text-on-surface-variant">Trạng thái hien tai: {getStatusLabel(status)}</p>
+            <p className="font-body-sm text-on-surface-variant">Trạng thái hiện tại: {getStatusLabel(status)}</p>
           </div>
         </div>
 
         {team?.members?.length ? (
           <div className="mt-md rounded-lg border border-outline-variant p-md">
-            <p className="mb-sm font-label-md text-on-surface">Thành viên trong doi</p>
+            <p className="mb-sm font-label-md text-on-surface">Thành viên trong đội</p>
             <ul className="space-y-1 font-body-sm text-on-surface-variant">
               {team.members.map((member) => (
                 <li key={member.id}>{member.fullName} - {member.email} ({getStatusLabel(member.status)})</li>
@@ -86,7 +87,7 @@ export function TeamInvitationConfirmationPage() {
 
         <div className="mt-lg flex flex-wrap gap-sm border-t border-outline-variant pt-md">
           <Button disabled={status === "CONFIRMED" || submitting} onClick={() => respond("CONFIRMED")}>
-            Xac nhan tham gia
+            Xác nhận tham gia
           </Button>
           <Button variant="secondary" disabled={status === "REJECTED" || submitting} onClick={() => respond("REJECTED")}>
             Từ chối lời mời
@@ -99,6 +100,6 @@ export function TeamInvitationConfirmationPage() {
           </ButtonLink>
         </div>
       </section>
-    </div>
+    </InvitationPanel>
   );
 }

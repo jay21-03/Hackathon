@@ -42,5 +42,5 @@ test("unauthenticated user is redirected to login from workspace", async ({ page
 test("participant cannot access organizer dashboard", async ({ page }) => {
   await seedAuth(page, "participant");
   await page.goto("/organizer/dashboard");
-  await expect(page).toHaveURL(/\/me$/);
+  await expect(page).toHaveURL(/\/events$/);
 });

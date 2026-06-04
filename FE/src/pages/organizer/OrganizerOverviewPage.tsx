@@ -1,70 +1,85 @@
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "../../components/ui/Badge";
 import { EventSelector } from "../../components/ui/EventSelector";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
-import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { RoundCountdown } from "../../components/ui/RoundCountdown";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useEventRound } from "../../hooks/useEventRound";
+import { useEventTeams } from "../../hooks/useEventTeams";
 import { fetchEventDetail } from "../../services/eventsApi";
-import { fetchEventTeams } from "../../services/registrationService";
+import { fetchEventRounds, fetchRoundBoards } from "../../services/contestApi";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
+import { queryKeys } from "../../lib/queryKeys";
 
 export function OrganizerOverviewPage() {
-  const { eventId, event, events, setEventId, loading, error } = useActiveEvent();
+  const { eventId, event, events, setEventId, loading, error } = useActiveEvent({ autoSelectFirst: true });
   const { roundId, countdown, loading: roundLoading } = useEventRound(eventId);
-  const [confirmedTeams, setConfirmedTeams] = useState(0);
-  const [pendingTeams, setPendingTeams] = useState(0);
-  const [waitlistTeams, setWaitlistTeams] = useState(0);
-  const [quota, setQuota] = useState(0);
-  const [statsLoading, setStatsLoading] = useState(true);
+  const { teams, loading: teamsLoading } = useEventTeams(eventId);
 
-  useEffect(() => {
-    if (!eventId) {
-      setStatsLoading(false);
-      return;
+  const detailQuery = useQuery({
+    queryKey: [...queryKeys.events.detail(eventId ?? ""), "organizer-stats"],
+    queryFn: () => fetchEventDetail(String(eventId)),
+    enabled: Boolean(eventId)
+  });
+
+  const structureQuery = useQuery({
+    queryKey: [...queryKeys.rounds.byEvent(eventId), "structure-count"],
+    enabled: Boolean(eventId),
+    queryFn: async () => {
+      const rounds = await fetchEventRounds(eventId!);
+      let boardCount = 0;
+      for (const round of rounds) {
+        const boards = await fetchRoundBoards(round.id);
+        boardCount += boards.length;
+      }
+      return { roundCount: rounds.length, boardCount };
     }
+  });
 
-    let cancelled = false;
-    setStatsLoading(true);
+  const confirmedTeams = teams.filter((team) => team.status === "CONFIRMED").length;
+  const pendingTeams = teams.filter((team) => team.status === "PENDING").length;
+  const waitlistTeams = teams.filter((team) => team.status === "WAITLIST").length;
+  const quota = detailQuery.data?.maxTeams ?? 0;
+  const boardCount = structureQuery.data?.boardCount ?? 0;
 
-    Promise.all([fetchEventTeams(eventId), fetchEventDetail(String(eventId))])
-      .then(([teams, detail]) => {
-        if (cancelled) return;
-        setConfirmedTeams(teams.filter((team) => team.status === "CONFIRMED").length);
-        setPendingTeams(teams.filter((team) => team.status === "PENDING").length);
-        setWaitlistTeams(teams.filter((team) => team.status === "WAITLIST").length);
-        setQuota(detail?.maxTeams ?? 0);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setConfirmedTeams(0);
-          setPendingTeams(0);
-          setWaitlistTeams(0);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setStatsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId]);
-
-  if (loading || statsLoading) {
+  if (loading || teamsLoading || detailQuery.isLoading) {
     return <ModuleSkeleton rows={4} />;
   }
+
+  const nextAction =
+    pendingTeams > 0
+      ? {
+          text: `${pendingTeams} đội đang chờ duyệt.`,
+          to: "/organizer/registrations",
+          label: "Xem đăng ký đội"
+        }
+      : confirmedTeams > 0 && boardCount === 0
+        ? {
+            text: "Đã có đội xác nhận — cần tạo bảng và gán slot.",
+            to: "/organizer/boards",
+            label: "Thiết lập bảng thi"
+          }
+        : confirmedTeams === 0
+          ? {
+              text: "Chưa có đội xác nhận — kiểm tra đăng ký hoặc mở đăng ký.",
+              to: "/organizer/registrations",
+              label: "Xem đăng ký"
+            }
+          : {
+              text: "Tiếp tục cấu hình đề hoặc phân công mentor.",
+              to: "/organizer/problems",
+              label: "Cấu hình đề thi"
+            };
 
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Tổng quan ban tổ chức"
+        eyebrow="Tổng quan"
         title={event?.name ?? "Cuộc thi"}
-        description="Theo dõi đăng ký, phân công bảng và mentor/giám khảo."
+        description="Số liệu vận hành theo cuộc thi đang chọn. Chi tiết thiết lập tại mục Cuộc thi trên sidebar."
         actions={
           <>
             {event ? (
@@ -85,71 +100,42 @@ export function OrganizerOverviewPage() {
 
       <section className="grid gap-md md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Doi xác nhận"
+          label="Đội đã xác nhận"
           value={confirmedTeams}
-          helper={`${waitlistTeams} doi trong danh sach cho`}
+          helper={`${waitlistTeams} đội danh sách chờ`}
           icon="groups"
           tone="success"
         />
         <StatCard
           label="Chờ duyệt"
           value={pendingTeams}
-          helper="Can xử lý trong muc đăng ký"
+          helper={pendingTeams > 0 ? "Cần xử lý" : "Không có pending"}
           icon="pending_actions"
           tone="warning"
         />
         <StatCard
           label="Quota"
           value={quota ? `${confirmedTeams}/${quota}` : confirmedTeams}
-          helper="Số đội đã xác nhận / quota"
+          helper="Đội xác nhận / quota"
           icon="fact_check"
           tone="primary"
         />
         <StatCard
-          label="Cuộc thi"
-          value={events.length}
-          helper="Tong so cuộc thi dang quan ly"
-          icon="event"
+          label="Bảng thi"
+          value={boardCount}
+          helper={`${structureQuery.data?.roundCount ?? 0} vòng`}
+          icon="view_module"
         />
       </section>
-
-      <WorkflowSteps
-        title="Thứ tự vận hành"
-        description="Cac buoc chinh trong pham vi he thong hien tai."
-        steps={[
-          {
-            label: "Đăng ký đội",
-            detail: "Duyệt đội và quản lý danh sách chờ.",
-            to: "/organizer/registrations",
-            state: pendingTeams > 0 ? "active" : "done"
-          },
-          {
-            label: "Phân công bang",
-            detail: "Random hoặc thủ công gán đội vào slot.",
-            to: "/organizer/boards",
-            state: confirmedTeams > 0 ? "active" : "next"
-          },
-          {
-            label: "Mentor & giám khảo",
-            detail: "Gán mentor va giám khảo theo bang.",
-            to: "/organizer/assignments",
-            state: "next"
-          }
-        ]}
-      />
 
       <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
         <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-headline-sm text-on-surface">Can xử lý tiep</h2>
-            <p className="font-body-sm text-on-surface-variant">
-              {pendingTeams > 0
-                ? `${pendingTeams} doi dang cho duyệt.`
-                : "Không có đội pending cần xử lý ngay."}
-            </p>
+            <h2 className="font-headline-sm text-on-surface">Việc cần làm</h2>
+            <p className="font-body-sm text-on-surface-variant">{nextAction.text}</p>
           </div>
-          <Link to="/organizer/registrations" className="font-label-md text-primary">
-            Xem đăng ký
+          <Link to={nextAction.to} className="font-label-md text-primary hover:underline">
+            {nextAction.label} →
           </Link>
         </div>
       </section>

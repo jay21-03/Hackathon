@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { mockCoreApis } from "./helpers/mockApi";
 import { seedAuth } from "./helpers/auth";
+import { waitForWorkspace } from "./helpers/waitForApp";
 
 test.beforeEach(async ({ page }) => {
   await mockCoreApis(page);
@@ -13,11 +14,11 @@ test("organizer can open create event form", async ({ page }) => {
   await expect(page.locator("body")).toContainText("Tên cuộc thi");
 });
 
-test("organizer wizard shows setup steps", async ({ page }) => {
+test("organizer edit page shows integrated setup steps", async ({ page }) => {
   await seedAuth(page, "organizer");
-  await page.goto("/organizer/events/wizard");
-  await expect(page.locator("body")).toContainText("Quy trình cấu hình");
-  await expect(page.locator("body")).toContainText("Thông tin cơ bản");
+  await page.goto("/organizer/events/basic-info");
+  await waitForWorkspace(page, "Quy trình thiết lập");
+  await expect(page.locator("body")).toContainText("Thông tin");
 });
 
 test("participant problem page waits for backend API", async ({ page }) => {

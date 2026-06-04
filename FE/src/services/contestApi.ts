@@ -37,6 +37,7 @@ export interface ProblemResponse {
   attachmentUrl?: string | null;
   externalLink?: string | null;
   releaseAt: string;
+  closeAt?: string | null;
 }
 
 export interface RoundCountdownResponse {
@@ -44,11 +45,62 @@ export interface RoundCountdownResponse {
   remainingSeconds: number;
 }
 
+/** BTC — cần role ORGANIZER */
 export async function fetchEventRounds(eventId: number) {
   const { data } = await apiClient.get<ApiResponse<RoundResponse[]>>(
     `/v1/admin/events/${eventId}/rounds`
   );
   return data.data ?? [];
+}
+
+/** Thí sinh / countdown — không cần admin */
+export async function fetchPublicEventRounds(eventId: number) {
+  const { data } = await apiClient.get<ApiResponse<RoundResponse[]>>(
+    `/v1/events/${eventId}/rounds`
+  );
+  return data.data ?? [];
+}
+
+export interface MyBoardPeer {
+  teamId: number;
+  teamName: string;
+  slotNumber: number;
+}
+
+export interface MyBoardResponse {
+  assigned: boolean;
+  reason?: "NO_TEAM" | "TEAM_NOT_CONFIRMED" | "NOT_ASSIGNED";
+  teamId?: number;
+  roundId?: number;
+  roundName?: string;
+  boardId?: number;
+  boardName?: string;
+  slotNumber?: number;
+  peers?: MyBoardPeer[];
+}
+
+export interface MyProblemResponse {
+  available: boolean;
+  reason?: string;
+  releaseAt?: string;
+  closeAt?: string;
+  problem?: ProblemResponse;
+}
+
+export async function fetchMyBoard(eventId: number) {
+  const { data } = await apiClient.get<ApiResponse<MyBoardResponse>>(
+    `/v1/my/board`,
+    { params: { eventId } }
+  );
+  return data.data ?? { assigned: false, reason: "NOT_ASSIGNED" };
+}
+
+export async function fetchMyProblem(eventId: number) {
+  const { data } = await apiClient.get<ApiResponse<MyProblemResponse>>(
+    `/v1/my/problem`,
+    { params: { eventId } }
+  );
+  return data.data ?? { available: false, reason: "NOT_ASSIGNED" };
 }
 
 export async function fetchRoundBoards(roundId: number) {
@@ -110,12 +162,24 @@ export async function assignTeamToSlot(
   return data.data;
 }
 
+export async function unassignTeamFromSlot(roundId: number, slotId: number) {
+  const { data } = await apiClient.post<ApiResponse<unknown>>(
+    `/v1/admin/rounds/${roundId}/boards/slots/${slotId}/unassign`
+  );
+  return data.data;
+}
+
+export async function deleteBoardSlot(slotId: number) {
+  await apiClient.delete(`/v1/admin/board-slots/${slotId}`);
+}
+
 export interface CreateProblemPayload {
   title: string;
   description?: string;
   attachmentUrl?: string;
   externalLink?: string;
   releaseAt: string;
+  closeAt: string;
 }
 
 export async function createProblem(boardId: number, payload: CreateProblemPayload) {
@@ -138,6 +202,10 @@ export async function updateProblem(problemId: number, payload: Partial<CreatePr
     throw new Error(data.message || "Cập nhật đề thi that bai");
   }
   return data.data;
+}
+
+export async function deleteProblem(problemId: number) {
+  await apiClient.delete(`/v1/admin/problems/${problemId}`);
 }
 
 export interface CreateRoundPayload {

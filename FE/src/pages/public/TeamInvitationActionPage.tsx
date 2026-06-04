@@ -21,7 +21,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 import { setStoredActiveEventId } from "../../hooks/useActiveEvent";
-import { queryKeys } from "../../lib/queryKeys";
+import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
 
 import {
 
@@ -104,7 +104,7 @@ export function TeamInvitationActionPage({ action }: TeamInvitationActionPagePro
           setStoredActiveEventId(response.eventId);
         }
 
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teams.all });
+        await invalidateAfterTeamMutation(queryClient);
 
         notify(
 
@@ -115,7 +115,6 @@ export function TeamInvitationActionPage({ action }: TeamInvitationActionPagePro
         );
 
       } catch (err) {
-
         const apiMessage = getApiErrorMessage(err, "");
         setError(invitationErrorMessage(apiMessage, isAccept));
 

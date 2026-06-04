@@ -37,6 +37,7 @@ export interface Problem {
   boardId: number;
   title: string;
   releaseAt: string;
+  closeAt?: string | null;
 }
 
 export interface ScoreSheet {

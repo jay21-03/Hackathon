@@ -12,7 +12,17 @@ export const queryKeys = {
   rounds: {
     all: ["rounds"] as const,
     byEvent: (eventId: number | null) => [...queryKeys.rounds.all, "event", eventId] as const,
+    publicByEvent: (eventId: number | null) =>
+      [...queryKeys.rounds.all, "public", eventId] as const,
     countdown: (roundId: number) => [...queryKeys.rounds.all, "countdown", roundId] as const
+  },
+  myBoard: {
+    all: ["myBoard"] as const,
+    byEvent: (eventId: number | null) => [...queryKeys.myBoard.all, eventId] as const
+  },
+  myProblem: {
+    all: ["myProblem"] as const,
+    byEvent: (eventId: number | null) => [...queryKeys.myProblem.all, eventId] as const
   },
   users: {
     admin: () => ["users", "admin"] as const

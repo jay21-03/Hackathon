@@ -67,7 +67,7 @@ export function getRoleHome(role: UserRole) {
   if (role === "organizer") return "/organizer/dashboard";
   if (role === "mentor") return "/mentor/dashboard";
   if (role === "judge") return "/judge/dashboard";
-  return "/me";
+  return "/events";
 }
 
 export const roleLabels: Record<UserRole, string> = {

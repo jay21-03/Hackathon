@@ -222,6 +222,10 @@ html.dark {
     @apply bg-surface-container-high;
   }
 
+  .table-row-interactive {
+    @apply transition-colors even:bg-surface-container-low/50 hover:bg-surface-container-high/80;
+  }
+
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }

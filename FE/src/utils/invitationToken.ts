@@ -2,7 +2,7 @@
 export function decodeInvitationTokenParam(value: string | null): string | null {
   if (!value) return null;
 
-  let trimmed = value.trim();
+  let trimmed = value.trim().replace(/ /g, "+");
   try {
     trimmed = decodeURIComponent(trimmed);
   } catch {

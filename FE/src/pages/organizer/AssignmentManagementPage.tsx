@@ -23,6 +23,8 @@ import {
   type RoundResponse
 } from "../../services/contestApi";
 import { fetchAdminUsers, type UserSummaryResponse } from "../../services/userService";
+import { getApiErrorMessage } from "../../utils/apiError";
+import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 type BoardAssignments = {
@@ -32,7 +34,7 @@ type BoardAssignments = {
 
 export function AssignmentManagementPage() {
   const { notify } = useToast();
-  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent();
+  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const [rounds, setRounds] = useState<RoundResponse[]>([]);
   const [boards, setBoards] = useState<BoardResponse[]>([]);
   const [users, setUsers] = useState<UserSummaryResponse[]>([]);
@@ -126,8 +128,8 @@ export function AssignmentManagementPage() {
       await assignMentor(boardId, userId);
       await reload();
       notify("Đã gán mentor.", "success");
-    } catch {
-      notify("Gán mentor thất bại.", "danger");
+    } catch (err) {
+      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Gán mentor thất bại.")), "danger");
     } finally {
       setBusyBoardId(null);
     }
@@ -144,8 +146,8 @@ export function AssignmentManagementPage() {
       await assignJudge(boardId, userId);
       await reload();
       notify("Đã gán giám khảo.", "success");
-    } catch {
-      notify("Gán giám khảo thất bại.", "danger");
+    } catch (err) {
+      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Gán giám khảo thất bại.")), "danger");
     } finally {
       setBusyBoardId(null);
     }
@@ -157,8 +159,8 @@ export function AssignmentManagementPage() {
       await removeMentor(boardId, mentorId);
       await reload();
       notify("Đã gỡ mentor.", "success");
-    } catch {
-      notify("Gỡ mentor thất bại.", "danger");
+    } catch (err) {
+      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Gỡ mentor thất bại.")), "danger");
     } finally {
       setBusyBoardId(null);
     }
@@ -170,8 +172,8 @@ export function AssignmentManagementPage() {
       await removeJudge(boardId, judgeId);
       await reload();
       notify("Đã gỡ giám khảo.", "success");
-    } catch {
-      notify("Gỡ giám khảo thất bại.", "danger");
+    } catch (err) {
+      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Gỡ giám khảo thất bại.")), "danger");
     } finally {
       setBusyBoardId(null);
     }
@@ -202,7 +204,7 @@ export function AssignmentManagementPage() {
 
       {boards.length === 0 ? (
         <p className="font-body-sm text-on-surface-variant">
-          Chưa có bảng thi — tạo vòng và bảng tại trang Quản lý bảng chấm trước.
+          Chưa có bảng thi — tạo vòng và bảng tại mục Bảng thi trước.
         </p>
       ) : (
         <section className="space-y-md">

@@ -32,5 +32,5 @@ test("event list shows error when API is unavailable", async ({ page }) => {
   });
 
   await page.goto("/events");
-  await expect(page.locator("body")).toContainText(/Không tải|lỗi|thử lại/i);
+  await expect(page.locator("body")).toContainText(/Không tải được danh sách cuộc thi/i);
 });

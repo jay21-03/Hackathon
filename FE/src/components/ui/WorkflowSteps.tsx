@@ -6,6 +6,8 @@ export interface WorkflowStep {
   label: string;
   detail: string;
   to?: string;
+  /** In-page anchor on same route */
+  href?: string;
   state?: "done" | "active" | "next" | "blocked";
 }
 
@@ -19,8 +21,8 @@ const stateTone = {
 const stateLabel = {
   done: "Hoàn tất",
   active: "Đang xử lý",
-  next: "Tiep theo",
-  blocked: "Can kiem tra"
+  next: "Tiếp theo",
+  blocked: "Chờ bước trước"
 };
 
 const stateIcon = {
@@ -44,7 +46,7 @@ export function WorkflowSteps({ title, description, steps }: WorkflowStepsProps)
         <p className="font-body-sm text-on-surface-variant">{description}</p>
       </div>
 
-      <div className="mt-md grid gap-sm xl:grid-cols-5">
+      <div className="mt-md grid gap-sm sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))]">
         {steps.map((step, index) => {
           const state = step.state ?? "next";
           const content = (
@@ -69,6 +71,10 @@ export function WorkflowSteps({ title, description, steps }: WorkflowStepsProps)
             <Link key={`${step.label}-${index}`} to={step.to} className={className}>
               {content}
             </Link>
+          ) : step.href ? (
+            <a key={`${step.label}-${index}`} href={step.href} className={className}>
+              {content}
+            </a>
           ) : (
             <div key={`${step.label}-${index}`} className={className}>
               {content}

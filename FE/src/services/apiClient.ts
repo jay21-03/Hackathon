@@ -19,12 +19,24 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+const PUBLIC_401_PATH_PREFIXES = [
+  "/login",
+  "/events",
+  "/team-invitations",
+  "/team-invitation",
+  "/register"
+];
+
+function shouldRedirectOn401(path: string) {
+  return !PUBLIC_401_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && typeof window !== "undefined") {
       const path = window.location.pathname;
-      if (!path.startsWith("/login") && !path.startsWith("/events")) {
+      if (shouldRedirectOn401(path)) {
         window.location.assign("/login");
       }
     }

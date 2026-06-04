@@ -3,7 +3,10 @@ import { Badge } from "../../components/ui/Badge";
 import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
+import { InvitationPanel } from "../../components/layout/InvitationPanel";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { tableRowClass } from "../../components/ui/DataTable";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { fetchMyTeams } from "../../services/registrationService";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
@@ -56,16 +59,23 @@ export function InvitationStatusPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-lg">
+    <InvitationPanel>
       <PageHeader
         eyebrow="Trạng thái lời mời"
         title={teamName}
         description="Theo dõi thành viên đã xác nhận, đang chờ phản hồi hoặc đã từ chối lời mời."
-        actions={<Badge tone={confirmed === invitationRows.length ? "success" : "warning"}>{confirmed}/{invitationRows.length} da xác nhận</Badge>}
+        actions={<Badge tone={confirmed === invitationRows.length ? "success" : "warning"}>{confirmed}/{invitationRows.length} đã xác nhận</Badge>}
       />
 
       {error ? <p className="rounded-lg border border-error/40 bg-error-container/40 p-md font-body-sm text-on-surface">{error}</p> : null}
 
+      {invitationRows.length === 0 ? (
+        <EmptyState
+          icon="groups"
+          title="Chưa có thành viên"
+          description="Đăng ký đội hoặc mời thành viên từ trang Đội của tôi."
+        />
+      ) : (
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
         <div className="overflow-x-auto">
           <table className="min-w-full text-left">
@@ -78,7 +88,7 @@ export function InvitationStatusPage() {
             </thead>
             <tbody className="table-divider">
               {invitationRows.map((row) => (
-                <tr key={row.id} className="font-body-sm text-on-surface">
+                <tr key={row.id} className={tableRowClass}>
                   <td className="px-md py-md font-label-md">{row.fullName}</td>
                   <td className="px-md py-md break-all">{row.email}</td>
                   <td className="px-md py-md">
@@ -90,10 +100,11 @@ export function InvitationStatusPage() {
           </table>
         </div>
       </section>
+      )}
 
       <ButtonLink to="/team-invitation" variant="secondary" icon={<Icon name="mail" />}>
-        Mo lời mời
+        Mở lời mời
       </ButtonLink>
-    </div>
+    </InvitationPanel>
   );
 }

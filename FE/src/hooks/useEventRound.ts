@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchEventRounds, fetchRoundCountdown, type RoundResponse } from "../services/contestApi";
+import { fetchPublicEventRounds, fetchRoundCountdown, type RoundResponse } from "../services/contestApi";
 import { queryKeys } from "../lib/queryKeys";
 import { getApiErrorMessage } from "../utils/apiError";
 
 export function useEventRound(eventId: number | null) {
   const roundsQuery = useQuery({
-    queryKey: queryKeys.rounds.byEvent(eventId),
+    queryKey: queryKeys.rounds.publicByEvent(eventId),
     queryFn: async (): Promise<RoundResponse | null> => {
-      const rounds = await fetchEventRounds(eventId!);
+      const rounds = await fetchPublicEventRounds(eventId!);
       return rounds[0] ?? null;
     },
     enabled: Boolean(eventId)
