@@ -19,4 +19,8 @@ public class CreateProblemRequest {
     @NotNull(message = "releaseAt must not be null")
     @Schema(type = "string", example = "2026-06-01T08:00:00")
     private OffsetDateTime releaseAt;
+
+    @NotNull(message = "closeAt must not be null")
+    @Schema(type = "string", example = "2026-06-01T17:00:00")
+    private OffsetDateTime closeAt;
 }

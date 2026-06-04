@@ -9,6 +9,8 @@ public interface BoardSlotRepository extends JpaRepository<BoardSlot, Long> {
 
 	List<BoardSlot> findByRoundId(Long roundId);
 
+	List<BoardSlot> findByTeamId(Long teamId);
+
 	boolean existsByBoardIdAndTeamNumber(Long boardId, Integer teamNumber);
 
 	boolean existsByBoardIdAndTeamNumberAndIdNot(Long boardId, Integer teamNumber, Long id);

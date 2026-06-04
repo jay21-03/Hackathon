@@ -61,11 +61,22 @@ public class TeamQueryController {
 
     @GetMapping("/events/{eventId}/teams")
     @SecurityRequirement(name = "bearerAuth")
-    public ResponseEntity<ApiResponse<List<TeamDetailDto>>> getEventTeams(@PathVariable Long eventId) {
+    public ResponseEntity<ApiResponse<List<TeamDetailDto>>> getEventTeams(
+            @PathVariable Long eventId,
+            @RequestParam(required = false) String status) {
         CurrentUserPrincipal currentUser = currentUserProvider.getCurrentUser();
         if (currentUser == null || currentUser.getRoles() == null || !currentUser.getRoles().contains("ORGANIZER")) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "Forbidden");
         }
-        return ResponseEntity.ok(ApiResponse.ok(registrationService.getEventTeams(eventId)));
+        com.seal.hackathon.common.enums.TeamStatus teamStatus = null;
+        if (status != null && !status.isBlank()) {
+            try {
+                teamStatus = com.seal.hackathon.common.enums.TeamStatus.valueOf(status.trim().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid team status");
+            }
+        }
+        return ResponseEntity.ok(ApiResponse.ok(registrationService.getEventTeams(eventId, teamStatus)));
     }
 }

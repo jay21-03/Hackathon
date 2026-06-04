@@ -20,4 +20,6 @@ public interface RegistrationService {
     List<TeamDetailDto> getMyTeams(Long eventId, Long userId);
 
     List<TeamDetailDto> getEventTeams(Long eventId);
+
+    List<TeamDetailDto> getEventTeams(Long eventId, com.seal.hackathon.common.enums.TeamStatus status);
 }

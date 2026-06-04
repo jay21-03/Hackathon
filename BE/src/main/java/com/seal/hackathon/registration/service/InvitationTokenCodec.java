@@ -35,7 +35,8 @@ public final class InvitationTokenCodec {
 
     public static InvitationTokenParts parse(String token) {
         String normalized = normalizeIncomingToken(token);
-        String[] segments = normalized.split("\\.", 3);
+        // Token shape: teamId.teamMemberId.nonce.rawToken (4 segments; raw segment may not contain dots)
+        String[] segments = normalized.split("\\.", 4);
         if (segments.length != 4) {
             throw new BusinessException("Invalid invitation token");
         }

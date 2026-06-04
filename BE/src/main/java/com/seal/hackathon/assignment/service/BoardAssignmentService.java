@@ -45,6 +45,9 @@ public class BoardAssignmentService {
         boardRepository.findById(boardId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
 
         Long mentorId = request.getUserId();
+        if (mentorId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId must not be null");
+        }
         if (!userRoleRepository.existsByUserIdAndRole(mentorId, SystemRole.MENTOR)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TARGET_NOT_MENTOR");
         }
@@ -75,6 +78,9 @@ public class BoardAssignmentService {
         boardRepository.findById(boardId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
 
         Long judgeId = request.getUserId();
+        if (judgeId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId must not be null");
+        }
         if (!userRoleRepository.existsByUserIdAndRole(judgeId, SystemRole.JUDGE)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TARGET_NOT_JUDGE");
         }

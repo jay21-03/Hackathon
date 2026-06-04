@@ -256,7 +256,9 @@ public class RegistrationServiceImpl implements RegistrationService {
     @Transactional
     public TeamDetailDto updateTeamStatus(Long teamId, TeamStatus status, String reason, Long actorUserId, String actorEmail, boolean organizer) {
         if (!organizer) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Organizer role required. Sign in with an account that has ORGANIZER permission.");
         }
 
         Team team = teamRepository.findById(teamId)
@@ -450,9 +452,17 @@ public class RegistrationServiceImpl implements RegistrationService {
     @Override
     @Transactional(readOnly = true)
     public List<TeamDetailDto> getEventTeams(Long eventId) {
+        return getEventTeams(eventId, null);
+    }
+
+    @Override
+    public List<TeamDetailDto> getEventTeams(Long eventId, TeamStatus status) {
         eventRepository.findById(eventId)
                 .orElseThrow(() -> new BusinessException("Event not found"));
-        return teamRepository.findByEventId(eventId).stream()
+        List<com.seal.hackathon.registration.entity.Team> teams = status == null
+                ? teamRepository.findByEventId(eventId)
+                : teamRepository.findByEventIdAndStatus(eventId, status);
+        return teams.stream()
                 .map(this::loadTeamDetail)
                 .collect(Collectors.toList());
     }

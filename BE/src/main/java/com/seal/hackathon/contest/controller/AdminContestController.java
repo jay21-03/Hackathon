@@ -3,6 +3,7 @@ package com.seal.hackathon.contest.controller;
 import com.seal.hackathon.common.response.ApiResponse;
 import com.seal.hackathon.contest.dto.BoardResponse;
 import com.seal.hackathon.contest.dto.BoardSlotResponse;
+import com.seal.hackathon.contest.dto.BoardTeamResponse;
 import com.seal.hackathon.contest.dto.CreateBoardRequest;
 import com.seal.hackathon.contest.dto.CreateBoardSlotRequest;
 import com.seal.hackathon.contest.dto.CreateEventRequest;
@@ -20,6 +21,7 @@ import com.seal.hackathon.contest.service.ContestManagementService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -55,6 +57,16 @@ public class AdminContestController {
             @PathVariable Long eventId,
             @Valid @RequestBody UpdateEventRequest request) {
         return ApiResponse.ok(contestManagementService.updateEvent(eventId, request));
+    }
+
+    @GetMapping("/events/{eventId}")
+    public ApiResponse<EventResponse> getEvent(@PathVariable Long eventId) {
+        return ApiResponse.ok(contestManagementService.getAdminEvent(eventId));
+    }
+
+    @PostMapping("/events/{eventId}/open-registration")
+    public ApiResponse<EventResponse> openEventRegistration(@PathVariable Long eventId) {
+        return ApiResponse.ok(contestManagementService.openEventRegistration(eventId));
     }
 
     @GetMapping("/events/{eventId}/rounds")
@@ -137,6 +149,18 @@ public class AdminContestController {
         return ApiResponse.ok(contestManagementService.assignTeamToSlot(roundId, slotId, request));
     }
 
+    @PostMapping("/rounds/{roundId}/boards/slots/{slotId}/unassign")
+    public ApiResponse<AssignResponse> unassignTeamFromSlot(
+            @PathVariable Long roundId,
+            @PathVariable Long slotId) {
+        return ApiResponse.ok(contestManagementService.unassignTeamFromSlot(roundId, slotId));
+    }
+
+    @GetMapping("/boards/{boardId}/teams")
+    public ApiResponse<List<BoardTeamResponse>> getTeamsByBoard(@PathVariable Long boardId) {
+        return ApiResponse.ok(contestManagementService.listTeamsByBoard(boardId));
+    }
+
     @PostMapping("/rounds/{roundId}/boards/slots/move")
     public ApiResponse<MoveResponse> moveTeamBetweenSlots(
             @PathVariable Long roundId,
@@ -180,5 +204,17 @@ public class AdminContestController {
             @PathVariable Long problemId,
             @Valid @RequestBody UpdateProblemRequest request) {
         return ApiResponse.ok(contestManagementService.updateProblem(problemId, request));
+    }
+
+    @DeleteMapping("/problems/{problemId}")
+    public ApiResponse<Void> deleteProblem(@PathVariable Long problemId) {
+        contestManagementService.deleteProblem(problemId);
+        return ApiResponse.ok(null);
+    }
+
+    @DeleteMapping("/board-slots/{slotId}")
+    public ApiResponse<Void> deleteBoardSlot(@PathVariable Long slotId) {
+        contestManagementService.deleteBoardSlot(slotId);
+        return ApiResponse.ok(null);
     }
 }

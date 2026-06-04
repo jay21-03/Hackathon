@@ -6,6 +6,7 @@ import com.seal.hackathon.assignment.service.BoardAssignmentService;
 import com.seal.hackathon.common.response.ApiResponse;
 import java.util.List;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,7 +30,8 @@ public class AssignmentController {
     }
 
     @PostMapping("/boards/{boardId}/mentors")
-    public ApiResponse<AssignmentResponse> assignMentor(@PathVariable Long boardId, @RequestBody CreateAssignmentRequest request) {
+    public ApiResponse<AssignmentResponse> assignMentor(
+            @PathVariable Long boardId, @Valid @RequestBody CreateAssignmentRequest request) {
         return ApiResponse.ok(boardAssignmentService.assignMentor(boardId, request));
     }
 
@@ -45,7 +47,8 @@ public class AssignmentController {
     }
 
     @PostMapping("/boards/{boardId}/judges")
-    public ApiResponse<AssignmentResponse> assignJudge(@PathVariable Long boardId, @RequestBody CreateAssignmentRequest request) {
+    public ApiResponse<AssignmentResponse> assignJudge(
+            @PathVariable Long boardId, @Valid @RequestBody CreateAssignmentRequest request) {
         return ApiResponse.ok(boardAssignmentService.assignJudge(boardId, request));
     }
 

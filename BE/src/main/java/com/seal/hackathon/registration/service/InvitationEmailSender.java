@@ -2,6 +2,7 @@ package com.seal.hackathon.registration.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,8 +48,9 @@ public class InvitationEmailSender {
             String teamMemberId = requiredText(root, "teamMemberId");
 
             String encodedToken = InvitationTokenCodec.encodeForEmailLink(inviteToken);
-            String acceptUrl = invitationBaseUrl + "/team-invitations/accept?token=" + encodedToken;
-            String declineUrl = invitationBaseUrl + "/team-invitations/decline?token=" + encodedToken;
+            String tokenQuery = URLEncoder.encode(encodedToken, StandardCharsets.UTF_8);
+            String acceptUrl = invitationBaseUrl + "/team-invitations/accept?token=" + tokenQuery;
+            String declineUrl = invitationBaseUrl + "/team-invitations/decline?token=" + tokenQuery;
 
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());

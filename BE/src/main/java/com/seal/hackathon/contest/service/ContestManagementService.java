@@ -8,6 +8,7 @@ import com.seal.hackathon.common.enums.RoundStatus;
 import com.seal.hackathon.common.enums.RoundType;
 import com.seal.hackathon.contest.dto.BoardResponse;
 import com.seal.hackathon.contest.dto.BoardSlotResponse;
+import com.seal.hackathon.contest.dto.BoardTeamResponse;
 import com.seal.hackathon.contest.dto.CreateBoardRequest;
 import com.seal.hackathon.contest.dto.CreateBoardSlotRequest;
 import com.seal.hackathon.contest.dto.CreateEventRequest;
@@ -32,10 +33,16 @@ import com.seal.hackathon.contest.entity.BoardSlotAssignmentAudit;
 import com.seal.hackathon.contest.dto.AssignRequest;
 import com.seal.hackathon.contest.dto.AssignResponse;
 import com.seal.hackathon.contest.dto.MoveResponse;
+import com.seal.hackathon.contest.dto.MyBoardPeerDto;
+import com.seal.hackathon.contest.dto.MyBoardResponse;
+import com.seal.hackathon.contest.dto.MyProblemResponse;
 import com.seal.hackathon.contest.dto.SwapResponse;
 import com.seal.hackathon.contest.dto.RandomAssignRequest;
 import com.seal.hackathon.contest.dto.RandomAssignResponse;
 import com.seal.hackathon.contest.dto.SlotAssignmentDetail;
+import com.seal.hackathon.registration.entity.Team;
+import com.seal.hackathon.registration.entity.TeamMember;
+import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.BoardSlotAssignmentAuditRepository;
@@ -164,6 +171,22 @@ public class ContestManagementService {
         return toEventResponse(eventRepository.save(event));
     }
 
+    @Transactional
+    public EventResponse openEventRegistration(Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        if (event.getStatus() == EventStatus.CANCELLED || event.getStatus() == EventStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot open registration for this event status");
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        if (event.getRegistrationEndAt() != null && now.isAfter(event.getRegistrationEndAt())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration end date has passed");
+        }
+        event.setStatus(EventStatus.REGISTRATION_OPEN);
+        event.setUpdatedAt(now);
+        return toEventResponse(eventRepository.save(event));
+    }
+
     @Transactional(readOnly = true)
     public List<EventListItemResponse> listPublicEvents() {
         return eventRepository.findAll(Sort.by(Sort.Direction.DESC, "startDate").and(Sort.by(Sort.Direction.DESC, "id")))
@@ -177,6 +200,13 @@ public class ContestManagementService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
         return toEventDetailResponse(event);
+    }
+
+    @Transactional(readOnly = true)
+    public EventResponse getAdminEvent(Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        return toEventResponse(event);
     }
 
     @Transactional(readOnly = true)
@@ -381,10 +411,19 @@ public class ContestManagementService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "SLOT_OCCUPIED");
         }
 
-        // validate team exists and is CONFIRMED
+        Long teamId = request.getTeamId();
+        if (teamId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "teamId must not be null");
+        }
+
+        Round round = getRoundEntity(roundId);
         com.seal.hackathon.registration.entity.Team teamEntity =
-            teamRepository.findById(request.getTeamId())
+            teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
+
+        if (!round.getEventId().equals(teamEntity.getEventId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TEAM_EVENT_MISMATCH");
+        }
 
         if (teamEntity.getStatus() != com.seal.hackathon.common.enums.TeamStatus.CONFIRMED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TEAM_NOT_CONFIRMED");
@@ -392,13 +431,13 @@ public class ContestManagementService {
 
         // check team not already assigned in this round
         boolean alreadyAssigned = boardSlotRepository.findByRoundId(roundId).stream()
-                .anyMatch(bs -> request.getTeamId().equals(bs.getTeamId()));
-        if (alreadyAssigned && (slot.getTeamId() == null || !slot.getTeamId().equals(request.getTeamId()))) {
+                .anyMatch(bs -> teamId.equals(bs.getTeamId()));
+        if (alreadyAssigned && (slot.getTeamId() == null || !slot.getTeamId().equals(teamId))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "TEAM_ALREADY_ASSIGNED");
         }
 
         Long previous = slot.getTeamId();
-        slot.setTeamId(request.getTeamId());
+        slot.setTeamId(teamId);
         slot.setAssignedAt(OffsetDateTime.now());
         slot.setCreatedAt(slot.getCreatedAt());
         boardSlotRepository.save(slot);
@@ -409,7 +448,7 @@ public class ContestManagementService {
                 .boardId(slot.getBoardId())
                 .slotId(slot.getId())
                 .teamIdBefore(previous)
-                .teamIdAfter(request.getTeamId())
+                .teamIdAfter(teamId)
                 .action(previous == null ? "assign" : "replace")
                 .performedBy(currentUserProvider.getCurrentUser().getUserId())
                 .performedAt(OffsetDateTime.now())
@@ -426,7 +465,71 @@ public class ContestManagementService {
     }
 
     @Transactional
+    public AssignResponse unassignTeamFromSlot(Long roundId, Long slotId) {
+        BoardSlot slot = getBoardSlotEntity(slotId);
+        if (!slot.getRoundId().equals(roundId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slot does not belong to round");
+        }
+        if (slot.getTeamId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "SLOT_EMPTY");
+        }
+
+        Long previous = slot.getTeamId();
+        OffsetDateTime now = OffsetDateTime.now();
+        slot.setTeamId(null);
+        slot.setAssignedAt(now);
+        slot.setAssignedBy(currentUserProvider.getCurrentUser().getUserId());
+        boardSlotRepository.save(slot);
+
+        BoardSlotAssignmentAudit audit = BoardSlotAssignmentAudit.builder()
+                .roundId(roundId)
+                .boardId(slot.getBoardId())
+                .slotId(slot.getId())
+                .teamIdBefore(previous)
+                .teamIdAfter(null)
+                .action("unassign")
+                .performedBy(currentUserProvider.getCurrentUser().getUserId())
+                .performedAt(now)
+                .build();
+        auditRepository.save(audit);
+
+        return AssignResponse.builder()
+                .slotId(slot.getId())
+                .boardId(slot.getBoardId())
+                .teamId(null)
+                .previousTeamId(previous)
+                .assignedAt(slot.getAssignedAt())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<BoardTeamResponse> listTeamsByBoard(Long boardId) {
+        boardRepository.findById(boardId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        return boardSlotRepository.findByBoardId(boardId).stream()
+                .filter(slot -> slot.getTeamId() != null)
+                .sorted(Comparator.comparing(BoardSlot::getTeamNumber, Comparator.nullsLast(Integer::compareTo)))
+                .map(slot -> {
+                    Team team = teamRepository.findById(slot.getTeamId()).orElse(null);
+                    return BoardTeamResponse.builder()
+                            .slotId(slot.getId())
+                            .slotNumber(slot.getTeamNumber())
+                            .teamId(slot.getTeamId())
+                            .teamName(team != null ? team.getName() : "Đội #" + slot.getTeamId())
+                            .teamStatus(team != null && team.getStatus() != null ? team.getStatus().name() : null)
+                            .build();
+                })
+                .toList();
+    }
+
+    @Transactional
     public MoveResponse moveTeamBetweenSlots(Long roundId, Long fromSlotId, Long toSlotId) {
+        if (fromSlotId == null || toSlotId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fromSlotId and toSlotId must not be null");
+        }
+        if (fromSlotId.equals(toSlotId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fromSlotId and toSlotId must differ");
+        }
         BoardSlot from = getBoardSlotEntity(fromSlotId);
         BoardSlot to = getBoardSlotEntity(toSlotId);
 
@@ -492,6 +595,12 @@ public class ContestManagementService {
 
     @Transactional
     public SwapResponse swapSlots(Long roundId, Long slotAId, Long slotBId) {
+        if (slotAId == null || slotBId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slotAId and slotBId must not be null");
+        }
+        if (slotAId.equals(slotBId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slotAId and slotBId must differ");
+        }
         BoardSlot a = getBoardSlotEntity(slotAId);
         BoardSlot b = getBoardSlotEntity(slotBId);
 
@@ -723,6 +832,9 @@ public class ContestManagementService {
             if (problem.getReleaseAt() == null || now.isBefore(problem.getReleaseAt())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PROBLEM_NOT_RELEASED");
             }
+            if (problem.getCloseAt() != null && !now.isBefore(problem.getCloseAt())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PROBLEM_CLOSED");
+            }
 
             // verify current user belongs to a team assigned to this board
             boolean memberAssigned = boardSlotRepository.findByBoardId(problem.getBoardId()).stream()
@@ -742,6 +854,8 @@ public class ContestManagementService {
         boardRepository.findById(boardId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
 
+        validateProblemWindow(request.getReleaseAt(), request.getCloseAt());
+
         CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
         OffsetDateTime now = OffsetDateTime.now();
         Problem problem = Problem.builder()
@@ -751,6 +865,7 @@ public class ContestManagementService {
                 .attachmentUrl(normalizeNullable(request.getAttachmentUrl()))
                 .externalLink(normalizeNullable(request.getExternalLink()))
                 .releaseAt(request.getReleaseAt())
+                .closeAt(request.getCloseAt())
                 .createdBy(principal.getUserId())
                 .createdAt(now)
                 .updatedAt(now)
@@ -781,15 +896,179 @@ public class ContestManagementService {
         if (request.getReleaseAt() != null) {
             problem.setReleaseAt(request.getReleaseAt());
         }
+        if (request.getCloseAt() != null) {
+            problem.setCloseAt(request.getCloseAt());
+        }
 
         if (problem.getReleaseAt() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "releaseAt must not be null");
         }
+        if (problem.getCloseAt() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "closeAt must not be null");
+        }
+        validateProblemWindow(problem.getReleaseAt(), problem.getCloseAt());
         if (!StringUtils.hasText(problem.getTitle())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title must not be blank");
         }
         problem.setUpdatedAt(OffsetDateTime.now());
         return toProblemResponse(problemRepository.save(problem));
+    }
+
+    @Transactional
+    public void deleteProblem(Long problemId) {
+        Problem problem = getProblemEntity(problemId);
+        problemRepository.delete(problem);
+    }
+
+    @Transactional
+    public void deleteBoardSlot(Long slotId) {
+        BoardSlot slot = getBoardSlotEntity(slotId);
+        if (slot.getTeamId() != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "SLOT_HAS_TEAM — unassign team before deleting slot");
+        }
+        boardSlotRepository.delete(slot);
+    }
+
+    @Transactional(readOnly = true)
+    public MyBoardResponse getMyBoard(Long eventId, Long userId) {
+        eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+
+        List<TeamMember> memberships = teamMemberRepository.findAllByEventIdAndUserId(eventId, userId);
+        if (memberships.isEmpty()) {
+            return MyBoardResponse.notAssigned("NO_TEAM");
+        }
+
+        Long teamId = resolveParticipantTeamId(memberships);
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
+
+        if (team.getStatus() != TeamStatus.CONFIRMED) {
+            return MyBoardResponse.notAssigned("TEAM_NOT_CONFIRMED");
+        }
+
+        BoardSlot slot = findTeamSlotForEvent(teamId, eventId);
+        if (slot == null) {
+            return MyBoardResponse.notAssigned("NOT_ASSIGNED");
+        }
+
+        Board board = getBoardEntity(slot.getBoardId());
+        Round round = getRoundEntity(slot.getRoundId());
+
+        List<MyBoardPeerDto> peers = boardSlotRepository.findByBoardId(board.getId()).stream()
+                .filter(boardSlot -> boardSlot.getTeamId() != null)
+                .sorted(Comparator.comparing(BoardSlot::getTeamNumber, Comparator.nullsLast(Integer::compareTo)))
+                .map(boardSlot -> {
+                    Team peerTeam = teamRepository.findById(boardSlot.getTeamId()).orElse(null);
+                    return MyBoardPeerDto.builder()
+                            .teamId(boardSlot.getTeamId())
+                            .teamName(peerTeam != null ? peerTeam.getName() : "Đội #" + boardSlot.getTeamId())
+                            .slotNumber(boardSlot.getTeamNumber())
+                            .build();
+                })
+                .toList();
+
+        return MyBoardResponse.builder()
+                .assigned(true)
+                .teamId(teamId)
+                .roundId(round.getId())
+                .roundName(round.getName())
+                .boardId(board.getId())
+                .boardName(board.getName())
+                .slotNumber(slot.getTeamNumber())
+                .peers(peers)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public MyProblemResponse getMyProblem(Long eventId, Long userId) {
+        MyBoardResponse board = getMyBoard(eventId, userId);
+        if (!board.isAssigned()) {
+            return MyProblemResponse.builder()
+                    .available(false)
+                    .reason(board.getReason() != null ? board.getReason() : "NOT_ASSIGNED")
+                    .build();
+        }
+
+        List<Problem> problems = problemRepository.findByBoardId(board.getBoardId());
+        if (problems.isEmpty()) {
+            return MyProblemResponse.builder()
+                    .available(false)
+                    .reason("NO_PROBLEM")
+                    .build();
+        }
+
+        Problem problem = problems.stream()
+                .min(Comparator.comparing(Problem::getReleaseAt, Comparator.nullsLast(OffsetDateTime::compareTo))
+                        .thenComparing(Problem::getId, Comparator.nullsLast(Long::compareTo)))
+                .orElse(problems.get(0));
+
+        OffsetDateTime now = OffsetDateTime.now();
+        if (problem.getReleaseAt() == null || now.isBefore(problem.getReleaseAt())) {
+            return MyProblemResponse.builder()
+                    .available(false)
+                    .reason("NOT_RELEASED")
+                    .releaseAt(problem.getReleaseAt())
+                    .closeAt(problem.getCloseAt())
+                    .build();
+        }
+        if (problem.getCloseAt() != null && !now.isBefore(problem.getCloseAt())) {
+            return MyProblemResponse.builder()
+                    .available(false)
+                    .reason("PROBLEM_CLOSED")
+                    .releaseAt(problem.getReleaseAt())
+                    .closeAt(problem.getCloseAt())
+                    .build();
+        }
+
+        return MyProblemResponse.builder()
+                .available(true)
+                .releaseAt(problem.getReleaseAt())
+                .closeAt(problem.getCloseAt())
+                .problem(toProblemResponse(problem))
+                .build();
+    }
+
+    private void validateProblemWindow(OffsetDateTime releaseAt, OffsetDateTime closeAt) {
+        if (releaseAt == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "releaseAt must not be null");
+        }
+        if (closeAt == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "closeAt must not be null");
+        }
+        if (!releaseAt.isBefore(closeAt)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "closeAt must be after releaseAt");
+        }
+    }
+
+    private Long resolveParticipantTeamId(List<TeamMember> memberships) {
+        for (TeamMember membership : memberships) {
+            Team team = teamRepository.findById(membership.getTeamId()).orElse(null);
+            if (team != null && team.getStatus() == TeamStatus.CONFIRMED) {
+                return team.getId();
+            }
+        }
+        return memberships.get(0).getTeamId();
+    }
+
+    private BoardSlot findTeamSlotForEvent(Long teamId, Long eventId) {
+        List<BoardSlot> slots = boardSlotRepository.findByTeamId(teamId);
+        if (slots.isEmpty()) {
+            return null;
+        }
+
+        return slots.stream()
+                .filter(slot -> {
+                    Round round = roundRepository.findById(slot.getRoundId()).orElse(null);
+                    return round != null && eventId.equals(round.getEventId());
+                })
+                .min(Comparator.comparing(
+                        slot -> roundRepository.findById(slot.getRoundId())
+                                .map(Round::getRoundOrder)
+                                .orElse(Integer.MAX_VALUE),
+                        Comparator.nullsLast(Integer::compareTo)))
+                .orElse(null);
     }
 
     private void validateEventState(
@@ -971,6 +1250,7 @@ public class ContestManagementService {
                 .attachmentUrl(problem.getAttachmentUrl())
                 .externalLink(problem.getExternalLink())
                 .releaseAt(problem.getReleaseAt())
+                .closeAt(problem.getCloseAt())
                 .createdBy(problem.getCreatedBy())
                 .createdAt(problem.getCreatedAt())
                 .updatedAt(problem.getUpdatedAt())

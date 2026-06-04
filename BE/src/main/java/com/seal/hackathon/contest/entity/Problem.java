@@ -29,6 +29,7 @@ public class Problem {
     private String attachmentUrl;
     private String externalLink;
     private OffsetDateTime releaseAt;
+    private OffsetDateTime closeAt;
     private Long createdBy;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;

@@ -18,6 +18,9 @@ public class UpdateProblemRequest {
     @Schema(type = "string", example = "2026-06-01T08:00:00")
     private OffsetDateTime releaseAt;
 
+    @Schema(type = "string", example = "2026-06-01T17:00:00")
+    private OffsetDateTime closeAt;
+
     @JsonIgnore
     private final Map<String, Object> extraFields = new HashMap<>();
 
