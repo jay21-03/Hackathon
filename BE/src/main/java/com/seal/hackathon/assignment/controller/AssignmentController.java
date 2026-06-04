@@ -23,6 +23,11 @@ public class AssignmentController {
 
     private final BoardAssignmentService boardAssignmentService;
 
+    @GetMapping("/boards/{boardId}/mentors")
+    public ApiResponse<List<AssignmentResponse>> listBoardMentors(@PathVariable Long boardId) {
+        return ApiResponse.ok(boardAssignmentService.listMentorsByBoard(boardId));
+    }
+
     @PostMapping("/boards/{boardId}/mentors")
     public ApiResponse<AssignmentResponse> assignMentor(@PathVariable Long boardId, @RequestBody CreateAssignmentRequest request) {
         return ApiResponse.ok(boardAssignmentService.assignMentor(boardId, request));
@@ -32,6 +37,11 @@ public class AssignmentController {
     public ApiResponse<String> deleteMentor(@PathVariable Long boardId, @PathVariable Long mentorId) {
         boardAssignmentService.deleteMentorAssignment(boardId, mentorId);
         return ApiResponse.ok("deleted");
+    }
+
+    @GetMapping("/boards/{boardId}/judges")
+    public ApiResponse<List<AssignmentResponse>> listBoardJudges(@PathVariable Long boardId) {
+        return ApiResponse.ok(boardAssignmentService.listJudgesByBoard(boardId));
     }
 
     @PostMapping("/boards/{boardId}/judges")

@@ -1,8 +1,18 @@
 <!doctype html>
 
-<html lang="en" class="dark">
+<html lang="vi" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("seal.theme");
+          document.documentElement.classList.toggle("dark", t !== "light");
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>SEAL Hackathon Management</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />

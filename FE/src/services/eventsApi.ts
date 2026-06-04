@@ -32,3 +32,21 @@ export async function updateEvent(eventId: string, payload: UpdateEventPayload) 
   const { data } = await apiClient.put<ApiResponse<EventDetail>>(`/v1/admin/events/${eventId}`, payload);
   return data.data;
 }
+
+export interface CreateEventPayload {
+  name: string;
+  description?: string;
+  startDate: string;
+  endDate: string;
+  registrationStartAt: string;
+  registrationEndAt: string;
+  maxTeams: number;
+}
+
+export async function createEvent(payload: CreateEventPayload) {
+  const { data } = await apiClient.post<ApiResponse<EventDetail>>("/v1/admin/events", payload);
+  if (!data.data) {
+    throw new Error(data.message || "Tạo cuộc thi thất bại");
+  }
+  return data.data;
+}

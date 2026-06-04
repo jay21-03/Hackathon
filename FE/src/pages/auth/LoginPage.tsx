@@ -4,10 +4,10 @@ import { GoogleSignInButton } from "../../components/auth/GoogleSignInButton";
 import {
   getRoleHome,
   resolveRoleFromApiRoles,
-  setDemoAuthenticated,
-  setDemoSessionFromUser,
+  setAuthenticated,
+  setAuthSession,
   type UserRole
-} from "../../auth/demoSession";
+} from "../../auth/authSession";
 import { setAccessToken } from "../../auth/tokenStorage";
 import { Icon } from "../../components/ui/Icon";
 import { googleLogin } from "../../services/authService";
@@ -33,32 +33,32 @@ export function LoginPage() {
       const me = await fetchCurrentUser();
       const role: UserRole = resolveRoleFromApiRoles(me.roles);
 
-      setDemoSessionFromUser({
+      setAuthSession({
         role,
         email: me.email,
         name: me.fullName
       });
-      setDemoAuthenticated(true);
+      setAuthenticated(true);
 
       window.location.href = from ?? getRoleHome(role);
     } catch (error) {
-      setDemoAuthenticated(false);
+      setAuthenticated(false);
       const apiMessage = error instanceof Error ? error.message : null;
 
       if (apiMessage === "Email domain is not allowed") {
         setAuthError(
-          "Email Google cua ban khong thuoc domain duoc phep (fpt.edu.vn, fe.edu.vn, gmail.com)."
+          "Email Google của bạn không thuộc domain được phép (fpt.edu.vn, fe.edu.vn, gmail.com)."
         );
         return;
       }
 
       if (apiMessage === "Invalid Google ID token") {
-        setAuthError("Khong xac thuc duoc tai khoan Google. Vui long thu lai hoac lien he quan tri he thong.");
+        setAuthError("Không xác thực được tài khoản Google. Vui lòng thử lại hoặc liên hệ quản trị hệ thống.");
         return;
       }
 
       setAuthError(
-        apiMessage || "Dang nhap that bai. Vui long thu lai sau."
+        apiMessage || "Đăng nhập thất bại. Vui lòng thử lại sau."
       );
     } finally {
       setLoading(false);
@@ -76,7 +76,7 @@ export function LoginPage() {
           <h1 className="mb-sm font-headline-md text-on-surface">SEAL Hackathon</h1>
 
           <p className="font-body-md text-on-surface-variant max-w-[280px]">
-            Dang nhap bang tai khoan Google de su dung he thong.
+            Đăng nhập bằng tài khoản Google để sử dụng hệ thống.
           </p>
         </div>
 
@@ -96,7 +96,7 @@ export function LoginPage() {
           {!googleClientId ? (
             <div className="rounded-lg border border-warning/40 bg-warning-container/60 px-md py-sm text-on-surface">
               <p className="font-body-sm">
-                He thong chua san sang cho dang nhap. Vui long lien he quan tri vien.
+                Hệ thống chưa sẵn sàng cho đăng nhập. Vui lòng liên hệ quản trị viên.
               </p>
             </div>
           ) : null}
@@ -106,7 +106,7 @@ export function LoginPage() {
               disabled={!googleClientId || loading}
               onSuccess={handleBackendLogin}
               onError={() => {
-                setAuthError("Khong the dang nhap bang Google. Vui long thu lai.");
+                setAuthError("Không thể đăng nhập bằng Google. Vui lòng thử lại.");
               }}
             />
           </div>
@@ -117,25 +117,25 @@ export function LoginPage() {
             href="#"
             className="font-label-sm normal-case text-on-surface-variant hover:text-primary"
           >
-            Huong dan
+            Hướng dẫn
           </a>
           <a
             href="#"
             className="font-label-sm normal-case text-on-surface-variant hover:text-primary"
           >
-            Ho tro
+            Hỗ trợ
           </a>
         </div>
       </div>
 
       <div className="mt-lg flex items-center justify-center gap-xs text-center font-label-sm normal-case text-outline">
         <Icon name="lock" className="text-[14px]" />
-        <span>Dang nhap an toan qua Google</span>
+        <span>Đăng nhập an toàn qua Google</span>
       </div>
 
       <p className="mt-md text-center font-body-sm text-on-surface-variant">
         <Link to="/events" className="text-primary hover:underline">
-          Xem danh sach cuoc thi
+          Xem danh sách cuộc thi
         </Link>
       </p>
     </main>

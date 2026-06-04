@@ -34,7 +34,7 @@ export function EventCard({ event, highlight }: EventCardProps) {
       <div className="flex items-start justify-between gap-md border-b border-outline-variant bg-surface-container-low p-md">
         <div className="min-w-0">
           <p className="font-label-sm normal-case text-on-surface-variant">
-            Ma cuoc thi #{event.id}
+            Ma cuộc thi #{event.id}
           </p>
           <h2 className="mt-xs line-clamp-2 font-headline-sm text-on-surface">{event.name}</h2>
         </div>
@@ -49,7 +49,7 @@ export function EventCard({ event, highlight }: EventCardProps) {
       <div className="flex flex-1 flex-col space-y-md p-md">
         <div className="space-y-1">
           <p className="font-body-sm text-on-surface-variant line-clamp-2">
-            Dang ky doi, theo doi lich thi, nhan de va xem ket qua cong bo.
+            Đăng ký đội, theo dõi lịch thi, nhận đề và xem kết quả công bố.
           </p>
         </div>
 
@@ -68,13 +68,13 @@ export function EventCard({ event, highlight }: EventCardProps) {
 
         <div className="mt-auto flex items-center justify-between border-t border-outline-variant pt-sm">
           <span className="font-label-sm normal-case text-on-surface-variant">
-            Mo dang ky theo lich
+            Mo đăng ký theo lich
           </span>
           <Link
             to={`/events/${event.id}`}
             className="inline-flex items-center gap-1 rounded-lg bg-primary-container px-4 py-2 font-label-md text-on-primary-container transition-colors hover:bg-primary"
           >
-            Xem chi tiet
+            Xem chi tiết
             <Icon name="arrow_forward" className="text-[16px]" />
           </Link>
         </div>

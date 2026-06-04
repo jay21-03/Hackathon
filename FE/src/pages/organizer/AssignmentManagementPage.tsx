@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -7,7 +7,15 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
-import { assignJudge, assignMentor } from "../../services/assignmentService";
+import {
+  assignJudge,
+  assignMentor,
+  fetchBoardJudges,
+  fetchBoardMentors,
+  removeJudge,
+  removeMentor,
+  type AssignmentResponse
+} from "../../services/assignmentService";
 import {
   fetchEventRounds,
   fetchRoundBoards,
@@ -17,15 +25,23 @@ import {
 import { fetchAdminUsers, type UserSummaryResponse } from "../../services/userService";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 
+type BoardAssignments = {
+  mentors: AssignmentResponse[];
+  judges: AssignmentResponse[];
+};
+
 export function AssignmentManagementPage() {
   const { notify } = useToast();
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent();
   const [rounds, setRounds] = useState<RoundResponse[]>([]);
   const [boards, setBoards] = useState<BoardResponse[]>([]);
   const [users, setUsers] = useState<UserSummaryResponse[]>([]);
+  const [byBoard, setByBoard] = useState<Record<number, BoardAssignments>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [assigningBoardId, setAssigningBoardId] = useState<number | null>(null);
+  const [busyBoardId, setBusyBoardId] = useState<number | null>(null);
+  const [mentorPick, setMentorPick] = useState<Record<number, string>>({});
+  const [judgePick, setJudgePick] = useState<Record<number, string>>({});
 
   const mentors = useMemo(
     () => users.filter((user) => user.roles.includes("MENTOR")),
@@ -35,6 +51,35 @@ export function AssignmentManagementPage() {
     () => users.filter((user) => user.roles.includes("JUDGE")),
     [users]
   );
+  const userNameById = useMemo(
+    () => Object.fromEntries(users.map((user) => [user.id, user.fullName])),
+    [users]
+  );
+
+  const loadBoardAssignments = useCallback(async (boardList: BoardResponse[]) => {
+    const entries = await Promise.all(
+      boardList.map(async (board) => {
+        const [mentorList, judgeList] = await Promise.all([
+          fetchBoardMentors(board.id),
+          fetchBoardJudges(board.id)
+        ]);
+        return [board.id, { mentors: mentorList, judges: judgeList }] as const;
+      })
+    );
+    setByBoard(Object.fromEntries(entries));
+  }, []);
+
+  const reload = useCallback(async () => {
+    if (!eventId) return;
+    const roundList = await fetchEventRounds(eventId);
+    const allBoards: BoardResponse[] = [];
+    for (const round of roundList) {
+      allBoards.push(...(await fetchRoundBoards(round.id)));
+    }
+    setRounds(roundList);
+    setBoards(allBoards);
+    await loadBoardAssignments(allBoards);
+  }, [eventId, loadBoardAssignments]);
 
   useEffect(() => {
     if (!eventId) {
@@ -49,17 +94,17 @@ export function AssignmentManagementPage() {
     Promise.all([fetchEventRounds(eventId), fetchAdminUsers()])
       .then(async ([roundList, userList]) => {
         if (cancelled) return;
-        setRounds(roundList);
         setUsers(userList);
         const allBoards: BoardResponse[] = [];
         for (const round of roundList) {
-          const roundBoards = await fetchRoundBoards(round.id);
-          allBoards.push(...roundBoards);
+          allBoards.push(...(await fetchRoundBoards(round.id)));
         }
+        setRounds(roundList);
         setBoards(allBoards);
+        await loadBoardAssignments(allBoards);
       })
       .catch(() => {
-        if (!cancelled) setError("Khong tai duoc du lieu phan cong.");
+        if (!cancelled) setError("Không tải được dữ liệu phân công.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -68,29 +113,67 @@ export function AssignmentManagementPage() {
     return () => {
       cancelled = true;
     };
-  }, [eventId]);
+  }, [eventId, loadBoardAssignments]);
 
-  async function handleAssignMentor(boardId: number, userId: number) {
-    setAssigningBoardId(boardId);
+  async function handleAssignMentor(boardId: number) {
+    const userId = Number(mentorPick[boardId] ?? "");
+    if (!userId) {
+      notify("Chọn mentor.", "warning");
+      return;
+    }
+    setBusyBoardId(boardId);
     try {
       await assignMentor(boardId, userId);
-      notify("Da gan mentor.", "success");
+      await reload();
+      notify("Đã gán mentor.", "success");
     } catch {
-      notify("Gan mentor that bai.", "danger");
+      notify("Gán mentor thất bại.", "danger");
     } finally {
-      setAssigningBoardId(null);
+      setBusyBoardId(null);
     }
   }
 
-  async function handleAssignJudge(boardId: number, userId: number) {
-    setAssigningBoardId(boardId);
+  async function handleAssignJudge(boardId: number) {
+    const userId = Number(judgePick[boardId] ?? "");
+    if (!userId) {
+      notify("Chọn giám khảo.", "warning");
+      return;
+    }
+    setBusyBoardId(boardId);
     try {
       await assignJudge(boardId, userId);
-      notify("Da gan giam khao.", "success");
+      await reload();
+      notify("Đã gán giám khảo.", "success");
     } catch {
-      notify("Gan giam khao that bai.", "danger");
+      notify("Gán giám khảo thất bại.", "danger");
     } finally {
-      setAssigningBoardId(null);
+      setBusyBoardId(null);
+    }
+  }
+
+  async function handleRemoveMentor(boardId: number, mentorId: number) {
+    setBusyBoardId(boardId);
+    try {
+      await removeMentor(boardId, mentorId);
+      await reload();
+      notify("Đã gỡ mentor.", "success");
+    } catch {
+      notify("Gỡ mentor thất bại.", "danger");
+    } finally {
+      setBusyBoardId(null);
+    }
+  }
+
+  async function handleRemoveJudge(boardId: number, judgeId: number) {
+    setBusyBoardId(boardId);
+    try {
+      await removeJudge(boardId, judgeId);
+      await reload();
+      notify("Đã gỡ giám khảo.", "success");
+    } catch {
+      notify("Gỡ giám khảo thất bại.", "danger");
+    } finally {
+      setBusyBoardId(null);
     }
   }
 
@@ -99,9 +182,9 @@ export function AssignmentManagementPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Phan cong"
-        title="Mentor va giam khao theo bang"
-        description="Gan mentor va giam khao cho tung bang thi."
+        eyebrow="Phân công"
+        title="Mentor và giám khảo theo bảng"
+        description="Xem người đã gán, gỡ hoặc thêm mentor / giám khảo cho từng bảng."
         actions={<EventSelector events={events} eventId={eventId} onChange={setEventId} />}
       />
 
@@ -112,65 +195,129 @@ export function AssignmentManagementPage() {
       ) : null}
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Bang thi" value={boards.length} helper={`${rounds.length} vong`} icon="view_module" />
-        <StatCard label="Mentor" value={mentors.length} helper="Tai khoan co vai tro MENTOR" icon="groups" tone="success" />
-        <StatCard label="Giam khao" value={judges.length} helper="Tai khoan co vai tro JUDGE" icon="gavel" tone="warning" />
+        <StatCard label="Bảng thi" value={boards.length} helper={`${rounds.length} vòng`} icon="view_module" />
+        <StatCard label="Mentor" value={mentors.length} helper="Tài khoản có vai trò MENTOR" icon="groups" tone="success" />
+        <StatCard label="Giám khảo" value={judges.length} helper="Tài khoản có vai trò JUDGE" icon="gavel" tone="warning" />
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left">
-            <thead className="table-header-bg">
-              <tr className="font-label-sm text-on-surface-variant">
-                <th className="px-md py-sm">Bang</th>
-                <th className="px-md py-sm">Trang thai</th>
-                <th className="px-md py-sm">Gan mentor</th>
-                <th className="px-md py-sm">Gan giam khao</th>
-              </tr>
-            </thead>
-            <tbody className="table-divider">
-              {boards.map((board) => (
-                <tr key={board.id} className="font-body-sm text-on-surface">
-                  <td className="px-md py-md font-label-md">{board.name}</td>
-                  <td className="px-md py-md">
-                    <Badge tone={getStatusTone(board.status)}>{getStatusLabel(board.status)}</Badge>
-                  </td>
-                  <td className="px-md py-md">
-                    <div className="flex flex-wrap gap-1">
-                      {mentors.slice(0, 3).map((mentor) => (
-                        <Button
-                          key={mentor.id}
-                          size="sm"
-                          variant="ghost"
-                          disabled={assigningBoardId === board.id}
-                          onClick={() => handleAssignMentor(board.id, mentor.id)}
-                        >
-                          {mentor.fullName.split(" ").slice(-1)[0]}
-                        </Button>
-                      ))}
+      {boards.length === 0 ? (
+        <p className="font-body-sm text-on-surface-variant">
+          Chưa có bảng thi — tạo vòng và bảng tại trang Quản lý bảng chấm trước.
+        </p>
+      ) : (
+        <section className="space-y-md">
+          {boards.map((board) => {
+            const assigned = byBoard[board.id] ?? { mentors: [], judges: [] };
+            const busy = busyBoardId === board.id;
+            return (
+              <article
+                key={board.id}
+                className="rounded-xl border border-outline-variant bg-surface-container p-lg space-y-md"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-sm">
+                  <div>
+                    <h2 className="font-headline-sm text-on-surface">{board.name}</h2>
+                    <p className="font-body-sm text-on-surface-variant">Bảng #{board.id}</p>
+                  </div>
+                  <Badge tone={getStatusTone(board.status)}>{getStatusLabel(board.status)}</Badge>
+                </div>
+
+                <div className="grid gap-md lg:grid-cols-2">
+                  <div className="space-y-sm">
+                    <p className="font-label-md text-on-surface">Mentor đã gán</p>
+                    {assigned.mentors.length === 0 ? (
+                      <p className="font-body-sm text-on-surface-variant">Chưa có mentor.</p>
+                    ) : (
+                      <ul className="flex flex-wrap gap-sm">
+                        {assigned.mentors.map((row) => (
+                          <li
+                            key={row.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-high px-sm py-xs font-body-sm"
+                          >
+                            {userNameById[row.assigneeId] ?? `User #${row.assigneeId}`}
+                            <button
+                              type="button"
+                              className="text-error hover:underline font-label-sm"
+                              disabled={busy}
+                              onClick={() => handleRemoveMentor(board.id, row.assigneeId)}
+                            >
+                              Gỡ
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="flex flex-wrap gap-sm items-center pt-xs">
+                      <select
+                        className="form-input min-w-[180px]"
+                        value={mentorPick[board.id] ?? ""}
+                        onChange={(e) =>
+                          setMentorPick((current) => ({ ...current, [board.id]: e.target.value }))
+                        }
+                      >
+                        <option value="">Thêm mentor</option>
+                        {mentors.map((mentor) => (
+                          <option key={mentor.id} value={mentor.id}>
+                            {mentor.fullName}
+                          </option>
+                        ))}
+                      </select>
+                      <Button type="button" size="sm" disabled={busy} onClick={() => handleAssignMentor(board.id)}>
+                        Gán
+                      </Button>
                     </div>
-                  </td>
-                  <td className="px-md py-md">
-                    <div className="flex flex-wrap gap-1">
-                      {judges.slice(0, 3).map((judge) => (
-                        <Button
-                          key={judge.id}
-                          size="sm"
-                          variant="ghost"
-                          disabled={assigningBoardId === board.id}
-                          onClick={() => handleAssignJudge(board.id, judge.id)}
-                        >
-                          {judge.fullName.split(" ").slice(-1)[0]}
-                        </Button>
-                      ))}
+                  </div>
+
+                  <div className="space-y-sm">
+                    <p className="font-label-md text-on-surface">Giám khảo đã gán</p>
+                    {assigned.judges.length === 0 ? (
+                      <p className="font-body-sm text-on-surface-variant">Chưa có giám khảo.</p>
+                    ) : (
+                      <ul className="flex flex-wrap gap-sm">
+                        {assigned.judges.map((row) => (
+                          <li
+                            key={row.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-high px-sm py-xs font-body-sm"
+                          >
+                            {userNameById[row.assigneeId] ?? `User #${row.assigneeId}`}
+                            <button
+                              type="button"
+                              className="text-error hover:underline font-label-sm"
+                              disabled={busy}
+                              onClick={() => handleRemoveJudge(board.id, row.assigneeId)}
+                            >
+                              Gỡ
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="flex flex-wrap gap-sm items-center pt-xs">
+                      <select
+                        className="form-input min-w-[180px]"
+                        value={judgePick[board.id] ?? ""}
+                        onChange={(e) =>
+                          setJudgePick((current) => ({ ...current, [board.id]: e.target.value }))
+                        }
+                      >
+                        <option value="">Thêm giám khảo</option>
+                        {judges.map((judge) => (
+                          <option key={judge.id} value={judge.id}>
+                            {judge.fullName}
+                          </option>
+                        ))}
+                      </select>
+                      <Button type="button" size="sm" disabled={busy} onClick={() => handleAssignJudge(board.id)}>
+                        Gán
+                      </Button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      )}
     </div>
   );
 }

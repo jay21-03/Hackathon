@@ -14,7 +14,7 @@ export interface UserSummaryResponse {
 export async function fetchCurrentUser() {
   const { data } = await apiClient.get<ApiResponse<CurrentUserResponse>>("/v1/me");
   if (!data.data) {
-    throw new Error(data.message || "Khong tai duoc thong tin nguoi dung");
+    throw new Error(data.message || "Không tải được thông tin người dùng");
   }
   return data.data;
 }
@@ -30,7 +30,7 @@ export async function assignUserRole(userId: number, role: "ORGANIZER" | "MENTOR
     { role }
   );
   if (!data.data) {
-    throw new Error(data.message || "Gan vai tro that bai");
+    throw new Error(data.message || "Gán vai trò thất bại");
   }
   return data.data;
 }

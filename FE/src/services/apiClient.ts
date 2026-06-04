@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getAccessToken } from "../auth/tokenStorage";
+import { getApiErrorMessage } from "../utils/apiError";
 
 const baseURL =
   import.meta.env.VITE_API_BASE_URL?.trim() || "/api";
@@ -27,6 +28,11 @@ apiClient.interceptors.response.use(
         window.location.assign("/login");
       }
     }
-    return Promise.reject(error);
+    const wrapped = error instanceof Error ? error : new Error(getApiErrorMessage(error));
+    if (axios.isAxiosError(error) && error.response?.data) {
+      const msg = getApiErrorMessage(error);
+      wrapped.message = msg;
+    }
+    return Promise.reject(wrapped);
   }
 );

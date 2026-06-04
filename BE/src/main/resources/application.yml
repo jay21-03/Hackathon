@@ -52,3 +52,5 @@ app:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:${MAIL_USERNAME:no-reply@seal-hackathon.local}}
     invitation-base-url: ${INVITATION_BASE_URL:http://localhost:5173}
+  invitation:
+    token-secret: ${APP_INVITATION_TOKEN_SECRET:dev-invite-secret-change-me}

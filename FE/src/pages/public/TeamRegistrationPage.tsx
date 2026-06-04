@@ -14,7 +14,7 @@ const initialMembers = ["", "", "", "", ""];
 
 export function TeamRegistrationPage() {
   const { notify } = useToast();
-  const { eventId, loading: eventListLoading } = useActiveEvent();
+  const { eventId } = useActiveEvent();
   const [eventInfo, setEventInfo] = useState<EventDetail | null>(null);
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [teamName, setTeamName] = useState("");
@@ -36,7 +36,7 @@ export function TeamRegistrationPage() {
     }
     fetchEventDetail(String(eventId))
       .then((result) => setEventInfo(result))
-      .catch(() => notify("Khong tai duoc thong tin cuoc thi.", "danger"))
+      .catch(() => notify("Không tải được thông tin cuộc thi.", "danger"))
       .finally(() => setLoadingEvent(false));
   }, [eventId, notify]);
 
@@ -46,7 +46,7 @@ export function TeamRegistrationPage() {
 
   function buildMemberName(email: string) {
     const local = email.split("@")[0] ?? "";
-    if (!local) return "Thanh vien";
+    if (!local) return "Thành viên";
     return local
       .split(/[._-]+/)
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -61,12 +61,12 @@ export function TeamRegistrationPage() {
     if (!schemaResult.success) {
       const nextErrors = schemaResult.error.issues.map((issue) => issue.message);
       setErrors(nextErrors);
-      notify("Kiem tra lai thong tin dang ky doi.", "warning");
+      notify("Kiểm tra lại thông tin đăng ký đội.", "warning");
       return;
     }
 
     if (!eventId) {
-      notify("Chua chon cuoc thi de dang ky.", "warning");
+      notify("Chưa chọn cuộc thi để đăng ký.", "warning");
       return;
     }
 
@@ -84,10 +84,10 @@ export function TeamRegistrationPage() {
       const response = await registerTeam(eventId, payload);
       const status = response.status ?? "PENDING";
       setSubmittedStatus(status);
-      notify(`Dang ky thanh cong: ${getStatusLabel(status)}.`, "success");
+      notify(`Đăng ký thành công: ${getStatusLabel(status)}.`, "success");
       return;
     } catch {
-      notify("Dang ky doi that bai. Vui long thu lai.", "danger");
+      notify("Đăng ký đội thất bại. Vui lòng thử lại.", "danger");
     } finally {
       setSubmitting(false);
     }
@@ -97,10 +97,10 @@ export function TeamRegistrationPage() {
     <div className="mx-auto max-w-5xl space-y-lg">
       <section className="flex flex-col gap-md border-b border-outline-variant pb-lg md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="font-label-sm normal-case text-primary">Dang ky tham gia</p>
-          <h1 className="font-headline-lg text-on-surface">{eventInfo?.name ?? "Dang tai cuoc thi..."}</h1>
+          <p className="font-label-sm normal-case text-primary">Đăng ký tham gia</p>
+          <h1 className="font-headline-lg text-on-surface">{eventInfo?.name ?? "Đang tải cuộc thi..."}</h1>
           <p className="mt-xs max-w-2xl font-body-md text-on-surface-variant">
-            Tao doi thi 1-5 thanh vien. Moi email chi duoc thuoc mot doi trong cung cuoc thi.
+            Tạo đội thi 1-5 thành viên. Mỗi email chỉ được thuộc một đội trong cùng cuộc thi.
           </p>
         </div>
         <Badge tone={getStatusTone(eventInfo?.status ?? "PENDING")}>{getStatusLabel(eventInfo?.status ?? "PENDING")}</Badge>
@@ -122,7 +122,7 @@ export function TeamRegistrationPage() {
                 value={teamName}
                 onChange={(event) => setTeamName(event.target.value)}
                 className="form-input"
-                placeholder="Nhap ten doi"
+                placeholder="Nhập tên đội"
               />
             </label>
             <label className="flex flex-col gap-xs">
@@ -142,16 +142,16 @@ export function TeamRegistrationPage() {
 
           <div className="space-y-sm">
             <div className="flex items-center justify-between">
-              <h2 className="font-headline-sm text-on-surface">Thanh vien doi</h2>
+              <h2 className="font-headline-sm text-on-surface">Thành viên doi</h2>
               <Badge tone={memberCount > 0 && memberCount <= 5 ? "success" : "warning"}>
-                {memberCount}/5 thanh vien
+                {memberCount}/5 thành viên
               </Badge>
             </div>
 
             {memberEmails.map((email, index) => (
               <label key={index} className="flex flex-col gap-xs md:flex-row md:items-center">
                 <span className="w-28 font-label-sm normal-case text-on-surface-variant">
-                  {index === 0 ? "Doi truong" : `Thanh vien ${index + 1}`}
+                  {index === 0 ? "Đội trưởng" : `Thành viên ${index + 1}`}
                 </span>
                 <input
                   data-testid={`member-email-${index}`}
@@ -181,10 +181,10 @@ export function TeamRegistrationPage() {
               className="rounded-lg border border-secondary/30 bg-secondary-container/30 p-md"
             >
               <p className="font-label-md text-on-surface">
-                Ho so dang ky: {getStatusLabel(submittedStatus)}
+                Hồ sơ đăng ký: {getStatusLabel(submittedStatus)}
               </p>
               <p className="font-body-sm text-on-surface-variant">
-                Ban to chuc se duyet doi va gui loi moi xac nhan cho tung thanh vien.
+                Ban tổ chức sẽ duyệt đội và gửi lời mời xác nhận cho từng thành viên.
               </p>
             </div>
           )}
@@ -196,11 +196,11 @@ export function TeamRegistrationPage() {
               disabled={submitting}
               icon={<Icon name="group_add" className="text-[18px]" />}
             >
-              {submitting || loadingEvent ? "Dang gui" : "Dang ky doi"}
+              {submitting || loadingEvent ? "Đang gửi" : "Đăng ký đội"}
             </Button>
             <ConfirmAction
-              title="Lam lai ho so?"
-              message="Thong tin doi dang nhap se bi xoa khoi form hien tai."
+              title="Lam lai hồ sơ?"
+              message="Thông tin đội đang nhập sẽ bị xóa khỏi form hiện tại."
               confirmLabel="Lam lai"
               onConfirm={() => {
                 setTeamName("");
@@ -217,12 +217,12 @@ export function TeamRegistrationPage() {
         </form>
 
         <aside className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
-          <h2 className="font-headline-sm text-on-surface">Quy tac dang ky</h2>
+          <h2 className="font-headline-sm text-on-surface">Quy tac đăng ký</h2>
           <div className="space-y-sm font-body-sm text-on-surface-variant">
-            <p>Quy mo doi: {eventInfo?.minTeamSize ?? 1}-{eventInfo?.maxTeamSize ?? 5} thanh vien.</p>
+            <p>Quy mo doi: {eventInfo?.minTeamSize ?? 1}-{eventInfo?.maxTeamSize ?? 5} thành viên.</p>
             <p>Quota: toi da {eventInfo?.maxTeams ?? "-"} doi.</p>
-            <p>Quota day thi doi moi vao danh sach cho.</p>
-            <p>Mot email khong duoc nam trong hai doi cua cung mot cuoc thi.</p>
+            <p>Quota đầy thì đội mới vào danh sách chờ.</p>
+            <p>Một email không được nằm trong hai đội của cùng một cuộc thi.</p>
           </div>
         </aside>
       </div>

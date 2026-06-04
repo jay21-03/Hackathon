@@ -14,10 +14,10 @@ export function FeatureUnavailable({ eyebrow, title, description, beNote }: Feat
       <PageHeader eyebrow={eyebrow} title={title} description={description} />
       <EmptyState
         icon="construction"
-        title="Chua ket noi API"
+        title="Chưa kết nối API"
         description={
           beNote ??
-          "Chuc nang nay can backend bo sung. Giao dien da san sang, du lieu se hien thi khi API duoc trien khai."
+          "Chức năng này cần backend bổ sung. Giao diện đã sẵn sàng, dữ liệu sẽ hiển thị khi API được triển khai."
         }
       />
     </div>

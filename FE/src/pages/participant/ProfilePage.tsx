@@ -29,7 +29,7 @@ export function ProfilePage() {
         setUniversity(result.university ?? "");
       })
       .catch(() => {
-        if (active) setFormError("Khong tai duoc ho so tu he thong.");
+        if (active) setFormError("Không tải được hồ sơ từ hệ thống.");
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -42,7 +42,7 @@ export function ProfilePage() {
   async function saveProfile() {
     const parsed = profileSchema.safeParse({ fullName, email, studentId, university });
     if (!parsed.success) {
-      setFormError(parsed.error.issues[0]?.message ?? "Ho so chua hop le.");
+      setFormError(parsed.error.issues[0]?.message ?? "Hồ sơ chua hop le.");
       return;
     }
     setFormError("");
@@ -56,9 +56,9 @@ export function ProfilePage() {
       setFullName(result.fullName ?? fullName);
       setStudentId(result.studentId ?? studentId);
       setUniversity(result.university ?? university);
-      notify("Da luu ho so ca nhan.", "success");
+      notify("Đã lưu hồ sơ ca nhan.", "success");
     } catch {
-      notify("Luu ho so that bai.", "danger");
+      notify("Lưu hồ sơ thất bại.", "danger");
     } finally {
       setSaving(false);
     }
@@ -67,9 +67,9 @@ export function ProfilePage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Ho so ca nhan"
-        title="Thong tin thi sinh"
-        description="Cap nhat thong tin lien he va ky nang de ban to chuc, mentor va doi thi theo doi dung nguoi."
+        eyebrow="Hồ sơ ca nhan"
+        title="Thông tin thi sinh"
+        description="Cập nhật thông tin liên hệ và kỹ năng để ban tổ chức, mentor và đội thi theo dõi đúng người."
       />
 
       <section className="grid gap-md lg:grid-cols-[1fr_320px]">
@@ -121,7 +121,7 @@ export function ProfilePage() {
             icon={<Icon name={saving ? "sync" : "save"} />}
             onClick={saveProfile}
           >
-            {saving ? "Dang luu" : "Luu ho so"}
+            {saving ? "Đang lưu" : "Lưu hồ sơ"}
           </Button>
         </form>
 
@@ -132,7 +132,7 @@ export function ProfilePage() {
           <h2 className="mt-md font-headline-sm text-on-surface">{fullName || "Thi sinh"}</h2>
           <p className="break-all font-body-sm text-on-surface-variant">{email || ""}</p>
           <p className="mt-md font-body-sm text-on-surface-variant">
-            Ho so nay chi dung cho lien he trong cuoc thi. Diem va xep hang khong bi anh huong boi thong tin ca nhan.
+            Hồ sơ này chỉ dùng cho liên hệ trong cuộc thi. Điểm và xếp hạng không bị ảnh hưởng bởi thông tin cá nhân.
           </p>
         </aside>
       </section>

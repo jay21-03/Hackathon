@@ -96,6 +96,20 @@ public class BoardAssignmentService {
     }
 
     @Transactional(readOnly = true)
+    public List<AssignmentResponse> listMentorsByBoard(Long boardId) {
+        requireOrganizer();
+        boardRepository.findById(boardId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        return mentorAssignmentRepository.findByBoardId(boardId).stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<AssignmentResponse> listJudgesByBoard(Long boardId) {
+        requireOrganizer();
+        boardRepository.findById(boardId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        return judgeAssignmentRepository.findByBoardId(boardId).stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public List<AssignmentResponse> listMentorAssignmentsForCurrentUser() {
         CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
         return mentorAssignmentRepository.findByMentorId(principal.getUserId()).stream().map(this::toResponse).collect(Collectors.toList());
@@ -123,6 +137,13 @@ public class BoardAssignmentService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
         }
         judgeAssignmentRepository.deleteByBoardIdAndJudgeId(boardId, judgeId);
+    }
+
+    private void requireOrganizer() {
+        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
+        if (principal.getRoles() == null || !principal.getRoles().contains("ORGANIZER")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
+        }
     }
 
     private AssignmentResponse toResponse(MentorAssignment m) {

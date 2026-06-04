@@ -16,7 +16,7 @@ export function JudgeDashboardPage() {
         setAssignments(result);
       })
       .catch(() => {
-        setError("Khong tai duoc danh sach phan cong giam khao.");
+        setError("Không tải được danh sach phân công giám khảo.");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -26,16 +26,16 @@ export function JudgeDashboardPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Giam khao"
-        title="Doi thi can cham"
-        description="Giam khao chi cham doi thuoc bang da phan cong. Diem phai duoc chot chinh thuc moi tinh xep hang."
+        eyebrow="Giám khảo"
+        title="Đội thi can cham"
+        description="Giám khảo chi cham doi thuoc bang da phân công. Diem phai duoc chot chinh thuc moi tinh xep hang."
         actions={<Badge tone={error ? "danger" : "success"}>{error ? "Loi API" : "Du lieu he thong"}</Badge>}
       />
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Phan cong" value={assignments.length} helper="Tu BE /judges/assignments" icon="groups" />
+        <StatCard label="Phân công" value={assignments.length} helper="Từ BE /judges/assignments" icon="groups" />
         <StatCard label="Board" value={new Set(assignments.map((item) => item.boardId)).size} helper="Moi board mot judge" icon="view_module" tone="success" />
-        <StatCard label="Judge ID" value={assignments[0]?.assigneeId ?? "-"} helper="Tai khoan hien tai" icon="badge" tone="warning" />
+        <StatCard label="Judge ID" value={assignments[0]?.assigneeId ?? "-"} helper="Tài khoản hien tai" icon="badge" tone="warning" />
       </section>
 
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">

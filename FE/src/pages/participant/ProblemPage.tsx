@@ -2,12 +2,16 @@ import { Badge } from "../../components/ui/Badge";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { RoundCountdown } from "../../components/ui/RoundCountdown";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useEventRound } from "../../hooks/useEventRound";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 export function ProblemPage() {
   const { event, eventId, loading: eventLoading } = useActiveEvent();
+  const { roundId, countdown, loading: roundLoading } = useEventRound(eventId);
   const { team, loading: teamLoading, error } = useMyTeam(eventId);
 
   if (eventLoading || teamLoading) {
@@ -17,8 +21,8 @@ export function ProblemPage() {
   if (!team) {
     return (
       <div className="space-y-lg">
-        <PageHeader eyebrow="De thi" title="Chua co doi" description="Dang ky doi de xem de thi." />
-        <EmptyState icon="code" title="Chua co doi thi" description="Dang ky doi truoc khi xem de." />
+        <PageHeader eyebrow="Đề thi" title="Chưa có đội" description="Đăng ký đội để xem đề thi." />
+        <EmptyState icon="code" title="Chưa có đội thi" description="Đăng ký đội trước khi xem đề." />
       </div>
     );
   }
@@ -27,12 +31,12 @@ export function ProblemPage() {
     return (
       <div className="space-y-lg">
         <PageHeader
-          eyebrow="De thi"
+          eyebrow="Đề thi"
           title={team.name}
-          description="Doi can duoc xac nhan truoc khi xem de thi."
+          description="Đội cần được xác nhận trước khi xem đề thi."
           actions={<Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>}
         />
-        <EmptyState icon="lock_clock" title="Chua the xem de" description="Cho ban to chuc duyet doi truoc." />
+        <EmptyState icon="lock_clock" title="Chưa thể xem đề" description="Chờ ban tổ chức duyệt đội trước." />
       </div>
     );
   }
@@ -40,20 +44,17 @@ export function ProblemPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="De thi"
+        eyebrow="Đề thi"
         title={team.name}
-        description={event?.name ?? "De thi se mo theo thoi gian ban to chuc cau hinh."}
-        actions={<Badge tone="warning">Chua mo de</Badge>}
+        description={event?.name ?? "Đề thi sẽ mở theo thời gian ban tổ chức cấu hình."}
+        actions={<Badge tone="warning">Chờ API đề thi</Badge>}
       />
-      {error ? (
-        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface">{error}</p>
-        </div>
-      ) : null}
+      <RoundCountdown roundId={roundId} countdown={countdown} loading={roundLoading} />
+      {error ? <RetryPanel message={error} /> : null}
       <EmptyState
         icon="lock_clock"
-        title="De thi chua san sang"
-        description="Sau khi duoc phan cong bang va den gio mo de, noi dung se hien tai day."
+        title="Đề thi chưa sẵn sàng"
+        description="Khi backend bổ sung GET /my/problem và đến giờ mở đề, nội dung sẽ hiện tại đây."
       />
     </div>
   );

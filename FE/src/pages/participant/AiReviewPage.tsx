@@ -4,8 +4,8 @@ export function AiReviewPage() {
   return (
     <FeatureUnavailable
       eyebrow="AI"
-      title="Danh gia AI"
-      description="Xem ket qua danh gia AI cho bai nop."
+      title="Đánh giá AI"
+      description="Xem kết quả đánh giá AI cho bài nộp."
       beNote="BE phase 10: GET /api/v1/ai-reviews/me."
     />
   );

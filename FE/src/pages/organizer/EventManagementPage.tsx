@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
+import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { fetchPublicEvents } from "../../services/eventsApi";
 import type { EventListItem } from "../../types/entities";
@@ -14,6 +16,8 @@ function formatDate(value: string) {
 }
 
 export function EventManagementPage() {
+  const navigate = useNavigate();
+  const { setEventId } = useActiveEvent();
   const [events, setEvents] = useState<EventListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,11 +25,16 @@ export function EventManagementPage() {
   useEffect(() => {
     fetchPublicEvents()
       .then((result) => setEvents(result))
-      .catch(() => setError("Khong tai duoc danh sach cuoc thi."))
+      .catch(() => setError("Không tải được danh sách cuộc thi."))
       .finally(() => setLoading(false));
   }, []);
 
-  const primaryEvent = useMemo(() => events[0] ?? null, [events]);
+  const primaryEvent = events[0] ?? null;
+
+  function openEvent(event: EventListItem) {
+    setEventId(event.id);
+    navigate("/organizer/events/basic-info");
+  }
 
   if (loading) {
     return <ModuleSkeleton rows={4} />;
@@ -34,36 +43,43 @@ export function EventManagementPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Cuoc thi"
-        title="Quan ly cau hinh cuoc thi"
-        description="Theo doi thoi gian dang ky, quota, kich thuoc doi va trang thai cong bo cua tung cuoc thi."
+        eyebrow="Cuộc thi"
+        title="Quản lý cấu hình cuộc thi"
+        description="Theo dõi thời gian đăng ký, quota, kích thước đội và trạng thái từng cuộc thi."
         actions={
-          <ButtonLink to="/organizer/events/new" icon={<Icon name="add_circle" />}>
-            Tao cuoc thi
-          </ButtonLink>
+          <>
+            <ButtonLink to="/organizer/events/wizard" variant="ghost" icon={<Icon name="route" />}>
+              Quy trình
+            </ButtonLink>
+            <ButtonLink to="/organizer/events/new" icon={<Icon name="add_circle" />}>
+              Tạo cuộc thi
+            </ButtonLink>
+          </>
         }
       />
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Tong cuoc thi" value={events.length} helper="Doc tu he thong" icon="groups" />
+        <StatCard label="Tổng cuộc thi" value={events.length} helper="Đọc từ hệ thống" icon="groups" />
         <StatCard
-          label="Trang thai dau tien"
-          value={primaryEvent ? getStatusLabel(primaryEvent.status) : "-"}
-          helper={primaryEvent ? primaryEvent.name : "Chua co du lieu"}
+          label="Trạng thái đầu tiên"
+          value={primaryEvent ? getStatusLabel(primaryEvent.status) : "—"}
+          helper={primaryEvent ? primaryEvent.name : "Chưa có dữ liệu"}
           icon="group"
           tone="success"
         />
         <StatCard
-          label="Ngay bat dau"
-          value={primaryEvent ? formatDate(primaryEvent.startDate) : "-"}
-          helper="Theo event dau tien"
+          label="Ngày bắt đầu"
+          value={primaryEvent ? formatDate(primaryEvent.startDate) : "—"}
+          helper="Theo cuộc thi đầu tiên"
           icon="schedule"
           tone="warning"
         />
       </section>
 
       {error ? (
-        <p className="rounded-lg border border-error/40 bg-error-container/40 p-md font-body-sm text-on-surface">{error}</p>
+        <p className="rounded-lg border border-error-container bg-error-container/30 p-md font-body-sm text-on-surface">
+          {error}
+        </p>
       ) : null}
 
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
@@ -71,26 +87,35 @@ export function EventManagementPage() {
           <table className="min-w-full text-left">
             <thead className="table-header-bg">
               <tr className="font-label-sm text-on-surface-variant">
-                <th className="px-md py-sm">Cuoc thi</th>
-                <th className="px-md py-sm">Dang ky</th>
-                <th className="px-md py-sm">Dien ra</th>
-                <th className="px-md py-sm">Trang thai</th>
-                <th className="px-md py-sm">Thao tac</th>
+                <th className="px-md py-sm">Cuộc thi</th>
+                <th className="px-md py-sm">Đăng ký</th>
+                <th className="px-md py-sm">Diễn ra</th>
+                <th className="px-md py-sm">Trạng thái</th>
+                <th className="px-md py-sm">Thao tác</th>
               </tr>
             </thead>
             <tbody className="table-divider">
               {events.map((event) => (
                 <tr key={event.id} className="font-body-sm text-on-surface">
                   <td className="px-md py-md font-label-md">{event.name}</td>
-                  <td className="px-md py-md">{formatDate(event.registrationStartAt)} - {formatDate(event.registrationEndAt)}</td>
-                  <td className="px-md py-md">{formatDate(event.startDate)} - {formatDate(event.endDate)}</td>
+                  <td className="px-md py-md">
+                    {formatDate(event.registrationStartAt)} – {formatDate(event.registrationEndAt)}
+                  </td>
+                  <td className="px-md py-md">
+                    {formatDate(event.startDate)} – {formatDate(event.endDate)}
+                  </td>
                   <td className="px-md py-md">
                     <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
                   </td>
                   <td className="px-md py-md">
-                    <ButtonLink to="/organizer/events/basic-info" variant="secondary" icon={<Icon name="edit" />}>
-                      Chinh sua
-                    </ButtonLink>
+                    <button
+                      type="button"
+                      onClick={() => openEvent(event)}
+                      className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-low px-sm py-1 font-label-md text-on-surface hover:bg-surface-container-high"
+                    >
+                      <Icon name="edit" className="text-[18px]" />
+                      Chỉnh sửa
+                    </button>
                   </td>
                 </tr>
               ))}

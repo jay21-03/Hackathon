@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ComponentType, type ReactNode, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { SESSION_CHANGE_EVENT } from "../auth/authSession";
 import { RoleGuard } from "../components/auth/RoleGuard";
 import { AuthLayout } from "../components/layout/AuthLayout";
 import { PublicShell } from "../components/layout/PublicShell";
@@ -28,6 +29,8 @@ const EventsDiscoveryPage = lazyPage(() => import("../pages/events/EventsDiscove
 const ResultsPortalPage = lazyPage(() => import("../pages/public/ResultsPortalPage"), "ResultsPortalPage");
 const InvitationStatusPage = lazyPage(() => import("../pages/public/InvitationStatusPage"), "InvitationStatusPage");
 const TeamInvitationConfirmationPage = lazyPage(() => import("../pages/public/TeamInvitationConfirmationPage"), "TeamInvitationConfirmationPage");
+const TeamInvitationActionPage = lazyPage(() => import("../pages/public/TeamInvitationActionPage"), "TeamInvitationActionPage");
+const TeamInvitationLegacyRedirect = lazyPage(() => import("../pages/public/TeamInvitationLegacyRedirect"), "TeamInvitationLegacyRedirect");
 const TeamRegistrationPage = lazyPage(() => import("../pages/public/TeamRegistrationPage"), "TeamRegistrationPage");
 const JudgeDashboardPage = lazyPage(() => import("../pages/judge/JudgeDashboardPage"), "JudgeDashboardPage");
 const JudgeScoringPage = lazyPage(() => import("../pages/judge/JudgeScoringPage"), "JudgeScoringPage");
@@ -42,6 +45,7 @@ const CheckInManagementPage = lazyPage(() => import("../pages/organizer/CheckInM
 const DisqualificationPage = lazyPage(() => import("../pages/organizer/DisqualificationPage"), "DisqualificationPage");
 const EventBasicInfoPage = lazyPage(() => import("../pages/organizer/EventBasicInfoPage"), "EventBasicInfoPage");
 const EventManagementPage = lazyPage(() => import("../pages/organizer/EventManagementPage"), "EventManagementPage");
+const CreateEventPage = lazyPage(() => import("../pages/organizer/CreateEventPage"), "CreateEventPage");
 const EventWizardPage = lazyPage(() => import("../pages/organizer/EventWizardPage"), "EventWizardPage");
 const ExportSuccessPage = lazyPage(() => import("../pages/organizer/ExportSuccessPage"), "ExportSuccessPage");
 const FinalsPage = lazyPage(() => import("../pages/organizer/FinalsPage"), "FinalsPage");
@@ -75,7 +79,7 @@ export function AppRouter() {
   useEffect(() => {
     // notify listeners that demo session may have changed on navigation
     try {
-      window.dispatchEvent(new Event("seal-demo-session-change"));
+      window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
     } catch {
       /* ignore */
     }
@@ -100,10 +104,27 @@ export function AppRouter() {
         </Route>
       </Route>
 
+      <Route element={<RoleGuard allow={["participant", "organizer", "mentor", "judge"]} />}>
+        <Route element={<PublicShell />}>
+          <Route
+            path="team-invitations/accept"
+            element={routeElement(<TeamInvitationActionPage action="accept" />)}
+          />
+          <Route
+            path="team-invitations/decline"
+            element={routeElement(<TeamInvitationActionPage action="decline" />)}
+          />
+        </Route>
+      </Route>
+
       <Route element={<RoleGuard allow={["participant"]} />}>
         <Route element={<PublicShell />}>
           <Route path="register" element={routeElement(<TeamRegistrationPage />)} />
-          <Route path="team-invitation" element={routeElement(<TeamInvitationConfirmationPage />)} />
+          <Route path="team-invitation" element={routeElement(<TeamInvitationLegacyRedirect />)} />
+          <Route
+            path="team-invitation/manual"
+            element={routeElement(<TeamInvitationConfirmationPage />)}
+          />
           <Route path="team-invitations/status" element={routeElement(<InvitationStatusPage />)} />
         </Route>
       </Route>
@@ -114,9 +135,9 @@ export function AppRouter() {
           element={
             <WorkspaceShell
               navItems={participantWorkspaceNav}
-              title="Khu vuc thi sinh"
-              subtitle="Theo doi doi thi"
-              primaryAction={{ label: "Dang ky doi", icon: "group_add", to: "/register" }}
+              title="Khu vực thí sinh"
+              subtitle="Theo dõi đội thi"
+              primaryAction={{ label: "Đăng ký đội", icon: "group_add", to: "/register" }}
             />
           }
         >
@@ -140,15 +161,16 @@ export function AppRouter() {
           element={
             <WorkspaceShell
               navItems={organizerNav}
-              title="Ban to chuc"
-              subtitle="Quan ly cuoc thi"
-              primaryAction={{ label: "Cong bo ket qua", icon: "campaign", to: "/organizer/publish-results" }}
+              title="Ban tổ chức"
+              subtitle="Quản lý cuộc thi"
+              primaryAction={{ label: "Công bố kết quả", icon: "campaign", to: "/organizer/publish-results" }}
             />
           }
         >
           <Route path="dashboard" element={routeElement(<OrganizerOverviewPage />)} />
           <Route path="events" element={routeElement(<EventManagementPage />)} />
-          <Route path="events/new" element={routeElement(<EventWizardPage />)} />
+          <Route path="events/new" element={routeElement(<CreateEventPage />)} />
+          <Route path="events/wizard" element={routeElement(<EventWizardPage />)} />
           <Route path="events/basic-info" element={routeElement(<EventBasicInfoPage />)} />
           <Route path="registrations" element={routeElement(<RegistrationManagementPage />)} />
           <Route path="users" element={routeElement(<UserManagementPage />)} />
@@ -174,7 +196,7 @@ export function AppRouter() {
       <Route element={<RoleGuard allow={["judge"]} />}>
         <Route
           path="/judge"
-          element={<WorkspaceShell navItems={judgeNav} title="Giam khao" subtitle="Cham diem theo rubric" />}
+          element={<WorkspaceShell navItems={judgeNav} title="Giám khảo" subtitle="Chấm điểm theo rubric" />}
         >
           <Route path="dashboard" element={routeElement(<JudgeDashboardPage />)} />
           <Route path="scoring" element={routeElement(<JudgeScoringPage />)} />
@@ -184,7 +206,7 @@ export function AppRouter() {
       <Route element={<RoleGuard allow={["mentor"]} />}>
         <Route
           path="/mentor"
-          element={<WorkspaceShell navItems={mentorNav} title="Mentor" subtitle="Theo doi doi phu trach" />}
+          element={<WorkspaceShell navItems={mentorNav} title="Mentor" subtitle="Theo dõi đội phụ trách" />}
         >
           <Route path="dashboard" element={routeElement(<MentorDashboardPage />)} />
           <Route path="ai-review" element={routeElement(<MentorAiReviewPage />)} />

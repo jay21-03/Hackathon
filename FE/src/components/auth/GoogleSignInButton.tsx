@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 
 interface GoogleSignInButtonProps {
@@ -7,19 +6,8 @@ interface GoogleSignInButtonProps {
   disabled?: boolean;
 }
 
-let googleSignInMounted = false;
-
 export function GoogleSignInButton({ onSuccess, onError, disabled }: GoogleSignInButtonProps) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!googleSignInMounted) {
-      googleSignInMounted = true;
-    }
-    setVisible(true);
-  }, []);
-
-  if (!visible || disabled) {
+  if (disabled) {
     return null;
   }
 

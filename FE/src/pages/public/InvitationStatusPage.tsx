@@ -15,14 +15,10 @@ interface InvitationRow {
   status: string;
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" });
-}
-
 export function InvitationStatusPage() {
-  const { eventId, loading: eventLoading } = useActiveEvent();
+  const { eventId } = useActiveEvent();
   const [rows, setRows] = useState<InvitationRow[]>([]);
-  const [teamName, setTeamName] = useState<string>("Doi thi");
+  const [teamName, setTeamName] = useState<string>("Đội thi");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,7 +44,7 @@ export function InvitationStatusPage() {
           }))
         );
       })
-      .catch(() => setError("Khong tai duoc trang thai loi moi tu he thong."))
+      .catch(() => setError("Không tải được trạng thái lời mời từ hệ thống."))
       .finally(() => setLoading(false));
   }, [eventId]);
 
@@ -62,10 +58,10 @@ export function InvitationStatusPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-lg">
       <PageHeader
-        eyebrow="Trang thai loi moi"
+        eyebrow="Trạng thái lời mời"
         title={teamName}
-        description="Theo doi thanh vien da xac nhan, dang cho phan hoi hoac da tu choi loi moi."
-        actions={<Badge tone={confirmed === invitationRows.length ? "success" : "warning"}>{confirmed}/{invitationRows.length} da xac nhan</Badge>}
+        description="Theo dõi thành viên đã xác nhận, đang chờ phản hồi hoặc đã từ chối lời mời."
+        actions={<Badge tone={confirmed === invitationRows.length ? "success" : "warning"}>{confirmed}/{invitationRows.length} da xác nhận</Badge>}
       />
 
       {error ? <p className="rounded-lg border border-error/40 bg-error-container/40 p-md font-body-sm text-on-surface">{error}</p> : null}
@@ -75,9 +71,9 @@ export function InvitationStatusPage() {
           <table className="min-w-full text-left">
             <thead className="table-header-bg">
               <tr className="font-label-sm text-on-surface-variant">
-                <th className="px-md py-sm">Thanh vien</th>
+                <th className="px-md py-sm">Thành viên</th>
                 <th className="px-md py-sm">Email</th>
-                <th className="px-md py-sm">Trang thai</th>
+                <th className="px-md py-sm">Trạng thái</th>
               </tr>
             </thead>
             <tbody className="table-divider">
@@ -96,7 +92,7 @@ export function InvitationStatusPage() {
       </section>
 
       <ButtonLink to="/team-invitation" variant="secondary" icon={<Icon name="mail" />}>
-        Mo loi moi
+        Mo lời mời
       </ButtonLink>
     </div>
   );

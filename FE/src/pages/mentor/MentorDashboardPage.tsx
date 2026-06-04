@@ -16,7 +16,7 @@ export function MentorDashboardPage() {
         setAssignments(result);
       })
       .catch(() => {
-        setError("Khong tai duoc danh sach phan cong mentor.");
+        setError("Không tải được danh sach phân công mentor.");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -27,8 +27,8 @@ export function MentorDashboardPage() {
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Mentor"
-        title="Doi thi duoc phu trach"
-        description="Mentor theo doi tien do kho ma nguon, danh gia AI va ho tro doi trong bang duoc phan cong."
+        title="Đội thi duoc phu trach"
+        description="Mentor theo dõi tien do kho ma nguon, danh gia AI va ho tro doi trong bang duoc phân công."
         actions={<Badge tone={error ? "danger" : "success"}>{error ? "Loi API" : "Du lieu he thong"}</Badge>}
       />
 
@@ -39,9 +39,9 @@ export function MentorDashboardPage() {
       ) : null}
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Phan cong" value={assignments.length} helper="Tu BE /mentors/assignments" icon="view_module" />
-        <StatCard label="Bang da gan" value={new Set(assignments.map((item) => item.boardId)).size} helper="Moi board mot phan cong" icon="groups" tone="success" />
-        <StatCard label="Mentor ID" value={assignments[0]?.assigneeId ?? "-"} helper="Tai khoan hien tai" icon="badge" tone="warning" />
+        <StatCard label="Phân công" value={assignments.length} helper="Từ BE /mentors/assignments" icon="view_module" />
+        <StatCard label="Bang da gan" value={new Set(assignments.map((item) => item.boardId)).size} helper="Moi board mot phân công" icon="groups" tone="success" />
+        <StatCard label="Mentor ID" value={assignments[0]?.assigneeId ?? "-"} helper="Tài khoản hien tai" icon="badge" tone="warning" />
       </section>
 
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">

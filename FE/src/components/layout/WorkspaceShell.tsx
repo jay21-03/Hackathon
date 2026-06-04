@@ -1,11 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { setDemoAuthenticated } from "../../auth/demoSession";
+import { setAuthenticated } from "../../auth/authSession";
 import { Icon } from "../ui/Icon";
 import type { NavItem } from "../../config/navigation";
 import { RoleSwitcher } from "../auth/RoleSwitcher";
 import { useToast } from "../feedback/ToastProvider";
 import { ButtonLink, buttonClassName } from "../ui/Button";
+import { ThemeToggle } from "../ui/ThemeToggle";
 
 interface WorkspaceShellProps {
   navItems: NavItem[];
@@ -17,58 +17,12 @@ interface WorkspaceShellProps {
 export function WorkspaceShell({
   navItems,
   title = "SEAL Hackathon",
-  subtitle = "Quan ly cuoc thi",
+  subtitle = "Quản lý cuộc thi",
   primaryAction
 }: WorkspaceShellProps) {
   const { notify } = useToast();
   const visibleNavItems = navItems.filter((item) => !item.hidden);
-  const [showShimRegistration, setShowShimRegistration] = useState(false);
-  const [showShimCheckin, setShowShimCheckin] = useState(false);
 
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    let regTimer: number | undefined;
-    let checkinTimer: number | undefined;
-
-    function check() {
-      try {
-        const hasRegistration = Boolean(document.querySelector('[data-testid="approve-registration-1002"]'));
-        const hasCheckin = Boolean(document.querySelector('[data-testid="approve-checkin-2002"]'));
-
-        // if a real element appears, wait a short time before removing shim to avoid race with test click
-        if (hasRegistration) {
-          regTimer = window.setTimeout(() => setShowShimRegistration(false), 300);
-        } else {
-          if (regTimer) {
-            clearTimeout(regTimer);
-            regTimer = undefined;
-          }
-          setShowShimRegistration(true);
-        }
-
-        if (hasCheckin) {
-          checkinTimer = window.setTimeout(() => setShowShimCheckin(false), 300);
-        } else {
-          if (checkinTimer) {
-            clearTimeout(checkinTimer);
-            checkinTimer = undefined;
-          }
-          setShowShimCheckin(true);
-        }
-      } catch {
-        setShowShimRegistration(true);
-        setShowShimCheckin(true);
-      }
-    }
-    check();
-    const mo = new MutationObserver(check);
-    mo.observe(document.body, { childList: true, subtree: true });
-    return () => {
-      mo.disconnect();
-      if (regTimer) clearTimeout(regTimer);
-      if (checkinTimer) clearTimeout(checkinTimer);
-    };
-  }, []);
   const primaryButton = primaryAction?.to ? (
     <ButtonLink
       to={primaryAction.to}
@@ -81,7 +35,7 @@ export function WorkspaceShell({
     <button
       type="button"
       onClick={() => {
-        notify(`${primaryAction.label} da duoc ghi nhan trong phien lam viec nay.`, "success");
+        notify(`${primaryAction.label} sẽ khả dụng khi backend bổ sung API.`, "warning");
       }}
       className={buttonClassName({ className: "mb-lg w-full" })}
     >
@@ -92,17 +46,18 @@ export function WorkspaceShell({
 
   return (
     <div className="flex min-h-screen overflow-x-hidden bg-background text-on-background">
-      <aside className="fixed left-0 top-0 z-40 flex h-screen w-[264px] flex-col gap-sm border-r border-white/5 bg-surface/95 p-md shadow-ambient backdrop-blur-xl">
-        <div className="mb-lg flex items-center gap-sm rounded-xl border border-white/5 bg-surface-container-low p-sm shadow-glow">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-container shadow-[0_0_0_1px_rgba(173,198,255,0.1)]">
+      <aside className="fixed left-0 top-0 z-40 flex h-screen w-[264px] flex-col gap-sm border-r border-outline-variant/60 bg-surface/95 p-md shadow-ambient backdrop-blur-xl">
+        <div className="mb-lg flex items-center gap-sm rounded-xl border border-outline-variant/60 bg-surface-container-low p-sm shadow-glow">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-container">
             <Icon name="shield" filled className="text-on-primary-container text-[20px]" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate font-headline-sm text-on-surface">{title}</p>
             <p className="truncate font-label-sm normal-case tracking-normal text-on-surface-variant">
               {subtitle}
             </p>
           </div>
+          <ThemeToggle />
         </div>
 
         <div className="mb-md px-sm">
@@ -144,31 +99,31 @@ export function WorkspaceShell({
           })}
         </nav>
 
-        <div className="mt-auto flex flex-col gap-1 border-t border-white/5 pt-4">
+        <div className="mt-auto flex flex-col gap-1 border-t border-outline-variant/60 pt-4">
           <button
             type="button"
             onClick={() => {
-              setDemoAuthenticated(false);
+              setAuthenticated(false);
               window.location.href = "/events";
             }}
-            className="flex items-center gap-3 rounded-lg px-sm py-2 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface font-label-md"
+            className="flex items-center gap-3 rounded-lg px-sm py-2 font-label-md text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
           >
             <Icon name="logout" className="text-[20px]" />
-            Dang xuat
+            Đăng xuất
           </button>
           <a
             href="#"
-            className="flex items-center gap-3 rounded-lg px-sm py-2 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface font-label-md"
+            className="flex items-center gap-3 rounded-lg px-sm py-2 font-label-md text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
           >
             <Icon name="description" className="text-[20px]" />
-            Tai lieu
+            Tài liệu
           </a>
           <a
             href="#"
-            className="flex items-center gap-3 rounded-lg px-sm py-2 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface font-label-md"
+            className="flex items-center gap-3 rounded-lg px-sm py-2 font-label-md text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
           >
             <Icon name="help" className="text-[20px]" />
-            Ho tro
+            Hỗ trợ
           </a>
         </div>
       </aside>
@@ -177,54 +132,6 @@ export function WorkspaceShell({
         <div className="mx-auto min-w-0 max-w-workspace overflow-x-hidden p-page md:p-margin-desktop">
           <div className="pointer-events-none fixed inset-0 -z-10 bg-grid-pattern opacity-100" />
           <Outlet />
-          {import.meta.env.DEV && showShimRegistration ? (
-            <button
-              data-testid="approve-registration-1002"
-              onClick={() => {
-                try {
-                  try {
-                    localStorage.setItem("e2e.approve-registration.1002", "1");
-                  } catch {}
-                  window.dispatchEvent(new CustomEvent("e2e-approve-registration", { detail: { id: 1002 } }));
-                } catch {
-                  /* ignore */
-                }
-                notify("Da cap nhat ho so", "success");
-              }}
-              style={{ position: "fixed", right: 12, bottom: 12, opacity: 0.01, pointerEvents: "auto" }}
-            >
-              Approve shim
-            </button>
-          ) : null}
-          {import.meta.env.DEV && showShimCheckin ? (
-            <button
-              data-testid="approve-checkin-2002"
-              onClick={() => {
-                try {
-                  try {
-                    localStorage.setItem("e2e.approve-checkin.2002", "1");
-                  } catch {}
-                  window.dispatchEvent(new CustomEvent("e2e-approve-checkin", { detail: { id: 2002 } }));
-                } catch {
-                  /* ignore */
-                }
-                try {
-                  if (!document.querySelector('[data-testid="checkin-card-2002"]')) {
-                    const art = document.createElement("article");
-                    art.setAttribute("data-testid", "checkin-card-2002");
-                    art.setAttribute("data-e2e-shim", "true");
-                    art.textContent = "Da xac nhan";
-                    Object.assign(art.style, { position: "fixed", left: 8, bottom: 8, opacity: "0.01" });
-                    document.body.appendChild(art);
-                  }
-                } catch {}
-                notify("Da cap nhat check-in", "success");
-              }}
-              style={{ position: "fixed", right: 12, bottom: 44, opacity: 0.01, pointerEvents: "auto" }}
-            >
-              Approve checkin shim
-            </button>
-          ) : null}
         </div>
       </main>
     </div>

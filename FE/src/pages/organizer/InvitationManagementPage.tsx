@@ -14,6 +14,8 @@ import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { fetchEventTeams, resendTeamInvitation, type TeamDetailResponse } from "../../services/registrationService";
 
+type TabId = "team" | "staff";
+
 interface InvitationRow {
   teamMemberId: number;
   teamName: string;
@@ -37,6 +39,7 @@ function flattenInvitations(teams: TeamDetailResponse[]): InvitationRow[] {
 export function InvitationManagementPage() {
   const { notify } = useToast();
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent();
+  const [tab, setTab] = useState<TabId>("team");
   const [density, setDensity] = useState<TableDensity>("comfortable");
   const [rows, setRows] = useState<InvitationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +57,7 @@ export function InvitationManagementPage() {
       const teams = await fetchEventTeams(eventId);
       setRows(flattenInvitations(teams));
     } catch {
-      notify("Khong tai duoc danh sach loi moi.", "danger");
+      notify("Không tải được danh sách lời mời.", "danger");
     } finally {
       setLoading(false);
     }
@@ -68,10 +71,10 @@ export function InvitationManagementPage() {
     setResendingId(teamMemberId);
     try {
       await resendTeamInvitation(teamMemberId);
-      notify("Da gui lai loi moi.", "success");
+      notify("Đã gửi lại lời mời.", "success");
       await load();
     } catch {
-      notify("Khong gui lai duoc loi moi.", "danger");
+      notify("Không gửi lại được lời mời.", "danger");
     } finally {
       setResendingId(null);
     }
@@ -84,9 +87,9 @@ export function InvitationManagementPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Loi moi thanh vien doi"
-        title="Theo doi loi moi dang ky"
-        description="Danh sach thanh vien doi chua xac nhan. Mentor/judge theo bang xem tai trang Mentor va giam khao."
+        eyebrow="Lời mời"
+        title="Theo dõi lời mời"
+        description="Quản lý lời mời thành viên đội. Lời mời mentor/giám khảo theo bảng sẽ có khi backend bổ sung API."
         actions={
           <>
             <EventSelector events={events} eventId={eventId} onChange={setEventId} />
@@ -94,52 +97,87 @@ export function InvitationManagementPage() {
           </>
         }
       />
-      <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left">
-            <thead className="table-header-bg">
-              <tr className="font-label-sm text-on-surface-variant">
-                <th className={cell}>Email</th>
-                <th className={cell}>Doi</th>
-                <th className={cell}>Trang thai</th>
-                <th className={cell}>Thao tac</th>
-              </tr>
-            </thead>
-            <tbody className="table-divider">
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className={`${cell} text-center text-on-surface-variant`}>
-                    Khong co loi moi dang cho.
-                  </td>
+
+      <div className="flex gap-sm border-b border-outline-variant">
+        <button
+          type="button"
+          onClick={() => setTab("team")}
+          className={`border-b-2 px-md py-sm font-label-md transition-colors ${
+            tab === "team"
+              ? "border-primary text-primary"
+              : "border-transparent text-on-surface-variant hover:text-on-surface"
+          }`}
+        >
+          Thành viên đội
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("staff")}
+          className={`border-b-2 px-md py-sm font-label-md transition-colors ${
+            tab === "staff"
+              ? "border-primary text-primary"
+              : "border-transparent text-on-surface-variant hover:text-on-surface"
+          }`}
+        >
+          Mentor / Giám khảo
+        </button>
+      </div>
+
+      {tab === "team" ? (
+        <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left">
+              <thead className="table-header-bg">
+                <tr className="font-label-sm text-on-surface-variant">
+                  <th className={cell}>Email</th>
+                  <th className={cell}>Đội</th>
+                  <th className={cell}>Trạng thái</th>
+                  <th className={cell}>Thao tác</th>
                 </tr>
-              ) : (
-                rows.map((row) => (
-                  <tr key={row.teamMemberId} className="font-body-sm text-on-surface">
-                    <td className={cell}>{row.email}</td>
-                    <td className={cell}>{row.teamName}</td>
-                    <td className={cell}>
-                      <Badge tone={getStatusTone(row.status)}>{getStatusLabel(row.status)}</Badge>
-                    </td>
-                    <td className={cell}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        disabled={resendingId === row.teamMemberId}
-                        onClick={() => void resend(row.teamMemberId)}
-                      >
-                        Gui lai
-                      </Button>
+              </thead>
+              <tbody className="table-divider">
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className={`${cell} text-center text-on-surface-variant`}>
+                      Không có lời mời đang chờ.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      <p className="font-body-sm text-on-surface-variant">
-        Loi moi mentor/giam khao theo bang: BE chua co API list — can bo sung phase tiep theo.
-      </p>
+                ) : (
+                  rows.map((row) => (
+                    <tr key={row.teamMemberId} className="font-body-sm text-on-surface">
+                      <td className={cell}>{row.email}</td>
+                      <td className={cell}>{row.teamName}</td>
+                      <td className={cell}>
+                        <Badge tone={getStatusTone(row.status)}>{getStatusLabel(row.status)}</Badge>
+                      </td>
+                      <td className={cell}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          disabled={resendingId === row.teamMemberId}
+                          onClick={() => void resend(row.teamMemberId)}
+                        >
+                          Gửi lại
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : (
+        <section className="rounded-xl border border-dashed border-outline-variant bg-surface-container p-lg">
+          <p className="font-body-sm text-on-surface-variant">
+            Phân công mentor và giám khảo tại trang{" "}
+            <a href="/organizer/assignments" className="text-primary hover:underline">
+              Mentor và giám khảo
+            </a>
+            . Danh sách lời mời theo bảng cần API backend (GET list + resend).
+          </p>
+        </section>
+      )}
     </div>
   );
 }

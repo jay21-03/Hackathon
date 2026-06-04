@@ -16,7 +16,7 @@ export interface CurrentUserResponse {
 export async function fetchMyProfile() {
   const { data } = await apiClient.get<ApiResponse<CurrentUserResponse>>("/v1/me");
   if (!data.data) {
-    throw new Error(data.message || "Khong tai duoc ho so");
+    throw new Error(data.message || "Không tải được hồ sơ");
   }
   return data.data;
 }
@@ -29,7 +29,7 @@ export async function updateMyProfile(payload: {
 }) {
   const { data } = await apiClient.put<ApiResponse<CurrentUserResponse>>("/v1/me/profile", payload);
   if (!data.data) {
-    throw new Error(data.message || "Cap nhat ho so that bai");
+    throw new Error(data.message || "Cập nhật hồ sơ thất bại");
   }
   return data.data;
 }

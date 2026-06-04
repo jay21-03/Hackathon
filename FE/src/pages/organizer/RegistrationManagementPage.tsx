@@ -15,6 +15,7 @@ import { fetchEventDetail } from "../../services/eventsApi";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import {
   fetchEventTeams,
+  fetchTeam,
   updateTeamStatus,
   type TeamDetailResponse
 } from "../../services/registrationService";
@@ -35,6 +36,8 @@ export function RegistrationManagementPage() {
 
   const [filter, setFilter] = useState<Filter>("ALL");
   const [search, setSearch] = useState("");
+  const [detailTeam, setDetailTeam] = useState<TeamDetailResponse | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     if (!eventId) {
@@ -49,8 +52,8 @@ export function RegistrationManagementPage() {
         setQuota(eventResult?.maxTeams ?? 0);
       })
       .catch(() => {
-        setError("Khong tai duoc ho so dang ky tu he thong.");
-        notify("Khong tai duoc du lieu dang ky.", "danger");
+        setError("Không tải được hồ sơ đăng ký từ hệ thống.");
+        notify("Không tải được dữ liệu đăng ký.", "danger");
       })
       .finally(() => setLoading(false));
   }, [eventId, notify]);
@@ -71,6 +74,19 @@ export function RegistrationManagementPage() {
     [filter, registrations, search]
   );
 
+  async function openTeamDetail(teamId: number) {
+    setDetailLoading(true);
+    setDetailTeam(null);
+    try {
+      const team = await fetchTeam(teamId);
+      setDetailTeam(team);
+    } catch {
+      notify("Không tải được chi tiết đội.", "danger");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
   async function updateStatus(id: number | null, status: string, reason?: string) {
     const currentRegistration = id ? registrations.find((registration) => registration.id === id) : undefined;
     const confirmedCount = registrations.filter((item) => item.status === "CONFIRMED").length;
@@ -79,7 +95,7 @@ export function RegistrationManagementPage() {
       currentRegistration?.status !== "CONFIRMED" &&
       confirmedCount >= quota
     ) {
-      notify("Quota da day, hay dua doi vao danh sach cho hoac mo them quota truoc khi duyet.", "warning");
+      notify("Quota đã đầy, hãy đưa đội vào danh sách chờ hoặc mở thêm quota trước khi duyệt.", "warning");
       return;
     }
 
@@ -91,41 +107,16 @@ export function RegistrationManagementPage() {
       if (updated) {
         setRegistrations((current) => current.map((registration) => (registration.id === targetId ? updated : registration)));
       }
-      notify(`Da cap nhat ho so: ${getStatusLabel(status)}.`, "success");
+      notify(`Đã cập nhật hồ sơ: ${getStatusLabel(status)}.`, "success");
     } catch {
       setRegistrations((current) =>
         current.map((registration) =>
           registration.id === targetId ? { ...registration, status, rejectedReason: reason ?? registration.rejectedReason } : registration
         )
       );
-      notify(`Da cap nhat ho so: ${getStatusLabel(status)}.`, "success");
+      notify(`Đã cập nhật hồ sơ: ${getStatusLabel(status)}.`, "success");
     }
   }
-
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    function handler(e: Event) {
-      try {
-        // @ts-ignore
-        const detail = e.detail as { id: number } | undefined;
-        if (detail?.id) updateStatus(detail.id, "CONFIRMED");
-      } catch {
-        /* ignore */
-      }
-    }
-    window.addEventListener("e2e-approve-registration", handler as EventListener);
-    try {
-      const pending = localStorage.getItem("e2e.approve-registration.1002");
-      if (pending) {
-        updateStatus(1002, "CONFIRMED");
-        localStorage.removeItem("e2e.approve-registration.1002");
-      }
-    } catch {
-      /* ignore */
-    }
-    return () => window.removeEventListener("e2e-approve-registration", handler as EventListener);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const confirmed = registrations.filter((item) => item.status === "CONFIRMED").length;
   const pending = registrations.filter((item) => item.status === "PENDING").length;
@@ -136,13 +127,13 @@ export function RegistrationManagementPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Duyet dang ky doi"
-        title="Theo doi ho so dang ky"
-        description="Ban to chuc duyet, tu choi hoac dua doi vao danh sach cho. Quota day thi doi moi khong duoc tinh vao confirmed."
+        eyebrow="Duyệt đăng ký đội"
+        title="Theo dõi hồ sơ đăng ký"
+        description="Ban tổ chức duyệt, từ chối hoặc đưa đội vào danh sách chờ. Quota đầy thì đội mới không được tính vào confirmed."
         actions={
           <>
             <EventSelector events={events} eventId={eventId} onChange={setEventId} />
-            <Badge tone={error ? "danger" : "success"}>{confirmed}/{quota || "-"} quota he thong</Badge>
+            <Badge tone={error ? "danger" : "success"}>{confirmed}/{quota || "-"} quota hệ thống</Badge>
           </>
         }
       />
@@ -150,15 +141,15 @@ export function RegistrationManagementPage() {
       {error ? <p className="rounded-lg border border-error/40 bg-error-container/40 p-md font-body-sm text-on-surface">{error}</p> : null}
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Da xac nhan" value={confirmed} helper="Duoc tinh vao quota" icon="check_circle" tone="success" />
-        <StatCard label="Cho xu ly" value={pending} helper="Can duyet thu cong" icon="pending_actions" tone="warning" />
-        <StatCard label="Danh sach cho" value={waitlist} helper="Cho khi quota mo lai" icon="hourglass_top" tone="primary" />
+        <StatCard label="Đã xác nhận" value={confirmed} helper="Duoc tinh vao quota" icon="check_circle" tone="success" />
+        <StatCard label="Chờ xử lý" value={pending} helper="Cần duyệt thủ công" icon="pending_actions" tone="warning" />
+        <StatCard label="Danh sách chờ" value={waitlist} helper="Chờ khi quota mở lại" icon="hourglass_top" tone="primary" />
       </section>
 
       <section className="rounded-xl border border-outline-variant bg-surface-container">
         <TableToolbar
           searchValue={search}
-          searchPlaceholder="Tim doi, track hoac trang thai"
+          searchPlaceholder="Tim doi, track hoac trạng thái"
           onSearchChange={setSearch}
           filters={
             <div className="flex gap-2 overflow-x-auto no-scrollbar">
@@ -180,7 +171,7 @@ export function RegistrationManagementPage() {
           }
           actions={<Button variant="ghost" icon={<Icon name="download" />}>Xuat CSV</Button>}
         />
-        <DataTable headers={["Doi thi", "Thanh vien", "Cap nhat", "Trang thai", "Thao tac"]}>
+        <DataTable headers={["Đội thi", "Thành viên", "Cập nhật", "Trạng thái", "Thao tác"]}>
           {filtered.map((registration) => {
             return (
               <tr key={registration.id} className="font-body-sm text-on-surface">
@@ -197,16 +188,17 @@ export function RegistrationManagementPage() {
                 </td>
                 <td className="px-md py-md">
                   <div className="flex flex-wrap gap-2">
-                    {!import.meta.env.DEV ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => updateStatus(registration.id, "CONFIRMED")}
-                        data-testid={`approve-registration-${registration.id}`}
-                      >
-                        Duyet
-                      </Button>
-                    ) : null}
+                    <Button type="button" variant="ghost" onClick={() => openTeamDetail(registration.id)}>
+                      Chi tiết
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => updateStatus(registration.id, "CONFIRMED")}
+                      data-testid={`approve-registration-${registration.id}`}
+                    >
+                      Duyệt
+                    </Button>
                     <Button
                       type="button"
                       variant="secondary"
@@ -215,13 +207,13 @@ export function RegistrationManagementPage() {
                       Cho
                     </Button>
                     <ConfirmAction
-                      title="Tu choi ho so?"
+                      title="Từ chối hồ sơ?"
                       message="Doi se khong duoc tinh vao danh sach tham gia hop le. Hay chac chan da lien he doi truoc khi tu choi."
-                      confirmLabel="Tu choi"
-                      onConfirm={() => updateStatus(registration.id, "REJECTED", "Tu choi boi ban to chuc")}
+                      confirmLabel="Từ chối"
+                      onConfirm={() => updateStatus(registration.id, "REJECTED", "Từ chối boi ban to chuc")}
                     >
                       <Button type="button" variant="danger">
-                        Tu choi
+                        Từ chối
                       </Button>
                     </ConfirmAction>
                   </div>
@@ -231,6 +223,36 @@ export function RegistrationManagementPage() {
           })}
         </DataTable>
       </section>
+
+      {detailLoading || detailTeam ? (
+        <section className="rounded-xl border border-outline-variant bg-surface-container p-lg space-y-md">
+          <div className="flex items-center justify-between gap-sm">
+            <h2 className="font-headline-sm text-on-surface">
+              {detailLoading ? "Đang tải chi tiết…" : detailTeam?.name}
+            </h2>
+            <Button type="button" variant="ghost" onClick={() => setDetailTeam(null)}>
+              Đóng
+            </Button>
+          </div>
+          {detailTeam ? (
+            <>
+              <p className="font-body-sm text-on-surface-variant">
+                Mã đội #{detailTeam.id} · {getStatusLabel(detailTeam.status)}
+              </p>
+              <ul className="divide-y divide-outline-variant/60 rounded-lg border border-outline-variant">
+                {(detailTeam.members ?? []).map((member) => (
+                  <li key={member.id} className="flex flex-wrap justify-between gap-sm px-md py-sm font-body-sm">
+                    <span>
+                      {member.fullName} — {member.email}
+                    </span>
+                    <Badge tone={getStatusTone(member.status)}>{getStatusLabel(member.status)}</Badge>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }

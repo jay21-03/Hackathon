@@ -11,7 +11,7 @@ interface TableToolbarProps {
 
 export function TableToolbar({
   searchValue = "",
-  searchPlaceholder = "Tim kiem",
+  searchPlaceholder = "Tìm kiếm",
   onSearchChange,
   filters,
   actions

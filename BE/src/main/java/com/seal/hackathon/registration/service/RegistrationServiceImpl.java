@@ -308,7 +308,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     @Override
     @Transactional
     public TeamDetailDto confirmInvitation(String token, Long actorUserId, String actorEmail) {
-        InvitationTokenParts parts = parseInvitationToken(token);
+        InvitationTokenCodec.InvitationTokenParts parts = InvitationTokenCodec.parse(token);
         TeamMember member = loadAndValidateInvitation(parts);
         validateInvitationActor(member, actorEmail);
 
@@ -359,7 +359,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     @Override
     @Transactional
     public TeamDetailDto declineInvitation(String token, Long actorUserId, String actorEmail) {
-        InvitationTokenParts parts = parseInvitationToken(token);
+        InvitationTokenCodec.InvitationTokenParts parts = InvitationTokenCodec.parse(token);
         TeamMember member = loadAndValidateInvitation(parts);
         validateInvitationActor(member, actorEmail);
 
@@ -564,9 +564,18 @@ public class RegistrationServiceImpl implements RegistrationService {
         }
     }
 
-    private TeamMember loadAndValidateInvitation(InvitationTokenParts parts) {
+    private TeamMember loadAndValidateInvitation(InvitationTokenCodec.InvitationTokenParts parts) {
+        String expectedHash = invitationService.hashIncomingToken(
+                parts.teamId(), parts.teamMemberId(), parts.nonce(), parts.rawToken());
+
         TeamMember member = teamMemberRepository.findByIdAndTeamId(parts.teamMemberId(), parts.teamId())
-                .orElseThrow(() -> new BusinessException("Invitation not found"));
+                .or(() -> teamMemberRepository.findByInviteTokenHashAndInviteNonce(expectedHash, parts.nonce()))
+                .orElseThrow(() -> new BusinessException(
+                        "Invitation not found. The link may be outdated — ask the organizer to resend the invitation."));
+
+        if (!Objects.equals(member.getTeamId(), parts.teamId())) {
+            throw new BusinessException("Invitation not found");
+        }
 
         if (member.getInviteExpiresAt() != null && OffsetDateTime.now(ZoneOffset.UTC).isAfter(member.getInviteExpiresAt())) {
             throw new BusinessException("Invitation token expired");
@@ -574,29 +583,10 @@ public class RegistrationServiceImpl implements RegistrationService {
         if (!Objects.equals(member.getInviteNonce(), parts.nonce())) {
             throw new BusinessException("Invalid invitation token");
         }
-
-        String expectedHash = invitationService.hashIncomingToken(parts.teamId(), parts.teamMemberId(), parts.nonce(), parts.rawToken());
         if (!Objects.equals(member.getInviteTokenHash(), expectedHash)) {
             throw new BusinessException("Invalid invitation token");
         }
         return member;
-    }
-
-    private InvitationTokenParts parseInvitationToken(String token) {
-        if (token == null || token.isBlank()) {
-            throw new BusinessException("Invitation token is required");
-        }
-
-        String[] parts = token.trim().split("\\.", 4);
-        if (parts.length != 4) {
-            throw new BusinessException("Invalid invitation token");
-        }
-
-        try {
-            return new InvitationTokenParts(Long.parseLong(parts[0]), Long.parseLong(parts[1]), parts[2], parts[3]);
-        } catch (NumberFormatException ex) {
-            throw new BusinessException("Invalid invitation token");
-        }
     }
 
     private void appendLifecycleArtifacts(Team team, String action, String eventType, Long actorUserId, String actorEmail,
@@ -687,6 +677,4 @@ public class RegistrationServiceImpl implements RegistrationService {
         return dto;
     }
 
-    private record InvitationTokenParts(Long teamId, Long teamMemberId, String nonce, String rawToken) {
-    }
 }

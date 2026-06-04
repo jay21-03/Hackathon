@@ -1,27 +1,29 @@
 import { clearAccessToken, getAccessToken } from "./tokenStorage";
 
+export const SESSION_CHANGE_EVENT = "seal-session-change";
+
 export type UserRole = "participant" | "organizer" | "mentor" | "judge";
 
-export interface DemoSession {
+export interface AuthSession {
   role: UserRole;
   email: string;
   name: string;
 }
 
-const storageKey = "seal.demo.session";
+const storageKey = "seal.auth.session";
 
-const defaultSession: DemoSession = {
+const defaultSession: AuthSession = {
   role: "participant",
   email: "",
   name: ""
 };
 
-export function getDemoSession(): DemoSession {
+export function getAuthSession(): AuthSession {
   if (typeof window === "undefined") return defaultSession;
   const raw = window.localStorage.getItem(storageKey);
   if (!raw) return defaultSession;
   try {
-    const parsed = JSON.parse(raw) as DemoSession;
+    const parsed = JSON.parse(raw) as AuthSession;
     if (!parsed.role) return defaultSession;
     return parsed;
   } catch {
@@ -29,27 +31,27 @@ export function getDemoSession(): DemoSession {
   }
 }
 
-export function isDemoAuthenticated(): boolean {
+export function isAuthenticated(): boolean {
   return Boolean(getAccessToken());
 }
 
-export function setDemoAuthenticated(value: boolean) {
+export function setAuthenticated(value: boolean) {
   if (typeof window === "undefined") return;
   if (!value) {
     clearAccessToken();
     window.localStorage.removeItem(storageKey);
   }
-  window.dispatchEvent(new Event("seal-demo-session-change"));
+  window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
 }
 
-export function setDemoSessionFromUser(input: { role: UserRole; email: string; name: string }) {
-  const next: DemoSession = {
+export function setAuthSession(input: { role: UserRole; email: string; name: string }) {
+  const next: AuthSession = {
     role: input.role,
     email: input.email,
     name: input.name
   };
   window.localStorage.setItem(storageKey, JSON.stringify(next));
-  window.dispatchEvent(new Event("seal-demo-session-change"));
+  window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
   return next;
 }
 
@@ -69,8 +71,8 @@ export function getRoleHome(role: UserRole) {
 }
 
 export const roleLabels: Record<UserRole, string> = {
-  participant: "Thi sinh",
-  organizer: "Ban to chuc",
+  participant: "Thí sinh",
+  organizer: "Ban tổ chức",
   mentor: "Mentor",
-  judge: "Giam khao"
+  judge: "Giám khảo"
 };

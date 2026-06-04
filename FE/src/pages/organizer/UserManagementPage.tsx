@@ -27,7 +27,7 @@ export function UserManagementPage() {
   useEffect(() => {
     fetchAdminUsers()
       .then(setUsers)
-      .catch(() => setError("Khong tai duoc danh sach nguoi dung."))
+      .catch(() => setError("Không tải được danh sách người dùng."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -42,9 +42,9 @@ export function UserManagementPage() {
     try {
       const updated = await assignUserRole(userId, role);
       setUsers((current) => current.map((user) => (user.id === userId ? updated : user)));
-      notify(`Da gan vai tro ${role}.`, "success");
+      notify(`Đã gán vai trò ${role}.`, "success");
     } catch {
-      notify("Gan vai tro that bai.", "danger");
+      notify("Gán vai trò thất bại.", "danger");
     } finally {
       setAssigningId(null);
     }
@@ -55,9 +55,9 @@ export function UserManagementPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Nguoi dung va vai tro"
-        title="Phan quyen he thong"
-        description="Quan ly tai khoan theo vai tro participant, organizer, mentor va judge."
+        eyebrow="Người dùng và vai trò"
+        title="Phân quyền hệ thống"
+        description="Quản lý tài khoản theo vai trò participant, organizer, mentor và judge."
       />
 
       {error ? (
@@ -69,11 +69,11 @@ export function UserManagementPage() {
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
         <TableToolbar
           searchValue={search}
-          searchPlaceholder="Tim ten, email hoac vai tro"
+          searchPlaceholder="Tìm tên, email hoặc vai trò"
           onSearchChange={setSearch}
           filters={<TableDensityToggle value={density} onChange={setDensity} />}
         />
-        <DataTable headers={["Ho ten", "Email", "Vai tro", "Trang thai", "Gan vai tro"]}>
+        <DataTable headers={["Họ tên", "Email", "Vai trò", "Trạng thái", "Gán vai trò"]}>
           {filteredUsers.map((user) => (
             <tr key={user.id} className="font-body-sm text-on-surface">
               <td className={cell}>{user.fullName}</td>

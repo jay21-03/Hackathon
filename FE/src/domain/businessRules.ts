@@ -34,9 +34,9 @@ export function validateTeamRegistration(
   const errors: string[] = [];
   const members = uniqueEmails(candidate.memberEmails);
 
-  if (!candidate.name.trim()) errors.push("Ten doi la bat buoc.");
+  if (!candidate.name.trim()) errors.push("Tên đội là bắt buộc.");
   if (members.length < 1 || members.length > 5) {
-    errors.push("Doi thi phai co tu 1 den 5 thanh vien.");
+    errors.push("Đội thi phải có từ 1 đến 5 thành viên.");
   }
 
   const duplicatedInEvent = existingMembers.find(
@@ -47,7 +47,7 @@ export function validateTeamRegistration(
 
   if (duplicatedInEvent) {
     errors.push(
-      `${duplicatedInEvent.email} da thuoc doi ${duplicatedInEvent.teamName} trong cuoc thi nay.`
+      `${duplicatedInEvent.email} da thuoc doi ${duplicatedInEvent.teamName} trong cuộc thi nay.`
     );
   }
 

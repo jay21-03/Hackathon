@@ -3,15 +3,15 @@ import { Link } from "react-router-dom";
 import { EventCard } from "../../components/events/EventCard";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { Icon } from "../../components/ui/Icon";
-import { getDemoSession, getRoleHome, isDemoAuthenticated, roleLabels } from "../../auth/demoSession";
+import { getAuthSession, getRoleHome, isAuthenticated, roleLabels } from "../../auth/authSession";
 import { fetchPublicEvents } from "../../services/eventsApi";
 import type { EventListItem } from "../../types/entities";
 
 type Filter = "all" | "upcoming" | "active";
 
 export function EventsDiscoveryPage() {
-  const authenticated = isDemoAuthenticated();
-  const session = getDemoSession();
+  const authenticated = isAuthenticated();
+  const session = getAuthSession();
   const roleHome = getRoleHome(session.role);
   const roleLabel = roleLabels[session.role];
   const [events, setEvents] = useState<EventListItem[]>([]);
@@ -29,7 +29,7 @@ export function EventsDiscoveryPage() {
       })
       .catch(() => {
         if (cancelled) return;
-        setError("Khong tai duoc danh sach cuoc thi tu he thong.");
+        setError("Không tải được danh sách cuộc thi từ hệ thống.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -60,13 +60,13 @@ export function EventsDiscoveryPage() {
 
   const chips: { id: Filter; label: string }[] = [
     { id: "all", label: "Tat ca" },
-    { id: "upcoming", label: "Sap dien ra" },
-    { id: "active", label: "Dang mo" }
+    { id: "upcoming", label: "Sắp diễn ra" },
+    { id: "active", label: "Đang mở" }
   ];
 
   const primaryAction = authenticated
     ? session.role === "participant"
-      ? { to: "/register", label: "Dang ky doi", icon: "group_add" }
+      ? { to: "/register", label: "Đăng ký đội", icon: "group_add" }
       : { to: roleHome, label: `Vao ${roleLabel}`, icon: "dashboard" }
     : null;
 
@@ -74,9 +74,9 @@ export function EventsDiscoveryPage() {
     <div className="space-y-lg">
       <section className="flex flex-col md:flex-row md:items-end justify-between gap-md border-b border-outline-variant pb-lg">
         <div>
-          <h1 className="font-headline-lg text-on-surface">Danh sach cuoc thi</h1>
+          <h1 className="font-headline-lg text-on-surface">Danh sach cuộc thi</h1>
           <p className="font-body-md text-on-surface-variant mt-xs">
-            Tim cuoc thi phu hop, xem thoi gian dang ky va bat dau tao doi.
+            Tim cuộc thi phu hop, xem thoi gian đăng ký va bat dau tao doi.
           </p>
         </div>
         {primaryAction ? (
@@ -100,7 +100,7 @@ export function EventsDiscoveryPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tim kiem theo ten cuoc thi..."
+            placeholder="Tìm kiếm theo ten cuộc thi..."
             className="form-input w-full py-3 pl-10 pr-4"
           />
         </div>
@@ -136,9 +136,9 @@ export function EventsDiscoveryPage() {
       {!loading && filtered.length === 0 && (
         <div className="rounded-xl border border-outline-variant bg-surface p-lg text-center shadow-sm">
           <Icon name="event_busy" className="text-4xl text-outline mb-md mx-auto" />
-          <p className="font-headline-sm mb-sm">Chua co cuoc thi phu hop</p>
+          <p className="font-headline-sm mb-sm">Chưa có cuộc thi phu hop</p>
           <p className="font-body-sm text-on-surface-variant mb-md">
-            Hay thu doi bo loc hoac quay lai danh sach tat ca cuoc thi.
+            Hãy thử đổi bộ lọc hoặc quay lại danh sách tất cả cuộc thi.
           </p>
           <Link
             to={authenticated ? roleHome : "/login"}
@@ -148,7 +148,7 @@ export function EventsDiscoveryPage() {
               name={authenticated ? "dashboard" : "account_circle"}
               className="text-[18px]"
             />
-            {authenticated ? `Vao ${roleLabel}` : "Dang nhap de bat dau"}
+            {authenticated ? `Vào ${roleLabel}` : "Đăng nhập để bắt đầu"}
           </Link>
         </div>
       )}

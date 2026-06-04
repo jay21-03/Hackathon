@@ -17,8 +17,8 @@ export function AssignedBoardPage() {
   if (!team) {
     return (
       <div className="space-y-lg">
-        <PageHeader eyebrow="Bang thi" title="Chua co doi" description="Dang ky doi de xem bang thi." />
-        <EmptyState icon="grid_view" title="Chua co doi thi" description="Dang ky doi truoc khi duoc phan cong bang." />
+        <PageHeader eyebrow="Bảng thi" title="Chưa có đội" description="Đăng ký đội để xem bảng thi." />
+        <EmptyState icon="grid_view" title="Chưa có đội thi" description="Đăng ký đội trước khi được phân công bảng." />
       </div>
     );
   }
@@ -27,15 +27,15 @@ export function AssignedBoardPage() {
     return (
       <div className="space-y-lg">
         <PageHeader
-          eyebrow="Bang thi"
+          eyebrow="Bảng thi"
           title={team.name}
-          description="Doi can duoc xac nhan truoc khi ban to chuc phan cong bang."
+          description="Đội cần được xác nhận trước khi ban tổ chức phân công bảng."
           actions={<Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>}
         />
         <EmptyState
           icon="grid_view"
-          title="Chua duoc phan cong bang"
-          description={`Doi dang o trang thai ${getStatusLabel(team.status)}. Vui long cho ban to chuc duyet.`}
+          title="Chưa được phân công bảng"
+          description={`Đội đang ở trạng thái ${getStatusLabel(team.status)}. Vui lòng chờ ban tổ chức duyệt.`}
         />
       </div>
     );
@@ -44,10 +44,10 @@ export function AssignedBoardPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Bang thi"
+        eyebrow="Bảng thi"
         title={team.name}
-        description={event?.name ?? "Thong tin bang thi se cap nhat sau khi ban to chuc phan cong."}
-        actions={<Badge tone="warning">Cho phan cong bang</Badge>}
+        description={event?.name ?? "Thông tin bảng thi sẽ cập nhật sau khi ban tổ chức phân công."}
+        actions={<Badge tone="warning">Chờ phân công bảng</Badge>}
       />
       {error ? (
         <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
@@ -56,8 +56,8 @@ export function AssignedBoardPage() {
       ) : null}
       <EmptyState
         icon="grid_view"
-        title="Chua co thong tin bang"
-        description="Ban to chuc se phan cong doi vao bang truoc ngay thi. Hay quay lai sau khi nhan thong bao."
+        title="Chưa có thông tin bảng"
+        description="Ban tổ chức sẽ phân công đội vào bảng trước ngày thi. Hãy quay lại sau khi nhận thông báo."
       />
     </div>
   );

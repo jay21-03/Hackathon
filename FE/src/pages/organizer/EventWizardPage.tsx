@@ -35,26 +35,26 @@ export function EventWizardPage() {
       if (cancelled) return;
       setSteps([
         {
-          title: "Thong tin co ban",
-          detail: "Ten cuoc thi, quota va mo ta.",
+          title: "Thông tin cơ bản",
+          detail: "Tên cuộc thi, quota va mo ta.",
           path: "/organizer/events/basic-info",
           status: "CONFIRMED"
         },
         {
-          title: "Dang ky doi",
-          detail: "Duyet doi va gui loi moi thanh vien.",
+          title: "Đăng ký đội",
+          detail: "Duyệt đội và gửi lời mời thành viên.",
           path: "/organizer/registrations",
           status: teams.length > 0 ? "CONFIRMED" : "PENDING"
         },
         {
-          title: "Bang thi",
-          detail: "Tao bang va phan doi ngau nhien.",
+          title: "Bảng thi",
+          detail: "Tạo bảng và phân đội ngẫu nhiên.",
           path: "/organizer/boards",
           status: boards.length > 0 ? "CONFIRMED" : "PENDING"
         },
         {
-          title: "De thi",
-          detail: "Cau hinh thoi gian mo de theo bang.",
+          title: "Đề thi",
+          detail: "Cấu hình thời gian mở đề theo bảng.",
           path: "/organizer/problems",
           status: hasProblem ? "CONFIRMED" : "PENDING"
         }
@@ -72,9 +72,9 @@ export function EventWizardPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Tao cuoc thi"
-        title="Quy trinh cau hinh"
-        description="Trang thai tung buoc duoc tinh tu du lieu that tren he thong."
+        eyebrow="Tạo cuộc thi"
+        title="Quy trình cấu hình"
+        description="Trạng thái từng bước được tính từ dữ liệu thật trên hệ thống."
       />
 
       <section className="grid gap-md lg:grid-cols-2">
@@ -91,11 +91,11 @@ export function EventWizardPage() {
                 </div>
               </div>
               <Badge tone={step.status === "CONFIRMED" ? "success" : "warning"}>
-                {step.status === "CONFIRMED" ? "Da san sang" : "Can cau hinh"}
+                {step.status === "CONFIRMED" ? "Đã sẵn sàng" : "Cần cấu hình"}
               </Badge>
             </div>
             <ButtonLink to={step.path} variant="secondary" className="mt-md" icon={<Icon name="arrow_forward" />}>
-              Mo buoc nay
+              Mở bước này
             </ButtonLink>
           </article>
         ))}

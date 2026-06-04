@@ -19,22 +19,22 @@ export type WorkflowStatus =
   | "FAILED";
 
 const statusLabels: Record<WorkflowStatus, string> = {
-  PENDING: "Cho xac nhan",
-  CONFIRMED: "Da xac nhan",
-  WAITLIST: "Danh sach cho",
-  REJECTED: "Tu choi",
-  DISQUALIFIED: "Bi loai",
-  DRAFT: "Ban nhap",
-  SUBMITTED: "Da nop",
-  PUBLISHED: "Da cong bo",
-  EXPIRED: "Het han",
-  OPEN: "Dang mo dang ky",
-  UPCOMING: "Sap dien ra",
-  ACTIVE: "Dang dien ra",
-  CLOSED: "Da dong",
-  ENDED: "Da ket thuc",
-  COMPLETED: "Hoan tat",
-  FAILED: "That bai"
+  PENDING: "Chờ xác nhận",
+  CONFIRMED: "Đã xác nhận",
+  WAITLIST: "Danh sách chờ",
+  REJECTED: "Từ chối",
+  DISQUALIFIED: "Bị loại",
+  DRAFT: "Bản nháp",
+  SUBMITTED: "Đã nộp",
+  PUBLISHED: "Đã công bố",
+  EXPIRED: "Hết hạn",
+  OPEN: "Đang mở đăng ký",
+  UPCOMING: "Sắp diễn ra",
+  ACTIVE: "Đang diễn ra",
+  CLOSED: "Đã đóng",
+  ENDED: "Đã kết thúc",
+  COMPLETED: "Hoàn tất",
+  FAILED: "Thất bại"
 };
 
 const statusTones: Record<WorkflowStatus, BadgeTone> = {
@@ -70,7 +70,7 @@ export function getStatusLabel(status?: string) {
   const normalized = normalizeStatus(status);
   return normalized in statusLabels
     ? statusLabels[normalized as WorkflowStatus]
-    : String(status ?? "Cho xac nhan");
+    : String(status ?? "Chờ xác nhận");
 }
 
 export function getStatusTone(status?: string): BadgeTone {

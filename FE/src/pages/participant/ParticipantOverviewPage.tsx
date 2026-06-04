@@ -2,16 +2,21 @@ import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { EventSelector } from "../../components/ui/EventSelector";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { RoundCountdown } from "../../components/ui/RoundCountdown";
 import { StatCard } from "../../components/ui/StatCard";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useEventRound } from "../../hooks/useEventRound";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 export function ParticipantOverviewPage() {
-  const { eventId, event, loading: eventLoading } = useActiveEvent();
+  const { eventId, event, events, setEventId, loading: eventLoading } = useActiveEvent();
+  const { roundId, countdown, loading: roundLoading } = useEventRound(eventId);
   const { team, loading: teamLoading, error } = useMyTeam(eventId);
 
   if (eventLoading || teamLoading) {
@@ -22,22 +27,19 @@ export function ParticipantOverviewPage() {
     return (
       <div className="space-y-lg">
         <PageHeader
-          eyebrow="Tong quan thi sinh"
-          title="Chua co doi thi"
-          description="Dang ky doi de tham gia cuoc thi va theo doi trang thai tai day."
+          eyebrow="Tổng quan thí sinh"
+          title="Chưa có đội thi"
+          description="Đăng ký đội để tham gia cuộc thi và theo dõi trạng thái tại đây."
+          actions={<EventSelector events={events} eventId={eventId} onChange={setEventId} />}
         />
-        {error ? (
-          <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-            <p className="font-body-sm text-on-surface">{error}</p>
-          </div>
-        ) : null}
+        {error ? <RetryPanel message={error} /> : null}
         <EmptyState
           icon="groups"
-          title="Ban chua dang ky doi nao"
-          description="Chon cuoc thi va tao doi de bat dau."
+          title="Bạn chưa đăng ký đội nào"
+          description="Chọn cuộc thi và tạo đội để bắt đầu."
           action={
             <ButtonLink to="/register" className="mt-md">
-              Dang ky doi
+              Đăng ký đội
             </ButtonLink>
           }
         />
@@ -48,62 +50,68 @@ export function ParticipantOverviewPage() {
   const confirmedMembers =
     team.members?.filter((member) => member.status === "CONFIRMED").length ?? 0;
   const totalMembers = team.members?.length ?? 0;
+  const isConfirmed = team.status === "CONFIRMED";
 
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Tong quan thi sinh"
+        eyebrow="Tổng quan thí sinh"
         title={team.name}
-        description={event?.name ?? "Theo doi trang thai doi va cac buoc chuan bi truoc ngay thi."}
+        description={event?.name ?? "Theo dõi trạng thái đội và các bước chuẩn bị trước ngày thi."}
         actions={
-          <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
+          <>
+            <EventSelector events={events} eventId={eventId} onChange={setEventId} />
+            <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
+          </>
         }
       />
 
+      <RoundCountdown roundId={roundId} countdown={countdown} loading={roundLoading} />
+
       <section className="grid gap-md md:grid-cols-2 xl:grid-cols-3">
         <StatCard
-          label="Thanh vien xac nhan"
+          label="Thành viên xác nhận"
           value={`${confirmedMembers}/${totalMembers}`}
-          helper="Doi hop le tu 1-5 thanh vien"
+          helper="Đội hợp lệ từ 1–5 thành viên"
           icon="groups"
           tone="success"
         />
         <StatCard
-          label="Trang thai dang ky"
+          label="Trạng thái đăng ký"
           value={getStatusLabel(team.status)}
-          helper="Cho ban to chuc duyet neu dang PENDING"
+          helper="Chờ ban tổ chức duyệt nếu đang PENDING"
           icon="fact_check"
           tone="primary"
         />
         <StatCard
-          label="Cuoc thi"
-          value={event?.name ?? `Su kien #${team.eventId}`}
-          helper={`Ma doi #${team.id}`}
+          label="Cuộc thi"
+          value={event?.name ?? `Sự kiện #${team.eventId}`}
+          helper={`Mã đội #${team.id}`}
           icon="event"
         />
       </section>
 
       <WorkflowSteps
-        title="Thu tu can hoan thanh"
-        description="Cac buoc chuan bi truoc ngay thi."
+        title="Thứ tự cần hoàn thành"
+        description="Các bước chuẩn bị trước ngày thi."
         steps={[
           {
-            label: "Doi thi",
-            detail: "Xac nhan thanh vien va trang thai dang ky.",
+            label: "Đội thi",
+            detail: "Xác nhận thành viên và trạng thái đăng ký.",
             to: "/me/team",
-            state: team.status === "CONFIRMED" ? "done" : "active"
+            state: isConfirmed ? "done" : "active"
           },
           {
-            label: "Bang thi",
-            detail: "Xem bang duoc phan cong sau khi doi duoc xac nhan.",
+            label: "Bảng thi",
+            detail: "Xem bảng được phân công sau khi đội được xác nhận.",
             to: "/me/board",
-            state: team.status === "CONFIRMED" ? "active" : "blocked"
+            state: isConfirmed ? "active" : "blocked"
           },
           {
-            label: "De thi",
-            detail: "Noi dung mo theo thoi gian ban to chuc cau hinh.",
+            label: "Đề thi",
+            detail: "Nội dung mở theo thời gian ban tổ chức cấu hình.",
             to: "/me/problem",
-            state: team.status === "CONFIRMED" ? "next" : "blocked"
+            state: isConfirmed ? "next" : "blocked"
           }
         ]}
       />
@@ -111,13 +119,13 @@ export function ParticipantOverviewPage() {
       <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
         <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-headline-sm text-on-surface">Tiep theo</h2>
+            <h2 className="font-headline-sm text-on-surface">Tiếp theo</h2>
             <p className="font-body-sm text-on-surface-variant">
-              Quan ly thanh vien va theo doi trang thai doi.
+              Quản lý thành viên và theo dõi trạng thái đội.
             </p>
           </div>
           <Link to="/me/team" className="font-label-md text-primary">
-            Xem doi cua toi
+            Xem đội của tôi
           </Link>
         </div>
       </section>

@@ -18,7 +18,7 @@ export function useAsyncResource<T>(loader: () => Promise<{ data: T; usingFallba
       })
       .catch((unknownError) => {
         if (!active) return;
-        setError(unknownError instanceof Error ? unknownError.message : "Khong tai duoc du lieu.");
+        setError(unknownError instanceof Error ? unknownError.message : "Không tải được dữ liệu.");
       })
       .finally(() => {
         if (active) setLoading(false);

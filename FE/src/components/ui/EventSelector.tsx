@@ -14,7 +14,7 @@ export function EventSelector({ events, eventId, onChange, className = "" }: Eve
 
   return (
     <label className={`flex items-center gap-2 ${className}`}>
-      <span className="font-label-sm normal-case text-on-surface-variant">Cuoc thi</span>
+      <span className="font-label-sm normal-case text-on-surface-variant">Cuộc thi</span>
       <select
         value={eventId ?? ""}
         onChange={(event) => onChange(Number(event.target.value))}

@@ -58,7 +58,7 @@ export function ProblemManagementPage() {
       setBoards(list);
       setBoardId((current) => current ?? list[0]?.id ?? null);
     } catch {
-      notify("Khong tai duoc danh sach bang.", "danger");
+      notify("Không tải được danh sách bảng.", "danger");
     } finally {
       setLoading(false);
     }
@@ -87,7 +87,7 @@ export function ProblemManagementPage() {
         setReleaseAt(current ? toLocalInput(current.releaseAt) : "");
       })
       .catch(() => {
-        if (!cancelled) notify("Khong tai duoc de thi.", "danger");
+        if (!cancelled) notify("Không tải được đề thi.", "danger");
       });
     return () => {
       cancelled = true;
@@ -96,7 +96,7 @@ export function ProblemManagementPage() {
 
   async function saveDraft() {
     if (!boardId || !title.trim() || !releaseAt) {
-      notify("Nhap ten de va thoi gian mo de.", "warning");
+      notify("Nhập tên đề và thời gian mở đề.", "warning");
       return;
     }
     setSaving(true);
@@ -110,9 +110,9 @@ export function ProblemManagementPage() {
         ? await updateProblem(problem.id, payload)
         : await createProblem(boardId, payload);
       setProblem(saved);
-      notify(problem ? "Da cap nhat de thi." : "Da tao de thi.", "success");
+      notify(problem ? "Đã cập nhật đề thi." : "Đã tạo đề thi.", "success");
     } catch {
-      notify("Khong luu duoc de thi.", "danger");
+      notify("Không lưu được đề thi.", "danger");
     } finally {
       setSaving(false);
     }
@@ -126,8 +126,8 @@ export function ProblemManagementPage() {
     return (
       <EmptyState
         icon="event"
-        title="Chua co cuoc thi"
-        description="Tao hoac chon cuoc thi truoc khi cau hinh de."
+        title="Chưa có cuộc thi"
+        description="Tạo hoặc chọn cuộc thi trước khi cấu hình đề."
       />
     );
   }
@@ -135,9 +135,9 @@ export function ProblemManagementPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Cau hinh de thi"
-        title="De thi theo bang"
-        description="Moi bang co the co mot de rieng. Thi sinh chi xem duoc sau thoi gian mo de (can API participant)."
+        eyebrow="Cấu hình đề thi"
+        title="Đề thi theo bảng"
+        description="Moi bang co the co mot de rieng. Thí sinh chỉ xem được sau thời gian mở đề (cần API participant)."
         actions={
           <EventSelector events={events} eventId={eventId} onChange={setEventId} />
         }
@@ -146,14 +146,14 @@ export function ProblemManagementPage() {
       {boards.length === 0 ? (
         <EmptyState
           icon="grid_view"
-          title="Chua co bang thi"
-          description="Tao bang trong muc Bang cham truoc khi gan de."
+          title="Chưa có bảng thi"
+          description="Tạo bảng trong mục Bảng chấm trước khi gán đề."
         />
       ) : (
         <section className="grid gap-lg lg:grid-cols-[1fr_320px]">
           <form className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
             <label className="flex flex-col gap-xs">
-              <span className="font-label-sm normal-case text-on-surface-variant">Bang thi</span>
+              <span className="font-label-sm normal-case text-on-surface-variant">Bảng thi</span>
               <select
                 className="form-input"
                 value={boardId ?? ""}
@@ -167,11 +167,11 @@ export function ProblemManagementPage() {
               </select>
             </label>
             <label className="flex flex-col gap-xs">
-              <span className="font-label-sm normal-case text-on-surface-variant">Ten de thi</span>
+              <span className="font-label-sm normal-case text-on-surface-variant">Tên đề thi</span>
               <input value={title} onChange={(e) => setTitle(e.target.value)} className="form-input" />
             </label>
             <label className="flex flex-col gap-xs">
-              <span className="font-label-sm normal-case text-on-surface-variant">Thoi gian mo de</span>
+              <span className="font-label-sm normal-case text-on-surface-variant">Thời gian mở đề</span>
               <input
                 value={releaseAt}
                 onChange={(e) => setReleaseAt(e.target.value)}
@@ -181,7 +181,7 @@ export function ProblemManagementPage() {
               />
             </label>
             <label className="flex flex-col gap-xs">
-              <span className="font-label-sm normal-case text-on-surface-variant">Noi dung de</span>
+              <span className="font-label-sm normal-case text-on-surface-variant">Nội dung đề</span>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -189,16 +189,16 @@ export function ProblemManagementPage() {
               />
             </label>
             <Button type="button" disabled={saving} onClick={() => void saveDraft()}>
-              {saving ? "Dang luu" : problem ? "Cap nhat de" : "Tao de thi"}
+              {saving ? "Đang lưu" : problem ? "Cập nhật đề" : "Tạo đề thi"}
             </Button>
           </form>
 
           <aside className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-            <h2 className="font-headline-sm text-on-surface">Quy tac can giu</h2>
+            <h2 className="font-headline-sm text-on-surface">Quy tắc cần giữ</h2>
             <div className="mt-md space-y-sm font-body-sm text-on-surface-variant">
-              <p>De chi hien sau thoi gian mo de.</p>
-              <p>Check-in khong duoc dung de khoa de thi.</p>
-              <p>Thi sinh can API GET /my/board va /problems (chua co tren BE).</p>
+              <p>Đề chỉ hiện sau thời gian mở đề.</p>
+              <p>Check-in không được dùng để khóa đề thi.</p>
+              <p>Thí sinh cần API GET /my/board và /problems (chưa có trên BE).</p>
             </div>
           </aside>
         </section>

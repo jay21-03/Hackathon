@@ -18,7 +18,7 @@ test("pages read fallback data only through service layer", () => {
   const pageFiles = listFiles(join(repoRoot, "src", "pages"), [".ts", ".tsx"]);
   const violations = pageFiles.filter((file) => {
     const source = readFileSync(file, "utf8");
-    return /mocks\/hackathonDemoData|services\/demoDataService/.test(source);
+    return /mocks\/hackathonDemoData|hackathonApi|apiFallback|readModelService/.test(source);
   });
 
   expect(violations.map((file) => relative(repoRoot, file))).toEqual([]);

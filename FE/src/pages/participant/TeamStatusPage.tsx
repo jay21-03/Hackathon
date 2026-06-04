@@ -20,13 +20,13 @@ export function TeamStatusPage() {
   if (!team) {
     return (
       <div className="space-y-lg">
-        <PageHeader eyebrow="Trang thai doi" title="Chua co doi" description="Dang ky doi de theo doi tien do." />
+        <PageHeader eyebrow="Trạng thái đội" title="Chưa có đội" description="Đăng ký đội để theo dõi tiến độ." />
         {error ? (
           <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
             <p className="font-body-sm text-on-surface">{error}</p>
           </div>
         ) : null}
-        <EmptyState icon="fact_check" title="Chua co doi thi" description="Dang ky doi de bat dau." />
+        <EmptyState icon="fact_check" title="Chưa có đội thi" description="Đăng ký đội để bắt đầu." />
       </div>
     );
   }
@@ -34,14 +34,14 @@ export function TeamStatusPage() {
   const members = team.members ?? [];
   const confirmedMembers = members.filter((member) => member.status === "CONFIRMED").length;
   const steps = [
-    { label: "Dang ky doi", status: team.status, to: "/me/team" },
+    { label: "Đăng ký đội", status: team.status, to: "/me/team" },
     {
-      label: "Thanh vien xac nhan",
+      label: "Thành viên xác nhận",
       status: confirmedMembers === members.length && members.length > 0 ? "CONFIRMED" : "PENDING",
       to: "/me/team"
     },
     {
-      label: "Phan cong bang",
+      label: "Phân công bang",
       status: team.status === "CONFIRMED" ? "CONFIRMED" : "PENDING",
       to: "/me/board"
     }
@@ -51,9 +51,9 @@ export function TeamStatusPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Trang thai doi"
+        eyebrow="Trạng thái đội"
         title={team.name}
-        description={event?.name ?? "Theo doi cac moc nghiep vu cua doi trong cuoc thi."}
+        description={event?.name ?? "Theo dõi các mốc nghiệp vụ của đội trong cuộc thi."}
         actions={<Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>}
       />
       <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">

@@ -11,7 +11,7 @@ import { fetchEventDetail, updateEvent, type EventDetail } from "../../services/
 
 export function EventBasicInfoPage() {
   const { notify } = useToast();
-  const { eventId, event: activeEvent, events, setEventId, loading: eventsLoading } = useActiveEvent();
+  const { eventId, events, setEventId, loading: eventsLoading } = useActiveEvent();
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [name, setName] = useState("");
   const [quota, setQuota] = useState(0);
@@ -35,7 +35,7 @@ export function EventBasicInfoPage() {
       })
       .catch(() => {
         if (!cancelled) {
-          setLoadError("Khong tai duoc thong tin cuoc thi.");
+          setLoadError("Không tải được thông tin cuộc thi.");
         }
       })
       .finally(() => {
@@ -53,7 +53,7 @@ export function EventBasicInfoPage() {
     if (!eventId) return;
     const parsed = eventConfigSchema.safeParse({ name, quota, minTeamSize, maxTeamSize });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Cau hinh cuoc thi chua hop le.");
+      setError(parsed.error.issues[0]?.message ?? "Cấu hình cuộc thi chưa hợp lệ.");
       return;
     }
     setError("");
@@ -67,9 +67,9 @@ export function EventBasicInfoPage() {
         setMinTeamSize(updated.minTeamSize);
         setMaxTeamSize(updated.maxTeamSize);
       }
-      notify("Da luu thong tin cuoc thi.", "success");
+      notify("Đã lưu thông tin cuộc thi.", "success");
     } catch {
-      notify("Khong the luu cau hinh cuoc thi.", "danger");
+      notify("Không thể lưu cấu hình cuộc thi.", "danger");
     } finally {
       setSaving(false);
     }
@@ -80,7 +80,7 @@ export function EventBasicInfoPage() {
   }
 
   if (!eventId) {
-    return <p className="rounded-lg border border-outline-variant bg-surface-container p-md font-body-sm">Chua co cuoc thi.</p>;
+    return <p className="rounded-lg border border-outline-variant bg-surface-container p-md font-body-sm">Chưa có cuộc thi.</p>;
   }
 
   if (!event) {
@@ -93,9 +93,9 @@ export function EventBasicInfoPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Thong tin co ban"
-        title="Cau hinh cuoc thi"
-        description="Thiet lap thong tin hien thi, quota va kich thuoc doi. Cac rule nay duoc dung trong luong dang ky."
+        eyebrow="Thông tin cơ bản"
+        title="Cấu hình cuộc thi"
+        description="Thiết lập thông tin hiển thị, quota và kích thước đội. Các rule này được dùng trong luồng đăng ký."
         actions={
           <EventSelector events={events} eventId={eventId} onChange={setEventId} />
         }
@@ -104,7 +104,7 @@ export function EventBasicInfoPage() {
       <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
         <div className="grid gap-md md:grid-cols-2">
           <label className="grid gap-xs font-label-md text-on-surface md:col-span-2">
-            Ten cuoc thi
+            Tên cuộc thi
             <input
               className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
               value={name}
@@ -112,7 +112,7 @@ export function EventBasicInfoPage() {
             />
           </label>
           <label className="grid gap-xs font-label-md text-on-surface">
-            Quota doi thi
+            Quota đội thi
             <input
               className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
               type="number"
@@ -123,7 +123,7 @@ export function EventBasicInfoPage() {
           </label>
           <div className="grid gap-md sm:grid-cols-2">
             <label className="grid gap-xs font-label-md text-on-surface">
-              Toi thieu
+              Tối thiểu
               <input
                 className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
                 type="number"
@@ -134,7 +134,7 @@ export function EventBasicInfoPage() {
               />
             </label>
             <label className="grid gap-xs font-label-md text-on-surface">
-              Toi da
+              Tối đa
               <input
                 className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
                 type="number"
@@ -147,11 +147,11 @@ export function EventBasicInfoPage() {
           </div>
         </div>
         <p className="mt-md font-body-sm text-on-surface-variant">
-          Kich thuoc doi hien dang doc tu cau hinh he thong; trang nay chi cap nhat ten cuoc thi va quota toi da.
+          Kích thước đội hiện đang đọc từ cấu hình hệ thống; trang này chỉ cập nhật tên cuộc thi và quota tối đa.
         </p>
         {error && <p className="mt-md rounded-lg border border-error/40 bg-error-container p-sm font-body-sm text-on-error-container">{error}</p>}
         <Button className="mt-lg" disabled={saving} icon={<Icon name={saving ? "sync" : "save"} />} onClick={save}>
-          {saving ? "Dang luu" : "Luu cau hinh"}
+          {saving ? "Đang lưu" : "Lưu cấu hình"}
         </Button>
       </section>
     </div>

@@ -5,5 +5,5 @@ export function isValidRepositoryUrl(value: string) {
 }
 
 export function formatNumber(value: number | null) {
-  return value === null ? "Chua co diem" : value.toFixed(1);
+  return value === null ? "Chưa có điểm" : value.toFixed(1);
 }

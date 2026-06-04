@@ -1,10 +1,10 @@
-import { getDemoSession, getRoleHome, isDemoAuthenticated, type UserRole } from "../auth/demoSession";
+import { getAuthSession, getRoleHome, isAuthenticated, type UserRole } from "../auth/authSession";
 
 export function useRoleGuard(allow: UserRole[]) {
-  const session = getDemoSession();
+  const session = getAuthSession();
   return {
     session,
-    authenticated: isDemoAuthenticated(),
+    authenticated: isAuthenticated(),
     allowed: allow.includes(session.role),
     home: getRoleHome(session.role)
   };

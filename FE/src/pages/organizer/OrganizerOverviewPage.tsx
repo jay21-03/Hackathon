@@ -6,13 +6,16 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
+import { RoundCountdown } from "../../components/ui/RoundCountdown";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useEventRound } from "../../hooks/useEventRound";
 import { fetchEventDetail } from "../../services/eventsApi";
 import { fetchEventTeams } from "../../services/registrationService";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 export function OrganizerOverviewPage() {
   const { eventId, event, events, setEventId, loading, error } = useActiveEvent();
+  const { roundId, countdown, loading: roundLoading } = useEventRound(eventId);
   const [confirmedTeams, setConfirmedTeams] = useState(0);
   const [pendingTeams, setPendingTeams] = useState(0);
   const [waitlistTeams, setWaitlistTeams] = useState(0);
@@ -59,9 +62,9 @@ export function OrganizerOverviewPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Tong quan ban to chuc"
-        title={event?.name ?? "Cuoc thi"}
-        description="Theo doi dang ky, phan cong bang va mentor/giam khao."
+        eyebrow="Tổng quan ban tổ chức"
+        title={event?.name ?? "Cuộc thi"}
+        description="Theo dõi đăng ký, phân công bảng và mentor/giám khảo."
         actions={
           <>
             {event ? (
@@ -73,60 +76,62 @@ export function OrganizerOverviewPage() {
       />
 
       {error ? (
-        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
+        <div className="rounded-xl border border-error-container bg-error-container/30 p-md">
           <p className="font-body-sm text-on-surface">{error}</p>
         </div>
       ) : null}
 
+      <RoundCountdown roundId={roundId} countdown={countdown} loading={roundLoading} />
+
       <section className="grid gap-md md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Doi xac nhan"
+          label="Doi xác nhận"
           value={confirmedTeams}
           helper={`${waitlistTeams} doi trong danh sach cho`}
           icon="groups"
           tone="success"
         />
         <StatCard
-          label="Cho duyet"
+          label="Chờ duyệt"
           value={pendingTeams}
-          helper="Can xu ly trong muc dang ky"
+          helper="Can xử lý trong muc đăng ký"
           icon="pending_actions"
           tone="warning"
         />
         <StatCard
           label="Quota"
           value={quota ? `${confirmedTeams}/${quota}` : confirmedTeams}
-          helper="So doi da xac nhan / quota"
+          helper="Số đội đã xác nhận / quota"
           icon="fact_check"
           tone="primary"
         />
         <StatCard
-          label="Cuoc thi"
+          label="Cuộc thi"
           value={events.length}
-          helper="Tong so cuoc thi dang quan ly"
+          helper="Tong so cuộc thi dang quan ly"
           icon="event"
         />
       </section>
 
       <WorkflowSteps
-        title="Thu tu van hanh"
+        title="Thứ tự vận hành"
         description="Cac buoc chinh trong pham vi he thong hien tai."
         steps={[
           {
-            label: "Dang ky doi",
-            detail: "Duyet doi va quan ly danh sach cho.",
+            label: "Đăng ký đội",
+            detail: "Duyệt đội và quản lý danh sách chờ.",
             to: "/organizer/registrations",
             state: pendingTeams > 0 ? "active" : "done"
           },
           {
-            label: "Phan cong bang",
-            detail: "Random hoac thu cong gan doi vao slot.",
+            label: "Phân công bang",
+            detail: "Random hoặc thủ công gán đội vào slot.",
             to: "/organizer/boards",
             state: confirmedTeams > 0 ? "active" : "next"
           },
           {
-            label: "Mentor & giam khao",
-            detail: "Gan mentor va giam khao theo bang.",
+            label: "Mentor & giám khảo",
+            detail: "Gán mentor va giám khảo theo bang.",
             to: "/organizer/assignments",
             state: "next"
           }
@@ -136,15 +141,15 @@ export function OrganizerOverviewPage() {
       <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
         <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-headline-sm text-on-surface">Can xu ly tiep</h2>
+            <h2 className="font-headline-sm text-on-surface">Can xử lý tiep</h2>
             <p className="font-body-sm text-on-surface-variant">
               {pendingTeams > 0
-                ? `${pendingTeams} doi dang cho duyet.`
-                : "Khong co doi pending can xu ly ngay."}
+                ? `${pendingTeams} doi dang cho duyệt.`
+                : "Không có đội pending cần xử lý ngay."}
             </p>
           </div>
           <Link to="/organizer/registrations" className="font-label-md text-primary">
-            Xem dang ky
+            Xem đăng ký
           </Link>
         </div>
       </section>

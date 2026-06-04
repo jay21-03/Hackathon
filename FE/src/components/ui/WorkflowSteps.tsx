@@ -17,8 +17,8 @@ const stateTone = {
 } as const;
 
 const stateLabel = {
-  done: "Hoan tat",
-  active: "Dang xu ly",
+  done: "Hoàn tất",
+  active: "Đang xử lý",
   next: "Tiep theo",
   blocked: "Can kiem tra"
 };

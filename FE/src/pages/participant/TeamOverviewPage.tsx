@@ -20,7 +20,7 @@ export function TeamOverviewPage() {
   if (!team) {
     return (
       <div className="space-y-lg">
-        <PageHeader eyebrow="Doi cua toi" title="Chua co doi" description="Dang ky doi de tham gia cuoc thi." />
+        <PageHeader eyebrow="Đội của tôi" title="Chưa có đội" description="Đăng ký đội để tham gia cuộc thi." />
         {error ? (
           <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
             <p className="font-body-sm text-on-surface">{error}</p>
@@ -28,11 +28,11 @@ export function TeamOverviewPage() {
         ) : null}
         <EmptyState
           icon="groups"
-          title="Chua co doi thi"
-          description="Tao doi moi hoac xac nhan loi moi thanh vien."
+          title="Chưa có đội thi"
+          description="Tạo đội mới hoặc xác nhận lời mời thành viên."
           action={
             <ButtonLink to="/register" className="mt-md">
-              Dang ky doi
+              Đăng ký đội
             </ButtonLink>
           }
         />
@@ -46,9 +46,9 @@ export function TeamOverviewPage() {
   return (
     <div className="space-y-lg">
       <PageHeader
-        eyebrow="Doi cua toi"
+        eyebrow="Đội của tôi"
         title={team.name}
-        description="Quan ly thanh vien, loi moi va trang thai xac nhan cua doi."
+        description="Quan ly thành viên, lời mời va trạng thái xác nhận cua doi."
         actions={
           <>
             <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
@@ -57,7 +57,7 @@ export function TeamOverviewPage() {
               variant="secondary"
               icon={<Icon name="mail" className="text-[18px]" />}
             >
-              Xem loi moi
+              Xem lời mời
             </ButtonLink>
           </>
         }
@@ -68,11 +68,11 @@ export function TeamOverviewPage() {
           <div className="border-b border-outline-variant p-lg">
             <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="font-headline-sm text-on-surface">Thanh vien</h2>
-                <p className="font-body-sm text-on-surface-variant">Doi hop le khi co 1-5 thanh vien.</p>
+                <h2 className="font-headline-sm text-on-surface">Thành viên</h2>
+                <p className="font-body-sm text-on-surface-variant">Đội hợp lệ khi có 1-5 thành viên.</p>
               </div>
               <Badge tone="success">
-                {confirmedMembers}/{members.length} da xac nhan
+                {confirmedMembers}/{members.length} da xác nhận
               </Badge>
             </div>
             <div className="mt-md">
@@ -86,8 +86,8 @@ export function TeamOverviewPage() {
             <div className="p-lg">
               <EmptyState
                 icon="groups"
-                title="Chua co thanh vien"
-                description="Them thanh vien bang email khi dang ky doi."
+                title="Chưa có thành viên"
+                description="Thêm thành viên bằng email khi đăng ký đội."
               />
             </div>
           ) : (
@@ -102,7 +102,7 @@ export function TeamOverviewPage() {
                     <p className="truncate font-body-sm text-on-surface-variant">{member.email}</p>
                   </div>
                   <p className="font-body-sm text-on-surface-variant">
-                    {member.contactPerson ? "Nguoi lien he" : "Thanh vien"}
+                    {member.contactPerson ? "Người liên hệ" : "Thành viên"}
                   </p>
                   <Badge tone={getStatusTone(member.status)}>{getStatusLabel(member.status)}</Badge>
                 </div>
@@ -112,10 +112,10 @@ export function TeamOverviewPage() {
         </article>
 
         <aside className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
-          <h2 className="font-headline-sm text-on-surface">Thong tin doi</h2>
+          <h2 className="font-headline-sm text-on-surface">Thông tin doi</h2>
           <div className="space-y-sm font-body-sm text-on-surface-variant">
             <p>Ma doi: #{team.id}</p>
-            <p>Trang thai: {getStatusLabel(team.status)}</p>
+            <p>Trạng thái: {getStatusLabel(team.status)}</p>
             {team.confirmedAt ? (
               <p>Xac nhan luc: {new Date(team.confirmedAt).toLocaleString("vi-VN")}</p>
             ) : null}

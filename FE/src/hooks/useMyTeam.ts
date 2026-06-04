@@ -1,42 +1,25 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "../lib/queryKeys";
 import { fetchMyTeams, type TeamDetailResponse } from "../services/registrationService";
+import { getApiErrorMessage } from "../utils/apiError";
 
 export function useMyTeam(eventId: number | null) {
-  const [teams, setTeams] = useState<TeamDetailResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useQuery({
+    queryKey: queryKeys.teams.my(eventId),
+    queryFn: () => fetchMyTeams(eventId!),
+    enabled: Boolean(eventId)
+  });
 
-  useEffect(() => {
-    if (!eventId) {
-      setTeams([]);
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    fetchMyTeams(eventId)
-      .then((result) => {
-        if (!cancelled) setTeams(result);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError("Khong tai duoc thong tin doi.");
-          setTeams([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId]);
-
+  const teams: TeamDetailResponse[] = query.data ?? [];
   const team = teams[0] ?? null;
 
-  return { team, teams, loading, error, reload: () => setTeams([...teams]) };
+  return {
+    team,
+    teams,
+    loading: query.isLoading,
+    error: query.isError
+      ? getApiErrorMessage(query.error, "Không tải được thông tin đội.")
+      : null,
+    refetch: query.refetch
+  };
 }

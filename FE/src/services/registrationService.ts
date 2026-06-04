@@ -45,7 +45,7 @@ export async function resendTeamInvitation(teamMemberId: number) {
     teamMemberId
   });
   if (!data.data) {
-    throw new Error(data.message || "Gui lai loi moi that bai");
+    throw new Error(data.message || "Gửi lại lời mời thất bại");
   }
   return data.data;
 }
@@ -56,7 +56,7 @@ export async function registerTeam(eventId: number, payload: RegisterTeamPayload
     payload
   );
   if (!data.data) {
-    throw new Error(data.message || "Dang ky doi that bai");
+    throw new Error(data.message || "Đăng ký đội thất bại");
   }
   return data.data;
 }
@@ -67,7 +67,7 @@ export async function confirmInvitation(token: string) {
     { token }
   );
   if (!data.data) {
-    throw new Error(data.message || "Xac nhan loi moi that bai");
+    throw new Error(data.message || "Xác nhận lời mời thất bại");
   }
   return data.data;
 }
@@ -78,7 +78,7 @@ export async function declineInvitation(token: string) {
     { token }
   );
   if (!data.data) {
-    throw new Error(data.message || "Tu choi loi moi that bai");
+    throw new Error(data.message || "Từ chối lời mời thất bại");
   }
   return data.data;
 }
@@ -86,4 +86,12 @@ export async function declineInvitation(token: string) {
 export async function fetchMyTeams(eventId: number) {
   const { data } = await apiClient.get<ApiResponse<TeamDetailResponse[]>>(`/v1/my/teams?eventId=${eventId}`);
   return data.data ?? [];
+}
+
+export async function fetchTeam(teamId: number) {
+  const { data } = await apiClient.get<ApiResponse<TeamDetailResponse>>(`/v1/teams/${teamId}`);
+  if (!data.data) {
+    throw new Error(data.message || "Không tải được thông tin đội");
+  }
+  return data.data;
 }

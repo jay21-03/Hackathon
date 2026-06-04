@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
-import { getDemoSession, getRoleHome, isDemoAuthenticated, roleLabels } from "../../auth/demoSession";
+import { getAuthSession, getRoleHome, isAuthenticated, roleLabels } from "../../auth/authSession";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { fetchEventDetail, type EventDetail } from "../../services/eventsApi";
 
@@ -19,8 +19,8 @@ function formatDateTime(value: string) {
 }
 
 export function EventDetailPage() {
-  const authenticated = isDemoAuthenticated();
-  const session = getDemoSession();
+  const authenticated = isAuthenticated();
+  const session = getAuthSession();
   const roleHome = getRoleHome(session.role);
   const roleLabel = roleLabels[session.role];
   const { eventId } = useParams();
@@ -38,7 +38,7 @@ export function EventDetailPage() {
       })
       .catch(() => {
         if (cancelled) return;
-        setError("Khong tai duoc thong tin cuoc thi.");
+        setError("Không tải được thông tin cuộc thi.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -55,7 +55,7 @@ export function EventDetailPage() {
   if (!event) {
     return (
       <div className="rounded-xl border border-outline-variant bg-surface p-lg shadow-sm">
-        <p className="text-error font-body-md">Khong tim thay cuoc thi.</p>
+        <p className="text-error font-body-md">Không tìm thấy cuộc thi.</p>
         <Link to="/events" className="text-primary font-label-md mt-md inline-block">
           Quay lai danh sach
         </Link>
@@ -67,7 +67,7 @@ export function EventDetailPage() {
     <div className="space-y-lg max-w-3xl mx-auto">
       <Link to="/events" className="inline-flex items-center gap-1 text-primary font-label-md">
         <Icon name="arrow_back" className="text-[18px]" />
-        Danh sach cuoc thi
+        Danh sach cuộc thi
       </Link>
 
       {error && (
@@ -81,7 +81,7 @@ export function EventDetailPage() {
           <div>
             <h1 className="font-headline-lg text-on-surface">{event.name}</h1>
             <p className="font-body-md text-on-surface-variant mt-xs">
-              Tao doi thi, moi thanh vien va theo doi cac moc thoi gian cua cuoc thi.
+              Tạo đội thi, mời thành viên và theo dõi các mốc thời gian của cuộc thi.
             </p>
           </div>
           <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
@@ -98,7 +98,7 @@ export function EventDetailPage() {
             <Icon name="groups" className="text-primary mb-sm" />
             <p className="font-label-sm normal-case text-on-surface">Quy mo doi</p>
             <p>
-              {event.minTeamSize} - {event.maxTeamSize} thanh vien
+              {event.minTeamSize} - {event.maxTeamSize} thành viên
             </p>
           </div>
           <div className="bg-surface-container-low border border-outline-variant/40 rounded-xl p-md">
@@ -115,7 +115,7 @@ export function EventDetailPage() {
               className="inline-flex items-center gap-2 bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
             >
               <Icon name="account_circle" className="text-[18px]" />
-              Dang nhap de dang ky
+              Đăng nhập de đăng ký
             </Link>
           ) : session.role === "participant" ? (
             <>
@@ -124,14 +124,14 @@ export function EventDetailPage() {
                 className="inline-flex items-center gap-2 bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
               >
                 <Icon name="group_add" className="text-[18px]" />
-                Dang ky tham gia
+                Đăng ký tham gia
               </Link>
               <Link
                 to="/me/team"
                 className="inline-flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-variant"
               >
                 <Icon name="groups" className="text-[18px]" />
-                Xem doi cua toi
+                Xem đội của tôi
               </Link>
             </>
           ) : (

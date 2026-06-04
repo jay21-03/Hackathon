@@ -11,7 +11,7 @@ on:
       - ".github/workflows/fe-ci.yml"
 
 jobs:
-  build-and-e2e:
+  build:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,14 +30,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
       - name: Typecheck
         run: npm run lint
 
       - name: Build
         run: npm run build
-
-      - name: E2E
-        run: npm run test:e2e

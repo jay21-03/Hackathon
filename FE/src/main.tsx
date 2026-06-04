@@ -3,6 +3,7 @@ import { BrowserRouter } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AppRouter } from "./app/AppRouter";
 import { ToastProvider } from "./components/feedback/ToastProvider";
+import { QueryProvider } from "./providers/QueryProvider";
 import "./index.css";
 
 // Monkey-patch localStorage.setItem to emit storage and custom events
@@ -19,7 +20,7 @@ try {
       /* ignore */
     }
     try {
-      window.dispatchEvent(new Event("seal-demo-session-change"));
+      window.dispatchEvent(new Event("seal-session-change"));
     } catch {
       /* ignore */
     }
@@ -33,7 +34,7 @@ try {
       /* ignore */
     }
     try {
-      window.dispatchEvent(new Event("seal-demo-session-change"));
+      window.dispatchEvent(new Event("seal-session-change"));
     } catch {
       /* ignore */
     }
@@ -46,10 +47,12 @@ const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <GoogleOAuthProvider clientId={googleClientId || "missing-client-id.apps.googleusercontent.com"}>
-    <ToastProvider>
-      <BrowserRouter>
-        <AppRouter />
-      </BrowserRouter>
-    </ToastProvider>
+    <QueryProvider>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppRouter />
+        </BrowserRouter>
+      </ToastProvider>
+    </QueryProvider>
   </GoogleOAuthProvider>
 );

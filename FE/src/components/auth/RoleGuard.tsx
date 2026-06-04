@@ -1,42 +1,44 @@
+import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
 import {
-  getDemoSession,
+  getAuthSession,
   getRoleHome,
-  isDemoAuthenticated,
+  isAuthenticated,
   roleLabels,
+  SESSION_CHANGE_EVENT,
   type UserRole
-} from "../../auth/demoSession";
+} from "../../auth/authSession";
 
 interface RoleGuardProps {
   allow: UserRole[];
+  children?: ReactNode;
 }
 
-export function RoleGuard({ allow }: RoleGuardProps) {
+export function RoleGuard({ allow, children }: RoleGuardProps) {
   const location = useLocation();
-  const [sessionVersion, setSessionVersion] = useState(0);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    const sync = () => setSessionVersion((value) => value + 1);
-    window.addEventListener("seal-demo-session-change", sync);
+    const sync = () => setTick((value) => value + 1);
+    window.addEventListener(SESSION_CHANGE_EVENT, sync);
     window.addEventListener("storage", sync);
     return () => {
-      window.removeEventListener("seal-demo-session-change", sync);
+      window.removeEventListener(SESSION_CHANGE_EVENT, sync);
       window.removeEventListener("storage", sync);
     };
   }, []);
 
-  const session = getDemoSession();
-  void sessionVersion;
+  const session = getAuthSession();
+  void tick;
 
-  if (!isDemoAuthenticated()) {
+  if (!isAuthenticated()) {
     return (
       <Navigate
         to="/login"
         replace
         state={{
-          from: location.pathname,
-          message: "Vui long dang nhap de tiep tuc."
+          from: `${location.pathname}${location.search}`,
+          message: "Vui lòng đăng nhập để tiếp tục."
         }}
       />
     );
@@ -48,12 +50,11 @@ export function RoleGuard({ allow }: RoleGuardProps) {
         to={getRoleHome(session.role)}
         replace
         state={{
-          from: location.pathname,
-          message: `Tai khoan hien tai la ${roleLabels[session.role]}, khong co quyen vao man nay.`
+          message: `Tài khoản hiện tại là ${roleLabels[session.role]}, không có quyền vào màn này.`
         }}
       />
     );
   }
 
-  return <Outlet />;
+  return children ?? <Outlet />;
 }

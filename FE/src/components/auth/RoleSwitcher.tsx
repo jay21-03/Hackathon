@@ -1,50 +1,48 @@
 import { useEffect, useState } from "react";
-import { getDemoSession, roleLabels, setDemoSessionFromUser, type UserRole } from "../../auth/demoSession";
-
-const roles: UserRole[] = ["participant", "organizer", "mentor", "judge"];
+import {
+  getAuthSession,
+  roleLabels,
+  SESSION_CHANGE_EVENT,
+  setAuthSession,
+  type UserRole
+} from "../../auth/authSession";
 
 export function RoleSwitcher({ compact = false }: { compact?: boolean }) {
   const enabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_ROLE_SWITCHER === "true";
-  const [role, setRole] = useState<UserRole>(() => getDemoSession().role);
+  const [role, setRole] = useState<UserRole>(() => getAuthSession().role);
 
   useEffect(() => {
-    const sync = () => setRole(getDemoSession().role);
-    window.addEventListener("seal-demo-session-change", sync);
+    const sync = () => setRole(getAuthSession().role);
+    window.addEventListener(SESSION_CHANGE_EVENT, sync);
     window.addEventListener("storage", sync);
     return () => {
-      window.removeEventListener("seal-demo-session-change", sync);
+      window.removeEventListener(SESSION_CHANGE_EVENT, sync);
       window.removeEventListener("storage", sync);
     };
   }, []);
 
-  if (!enabled) {
-    return null;
-  }
+  if (!enabled) return null;
 
   return (
-    <label className={`flex items-center gap-2 ${compact ? "w-full" : ""}`}>
-      {!compact && (
-        <span className="font-label-sm normal-case text-on-surface-variant">Vai tro UI</span>
-      )}
+    <label className={`flex flex-col gap-xs ${compact ? "text-xs" : ""}`}>
+      <span className="font-label-sm normal-case text-on-surface-variant">Dev: đổi vai trò UI</span>
       <select
         value={role}
         onChange={(event) => {
-          const nextRole = event.target.value as UserRole;
-          const current = getDemoSession();
-          setDemoSessionFromUser({
-            role: nextRole,
+          const next = event.target.value as UserRole;
+          const current = getAuthSession();
+          setAuthSession({
+            role: next,
             email: current.email,
             name: current.name
           });
-          setRole(nextRole);
+          setRole(next);
         }}
-        className={`rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-label-md text-on-surface focus:border-primary focus:outline-none ${
-          compact ? "w-full" : ""
-        }`}
+        className="rounded-lg border border-outline-variant bg-surface-container-high px-2 py-1 font-label-md text-on-surface"
       >
-        {roles.map((item) => (
-          <option key={item} value={item}>
-            {roleLabels[item]}
+        {(Object.keys(roleLabels) as UserRole[]).map((key) => (
+          <option key={key} value={key}>
+            {roleLabels[key]}
           </option>
         ))}
       </select>
