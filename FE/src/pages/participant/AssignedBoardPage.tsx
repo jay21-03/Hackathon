@@ -1,49 +1,64 @@
 import { Badge } from "../../components/ui/Badge";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useMyTeam } from "../../hooks/useMyTeam";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { demoBoards, demoTeams, getTeamById } from "../../services/readModelService";
 
 export function AssignedBoardPage() {
-  const team = demoTeams[0];
-  const board = demoBoards.find((item) => item.teamIds.includes(team.id)) ?? demoBoards[0];
+  const { event, eventId, loading: eventLoading } = useActiveEvent();
+  const { team, loading: teamLoading, error } = useMyTeam(eventId);
+
+  if (eventLoading || teamLoading) {
+    return <ModuleSkeleton rows={4} />;
+  }
+
+  if (!team) {
+    return (
+      <div className="space-y-lg">
+        <PageHeader eyebrow="Bang thi" title="Chua co doi" description="Dang ky doi de xem bang thi." />
+        <EmptyState icon="grid_view" title="Chua co doi thi" description="Dang ky doi truoc khi duoc phan cong bang." />
+      </div>
+    );
+  }
+
+  if (team.status !== "CONFIRMED") {
+    return (
+      <div className="space-y-lg">
+        <PageHeader
+          eyebrow="Bang thi"
+          title={team.name}
+          description="Doi can duoc xac nhan truoc khi ban to chuc phan cong bang."
+          actions={<Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>}
+        />
+        <EmptyState
+          icon="grid_view"
+          title="Chua duoc phan cong bang"
+          description={`Doi dang o trang thai ${getStatusLabel(team.status)}. Vui long cho ban to chuc duyet.`}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Bang thi"
-        title={board.name}
-        description="Doi thi chi thuoc mot bang trong cung vong. Giam khao chi cham cac doi trong bang duoc phan cong."
-        actions={<Badge tone={getStatusTone(board.status)}>{getStatusLabel(board.status)}</Badge>}
+        title={team.name}
+        description={event?.name ?? "Thong tin bang thi se cap nhat sau khi ban to chuc phan cong."}
+        actions={<Badge tone="warning">Cho phan cong bang</Badge>}
       />
-      <section className="grid gap-lg lg:grid-cols-[1fr_320px]">
-        <article className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-          <h2 className="font-headline-sm text-on-surface">Doi trong bang</h2>
-          <div className="mt-md divide-y divide-outline-variant/60">
-            {board.teamIds.map((id) => {
-              const row = getTeamById(id);
-              return (
-                <div key={id} className="flex items-center justify-between gap-md py-md">
-                  <div>
-                    <p className="font-label-md text-on-surface">{row?.name}</p>
-                    <p className="font-body-sm text-on-surface-variant">{row?.track}</p>
-                  </div>
-                  <Badge tone={row?.id === team.id ? "active" : "neutral"}>
-                    {row?.id === team.id ? "Doi cua toi" : "Cung bang"}
-                  </Badge>
-                </div>
-              );
-            })}
-          </div>
-        </article>
-        <aside className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-          <h2 className="font-headline-sm text-on-surface">Phan cong</h2>
-          <div className="mt-md space-y-sm font-body-sm text-on-surface-variant">
-            <p>Round: {board.round}</p>
-            <p>Mentor: {board.mentor}</p>
-            <p>Giam khao: {board.judges.join(", ")}</p>
-          </div>
-        </aside>
-      </section>
+      {error ? (
+        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
+          <p className="font-body-sm text-on-surface">{error}</p>
+        </div>
+      ) : null}
+      <EmptyState
+        icon="grid_view"
+        title="Chua co thong tin bang"
+        description="Ban to chuc se phan cong doi vao bang truoc ngay thi. Hay quay lai sau khi nhan thong bao."
+      />
     </div>
   );
 }

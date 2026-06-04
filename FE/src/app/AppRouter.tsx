@@ -116,7 +116,7 @@ export function AppRouter() {
               navItems={participantWorkspaceNav}
               title="Khu vuc thi sinh"
               subtitle="Theo doi doi thi"
-              primaryAction={{ label: "Nop bai", icon: "upload", to: "/me/submission" }}
+              primaryAction={{ label: "Dang ky doi", icon: "group_add", to: "/register" }}
             />
           }
         >

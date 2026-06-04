@@ -1,52 +1,120 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { EventSelector } from "../../components/ui/EventSelector";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
+import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { assignJudge, assignMentor } from "../../services/assignmentService";
+import {
+  fetchEventRounds,
+  fetchRoundBoards,
+  type BoardResponse,
+  type RoundResponse
+} from "../../services/contestApi";
+import { fetchAdminUsers, type UserSummaryResponse } from "../../services/userService";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import type { DemoBoard } from "../../services/readModelService";
-import { fetchBoardAssignments } from "../../services/hackathonApi";
 
 export function AssignmentManagementPage() {
-  const [boards, setBoards] = useState<DemoBoard[]>([]);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const { notify } = useToast();
+  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent();
+  const [rounds, setRounds] = useState<RoundResponse[]>([]);
+  const [boards, setBoards] = useState<BoardResponse[]>([]);
+  const [users, setUsers] = useState<UserSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [assigningBoardId, setAssigningBoardId] = useState<number | null>(null);
+
+  const mentors = useMemo(
+    () => users.filter((user) => user.roles.includes("MENTOR")),
+    [users]
+  );
+  const judges = useMemo(
+    () => users.filter((user) => user.roles.includes("JUDGE")),
+    [users]
+  );
 
   useEffect(() => {
-    fetchBoardAssignments()
-      .then((result) => {
-        setBoards(result.data);
-        setUsingFallback(result.usingFallback);
+    if (!eventId) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    Promise.all([fetchEventRounds(eventId), fetchAdminUsers()])
+      .then(async ([roundList, userList]) => {
+        if (cancelled) return;
+        setRounds(roundList);
+        setUsers(userList);
+        const allBoards: BoardResponse[] = [];
+        for (const round of roundList) {
+          const roundBoards = await fetchRoundBoards(round.id);
+          allBoards.push(...roundBoards);
+        }
+        setBoards(allBoards);
       })
-      .finally(() => setLoading(false));
-  }, []);
+      .catch(() => {
+        if (!cancelled) setError("Khong tai duoc du lieu phan cong.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-  if (loading) return <ModuleSkeleton rows={4} />;
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
 
-  const judgeCount = new Set(boards.flatMap((board) => board.judges)).size;
+  async function handleAssignMentor(boardId: number, userId: number) {
+    setAssigningBoardId(boardId);
+    try {
+      await assignMentor(boardId, userId);
+      notify("Da gan mentor.", "success");
+    } catch {
+      notify("Gan mentor that bai.", "danger");
+    } finally {
+      setAssigningBoardId(null);
+    }
+  }
+
+  async function handleAssignJudge(boardId: number, userId: number) {
+    setAssigningBoardId(boardId);
+    try {
+      await assignJudge(boardId, userId);
+      notify("Da gan giam khao.", "success");
+    } catch {
+      notify("Gan giam khao that bai.", "danger");
+    } finally {
+      setAssigningBoardId(null);
+    }
+  }
+
+  if (eventLoading || loading) return <ModuleSkeleton rows={4} />;
 
   return (
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Phan cong"
         title="Mentor va giam khao theo bang"
-        description="Moi bang co mentor phu trach va danh sach giam khao rieng. Giam khao chi cham doi thuoc bang duoc phan cong."
-        actions={usingFallback ? <Badge tone="warning">Du lieu minh hoa</Badge> : <Badge tone="success">Du lieu he thong</Badge>}
+        description="Gan mentor va giam khao cho tung bang thi."
+        actions={<EventSelector events={events} eventId={eventId} onChange={setEventId} />}
       />
 
-      {usingFallback ? (
-        <div className="rounded-xl border border-primary/20 bg-primary-fixed p-md">
-          <p className="font-body-sm text-on-surface-variant">
-            Muc phan cong nay hien dang hien thi du lieu minh hoa. Khi backend assignment san sang, trang nay se tu dong
-            doi sang du lieu he thong.
-          </p>
+      {error ? (
+        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
+          <p className="font-body-sm text-on-surface">{error}</p>
         </div>
       ) : null}
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Bang thi" value={boards.length} helper="Theo vong so loai" icon="view_module" />
-        <StatCard label="Mentor" value={new Set(boards.map((board) => board.mentor)).size} helper="Da phan cong" icon="groups" tone="success" />
-        <StatCard label="Giam khao" value={judgeCount} helper="Khong cham ngoai bang" icon="gavel" tone="warning" />
+        <StatCard label="Bang thi" value={boards.length} helper={`${rounds.length} vong`} icon="view_module" />
+        <StatCard label="Mentor" value={mentors.length} helper="Tai khoan co vai tro MENTOR" icon="groups" tone="success" />
+        <StatCard label="Giam khao" value={judges.length} helper="Tai khoan co vai tro JUDGE" icon="gavel" tone="warning" />
       </section>
 
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
@@ -55,23 +123,47 @@ export function AssignmentManagementPage() {
             <thead className="table-header-bg">
               <tr className="font-label-sm text-on-surface-variant">
                 <th className="px-md py-sm">Bang</th>
-                <th className="px-md py-sm">Vong</th>
-                <th className="px-md py-sm">So doi</th>
-                <th className="px-md py-sm">Mentor</th>
-                <th className="px-md py-sm">Giam khao</th>
                 <th className="px-md py-sm">Trang thai</th>
+                <th className="px-md py-sm">Gan mentor</th>
+                <th className="px-md py-sm">Gan giam khao</th>
               </tr>
             </thead>
             <tbody className="table-divider">
               {boards.map((board) => (
                 <tr key={board.id} className="font-body-sm text-on-surface">
                   <td className="px-md py-md font-label-md">{board.name}</td>
-                  <td className="px-md py-md">{board.round}</td>
-                  <td className="px-md py-md">{board.teamIds.length}</td>
-                  <td className="px-md py-md">{board.mentor}</td>
-                  <td className="px-md py-md">{board.judges.join(", ")}</td>
                   <td className="px-md py-md">
                     <Badge tone={getStatusTone(board.status)}>{getStatusLabel(board.status)}</Badge>
+                  </td>
+                  <td className="px-md py-md">
+                    <div className="flex flex-wrap gap-1">
+                      {mentors.slice(0, 3).map((mentor) => (
+                        <Button
+                          key={mentor.id}
+                          size="sm"
+                          variant="ghost"
+                          disabled={assigningBoardId === board.id}
+                          onClick={() => handleAssignMentor(board.id, mentor.id)}
+                        >
+                          {mentor.fullName.split(" ").slice(-1)[0]}
+                        </Button>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-md py-md">
+                    <div className="flex flex-wrap gap-1">
+                      {judges.slice(0, 3).map((judge) => (
+                        <Button
+                          key={judge.id}
+                          size="sm"
+                          variant="ghost"
+                          disabled={assigningBoardId === board.id}
+                          onClick={() => handleAssignJudge(board.id, judge.id)}
+                        >
+                          {judge.fullName.split(" ").slice(-1)[0]}
+                        </Button>
+                      ))}
+                    </div>
                   </td>
                 </tr>
               ))}

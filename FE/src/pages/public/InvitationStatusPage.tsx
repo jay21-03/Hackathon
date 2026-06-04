@@ -6,6 +6,7 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { fetchMyTeams } from "../../services/registrationService";
+import { useActiveEvent } from "../../hooks/useActiveEvent";
 
 interface InvitationRow {
   id: number;
@@ -19,13 +20,17 @@ function formatDate(value: string) {
 }
 
 export function InvitationStatusPage() {
-  const eventId = 11;
+  const { eventId, loading: eventLoading } = useActiveEvent();
   const [rows, setRows] = useState<InvitationRow[]>([]);
   const [teamName, setTeamName] = useState<string>("Doi thi");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!eventId) {
+      setLoading(false);
+      return;
+    }
     fetchMyTeams(eventId)
       .then((teams) => {
         const team = teams[0];

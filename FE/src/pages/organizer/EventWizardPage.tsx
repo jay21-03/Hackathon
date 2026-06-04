@@ -1,22 +1,80 @@
+import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
+import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { fetchBoardProblems, fetchEventRounds, fetchRoundBoards } from "../../services/contestApi";
+import { fetchEventTeams } from "../../services/registrationService";
 
-const steps = [
-  { title: "Thong tin co ban", detail: "Ten cuoc thi, thoi gian va mo ta ngan.", path: "/organizer/events/basic-info", status: "CONFIRMED" },
-  { title: "Dang ky doi", detail: "Quota, kich thuoc doi va han dang ky.", path: "/organizer/registrations", status: "PENDING" },
-  { title: "Bang thi", detail: "Tao bang, phan mentor va giam khao.", path: "/organizer/boards", status: "PENDING" },
-  { title: "De thi va rubric", detail: "Cau hinh thoi gian mo de va tieu chi cham.", path: "/organizer/problems", status: "PENDING" }
-];
+type StepStatus = "CONFIRMED" | "PENDING";
 
 export function EventWizardPage() {
+  const { eventId, loading } = useActiveEvent();
+  const [steps, setSteps] = useState<
+    Array<{ title: string; detail: string; path: string; status: StepStatus }>
+  >([]);
+
+  useEffect(() => {
+    if (!eventId) {
+      setSteps([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const teams = await fetchEventTeams(eventId).catch(() => []);
+      const rounds = await fetchEventRounds(eventId).catch(() => []);
+      const round = rounds[0];
+      const boards = round ? await fetchRoundBoards(round.id).catch(() => []) : [];
+      let hasProblem = false;
+      if (boards[0]) {
+        const problems = await fetchBoardProblems(boards[0].id).catch(() => []);
+        hasProblem = problems.length > 0;
+      }
+      if (cancelled) return;
+      setSteps([
+        {
+          title: "Thong tin co ban",
+          detail: "Ten cuoc thi, quota va mo ta.",
+          path: "/organizer/events/basic-info",
+          status: "CONFIRMED"
+        },
+        {
+          title: "Dang ky doi",
+          detail: "Duyet doi va gui loi moi thanh vien.",
+          path: "/organizer/registrations",
+          status: teams.length > 0 ? "CONFIRMED" : "PENDING"
+        },
+        {
+          title: "Bang thi",
+          detail: "Tao bang va phan doi ngau nhien.",
+          path: "/organizer/boards",
+          status: boards.length > 0 ? "CONFIRMED" : "PENDING"
+        },
+        {
+          title: "De thi",
+          detail: "Cau hinh thoi gian mo de theo bang.",
+          path: "/organizer/problems",
+          status: hasProblem ? "CONFIRMED" : "PENDING"
+        }
+      ]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
+
+  if (loading) {
+    return <ModuleSkeleton rows={4} />;
+  }
+
   return (
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Tao cuoc thi"
         title="Quy trinh cau hinh"
-        description="Di theo tung buoc de tao cuoc thi moi. Moi buoc deu co trang thai ro rang truoc khi mo dang ky."
+        description="Trang thai tung buoc duoc tinh tu du lieu that tren he thong."
       />
 
       <section className="grid gap-md lg:grid-cols-2">

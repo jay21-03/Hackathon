@@ -1,140 +1,152 @@
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
+import { EventSelector } from "../../components/ui/EventSelector";
+import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { ProgressBar } from "../../components/ui/ProgressBar";
 import { StatCard } from "../../components/ui/StatCard";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
+import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { fetchEventDetail } from "../../services/eventsApi";
+import { fetchEventTeams } from "../../services/registrationService";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import {
-  demoEvent,
-  demoScoreSheets,
-  demoTeams,
-  organizerActivities
-} from "../../services/readModelService";
 
 export function OrganizerOverviewPage() {
-  const confirmedTeams = demoTeams.filter((team) => team.status === "CONFIRMED").length;
-  const waitlistTeams = demoTeams.filter((team) => team.status === "WAITLIST").length;
-  const submittedScores = demoScoreSheets.filter((sheet) => sheet.status === "SUBMITTED").length;
-  const draftScores = demoScoreSheets.filter((sheet) => sheet.status === "DRAFT").length;
-  const scoringProgress = Math.round((submittedScores / demoScoreSheets.length) * 100);
+  const { eventId, event, events, setEventId, loading, error } = useActiveEvent();
+  const [confirmedTeams, setConfirmedTeams] = useState(0);
+  const [pendingTeams, setPendingTeams] = useState(0);
+  const [waitlistTeams, setWaitlistTeams] = useState(0);
+  const [quota, setQuota] = useState(0);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!eventId) {
+      setStatsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setStatsLoading(true);
+
+    Promise.all([fetchEventTeams(eventId), fetchEventDetail(String(eventId))])
+      .then(([teams, detail]) => {
+        if (cancelled) return;
+        setConfirmedTeams(teams.filter((team) => team.status === "CONFIRMED").length);
+        setPendingTeams(teams.filter((team) => team.status === "PENDING").length);
+        setWaitlistTeams(teams.filter((team) => team.status === "WAITLIST").length);
+        setQuota(detail?.maxTeams ?? 0);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setConfirmedTeams(0);
+          setPendingTeams(0);
+          setWaitlistTeams(0);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setStatsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
+
+  if (loading || statsLoading) {
+    return <ModuleSkeleton rows={4} />;
+  }
 
   return (
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Tong quan ban to chuc"
-        title={demoEvent.name}
-        description="Theo doi dang ky, check-in, cham diem, xep hang va cong bo ket qua trong mot dashboard gon."
+        title={event?.name ?? "Cuoc thi"}
+        description="Theo doi dang ky, phan cong bang va mentor/giam khao."
         actions={
           <>
-            <Badge tone={getStatusTone(demoEvent.status)}>{getStatusLabel(demoEvent.status)}</Badge>
+            {event ? (
+              <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
+            ) : null}
+            <EventSelector events={events} eventId={eventId} onChange={setEventId} />
           </>
         }
       />
+
+      {error ? (
+        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
+          <p className="font-body-sm text-on-surface">{error}</p>
+        </div>
+      ) : null}
 
       <section className="grid gap-md md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Doi xac nhan"
           value={confirmedTeams}
-          helper={`${waitlistTeams} doi dang o danh sach cho`}
+          helper={`${waitlistTeams} doi trong danh sach cho`}
           icon="groups"
           tone="success"
         />
         <StatCard
-          label="Quota dang ky"
-          value={`${demoEvent.confirmedTeams}/${demoEvent.quota}`}
-          helper="Sap day quota, can theo doi waitlist"
+          label="Cho duyet"
+          value={pendingTeams}
+          helper="Can xu ly trong muc dang ky"
+          icon="pending_actions"
+          tone="warning"
+        />
+        <StatCard
+          label="Quota"
+          value={quota ? `${confirmedTeams}/${quota}` : confirmedTeams}
+          helper="So doi da xac nhan / quota"
           icon="fact_check"
-          tone="warning"
-        >
-          <ProgressBar value={Math.round((demoEvent.confirmedTeams / demoEvent.quota) * 100)} />
-        </StatCard>
-        <StatCard
-          label="Cham diem"
-          value={`${submittedScores}/${demoScoreSheets.length}`}
-          helper={`${draftScores} ban nhap chua tinh diem`}
-          icon="gavel"
           tone="primary"
-        >
-          <ProgressBar value={scoringProgress} />
-        </StatCard>
+        />
         <StatCard
-          label="Danh gia AI"
-          value="Tham khao"
-          helper="Khong anh huong xep hang"
-          icon="psychology"
-          tone="warning"
+          label="Cuoc thi"
+          value={events.length}
+          helper="Tong so cuoc thi dang quan ly"
+          icon="event"
         />
       </section>
 
       <WorkflowSteps
-        title="Thu tu van hanh cuoc thi"
-        description="Cac man lien quan duoc xep theo dung dong nghiep vu de ban to chuc khong phai nhay qua lai."
+        title="Thu tu van hanh"
+        description="Cac buoc chinh trong pham vi he thong hien tai."
         steps={[
           {
-            label: "Thiet lap",
-            detail: "Cau hinh cuoc thi, de thi va tieu chi cham.",
-            state: "done"
+            label: "Dang ky doi",
+            detail: "Duyet doi va quan ly danh sach cho.",
+            to: "/organizer/registrations",
+            state: pendingTeams > 0 ? "active" : "done"
           },
           {
-            label: "Dang ky",
-            detail: "Duyet doi, loi moi thanh vien va danh sach cho.",
-            state: waitlistTeams > 0 ? "active" : "done"
+            label: "Phan cong bang",
+            detail: "Random hoac thu cong gan doi vao slot.",
+            to: "/organizer/boards",
+            state: confirmedTeams > 0 ? "active" : "next"
+          },
+          {
+            label: "Mentor & giam khao",
+            detail: "Gan mentor va giam khao theo bang.",
+            to: "/organizer/assignments",
+            state: "next"
           }
         ]}
       />
 
-      <section className="grid gap-lg xl:grid-cols-[1.1fr_0.9fr]">
-        <article className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-          <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="font-headline-sm text-on-surface">Can xu ly tiep</h2>
-              <p className="font-body-sm text-on-surface-variant">
-                Cac khu vuc nghiep vu can ban to chuc theo doi trong ngay thi.
-              </p>
-            </div>
-            <Link to="/organizer/registrations" className="font-label-md text-primary">
-              Xem dang ky
-            </Link>
+      <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+        <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="font-headline-sm text-on-surface">Can xu ly tiep</h2>
+            <p className="font-body-sm text-on-surface-variant">
+              {pendingTeams > 0
+                ? `${pendingTeams} doi dang cho duyet.`
+                : "Khong co doi pending can xu ly ngay."}
+            </p>
           </div>
-          <div className="mt-md grid gap-sm md:grid-cols-2">
-            {[
-              ["Duyet dang ky", `${waitlistTeams} doi trong danh sach cho`],
-              ["Quan ly cuoc thi", "Cuoc thi va danh sach nguoi dung da giong api" ]
-            ].map(([title, detail]) => (
-              <div
-                key={title}
-                className="rounded-lg border border-outline-variant bg-surface-container-low p-md"
-              >
-                <p className="font-label-md text-on-surface">{title}</p>
-                <p className="mt-xs font-body-sm text-on-surface-variant">{detail}</p>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-          <h2 className="font-headline-sm text-on-surface">Hoat dong gan day</h2>
-          <div className="mt-md space-y-sm">
-            {organizerActivities.map((activity) => (
-              <div
-                key={activity.id}
-                className="rounded-lg border border-outline-variant bg-surface-container-low p-md"
-              >
-                <div className="flex items-start justify-between gap-sm">
-                  <p className="font-label-md text-on-surface">{activity.title}</p>
-                  <Badge tone={getStatusTone(activity.status)}>
-                    {getStatusLabel(activity.status)}
-                  </Badge>
-                </div>
-                <p className="mt-xs font-body-sm text-on-surface-variant">{activity.detail}</p>
-                <p className="mt-sm font-label-sm normal-case text-on-surface-variant">
-                  {activity.time}
-                </p>
-              </div>
-            ))}
-          </div>
-        </article>
+          <Link to="/organizer/registrations" className="font-label-md text-primary">
+            Xem dang ky
+          </Link>
+        </div>
       </section>
     </div>
   );

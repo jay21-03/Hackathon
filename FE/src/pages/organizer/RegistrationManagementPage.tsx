@@ -4,11 +4,13 @@ import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { EventSelector } from "../../components/ui/EventSelector";
 import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { TableToolbar } from "../../components/ui/TableToolbar";
+import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { fetchEventDetail } from "../../services/eventsApi";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import {
@@ -25,7 +27,7 @@ function formatDate(value: string) {
 
 export function RegistrationManagementPage() {
   const { notify } = useToast();
-  const eventId = 11;
+  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent();
   const [registrations, setRegistrations] = useState<TeamDetailResponse[]>([]);
   const [quota, setQuota] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +37,12 @@ export function RegistrationManagementPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
+    if (!eventId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     Promise.all([fetchEventTeams(eventId), fetchEventDetail(String(eventId))])
       .then(([teamsResult, eventResult]) => {
         setRegistrations(teamsResult);
@@ -123,7 +131,7 @@ export function RegistrationManagementPage() {
   const pending = registrations.filter((item) => item.status === "PENDING").length;
   const waitlist = registrations.filter((item) => item.status === "WAITLIST").length;
 
-  if (loading) return <ModuleSkeleton rows={4} />;
+  if (loading || eventLoading) return <ModuleSkeleton rows={4} />;
 
   return (
     <div className="space-y-lg">
@@ -131,7 +139,12 @@ export function RegistrationManagementPage() {
         eyebrow="Duyet dang ky doi"
         title="Theo doi ho so dang ky"
         description="Ban to chuc duyet, tu choi hoac dua doi vao danh sach cho. Quota day thi doi moi khong duoc tinh vao confirmed."
-        actions={<Badge tone={error ? "danger" : "success"}>{confirmed}/{quota || "-"} quota he thong</Badge>}
+        actions={
+          <>
+            <EventSelector events={events} eventId={eventId} onChange={setEventId} />
+            <Badge tone={error ? "danger" : "success"}>{confirmed}/{quota || "-"} quota he thong</Badge>
+          </>
+        }
       />
 
       {error ? <p className="rounded-lg border border-error/40 bg-error-container/40 p-md font-body-sm text-on-surface">{error}</p> : null}

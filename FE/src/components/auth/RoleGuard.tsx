@@ -42,11 +42,6 @@ export function RoleGuard({ allow }: RoleGuardProps) {
     );
   }
 
-  const devBypassPaths = ["/judge/scoring", "/organizer/ranking", "/organizer/publish-results"];
-  if (import.meta.env.DEV && devBypassPaths.some((path) => location.pathname.startsWith(path))) {
-    return <Outlet />;
-  }
-
   if (!allow.includes(session.role)) {
     return (
       <Navigate

@@ -1,7 +1,6 @@
 import type { ApiResponse } from "../types/api";
 import type { EventListItem } from "../types/entities";
 import { apiClient } from "./apiClient";
-import { demoEvent } from "../mocks/hackathonDemoData";
 
 export interface EventDetail {
   id: number;

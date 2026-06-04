@@ -142,8 +142,12 @@ export function EventsDiscoveryPage() {
           </p>
           <Link
             to={authenticated ? roleHome : "/login"}
-            className="text-primary font-label-md"
+            className="inline-flex items-center justify-center gap-2 text-primary font-label-md"
           >
+            <Icon
+              name={authenticated ? "dashboard" : "account_circle"}
+              className="text-[18px]"
+            />
             {authenticated ? `Vao ${roleLabel}` : "Dang nhap de bat dau"}
           </Link>
         </div>

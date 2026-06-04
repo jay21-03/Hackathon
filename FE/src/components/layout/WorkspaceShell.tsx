@@ -1,6 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { clearAccessToken } from "../../auth/tokenStorage";
 import { setDemoAuthenticated } from "../../auth/demoSession";
 import { Icon } from "../ui/Icon";
 import type { NavItem } from "../../config/navigation";
@@ -149,7 +148,6 @@ export function WorkspaceShell({
           <button
             type="button"
             onClick={() => {
-              clearAccessToken();
               setDemoAuthenticated(false);
               window.location.href = "/events";
             }}

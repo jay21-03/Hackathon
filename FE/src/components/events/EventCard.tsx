@@ -72,9 +72,10 @@ export function EventCard({ event, highlight }: EventCardProps) {
           </span>
           <Link
             to={`/events/${event.id}`}
-            className="rounded-lg bg-primary-container px-4 py-2 font-label-md text-on-primary-container transition-colors hover:bg-primary"
+            className="inline-flex items-center gap-1 rounded-lg bg-primary-container px-4 py-2 font-label-md text-on-primary-container transition-colors hover:bg-primary"
           >
             Xem chi tiet
+            <Icon name="arrow_forward" className="text-[16px]" />
           </Link>
         </div>
       </div>

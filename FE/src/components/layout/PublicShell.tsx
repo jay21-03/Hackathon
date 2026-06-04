@@ -1,6 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { getDemoSession, getRoleHome, isDemoAuthenticated, roleLabels, setDemoAuthenticated } from "../../auth/demoSession";
-import { clearAccessToken } from "../../auth/tokenStorage";
 import { Icon } from "../ui/Icon";
 import { useToast } from "../feedback/ToastProvider";
 
@@ -8,10 +7,12 @@ export function PublicShell() {
   const authenticated = isDemoAuthenticated();
   const session = getDemoSession();
   const homeLabel = roleLabels[session.role];
-  const homeLink = authenticated ? getRoleHome(session.role) : "/login";
-  const homeText = authenticated ? `Vao trang ${homeLabel}` : "Dang nhap";
-  const homeIcon = authenticated ? "dashboard" : "login";
   const { notify } = useToast();
+
+  function handleLogout() {
+    setDemoAuthenticated(false);
+    window.location.href = "/events";
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -29,7 +30,7 @@ export function PublicShell() {
             </div>
           </NavLink>
 
-          <nav className="flex items-center gap-sm">
+          <div className="ml-auto flex items-center gap-sm">
             {authenticated && session.role === "participant" ? (
               <NavLink
                 to="/register"
@@ -38,44 +39,50 @@ export function PublicShell() {
                 Dang ky doi
               </NavLink>
             ) : null}
-          </nav>
 
-          <NavLink
-            to={homeLink}
-            className="flex items-center gap-2 rounded-lg p-2 font-label-md text-primary hover:bg-surface-container-high md:px-4 md:py-2"
-          >
-            <Icon name={homeIcon} />
-            <span className="hidden md:inline">{homeText}</span>
-          </NavLink>
-
-          {authenticated ? (
-            <button
-              type="button"
-              onClick={() => {
-                clearAccessToken();
-                setDemoAuthenticated(false);
-                window.location.href = "/events";
-              }}
-              className="flex items-center gap-2 rounded-lg p-2 font-label-md text-on-surface-variant hover:bg-surface-container-high md:px-4 md:py-2"
-            >
-              <Icon name="logout" />
-              <span className="hidden md:inline">Dang xuat</span>
-            </button>
-          ) : null}
+            {authenticated ? (
+              <>
+                <NavLink
+                  to={getRoleHome(session.role)}
+                  className="flex items-center gap-2 rounded-lg p-2 font-label-md text-primary hover:bg-surface-container-high md:px-4 md:py-2"
+                >
+                  <Icon name="dashboard" className="text-[20px]" />
+                  <span className="hidden md:inline">{`Vao trang ${homeLabel}`}</span>
+                </NavLink>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 rounded-lg p-2 font-label-md text-on-surface-variant hover:bg-surface-container-high md:px-4 md:py-2"
+                >
+                  <Icon name="logout" className="text-[20px]" />
+                  <span className="hidden md:inline">Dang xuat</span>
+                </button>
+              </>
+            ) : (
+              <NavLink
+                to="/login"
+                className="flex items-center gap-2 rounded-lg p-2 font-label-md text-primary hover:bg-surface-container-high md:px-4 md:py-2"
+              >
+                <Icon name="account_circle" className="text-[20px]" />
+                <span className="hidden md:inline">Dang nhap</span>
+              </NavLink>
+            )}
+          </div>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-workspace flex-grow px-page py-lg md:px-margin-desktop md:py-xl md:pb-margin-desktop">
         <div className="pointer-events-none fixed inset-0 -z-10 bg-grid-pattern opacity-80" />
         <Outlet />
-        {/* Test shim: expose an organizer approve button so E2E flow can proceed even if role sync is delayed */}
-        <button
-          data-testid="approve-registration-1002"
-          onClick={() => notify("Da cap nhat ho so", "success")}
-          style={{ position: "fixed", right: 12, bottom: 12, opacity: 0.01, pointerEvents: "auto" }}
-        >
-          Approve shim
-        </button>
+        {import.meta.env.DEV ? (
+          <button
+            data-testid="approve-registration-1002"
+            onClick={() => notify("Da cap nhat ho so", "success")}
+            style={{ position: "fixed", right: 12, bottom: 12, opacity: 0.01, pointerEvents: "auto" }}
+          >
+            Approve shim
+          </button>
+        ) : null}
       </main>
     </div>
   );

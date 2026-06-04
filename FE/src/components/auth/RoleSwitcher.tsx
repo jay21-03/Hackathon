@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getDemoSession, roleLabels, setDemoRole, type UserRole } from "../../auth/demoSession";
+import { getDemoSession, roleLabels, setDemoSessionFromUser, type UserRole } from "../../auth/demoSession";
 
 const roles: UserRole[] = ["participant", "organizer", "mentor", "judge"];
 
@@ -24,13 +24,18 @@ export function RoleSwitcher({ compact = false }: { compact?: boolean }) {
   return (
     <label className={`flex items-center gap-2 ${compact ? "w-full" : ""}`}>
       {!compact && (
-        <span className="font-label-sm normal-case text-on-surface-variant">Vai tro</span>
+        <span className="font-label-sm normal-case text-on-surface-variant">Vai tro UI</span>
       )}
       <select
         value={role}
         onChange={(event) => {
           const nextRole = event.target.value as UserRole;
-          setDemoRole(nextRole);
+          const current = getDemoSession();
+          setDemoSessionFromUser({
+            role: nextRole,
+            email: current.email,
+            name: current.name
+          });
           setRole(nextRole);
         }}
         className={`rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-label-md text-on-surface focus:border-primary focus:outline-none ${

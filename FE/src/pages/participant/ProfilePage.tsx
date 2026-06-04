@@ -20,14 +20,20 @@ export function ProfilePage() {
 
   useEffect(() => {
     let active = true;
-    fetchMyProfile().then((result) => {
-      if (!active) return;
-      setFullName(result.data.fullName ?? "");
-      setEmail(result.data.email ?? "");
-      setStudentId(result.data.studentId ?? "");
-      setUniversity(result.data.university ?? "");
-      setLoading(false);
-    });
+    fetchMyProfile()
+      .then((result) => {
+        if (!active) return;
+        setFullName(result.fullName ?? "");
+        setEmail(result.email ?? "");
+        setStudentId(result.studentId ?? "");
+        setUniversity(result.university ?? "");
+      })
+      .catch(() => {
+        if (active) setFormError("Khong tai duoc ho so tu he thong.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
     };
@@ -41,16 +47,21 @@ export function ProfilePage() {
     }
     setFormError("");
     setSaving(true);
-    const result = await updateMyProfile({
-      fullName,
-      studentId: studentId || undefined,
-      university: university || undefined
-    });
-    setFullName(result.data.fullName ?? fullName);
-    setStudentId(result.data.studentId ?? studentId);
-    setUniversity(result.data.university ?? university);
-    setSaving(false);
-    notify("Da luu ho so ca nhan.", "success");
+    try {
+      const result = await updateMyProfile({
+        fullName,
+        studentId: studentId || undefined,
+        university: university || undefined
+      });
+      setFullName(result.fullName ?? fullName);
+      setStudentId(result.studentId ?? studentId);
+      setUniversity(result.university ?? university);
+      notify("Da luu ho so ca nhan.", "success");
+    } catch {
+      notify("Luu ho so that bai.", "danger");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

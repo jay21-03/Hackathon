@@ -5,11 +5,13 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { eventConfigSchema } from "../../domain/schemas";
+import { EventSelector } from "../../components/ui/EventSelector";
+import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { fetchEventDetail, updateEvent, type EventDetail } from "../../services/eventsApi";
 
 export function EventBasicInfoPage() {
   const { notify } = useToast();
-  const eventId = "1";
+  const { eventId, event: activeEvent, events, setEventId, loading: eventsLoading } = useActiveEvent();
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [name, setName] = useState("");
   const [quota, setQuota] = useState(0);
@@ -20,8 +22,9 @@ export function EventBasicInfoPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (!eventId) return;
     let cancelled = false;
-    fetchEventDetail(eventId)
+    fetchEventDetail(String(eventId))
       .then((result) => {
         if (cancelled || !result) return;
         setEvent(result);
@@ -44,9 +47,10 @@ export function EventBasicInfoPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [eventId]);
 
   async function save() {
+    if (!eventId) return;
     const parsed = eventConfigSchema.safeParse({ name, quota, minTeamSize, maxTeamSize });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Cau hinh cuoc thi chua hop le.");
@@ -55,7 +59,7 @@ export function EventBasicInfoPage() {
     setError("");
     setSaving(true);
     try {
-      const updated = await updateEvent(eventId, { name, maxTeams: quota });
+      const updated = await updateEvent(String(eventId), { name, maxTeams: quota });
       if (updated) {
         setEvent(updated);
         setName(updated.name);
@@ -71,6 +75,14 @@ export function EventBasicInfoPage() {
     }
   }
 
+  if (eventsLoading || (!event && !loadError && eventId)) {
+    return <ModuleSkeleton rows={5} />;
+  }
+
+  if (!eventId) {
+    return <p className="rounded-lg border border-outline-variant bg-surface-container p-md font-body-sm">Chua co cuoc thi.</p>;
+  }
+
   if (!event) {
     if (loadError) {
       return <p className="rounded-lg border border-error/40 bg-error-container/40 p-md font-body-sm text-on-surface">{loadError}</p>;
@@ -84,6 +96,9 @@ export function EventBasicInfoPage() {
         eyebrow="Thong tin co ban"
         title="Cau hinh cuoc thi"
         description="Thiet lap thong tin hien thi, quota va kich thuoc doi. Cac rule nay duoc dung trong luong dang ky."
+        actions={
+          <EventSelector events={events} eventId={eventId} onChange={setEventId} />
+        }
       />
 
       <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">

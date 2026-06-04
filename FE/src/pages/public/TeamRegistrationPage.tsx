@@ -8,16 +8,17 @@ import { teamRegistrationSchema } from "../../domain/schemas";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { fetchEventDetail, type EventDetail } from "../../services/eventsApi";
 import { registerTeam } from "../../services/registrationService";
+import { useActiveEvent } from "../../hooks/useActiveEvent";
 
-const initialMembers = ["captain@seal.edu.vn", "", "", "", ""];
+const initialMembers = ["", "", "", "", ""];
 
 export function TeamRegistrationPage() {
   const { notify } = useToast();
-  const eventId = 11;
+  const { eventId, loading: eventListLoading } = useActiveEvent();
   const [eventInfo, setEventInfo] = useState<EventDetail | null>(null);
   const [loadingEvent, setLoadingEvent] = useState(true);
-  const [teamName, setTeamName] = useState("CodeStorm");
-  const [track, setTrack] = useState("AI / LLM Tooling");
+  const [teamName, setTeamName] = useState("");
+  const [track, setTrack] = useState("");
   const [memberEmails, setMemberEmails] = useState(initialMembers);
   const [errors, setErrors] = useState<string[]>([]);
   const [submittedStatus, setSubmittedStatus] = useState<string | null>(null);
@@ -29,6 +30,10 @@ export function TeamRegistrationPage() {
   );
 
   useEffect(() => {
+    if (!eventId) {
+      setLoadingEvent(false);
+      return;
+    }
     fetchEventDetail(String(eventId))
       .then((result) => setEventInfo(result))
       .catch(() => notify("Khong tai duoc thong tin cuoc thi.", "danger"))
@@ -57,6 +62,11 @@ export function TeamRegistrationPage() {
       const nextErrors = schemaResult.error.issues.map((issue) => issue.message);
       setErrors(nextErrors);
       notify("Kiem tra lai thong tin dang ky doi.", "warning");
+      return;
+    }
+
+    if (!eventId) {
+      notify("Chua chon cuoc thi de dang ky.", "warning");
       return;
     }
 
@@ -180,9 +190,13 @@ export function TeamRegistrationPage() {
           )}
 
           <div className="flex flex-wrap gap-sm pt-sm">
-            <Button type="submit" data-testid="submit-registration" disabled={submitting}>
+            <Button
+              type="submit"
+              data-testid="submit-registration"
+              disabled={submitting}
+              icon={<Icon name="group_add" className="text-[18px]" />}
+            >
               {submitting || loadingEvent ? "Dang gui" : "Dang ky doi"}
-              <Icon name="arrow_forward" className="text-[18px]" />
             </Button>
             <ConfirmAction
               title="Lam lai ho so?"

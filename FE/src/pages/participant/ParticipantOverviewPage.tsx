@@ -1,76 +1,91 @@
+import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { ButtonLink } from "../../components/ui/Button";
-import { Icon } from "../../components/ui/Icon";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { ProgressBar } from "../../components/ui/ProgressBar";
 import { StatCard } from "../../components/ui/StatCard";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
+import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useMyTeam } from "../../hooks/useMyTeam";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import {
-  demoEvent,
-  demoScoreSheets,
-  demoTeams,
-  participantActivities
-} from "../../services/readModelService";
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("vi-VN", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  });
-}
 
 export function ParticipantOverviewPage() {
-  const team = demoTeams[0];
-  const submittedSheets = demoScoreSheets.filter(
-    (sheet) => sheet.teamId === team.id && sheet.status === "SUBMITTED"
-  ).length;
-  const readiness = 80;
+  const { eventId, event, loading: eventLoading } = useActiveEvent();
+  const { team, loading: teamLoading, error } = useMyTeam(eventId);
+
+  if (eventLoading || teamLoading) {
+    return <ModuleSkeleton rows={4} />;
+  }
+
+  if (!team) {
+    return (
+      <div className="space-y-lg">
+        <PageHeader
+          eyebrow="Tong quan thi sinh"
+          title="Chua co doi thi"
+          description="Dang ky doi de tham gia cuoc thi va theo doi trang thai tai day."
+        />
+        {error ? (
+          <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
+            <p className="font-body-sm text-on-surface">{error}</p>
+          </div>
+        ) : null}
+        <EmptyState
+          icon="groups"
+          title="Ban chua dang ky doi nao"
+          description="Chon cuoc thi va tao doi de bat dau."
+          action={
+            <ButtonLink to="/register" className="mt-md">
+              Dang ky doi
+            </ButtonLink>
+          }
+        />
+      </div>
+    );
+  }
+
+  const confirmedMembers =
+    team.members?.filter((member) => member.status === "CONFIRMED").length ?? 0;
+  const totalMembers = team.members?.length ?? 0;
 
   return (
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Tong quan thi sinh"
         title={team.name}
-        description="Theo doi trang thai doi, bang thi, check-in, bai nop va danh gia AI trong mot man hinh gon."
+        description={event?.name ?? "Theo doi trang thai doi va cac buoc chuan bi truoc ngay thi."}
         actions={
-          <>
-            <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
-            <ButtonLink to="/me/submission" icon={<Icon name="upload" className="text-[18px]" />}>
-              Nop bai
-            </ButtonLink>
-          </>
+          <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
         }
       />
 
-      <section className="grid gap-md md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Bang thi" value={team.board} helper={team.track} icon="grid_view" />
+      <section className="grid gap-md md:grid-cols-2 xl:grid-cols-3">
         <StatCard
-          label="Check-in"
-          value={getStatusLabel(team.checkInStatus)}
-          helper="Khong chan quyen xem de thi"
-          icon="how_to_reg"
+          label="Thanh vien xac nhan"
+          value={`${confirmedMembers}/${totalMembers}`}
+          helper="Doi hop le tu 1-5 thanh vien"
+          icon="groups"
           tone="success"
         />
         <StatCard
-          label="Danh gia AI"
-          value={`${team.aiReviewScore}/100`}
-          helper="Chi dung de tham khao"
-          icon="psychology"
-          tone="warning"
+          label="Trang thai dang ky"
+          value={getStatusLabel(team.status)}
+          helper="Cho ban to chuc duyet neu dang PENDING"
+          icon="fact_check"
+          tone="primary"
         />
         <StatCard
-          label="Phieu cham da chot"
-          value={`${submittedSheets}/3`}
-          helper="Xep hang chi tinh diem da chot"
-          icon="gavel"
-          tone="primary"
+          label="Cuoc thi"
+          value={event?.name ?? `Su kien #${team.eventId}`}
+          helper={`Ma doi #${team.id}`}
+          icon="event"
         />
       </section>
 
       <WorkflowSteps
         title="Thu tu can hoan thanh"
-        description="Cac moc duoc sap theo dung luong thi sinh: doi thi, check-in, xem de, nop bai va xem ket qua."
+        description="Cac buoc chuan bi truoc ngay thi."
         steps={[
           {
             label: "Doi thi",
@@ -79,90 +94,32 @@ export function ParticipantOverviewPage() {
             state: team.status === "CONFIRMED" ? "done" : "active"
           },
           {
-            label: "Check-in",
-            detail: "Nop anh tham du, khong khoa quyen xem de.",
-            to: "/me/check-in",
-            state: team.checkInStatus === "CONFIRMED" ? "done" : "active"
+            label: "Bang thi",
+            detail: "Xem bang duoc phan cong sau khi doi duoc xac nhan.",
+            to: "/me/board",
+            state: team.status === "CONFIRMED" ? "active" : "blocked"
           },
           {
             label: "De thi",
             detail: "Noi dung mo theo thoi gian ban to chuc cau hinh.",
             to: "/me/problem",
-            state: "next"
-          },
-          {
-            label: "Bai nop",
-            detail: "Cap nhat link GitHub/GitLab hop le.",
-            to: "/me/submission",
-            state: team.repoUrl ? "done" : "active"
-          },
-          {
-            label: "Ket qua",
-            detail: "Chi hien sau khi ban to chuc cong bo.",
-            to: "/me/results",
-            state: "next"
+            state: team.status === "CONFIRMED" ? "next" : "blocked"
           }
         ]}
       />
 
-      <section className="grid gap-lg xl:grid-cols-[1.2fr_0.8fr]">
-        <article className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-          <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="font-headline-sm text-on-surface">Tien do san sang</h2>
-              <p className="font-body-sm text-on-surface-variant">
-                Cac moc can hoan thanh truoc khi ban to chuc tinh xep hang.
-              </p>
-            </div>
-            <Badge tone="success">{readiness}% san sang</Badge>
+      <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+        <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="font-headline-sm text-on-surface">Tiep theo</h2>
+            <p className="font-body-sm text-on-surface-variant">
+              Quan ly thanh vien va theo doi trang thai doi.
+            </p>
           </div>
-          <div className="mt-md">
-            <ProgressBar value={readiness} label="Muc san sang" />
-          </div>
-          <div className="mt-lg grid gap-sm md:grid-cols-2">
-            {[
-              ["Dang ky doi", team.status],
-              ["Check-in", team.checkInStatus ?? "PENDING"],
-              ["Repository", team.repoUrl ? "SUBMITTED" : "DRAFT"],
-              ["De thi mo luc", demoEvent.releaseAt]
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="rounded-lg border border-outline-variant bg-surface-container-low p-md"
-              >
-                <p className="font-label-sm normal-case text-on-surface-variant">{label}</p>
-                <p className="mt-xs font-label-md text-on-surface">
-                  {String(value).includes("T")
-                    ? formatDateTime(String(value))
-                    : getStatusLabel(String(value))}
-                </p>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-          <h2 className="font-headline-sm text-on-surface">Hoat dong gan day</h2>
-          <div className="mt-md space-y-sm">
-            {participantActivities.map((activity) => (
-              <div
-                key={activity.id}
-                className="flex gap-sm rounded-lg border border-outline-variant bg-surface-container-low p-md"
-              >
-                <div className="mt-1 h-2 w-2 rounded-full bg-primary" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-sm">
-                    <p className="font-label-md text-on-surface">{activity.title}</p>
-                    <span className="font-label-sm normal-case text-on-surface-variant">
-                      {activity.time}
-                    </span>
-                  </div>
-                  <p className="mt-xs font-body-sm text-on-surface-variant">{activity.detail}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </article>
+          <Link to="/me/team" className="font-label-md text-primary">
+            Xem doi cua toi
+          </Link>
+        </div>
       </section>
     </div>
   );

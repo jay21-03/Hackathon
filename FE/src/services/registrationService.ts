@@ -1,7 +1,5 @@
 import type { ApiResponse } from "../types/api";
-import { demoRegistrations } from "../mocks/hackathonDemoData";
 import { apiClient } from "./apiClient";
-import { withApiFallback } from "./apiFallback";
 
 export interface RegisterTeamPayload {
   name: string;
@@ -42,15 +40,14 @@ export async function updateTeamStatus(teamId: number, status: string, reason?: 
   return data.data;
 }
 
-export function fetchRegistrations() {
-  return withApiFallback(
-    async () => (await apiClient.get<typeof demoRegistrations>("/registrations")).data,
-    demoRegistrations
-  );
-}
-
-export async function updateRegistrationStatus(id: number, status: string) {
-  return apiClient.patch(`/registrations/${id}`, { status });
+export async function resendTeamInvitation(teamMemberId: number) {
+  const { data } = await apiClient.post<ApiResponse<TeamDetailResponse>>("/v1/team-invitations/resend", {
+    teamMemberId
+  });
+  if (!data.data) {
+    throw new Error(data.message || "Gui lai loi moi that bai");
+  }
+  return data.data;
 }
 
 export async function registerTeam(eventId: number, payload: RegisterTeamPayload) {

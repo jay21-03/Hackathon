@@ -112,30 +112,34 @@ export function EventDetailPage() {
           {!authenticated ? (
             <Link
               to="/login"
-              className="bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
+              className="inline-flex items-center gap-2 bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
             >
+              <Icon name="account_circle" className="text-[18px]" />
               Dang nhap de dang ky
             </Link>
           ) : session.role === "participant" ? (
             <>
               <Link
                 to="/register"
-                className="bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
+                className="inline-flex items-center gap-2 bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
               >
+                <Icon name="group_add" className="text-[18px]" />
                 Dang ky tham gia
               </Link>
               <Link
                 to="/me/team"
-                className="border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-variant"
+                className="inline-flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-variant"
               >
+                <Icon name="groups" className="text-[18px]" />
                 Xem doi cua toi
               </Link>
             </>
           ) : (
             <Link
               to={roleHome}
-              className="bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
+              className="inline-flex items-center gap-2 bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-label-md"
             >
+              <Icon name="dashboard" className="text-[18px]" />
               Vao {roleLabel}
             </Link>
           )}

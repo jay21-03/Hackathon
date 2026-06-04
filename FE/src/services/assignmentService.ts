@@ -1,6 +1,4 @@
 import { apiClient } from "./apiClient";
-import { withApiFallback } from "./apiFallback";
-import { demoBoards } from "../mocks/hackathonDemoData";
 import type { ApiResponse } from "../types/api";
 
 export interface AssignmentResponse {
@@ -9,10 +7,6 @@ export interface AssignmentResponse {
   assigneeId: number;
   createdAt: string;
   createdBy: number;
-}
-
-export async function fetchBoards(eventId: string) {
-  return withApiFallback(() => apiClient.get(`/events/${eventId}/boards`).then((r) => r.data), demoBoards);
 }
 
 export async function fetchMentorAssignments() {
@@ -25,20 +19,32 @@ export async function fetchJudgeAssignments() {
   return response.data.data ?? [];
 }
 
-export async function assignMentor(boardId: string, mentorId: string) {
-  try {
-    const res = await apiClient.post(`/v1/boards/${boardId}/mentors`, { userId: Number(mentorId) });
-    return { data: res.data, usingFallback: false };
-  } catch {
-    return { data: { boardId, mentorId }, usingFallback: true };
+export async function assignMentor(boardId: number, userId: number) {
+  const { data } = await apiClient.post<ApiResponse<AssignmentResponse>>(
+    `/v1/boards/${boardId}/mentors`,
+    { userId }
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Gan mentor that bai");
   }
+  return data.data;
 }
 
-export async function assignJudge(boardId: string, judgeId: string) {
-  try {
-    const res = await apiClient.post(`/v1/boards/${boardId}/judges`, { userId: Number(judgeId) });
-    return { data: res.data, usingFallback: false };
-  } catch {
-    return { data: { boardId, judgeId }, usingFallback: true };
+export async function assignJudge(boardId: number, userId: number) {
+  const { data } = await apiClient.post<ApiResponse<AssignmentResponse>>(
+    `/v1/boards/${boardId}/judges`,
+    { userId }
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Gan giam khao that bai");
   }
+  return data.data;
+}
+
+export async function removeMentor(boardId: number, mentorId: number) {
+  await apiClient.delete(`/v1/boards/${boardId}/mentors/${mentorId}`);
+}
+
+export async function removeJudge(boardId: number, judgeId: number) {
+  await apiClient.delete(`/v1/boards/${boardId}/judges/${judgeId}`);
 }

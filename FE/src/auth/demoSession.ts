@@ -1,4 +1,4 @@
-import { clearAccessToken, getAccessToken, setAccessToken } from "./tokenStorage";
+import { clearAccessToken, getAccessToken } from "./tokenStorage";
 
 export type UserRole = "participant" | "organizer" | "mentor" | "judge";
 
@@ -9,83 +9,56 @@ export interface DemoSession {
 }
 
 const storageKey = "seal.demo.session";
-const authKey = "seal.demo.authenticated";
-const devAuthBypassEnabled = import.meta.env.DEV && import.meta.env.VITE_DEV_AUTH_BYPASS === "true";
 
-const roleProfiles: Record<UserRole, DemoSession> = {
-  participant: {
-    role: "participant",
-    email: "participant@seal.edu.vn",
-    name: "Thi sinh demo"
-  },
-  organizer: {
-    role: "organizer",
-    email: "organizer@seal.edu.vn",
-    name: "Ban to chuc demo"
-  },
-  mentor: {
-    role: "mentor",
-    email: "mentor@seal.edu.vn",
-    name: "Mentor demo"
-  },
-  judge: {
-    role: "judge",
-    email: "judge@seal.edu.vn",
-    name: "Giam khao demo"
-  }
+const defaultSession: DemoSession = {
+  role: "participant",
+  email: "",
+  name: ""
 };
 
 export function getDemoSession(): DemoSession {
-  if (typeof window === "undefined") return roleProfiles.participant;
+  if (typeof window === "undefined") return defaultSession;
   const raw = window.localStorage.getItem(storageKey);
-  if (!raw) return roleProfiles.participant;
+  if (!raw) return defaultSession;
   try {
     const parsed = JSON.parse(raw) as DemoSession;
-    return parsed.role in roleProfiles ? parsed : roleProfiles.participant;
+    if (!parsed.role) return defaultSession;
+    return parsed;
   } catch {
-    return roleProfiles.participant;
+    return defaultSession;
   }
 }
 
 export function isDemoAuthenticated(): boolean {
-  if (typeof window === "undefined") return false;
-  if (getAccessToken()) return true;
-  if (window.localStorage.getItem(authKey) !== "true") return false;
-  const raw = window.localStorage.getItem(storageKey);
-  if (!raw) return false;
-  try {
-    const parsed = JSON.parse(raw) as DemoSession;
-    return parsed.role in roleProfiles;
-  } catch {
-    return false;
-  }
+  return Boolean(getAccessToken());
 }
 
 export function setDemoAuthenticated(value: boolean) {
   if (typeof window === "undefined") return;
-  if (value) {
-    window.localStorage.setItem(authKey, "true");
-  } else {
-    window.localStorage.removeItem(authKey);
-    if (devAuthBypassEnabled) {
-      clearAccessToken();
-    }
-  }
-}
-
-function buildDevToken(role: UserRole, email: string) {
-  return `dev:${role}:${email.trim().toLowerCase()}`;
-}
-
-export function setDemoRole(role: UserRole) {
-  const next = roleProfiles[role];
-  window.localStorage.setItem(storageKey, JSON.stringify(next));
-  if (devAuthBypassEnabled) {
-    setAccessToken(buildDevToken(role, next.email));
-    setDemoAuthenticated(true);
+  if (!value) {
+    clearAccessToken();
+    window.localStorage.removeItem(storageKey);
   }
   window.dispatchEvent(new Event("seal-demo-session-change"));
+}
+
+export function setDemoSessionFromUser(input: { role: UserRole; email: string; name: string }) {
+  const next: DemoSession = {
+    role: input.role,
+    email: input.email,
+    name: input.name
+  };
+  window.localStorage.setItem(storageKey, JSON.stringify(next));
+  window.dispatchEvent(new Event("seal-demo-session-change"));
   return next;
+}
+
+export function resolveRoleFromApiRoles(roles: string[] | undefined): UserRole {
+  const normalized = (roles ?? []).map((role) => role.toUpperCase());
+  if (normalized.includes("ORGANIZER")) return "organizer";
+  if (normalized.includes("MENTOR")) return "mentor";
+  if (normalized.includes("JUDGE")) return "judge";
+  return "participant";
 }
 
 export function getRoleHome(role: UserRole) {
