@@ -1,7 +1,10 @@
 package com.seal.hackathon.notification.entity;
 
+import com.seal.hackathon.common.enums.AnnouncementAudience;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -33,4 +36,9 @@ public class Announcement {
     private OffsetDateTime publishedAt;
     private Long createdBy;
     private OffsetDateTime createdAt;
+
+    @Enumerated(EnumType.STRING)
+    private AnnouncementAudience audience;
+
+    private Integer recipientCount;
 }

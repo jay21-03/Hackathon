@@ -5,5 +5,8 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AnnouncementRepository extends JpaRepository<Announcement, Long> {
-	List<Announcement> findByEventId(Long eventId);
+
+    List<Announcement> findByEventIdOrderByPublishedAtDescCreatedAtDesc(Long eventId);
+
+    List<Announcement> findByEventIdAndPublishedAtIsNotNullOrderByPublishedAtDesc(Long eventId);
 }
