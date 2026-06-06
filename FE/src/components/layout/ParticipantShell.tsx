@@ -2,11 +2,13 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { getAuthSession, isAuthenticated, setAuthenticated } from "../../auth/authSession";
 import {
   getVisibleNavItems,
+  isNotificationsNavItem,
   navItemUsesEnd,
   participantHubNav,
   participantWorkspaceNav
 } from "../../config/navigation";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useUnreadNotificationCount } from "../../hooks/useNotifications";
 import { RoleSwitcher } from "../auth/RoleSwitcher";
 import { Icon } from "../ui/Icon";
 import { ButtonLink } from "../ui/Button";
@@ -21,6 +23,8 @@ export function ParticipantShell() {
   const isWorkspace = location.pathname.startsWith("/me");
   const navItems = isWorkspace ? participantWorkspaceNav : participantHubNav;
   const visibleNavItems = getVisibleNavItems(navItems);
+  const unreadQuery = useUnreadNotificationCount();
+  const unreadCount = unreadQuery.data ?? 0;
 
   const title = isWorkspace ? "Không gian thi" : "SEAL Hackathon";
   const subtitle = isWorkspace
@@ -88,11 +92,18 @@ export function ParticipantShell() {
               >
                 {({ isActive }) => (
                   <>
-                    <Icon
-                      name={item.icon}
-                      filled={isActive || hubPrimary}
-                      className={`text-[20px] ${isActive || hubPrimary ? "text-primary" : ""}`}
-                    />
+                    <span className="relative inline-flex shrink-0">
+                      <Icon
+                        name={item.icon}
+                        filled={isActive || hubPrimary}
+                        className={`text-[20px] ${isActive || hubPrimary ? "text-primary" : ""}`}
+                      />
+                      {isNotificationsNavItem(item.to) && unreadCount > 0 ? (
+                        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold leading-none text-on-error">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      ) : null}
+                    </span>
                     {item.label}
                   </>
                 )}
