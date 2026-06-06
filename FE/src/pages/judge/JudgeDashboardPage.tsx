@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "../../components/ui/Badge";
+import { ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -25,8 +26,8 @@ export function JudgeDashboardPage() {
       <PageHeader
         eyebrow="Giám khảo"
         title="Bảng cần chấm"
-        description="Giám khảo chỉ chấm đội thuộc bảng đã phân công. Chấm điểm chi tiết sẽ mở ở phase 7."
-        actions={<Badge tone={error ? "danger" : "success"}>{error ? "Lỗi tải dữ liệu" : "Dữ liệu hệ thống"}</Badge>}
+        description="Giám khảo chỉ chấm đội thuộc bảng đã phân công. Mở ma trận chấm điểm cho từng bảng."
+        actions={<Badge tone={error ? "danger" : "success"}>{error ? "Lỗi tải dữ liệu" : "Đã cập nhật"}</Badge>}
       />
 
       {error ? (
@@ -39,7 +40,7 @@ export function JudgeDashboardPage() {
         <StatCard
           label="Phân công"
           value={assignments.length}
-          helper="Từ API /judges/assignments"
+          helper="Bảng bạn được phân công chấm"
           icon="groups"
         />
         <StatCard
@@ -66,16 +67,33 @@ export function JudgeDashboardPage() {
                   <th className="px-md py-sm">Bảng</th>
                   <th className="px-md py-sm">Gán lúc</th>
                   <th className="px-md py-sm">Gán bởi</th>
+                  <th className="px-md py-sm" />
                 </tr>
               </thead>
               <tbody className="table-divider">
                 {assignments.map((assignment) => (
                   <tr key={assignment.id} className="font-body-sm text-on-surface">
-                    <td className="px-md py-md font-label-md">Bảng #{assignment.boardId}</td>
+                    <td className="px-md py-md font-label-md">
+                      {assignment.boardName ?? `Bảng #${assignment.boardId}`}
+                      {assignment.roundName ? (
+                        <span className="ml-1 font-body-sm text-on-surface-variant">
+                          · {assignment.roundName}
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="px-md py-md">
                       {new Date(assignment.createdAt).toLocaleString("vi-VN")}
                     </td>
                     <td className="px-md py-md">BTC #{assignment.createdBy}</td>
+                    <td className="px-md py-md">
+                      <ButtonLink
+                        to={`/judge/scoring?boardId=${assignment.boardId}`}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        Chấm điểm
+                      </ButtonLink>
+                    </td>
                   </tr>
                 ))}
               </tbody>

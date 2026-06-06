@@ -25,8 +25,8 @@ export function MentorDashboardPage() {
       <PageHeader
         eyebrow="Mentor"
         title="Bảng được phân công"
-        description="Theo dõi các bảng bạn phụ trách. Chi tiết đội và AI review sẽ mở khi backend bổ sung API."
-        actions={<Badge tone={error ? "danger" : "success"}>{error ? "Lỗi tải dữ liệu" : "Dữ liệu hệ thống"}</Badge>}
+        description="Theo dõi các bảng bạn phụ trách và hỗ trợ đội trong suốt cuộc thi."
+        actions={<Badge tone={error ? "danger" : "success"}>{error ? "Lỗi tải dữ liệu" : "Đã cập nhật"}</Badge>}
       />
 
       {error ? (
@@ -39,7 +39,7 @@ export function MentorDashboardPage() {
         <StatCard
           label="Phân công"
           value={assignments.length}
-          helper="Từ API /mentors/assignments"
+          helper="Bảng bạn được phân công hỗ trợ"
           icon="view_module"
         />
         <StatCard
@@ -71,7 +71,14 @@ export function MentorDashboardPage() {
               <tbody className="table-divider">
                 {assignments.map((assignment) => (
                   <tr key={assignment.id} className="font-body-sm text-on-surface">
-                    <td className="px-md py-md font-label-md">Bảng #{assignment.boardId}</td>
+                    <td className="px-md py-md font-label-md">
+                      {assignment.boardName ?? `Bảng #${assignment.boardId}`}
+                      {assignment.eventName ? (
+                        <span className="ml-1 font-body-sm text-on-surface-variant">
+                          · {assignment.eventName}
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="px-md py-md">
                       {new Date(assignment.createdAt).toLocaleString("vi-VN")}
                     </td>

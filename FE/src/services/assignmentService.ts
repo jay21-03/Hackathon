@@ -4,6 +4,11 @@ import type { ApiResponse } from "../types/api";
 export interface AssignmentResponse {
   id: number;
   boardId: number;
+  boardName?: string | null;
+  roundId?: number | null;
+  roundName?: string | null;
+  eventId?: number | null;
+  eventName?: string | null;
   assigneeId: number;
   createdAt: string;
   createdBy: number;
