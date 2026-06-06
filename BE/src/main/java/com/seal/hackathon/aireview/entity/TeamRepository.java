@@ -1,6 +1,10 @@
 package com.seal.hackathon.aireview.entity;
 
+import com.seal.hackathon.common.enums.SubmissionStatus;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -32,4 +36,10 @@ public class TeamRepository {
     private Long createdBy;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private SubmissionStatus status;
+
+    private OffsetDateTime submittedAt;
 }

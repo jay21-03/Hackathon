@@ -1,0 +1,4 @@
+# Integration tests: schema only — seeds live in db/seed (dev/local).
+spring:
+  flyway:
+    locations: classpath:db/migration
