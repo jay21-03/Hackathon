@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
@@ -50,6 +50,7 @@ export function RegistrationManagementPage() {
   const [search, setSearch] = useState("");
   const [detailTeam, setDetailTeam] = useState<TeamDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const detailPanelRef = useRef<HTMLElement>(null);
 
   function memberCount(team: TeamDetailResponse) {
     return team.members?.length ?? 0;
@@ -73,6 +74,9 @@ export function RegistrationManagementPage() {
     try {
       const team = await fetchTeam(teamId);
       setDetailTeam(team);
+      requestAnimationFrame(() => {
+        detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     } catch (err) {
       notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Không tải được chi tiết đội.")), "danger");
     } finally {
@@ -259,7 +263,10 @@ export function RegistrationManagementPage() {
       </section>
 
       {detailLoading || detailTeam ? (
-        <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
+        <section
+          ref={detailPanelRef}
+          className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg scroll-mt-24"
+        >
           <div className="flex items-center justify-between gap-sm">
             <h2 className="font-headline-sm text-on-surface">
               {detailLoading ? "Đang tải chi tiết…" : detailTeam?.name}
@@ -271,7 +278,7 @@ export function RegistrationManagementPage() {
           {detailTeam ? (
             <>
               <p className="font-body-sm text-on-surface-variant">
-                Mã đội #{detailTeam.id} · {getStatusLabel(detailTeam.status)}
+                {getStatusLabel(detailTeam.status)}
               </p>
               <ul className="divide-y divide-outline-variant/60 rounded-lg border border-outline-variant">
                 {(detailTeam.members ?? []).map((member) => (

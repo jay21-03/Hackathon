@@ -53,10 +53,15 @@ export function CreateEventPage() {
         registrationEndAt: toIsoFromLocal(parsed.data.registrationEndAt),
         maxTeams: parsed.data.maxTeams
       });
-      notify("Đã tạo cuộc thi.", "success");
+      notify("Đã tạo cuộc thi. Tiếp theo: chỉnh thông tin → tạo vòng/bảng → mở đăng ký.", "success");
       localStorage.setItem("seal.activeEventId", String(created.id));
       await invalidateAfterTeamMutation(queryClient);
-      navigate("/organizer/events/basic-info");
+      navigate("/organizer/events/basic-info", {
+        state: {
+          message:
+            "Cuộc thi mới đã tạo. Bước tiếp: cập nhật quota/ngày thi, tạo vòng & bảng, rồi mở đăng ký."
+        }
+      });
     } catch (error) {
       notify(resolveOrganizerApiError(error, "Không tạo được cuộc thi."), "danger");
     } finally {

@@ -7,6 +7,7 @@ export async function invalidateAfterTeamMutation(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: queryKeys.teams.all }),
     queryClient.invalidateQueries({ queryKey: queryKeys.events.all }),
     queryClient.invalidateQueries({ queryKey: queryKeys.myBoard.all }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.myProblem.all })
+    queryClient.invalidateQueries({ queryKey: queryKeys.myProblem.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.submission.all })
   ]);
 }

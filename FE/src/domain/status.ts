@@ -3,6 +3,7 @@ import type { BadgeTone } from "../components/ui/Badge";
 export type WorkflowStatus =
   | "PENDING"
   | "INVITED"
+  | "DECLINED"
   | "CONFIRMED"
   | "WAITLIST"
   | "REJECTED"
@@ -25,6 +26,7 @@ export type WorkflowStatus =
 const statusLabels: Record<WorkflowStatus, string> = {
   PENDING: "Chờ xác nhận",
   INVITED: "Đã gửi lời mời",
+  DECLINED: "Đã từ chối",
   CONFIRMED: "Đã xác nhận",
   WAITLIST: "Danh sách chờ",
   REJECTED: "Từ chối",
@@ -48,6 +50,7 @@ const statusLabels: Record<WorkflowStatus, string> = {
 const statusTones: Record<WorkflowStatus, BadgeTone> = {
   PENDING: "warning",
   INVITED: "active",
+  DECLINED: "danger",
   CONFIRMED: "success",
   WAITLIST: "warning",
   REJECTED: "danger",

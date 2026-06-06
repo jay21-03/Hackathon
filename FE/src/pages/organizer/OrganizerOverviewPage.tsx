@@ -9,6 +9,7 @@ import { RoundCountdown } from "../../components/ui/RoundCountdown";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useEventRound } from "../../hooks/useEventRound";
 import { useEventTeams } from "../../hooks/useEventTeams";
+import { enableRanking, enableScoring } from "../../config/features";
 import { fetchEventDetail } from "../../services/eventsApi";
 import { fetchEventRounds, fetchRoundBoards } from "../../services/contestApi";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
@@ -139,6 +140,32 @@ export function OrganizerOverviewPage() {
           </Link>
         </div>
       </section>
+
+      {boardCount > 0 && (enableScoring || enableRanking) ? (
+        <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+          <h2 className="font-headline-sm text-on-surface">Chấm điểm & kết quả</h2>
+          <p className="mt-xs font-body-sm text-on-surface-variant">
+            Các mục này nằm trên sidebar bên trái (nhóm «Chấm điểm» và «Kết quả»). Cuộn sidebar nếu chưa thấy.
+          </p>
+          <div className="mt-md flex flex-wrap gap-md font-label-md text-on-surface-variant">
+            {enableScoring ? (
+              <>
+                <span>Tiêu chí chấm</span>
+                <span>·</span>
+                <span>Tiến độ chấm</span>
+              </>
+            ) : null}
+            {enableScoring && enableRanking ? <span>·</span> : null}
+            {enableRanking ? (
+              <>
+                <span>Xếp hạng</span>
+                <span>·</span>
+                <span>Công bố kết quả</span>
+              </>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
