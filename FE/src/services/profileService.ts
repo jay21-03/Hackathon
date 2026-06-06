@@ -5,11 +5,14 @@ import { apiClient } from "./apiClient";
 export interface CurrentUserResponse {
   id: number;
   email: string;
+  username?: string | null;
   fullName: string;
   studentId?: string;
   university?: string;
   avatarUrl?: string;
   status?: string;
+  profileCompleted?: boolean;
+  hasPassword?: boolean;
   roles?: string[];
 }
 

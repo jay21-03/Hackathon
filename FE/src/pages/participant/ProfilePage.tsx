@@ -4,14 +4,21 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { profileSchema } from "../../domain/schemas";
+import { setMyPassword } from "../../services/authService";
 import { fetchMyProfile, updateMyProfile } from "../../services/profileService";
+import { mapAuthErrorMessage } from "../../utils/authErrors";
 
 export function ProfilePage() {
   const { notify } = useToast();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
   const [studentId, setStudentId] = useState("");
   const [university, setUniversity] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -25,6 +32,7 @@ export function ProfilePage() {
         if (!active) return;
         setFullName(result.fullName ?? "");
         setEmail(result.email ?? "");
+        setHasPassword(result.hasPassword === true);
         setStudentId(result.studentId ?? "");
         setUniversity(result.university ?? "");
       })
@@ -38,6 +46,35 @@ export function ProfilePage() {
       active = false;
     };
   }, []);
+
+  async function savePassword() {
+    if (!newPassword.trim()) {
+      setPasswordError("Nhập mật khẩu mới.");
+      return;
+    }
+    setPasswordError("");
+    setPasswordSaving(true);
+    try {
+      const wasChanging = hasPassword === true;
+      await setMyPassword({
+        currentPassword: wasChanging ? currentPassword : undefined,
+        newPassword
+      });
+      setHasPassword(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      notify(
+        wasChanging ? "Đã đổi mật khẩu." : "Đã đặt mật khẩu — có thể đăng nhập bằng email.",
+        "success"
+      );
+    } catch (error) {
+      setPasswordError(
+        mapAuthErrorMessage(error instanceof Error ? error.message : "Đặt mật khẩu thất bại.")
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
+  }
 
   async function saveProfile() {
     const parsed = profileSchema.safeParse({ fullName, email, studentId, university });
@@ -135,6 +172,68 @@ export function ProfilePage() {
             Hồ sơ này chỉ dùng cho liên hệ trong cuộc thi. Điểm và xếp hạng không bị ảnh hưởng bởi thông tin cá nhân.
           </p>
         </aside>
+      </section>
+
+      <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+        <h2 className="font-title-md text-on-surface">
+          {hasPassword === true ? "Đổi mật khẩu" : "Đặt mật khẩu"}
+        </h2>
+        <p className="mt-xs font-body-sm text-on-surface-variant">
+          {hasPassword === true
+            ? "Dùng khi bạn muốn đăng nhập bằng email thay vì Google."
+            : "Tài khoản Google chưa có mật khẩu — đặt tại đây để đăng nhập bằng email."}
+        </p>
+        {hasPassword === null ? (
+          <p className="mt-md font-body-sm text-on-surface-variant">Đang tải thông tin mật khẩu…</p>
+        ) : (
+        <div className="mt-md grid gap-md md:grid-cols-2">
+          {hasPassword === true ? (
+            <label className="grid gap-xs font-label-md text-on-surface">
+              Mật khẩu hiện tại
+              <input
+                type="password"
+                className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                autoComplete="current-password"
+                disabled={loading || passwordSaving}
+              />
+            </label>
+          ) : null}
+          <label className={`grid gap-xs font-label-md text-on-surface ${hasPassword === true ? "" : "md:col-span-2"}`}>
+            {hasPassword === true ? "Mật khẩu mới" : "Mật khẩu"}
+            <input
+              type="password"
+              className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              autoComplete="new-password"
+              disabled={loading || passwordSaving}
+            />
+          </label>
+        </div>
+        )}
+        {hasPassword !== null ? (
+          <>
+        <p className="mt-xs font-body-sm text-on-surface-variant">
+          ≥15 ký tự, hoặc ≥8 ký tự gồm số và chữ thường.
+        </p>
+        {passwordError ? <p className="mt-md font-body-sm text-error">{passwordError}</p> : null}
+        <Button
+          className="mt-lg"
+          disabled={
+            !newPassword.trim()
+            || (hasPassword === true && !currentPassword)
+            || passwordSaving
+            || loading
+          }
+          icon={<Icon name={passwordSaving ? "sync" : "lock"} />}
+          onClick={() => void savePassword()}
+        >
+          {passwordSaving ? "Đang lưu" : hasPassword === true ? "Đổi mật khẩu" : "Đặt mật khẩu"}
+        </Button>
+          </>
+        ) : null}
       </section>
     </div>
   );
