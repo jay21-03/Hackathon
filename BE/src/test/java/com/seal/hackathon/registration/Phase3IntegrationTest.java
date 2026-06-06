@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.authprofile.entity.User;
 import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.authprofile.security.JwtService;
+import com.seal.hackathon.support.IntegrationTestConfig;
 import com.seal.hackathon.common.enums.EventStatus;
 import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.enums.UserStatus;
@@ -50,11 +51,8 @@ class Phase3IntegrationTest {
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
-        registry.add("app.jwt.secret", () -> "integration-test-secret-which-is-long-enough-for-hs256");
+        IntegrationTestConfig.registerPostgres(
+                registry, postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
         registry.add("app.invitation.token-secret", () -> "integration-invite-secret-which-is-long-enough");
         registry.add("app.outbox.poll-delay-ms", () -> "60000");
     }
@@ -240,6 +238,52 @@ class Phase3IntegrationTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].status").value(TeamStatus.DISQUALIFIED.name()));
 
         assertThat(teamRepository.findById(teamId)).isPresent();
+    }
+
+    @Test
+    void captainCanInviteAdditionalMembersAfterRegistration() throws Exception {
+        String creatorJwt = jwtService.generateToken(creator, Set.of("PARTICIPANT"));
+        String inviteeJwt = jwtService.generateToken(invitee, Set.of("PARTICIPANT"));
+
+        String registerPayload = """
+                {
+                  "name": "Solo Then Grow",
+                  "members": [
+                    {"email": "creator@example.com", "fullName": "Creator User", "studentId": "S001", "university": "SEAL"}
+                  ]
+                }
+                """;
+
+        MvcResult registerResult = mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/events/{eventId}/teams", event.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + creatorJwt)
+                        .header("Idempotency-Key", "phase3-register-solo")
+                        .content(registerPayload))
+                .andExpect(MockMvcResultMatchers.status().isCreated())
+                .andReturn();
+
+        Long teamId = objectMapper.readTree(registerResult.getResponse().getContentAsString())
+                .path("data").path("id").asLong();
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/teams/{teamId}/members", teamId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + inviteeJwt)
+                        .content("""
+                                {"member":{"email":"invitee@example.com","fullName":"Invitee User"}}
+                                """))
+                .andExpect(MockMvcResultMatchers.status().isForbidden());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/teams/{teamId}/members", teamId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + creatorJwt)
+                        .content("""
+                                {"member":{"email":"invitee@example.com","fullName":"Invitee User"}}
+                                """))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.members.length()").value(2))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.status").value(TeamStatus.PENDING.name()));
+
+        assertThat(extractLatestInvitation(teamId).teamMemberId()).isPositive();
     }
 
         private InvitationSnapshot extractLatestInvitation(Long teamId) throws Exception {

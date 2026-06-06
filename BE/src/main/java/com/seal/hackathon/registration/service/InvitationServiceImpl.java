@@ -1,6 +1,9 @@
 package com.seal.hackathon.registration.service;
 
+import com.seal.hackathon.contest.entity.Event;
+import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.common.enums.TeamMemberStatus;
+import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.registration.entity.OutboxMessage;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.entity.TeamMember;
@@ -28,14 +31,20 @@ public class InvitationServiceImpl implements InvitationService {
 
     private final TeamMemberRepository teamMemberRepository;
     private final OutboxMessageRepository outboxMessageRepository;
+    private final EventRepository eventRepository;
+    private final NotificationService notificationService;
     private final String tokenSecret;
 
     public InvitationServiceImpl(
             TeamMemberRepository teamMemberRepository,
             OutboxMessageRepository outboxMessageRepository,
+            EventRepository eventRepository,
+            NotificationService notificationService,
             @Value("${app.invitation.token-secret:dev-invite-secret-change-me}") String tokenSecret) {
         this.teamMemberRepository = teamMemberRepository;
         this.outboxMessageRepository = outboxMessageRepository;
+        this.eventRepository = eventRepository;
+        this.notificationService = notificationService;
         this.tokenSecret = tokenSecret;
     }
 
@@ -44,6 +53,12 @@ public class InvitationServiceImpl implements InvitationService {
     public List<TeamMember> issueInvitations(Team team, List<TeamMember> members, Long actorId) {
         List<TeamMember> updatedMembers = new ArrayList<>();
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        String teamName = escapeJson(team.getName() == null || team.getName().isBlank() ? "Đội thi" : team.getName());
+        String eventName = eventRepository.findById(team.getEventId())
+                .map(Event::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .map(this::escapeJson)
+                .orElse("cuộc thi");
 
         for (TeamMember member : members) {
             if (Boolean.TRUE.equals(member.getContactPerson()) || member.getStatus() == TeamMemberStatus.CONFIRMED) {
@@ -72,7 +87,13 @@ public class InvitationServiceImpl implements InvitationService {
                     .aggregateType("TeamMember")
                     .aggregateId(saved.getId())
                     .eventType("InvitationSent")
-                    .payload("{\"teamId\": " + team.getId() + ", \"teamMemberId\": " + saved.getId() + ", \"email\": \"" + escapeJson(saved.getEmail()) + "\", \"inviteToken\": \"" + escapeJson(invitationToken) + "\", \"inviteExpiresAt\": \"" + now.plusDays(2) + "\"}")
+                    .payload("{\"teamId\": " + team.getId()
+                            + ", \"teamMemberId\": " + saved.getId()
+                            + ", \"teamName\": \"" + teamName + "\""
+                            + ", \"eventName\": \"" + eventName + "\""
+                            + ", \"email\": \"" + escapeJson(saved.getEmail()) + "\""
+                            + ", \"inviteToken\": \"" + escapeJson(invitationToken) + "\""
+                            + ", \"inviteExpiresAt\": \"" + now.plusDays(2) + "\"}")
                     .attempts(0)
                     .lastError(null)
                     .processed(false)
@@ -80,6 +101,7 @@ public class InvitationServiceImpl implements InvitationService {
                     .createdAt(now)
                     .build();
             outboxMessageRepository.save(outboxMessage);
+            notificationService.notifyTeamMemberInvited(team, saved);
         }
 
         return updatedMembers;

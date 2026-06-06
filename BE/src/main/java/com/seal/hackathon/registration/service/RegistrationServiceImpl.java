@@ -25,6 +25,7 @@ import com.seal.hackathon.registration.repository.IdempotencyKeyRepository;
 import com.seal.hackathon.registration.repository.OutboxMessageRepository;
 import com.seal.hackathon.registration.repository.TeamMemberRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
+import com.seal.hackathon.notification.service.NotificationService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.ZoneOffset;
@@ -57,6 +58,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final InvitationService invitationService;
     private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final ObjectMapper objectMapper;
+    private final NotificationService notificationService;
 
     public RegistrationServiceImpl(
             EventRepository eventRepository,
@@ -68,7 +70,8 @@ public class RegistrationServiceImpl implements RegistrationService {
             AuditLogRepository auditLogRepository,
             InvitationService invitationService,
             IdempotencyKeyRepository idempotencyKeyRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            NotificationService notificationService) {
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
         this.teamRepository = teamRepository;
@@ -79,6 +82,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         this.invitationService = invitationService;
         this.idempotencyKeyRepository = idempotencyKeyRepository;
         this.objectMapper = objectMapper;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -304,6 +308,8 @@ public class RegistrationServiceImpl implements RegistrationService {
         String payload = "{\"teamId\": " + team.getId() + ", \"teamStatus\": \"" + team.getStatus() + "\", \"reason\": " + (trimmedReason == null ? "null" : "\"" + escapeJson(trimmedReason) + "\"") + "}";
         appendLifecycleArtifacts(team, "TEAM_STATUS_UPDATED", "TeamStatusUpdated", actorUserId, actorEmail, now, payload);
 
+        notificationService.notifyTeamStatusChanged(team, status);
+
         return loadTeamDetail(team);
     }
 
@@ -432,6 +438,88 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         appendLifecycleArtifacts(team, "INVITATION_RESENT", "InvitationResent", actorUserId, actorEmail, now,
                 "{\"teamId\": " + team.getId() + ", \"teamMemberId\": " + member.getId() + ", \"teamStatus\": \"" + team.getStatus() + "\"}");
+
+        return loadTeamDetail(team);
+    }
+
+    @Override
+    @Transactional
+    public TeamDetailDto inviteTeamMember(Long teamId, MemberRequest memberRequest, Long actorUserId, String actorEmail, boolean organizer) {
+        if (memberRequest == null || memberRequest.getEmail() == null || memberRequest.getEmail().isBlank()) {
+            throw new BusinessException("Invalid email format");
+        }
+
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
+
+        if (!organizer && !Objects.equals(team.getContactUserId(), actorUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+
+        if (team.getStatus() == TeamStatus.REJECTED || team.getStatus() == TeamStatus.DISQUALIFIED) {
+            throw new BusinessException("Team registration is closed");
+        }
+
+        Event event = eventRepository.findById(team.getEventId())
+                .orElseThrow(() -> new BusinessException("Event not found"));
+
+        validateRegistrationWindow(event);
+
+        List<TeamMember> existingMembers = teamMemberRepository.findByTeamId(teamId);
+        if (existingMembers.size() >= event.getMaxTeamSize()) {
+            throw new BusinessException("Team has reached the maximum size of " + event.getMaxTeamSize());
+        }
+
+        String normalizedEmail = normalizeEmail(memberRequest.getEmail());
+        boolean alreadyOnTeam = existingMembers.stream()
+                .anyMatch(existing -> Objects.equals(normalizeEmail(existing.getEmail()), normalizedEmail));
+        if (alreadyOnTeam) {
+            throw new BusinessException("Email already belongs to this team");
+        }
+
+        if (teamMemberRepository.existsByEventIdAndEmailIgnoreCase(team.getEventId(), normalizedEmail)) {
+            throw new BusinessException("User/email already registered in another team for this event");
+        }
+
+        String fullName = memberRequest.getFullName();
+        if (fullName == null || fullName.isBlank()) {
+            fullName = normalizedEmail;
+        }
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        TeamMember member = TeamMember.builder()
+                .eventId(team.getEventId())
+                .teamId(team.getId())
+                .userId(null)
+                .email(normalizedEmail)
+                .fullName(fullName.trim())
+                .studentId(memberRequest.getStudentId())
+                .university(memberRequest.getUniversity())
+                .contactPerson(false)
+                .status(TeamMemberStatus.INVITED)
+                .inviteTokenHash(null)
+                .inviteNonce(null)
+                .inviteExpiresAt(null)
+                .inviteConsumedAt(null)
+                .invitedAt(now)
+                .confirmedAt(null)
+                .declinedAt(null)
+                .build();
+        member = teamMemberRepository.save(member);
+        teamMemberRepository.flush();
+
+        invitationService.issueInvitations(team, List.of(member), actorUserId);
+
+        if (team.getStatus() == TeamStatus.CONFIRMED || team.getStatus() == TeamStatus.WAITLIST) {
+            team.setStatus(TeamStatus.PENDING);
+            team.setConfirmedAt(null);
+            team.setRejectedReason(null);
+        }
+        team.setUpdatedAt(now);
+        teamRepository.save(team);
+
+        appendLifecycleArtifacts(team, "TEAM_MEMBER_INVITED", "TeamMemberInvited", actorUserId, actorEmail, now,
+                "{\"teamId\": " + team.getId() + ", \"teamMemberId\": " + member.getId() + ", \"email\": \"" + escapeJson(normalizedEmail) + "\", \"teamStatus\": \"" + team.getStatus() + "\"}");
 
         return loadTeamDetail(team);
     }

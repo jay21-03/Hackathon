@@ -1,5 +1,6 @@
 package com.seal.hackathon.registration.service;
 
+import com.seal.hackathon.registration.dto.MemberRequest;
 import com.seal.hackathon.registration.dto.RegisterTeamRequest;
 import com.seal.hackathon.registration.dto.TeamDetailDto;
 import java.util.List;
@@ -16,6 +17,8 @@ public interface RegistrationService {
     TeamDetailDto declineInvitation(String token, Long actorUserId, String actorEmail);
 
     TeamDetailDto resendInvitation(Long teamMemberId, Long actorUserId, String actorEmail, boolean organizer);
+
+    TeamDetailDto inviteTeamMember(Long teamId, MemberRequest member, Long actorUserId, String actorEmail, boolean organizer);
 
     List<TeamDetailDto> getMyTeams(Long eventId, Long userId);
 

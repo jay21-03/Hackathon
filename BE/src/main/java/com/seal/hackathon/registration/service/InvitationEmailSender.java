@@ -34,6 +34,42 @@ public class InvitationEmailSender {
         this.objectMapper = objectMapper;
     }
 
+    public void sendStaffFromOutboxPayload(String payload) {
+        if (!mailEnabled) {
+            log.warn("Mail integration is disabled (MAIL_ENABLED=false), skipping staff invitation email send");
+            return;
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(payload);
+            String recipientEmail = requiredText(root, "email");
+            String inviteToken = requiredText(root, "inviteToken");
+            String role = requiredText(root, "role");
+            String boardId = requiredText(root, "boardId");
+
+            String encodedToken = com.seal.hackathon.registration.service.InvitationTokenCodec.encodeForEmailLink(inviteToken);
+            String tokenQuery = URLEncoder.encode(encodedToken, StandardCharsets.UTF_8);
+            String acceptUrl = invitationBaseUrl + "/staff-invitations/accept?token=" + tokenQuery;
+            String declineUrl = invitationBaseUrl + "/staff-invitations/decline?token=" + tokenQuery;
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
+            helper.setFrom(fromEmail);
+            helper.setTo(recipientEmail);
+            helper.setSubject("[SEAL Hackathon] Loi moi " + ("JUDGE".equals(role) ? "giam khao" : "mentor"));
+            helper.setText(
+                    "<p>Ban duoc moi lam <strong>" + escapeHtml(role) + "</strong> cho bang #" + escapeHtml(boardId)
+                            + ".</p><p><a href=\"" + escapeHtml(acceptUrl) + "\">Dong y</a> | <a href=\""
+                            + escapeHtml(declineUrl) + "\">Tu choi</a></p>",
+                    true);
+            mailSender.send(message);
+            log.info("Staff invitation email sent to {} for boardId={}, role={}", recipientEmail, boardId, role);
+        } catch (Exception ex) {
+            log.error("Failed to send staff invitation email. payload={}, rootCause={}", payload, rootCauseMessage(ex), ex);
+            throw new IllegalStateException("Failed to send staff invitation email from outbox payload", ex);
+        }
+    }
+
     public void sendFromOutboxPayload(String payload) {
         if (!mailEnabled) {
             log.warn("Mail integration is disabled (MAIL_ENABLED=false), skipping invitation email send");
@@ -44,8 +80,8 @@ public class InvitationEmailSender {
             JsonNode root = objectMapper.readTree(payload);
             String recipientEmail = requiredText(root, "email");
             String inviteToken = requiredText(root, "inviteToken");
-            String teamId = requiredText(root, "teamId");
-            String teamMemberId = requiredText(root, "teamMemberId");
+            String teamName = optionalText(root, "teamName", "đội thi");
+            String eventName = optionalText(root, "eventName", "cuộc thi");
 
             String encodedToken = InvitationTokenCodec.encodeForEmailLink(inviteToken);
             String tokenQuery = URLEncoder.encode(encodedToken, StandardCharsets.UTF_8);
@@ -56,11 +92,13 @@ public class InvitationEmailSender {
             MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
             helper.setFrom(fromEmail);
             helper.setTo(recipientEmail);
-            helper.setSubject("[SEAL Hackathon] Thư mời tham gia đội thi");
-            helper.setText(buildEmailHtmlBody(teamId, teamMemberId, acceptUrl, declineUrl), true);
+            helper.setSubject("[SEAL Hackathon] Lời mời tham gia đội " + teamName);
+            helper.setText(buildEmailHtmlBody(teamName, eventName, acceptUrl, declineUrl), true);
 
             mailSender.send(message);
-            log.info("Invitation email sent to {} for teamId={}, teamMemberId={}", recipientEmail, teamId, teamMemberId);
+            Long teamId = root.hasNonNull("teamId") ? root.get("teamId").asLong() : null;
+            Long teamMemberId = root.hasNonNull("teamMemberId") ? root.get("teamMemberId").asLong() : null;
+            log.info("Invitation email sent to {} for team={}, member={}", recipientEmail, teamId, teamMemberId);
         } catch (Exception ex) {
             log.error("Failed to send invitation email. payload={}, rootCause={}", payload, rootCauseMessage(ex), ex);
             throw new IllegalStateException("Failed to send invitation email from outbox payload", ex);
@@ -79,14 +117,23 @@ public class InvitationEmailSender {
         return value;
     }
 
-        private String buildEmailHtmlBody(String teamId, String teamMemberId, String acceptUrl, String declineUrl) {
+    private String optionalText(JsonNode root, String fieldName, String fallback) {
+        JsonNode node = root.get(fieldName);
+        if (node == null || node.isNull()) {
+            return fallback;
+        }
+        String value = node.asText();
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+        private String buildEmailHtmlBody(String teamName, String eventName, String acceptUrl, String declineUrl) {
             return """
                                 <!doctype html>
                                 <html lang=\"vi\">
                                 <head>
                                     <meta charset=\"UTF-8\" />
                                     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
-                                    <title>Thu moi tham gia doi - SEAL Hackathon</title>
+                                    <title>Lời mời tham gia đội - SEAL Hackathon</title>
                                 </head>
                                 <body style=\"margin:0;padding:0;background:#f5f7fb;font-family:Arial,Helvetica,sans-serif;color:#1f2937;\">
                                     <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f5f7fb;padding:24px 12px;\">
@@ -96,16 +143,15 @@ public class InvitationEmailSender {
                                                     <tr>
                                                         <td style=\"background:linear-gradient(135deg,#0f766e,#155e75);padding:24px 28px;color:#ffffff;\">
                                                               <h1 style=\"margin:0;font-size:24px;line-height:1.3;\">Bạn được mời tham gia đội thi</h1>
-                                                            <p style=\"margin:8px 0 0 0;font-size:14px;opacity:0.95;\">SEAL Hackathon Management System</p>
+                                                            <p style=\"margin:8px 0 0 0;font-size:14px;opacity:0.95;\">SEAL Hackathon</p>
                                                         </td>
                                                     </tr>
 
                                                     <tr>
                                                         <td style=\"padding:24px 28px 8px 28px;font-size:15px;line-height:1.7;\">
                                                               <p style=\"margin:0 0 12px 0;\">Xin chào,</p>
-                                                              <p style=\"margin:0 0 12px 0;\">Bạn vừa nhận được lời mời vào một đội thi trong hệ thống <strong>SEAL Hackathon</strong>.</p>
-                                                            <p style=\"margin:0 0 4px 0;\"><strong>Team ID:</strong> __TEAM_ID__</p>
-                                                            <p style=\"margin:0 0 16px 0;\"><strong>Team Member ID:</strong> __TEAM_MEMBER_ID__</p>
+                                                              <p style=\"margin:0 0 12px 0;\">Bạn được mời tham gia đội <strong>__TEAM_NAME__</strong> tại cuộc thi <strong>__EVENT_NAME__</strong>.</p>
+                                                              <p style=\"margin:0 0 16px 0;\">Chọn một trong các tùy chọn bên dưới để xác nhận hoặc từ chối lời mời.</p>
                                                         </td>
                                                     </tr>
 
@@ -144,8 +190,8 @@ public class InvitationEmailSender {
                                 </body>
                                 </html>
                                 """
-                .replace("__TEAM_ID__", escapeHtml(teamId))
-                .replace("__TEAM_MEMBER_ID__", escapeHtml(teamMemberId))
+                .replace("__TEAM_NAME__", escapeHtml(teamName))
+                .replace("__EVENT_NAME__", escapeHtml(eventName))
                 .replace("__ACCEPT_URL__", escapeHtml(acceptUrl))
                 .replace("__DECLINE_URL__", escapeHtml(declineUrl));
     }

@@ -34,6 +34,8 @@ public class OutboxWorker {
 
                 if ("InvitationSent".equals(message.getEventType())) {
                     invitationEmailSender.sendFromOutboxPayload(message.getPayload());
+                } else if ("StaffInvitationSent".equals(message.getEventType())) {
+                    invitationEmailSender.sendStaffFromOutboxPayload(message.getPayload());
                 }
 
                 message.setAttempts(message.getAttempts() == null ? 1 : message.getAttempts() + 1);
