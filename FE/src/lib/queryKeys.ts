@@ -24,7 +24,42 @@ export const queryKeys = {
     all: ["myProblem"] as const,
     byEvent: (eventId: number | null) => [...queryKeys.myProblem.all, eventId] as const
   },
+  submission: {
+    all: ["submission"] as const,
+    my: (eventId: number | null) => [...queryKeys.submission.all, "my", eventId] as const,
+    byEvent: (eventId: number | null, boardId?: number | null) =>
+      [...queryKeys.submission.all, "event", eventId, boardId ?? "all"] as const
+  },
+  boards: {
+    all: ["boards"] as const,
+    byEvent: (eventId: number | null) => [...queryKeys.boards.all, "event", eventId] as const
+  },
+  scoring: {
+    all: ["scoring"] as const,
+    rubric: (roundId: number | null) => [...queryKeys.scoring.all, "rubric", roundId] as const,
+    progress: (boardId: number | null) => [...queryKeys.scoring.all, "progress", boardId] as const,
+    matrix: (boardId: number | null) => [...queryKeys.scoring.all, "matrix", boardId] as const
+  },
+  assignments: {
+    judge: () => ["assignments", "judge"] as const
+  },
   users: {
     admin: () => ["users", "admin"] as const
+  },
+  rankings: {
+    all: ["rankings"] as const,
+    board: (boardId: number | null) => [...queryKeys.rankings.all, "board", boardId] as const,
+    event: (eventId: number | null) => [...queryKeys.rankings.all, "event", eventId] as const,
+    public: (eventId: number | null) => [...queryKeys.rankings.all, "public", eventId] as const
+  },
+  notifications: {
+    all: ["notifications"] as const,
+    list: (page = 0, size = 50, type?: string) =>
+      [...queryKeys.notifications.all, "list", page, size, type ?? "all"] as const,
+    unreadCount: () => [...queryKeys.notifications.all, "unread-count"] as const
+  },
+  announcements: {
+    all: ["announcements"] as const,
+    byEvent: (eventId: number | null) => [...queryKeys.announcements.all, "event", eventId] as const
   }
 };

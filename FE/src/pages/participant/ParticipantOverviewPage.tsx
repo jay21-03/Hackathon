@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -12,6 +11,7 @@ import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useEventRound } from "../../hooks/useEventRound";
 import { useMyBoard } from "../../hooks/useMyBoard";
 import { useMyTeam } from "../../hooks/useMyTeam";
+import { enableRanking, enableSubmissions } from "../../config/features";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 export function ParticipantOverviewPage() {
@@ -115,7 +115,27 @@ export function ParticipantOverviewPage() {
             detail: "Mở theo lịch ban tổ chức cấu hình.",
             to: "/me/problem",
             state: !isConfirmed || !hasBoard ? "blocked" : "next"
-          }
+          },
+          ...(enableSubmissions
+            ? [
+                {
+                  label: "Bài nộp",
+                  detail: "Gửi link GitHub/GitLab trước deadline.",
+                  to: "/me/submission",
+                  state: !isConfirmed || !hasBoard ? ("blocked" as const) : ("next" as const)
+                }
+              ]
+            : []),
+          ...(enableRanking
+            ? [
+                {
+                  label: "Kết quả",
+                  detail: "Xem bảng xếp hạng sau khi BTC công bố.",
+                  to: "/me/results",
+                  state: !isConfirmed || !hasBoard ? ("blocked" as const) : ("next" as const)
+                }
+              ]
+            : [])
         ]}
       />
     </div>

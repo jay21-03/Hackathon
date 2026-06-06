@@ -7,6 +7,10 @@ const registrationErrorMap: Record<string, string> = {
   "Duplicate member email in request": "Trùng email thành viên trong form.",
   "Invalid email format": "Email thành viên không hợp lệ.",
   "Team size must be between": "Số thành viên không đúng quy định của cuộc thi.",
+  "Team has reached the maximum size of": "Đội đã đủ số thành viên tối đa.",
+  "Email already belongs to this team": "Email này đã có trong đội.",
+  "Team registration is closed": "Không thể thay đổi đội ở trạng thái hiện tại.",
+  "Cannot resend confirmed invitation": "Thành viên đã xác nhận, không gửi lại được.",
   "Idempotency key already used for a different request":
     "Yêu cầu trùng khóa. Hãy tải lại trang và thử lại.",
   "Duplicate request in progress": "Đang xử lý yêu cầu trước. Đợi vài giây rồi thử lại.",

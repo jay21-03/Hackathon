@@ -50,6 +50,23 @@ export async function resendTeamInvitation(teamMemberId: number) {
   return data.data;
 }
 
+export interface InviteTeamMemberPayload {
+  email: string;
+  fullName: string;
+  studentId?: string;
+  university?: string;
+}
+
+export async function inviteTeamMember(teamId: number, member: InviteTeamMemberPayload) {
+  const { data } = await apiClient.post<ApiResponse<TeamDetailResponse>>(`/v1/teams/${teamId}/members`, {
+    member
+  });
+  if (!data.data) {
+    throw new Error(data.message || "Mời thành viên thất bại");
+  }
+  return data.data;
+}
+
 export async function registerTeam(
   eventId: number,
   payload: RegisterTeamPayload,

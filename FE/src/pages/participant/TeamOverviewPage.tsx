@@ -1,7 +1,12 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { getAuthSession } from "../../auth/authSession";
 import { Badge } from "../../components/ui/Badge";
-import { ButtonLink } from "../../components/ui/Button";
+import { Button, ButtonLink } from "../../components/ui/Button";
+import { useToast } from "../../components/feedback/ToastProvider";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { TextField } from "../../components/ui/FormField";
 import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -9,10 +14,44 @@ import { ProgressBar } from "../../components/ui/ProgressBar";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
+import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
+import { inviteTeamMember, resendTeamInvitation } from "../../services/registrationService";
+import { getApiErrorMessage } from "../../utils/apiError";
+import { canRegisterForEvent, mapRegistrationErrorMessage } from "../../utils/registrationErrors";
+
+function buildMemberName(email: string) {
+  const local = email.split("@")[0] ?? "";
+  if (!local) return "Thành viên";
+  return local
+    .split(/[._-]+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function isTeamCaptain(
+  members: Array<{ contactPerson?: boolean; email: string }>,
+  sessionEmail: string
+) {
+  const normalizedSession = sessionEmail.trim().toLowerCase();
+  return members.some(
+    (member) =>
+      member.contactPerson && member.email.trim().toLowerCase() === normalizedSession
+  );
+}
+
+function canResendInvitation(status: string, contactPerson?: boolean) {
+  return !contactPerson && status !== "CONFIRMED";
+}
 
 export function TeamOverviewPage() {
+  const { notify } = useToast();
+  const queryClient = useQueryClient();
+  const session = getAuthSession();
   const { event, eventId, loading: eventLoading } = useActiveEvent();
-  const { team, loading: teamLoading, error } = useMyTeam(eventId);
+  const { team, loading: teamLoading, error, refetch } = useMyTeam(eventId);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [resendingId, setResendingId] = useState<number | null>(null);
 
   if (eventLoading || teamLoading) {
     return <ModuleSkeleton rows={4} />;
@@ -50,6 +89,61 @@ export function TeamOverviewPage() {
 
   const members = team.members ?? [];
   const confirmedMembers = members.filter((member) => member.status === "CONFIRMED").length;
+  const minTeamSize = 1;
+  const maxTeamSize = 5;
+  const registrationOpen = canRegisterForEvent(
+    event?.status,
+    event?.registrationStartAt,
+    event?.registrationEndAt
+  );
+  const teamLocked =
+    team.status === "REJECTED" || team.status === "DISQUALIFIED";
+  const isCaptain = isTeamCaptain(members, session.email);
+  const canManageInvites = isCaptain && registrationOpen && !teamLocked;
+  const canAddMember = canManageInvites && members.length < maxTeamSize;
+  const slotsRemaining = Math.max(maxTeamSize - members.length, 0);
+
+  async function submitInvite(event: React.FormEvent) {
+    event.preventDefault();
+    const trimmedEmail = inviteEmail.trim();
+    if (!trimmedEmail) {
+      notify("Nhập email thành viên cần mời.", "warning");
+      return;
+    }
+
+    setInviting(true);
+    try {
+      await inviteTeamMember(team.id, {
+        email: trimmedEmail,
+        fullName: buildMemberName(trimmedEmail)
+      });
+      setInviteEmail("");
+      await invalidateAfterTeamMutation(queryClient);
+      await refetch();
+      notify("Đã gửi lời mời thành viên.", "success");
+    } catch (err) {
+      const message = mapRegistrationErrorMessage(getApiErrorMessage(err, "Mời thành viên thất bại."));
+      notify(message, "danger");
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function resendMember(teamMemberId: number) {
+    setResendingId(teamMemberId);
+    try {
+      await resendTeamInvitation(teamMemberId);
+      await invalidateAfterTeamMutation(queryClient);
+      await refetch();
+      notify("Đã gửi lại lời mời.", "success");
+    } catch (err) {
+      const message = mapRegistrationErrorMessage(getApiErrorMessage(err, "Gửi lại lời mời thất bại."));
+      notify(message, "danger");
+    } finally {
+      setResendingId(null);
+    }
+  }
+
   const progressSteps = [
     { label: "Đăng ký đội", status: team.status, to: "/me/team" as const },
     {
@@ -77,16 +171,7 @@ export function TeamOverviewPage() {
             : "Quản lý thành viên, lời mời và trạng thái xác nhận của đội."
         }
         actions={
-          <>
-            <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
-            <ButtonLink
-              to="/team-invitations/status"
-              variant="secondary"
-              icon={<Icon name="mail" className="text-[18px]" />}
-            >
-              Xem lời mời
-            </ButtonLink>
-          </>
+          <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
         }
       />
 
@@ -96,7 +181,9 @@ export function TeamOverviewPage() {
             <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="font-headline-sm text-on-surface">Thành viên</h2>
-                <p className="font-body-sm text-on-surface-variant">Đội hợp lệ khi có 1–5 thành viên.</p>
+                <p className="font-body-sm text-on-surface-variant">
+                  Đội hợp lệ khi có {minTeamSize}–{maxTeamSize} thành viên.
+                </p>
               </div>
               <Badge tone="success">
                 {confirmedMembers}/{members.length} đã xác nhận
@@ -108,6 +195,39 @@ export function TeamOverviewPage() {
               />
             </div>
           </div>
+
+          {canAddMember ? (
+            <form
+              onSubmit={(event) => void submitInvite(event)}
+              className="border-b border-outline-variant bg-surface-container-low p-lg"
+            >
+              <h3 className="font-label-md text-on-surface">Mời thêm thành viên</h3>
+              <p className="mt-xs font-body-sm text-on-surface-variant">
+                Còn thêm được {slotsRemaining} thành viên. Lời mời gửi qua email.
+              </p>
+              <div className="mt-md flex flex-col gap-md sm:flex-row sm:items-end">
+                <TextField
+                  label="Email thành viên"
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  placeholder="email@fpt.edu.vn"
+                  className="flex-1"
+                />
+                <Button type="submit" loading={inviting} icon={<Icon name="person_add" />}>
+                  Gửi lời mời
+                </Button>
+              </div>
+            </form>
+          ) : isCaptain && !registrationOpen && !teamLocked ? (
+            <p className="border-b border-outline-variant bg-surface-container-low p-lg font-body-sm text-on-surface-variant">
+              Cuộc thi đã đóng đăng ký — không thể mời thêm thành viên.
+            </p>
+          ) : isCaptain && members.length >= maxTeamSize ? (
+            <p className="border-b border-outline-variant bg-surface-container-low p-lg font-body-sm text-on-surface-variant">
+              Đội đã đủ {maxTeamSize} thành viên.
+            </p>
+          ) : null}
 
           {members.length === 0 ? (
             <div className="p-lg">
@@ -122,16 +242,29 @@ export function TeamOverviewPage() {
               {members.map((member) => (
                 <div
                   key={member.id}
-                  className="grid gap-sm p-md md:grid-cols-[1fr_140px_120px]"
+                  className="grid gap-sm p-md md:grid-cols-[1fr_120px_120px_auto]"
                 >
                   <div className="min-w-0">
                     <p className="font-label-md text-on-surface">{member.fullName}</p>
                     <p className="truncate font-body-sm text-on-surface-variant">{member.email}</p>
                   </div>
                   <p className="font-body-sm text-on-surface-variant">
-                    {member.contactPerson ? "Người liên hệ" : "Thành viên"}
+                    {member.contactPerson ? "Đội trưởng" : "Thành viên"}
                   </p>
                   <Badge tone={getStatusTone(member.status)}>{getStatusLabel(member.status)}</Badge>
+                  {canManageInvites && canResendInvitation(member.status, member.contactPerson) ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={resendingId === member.id}
+                      onClick={() => void resendMember(member.id)}
+                    >
+                      Gửi lại
+                    </Button>
+                  ) : (
+                    <span />
+                  )}
                 </div>
               ))}
             </div>
@@ -141,8 +274,10 @@ export function TeamOverviewPage() {
         <aside className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
           <h2 className="font-headline-sm text-on-surface">Thông tin đội</h2>
           <div className="space-y-sm font-body-sm text-on-surface-variant">
-            <p>Mã đội: #{team.id}</p>
             <p>Trạng thái: {getStatusLabel(team.status)}</p>
+            <p>
+              Thành viên: {members.length}/{maxTeamSize}
+            </p>
             {team.confirmedAt ? (
               <p>Xác nhận lúc: {new Date(team.confirmedAt).toLocaleString("vi-VN")}</p>
             ) : null}
