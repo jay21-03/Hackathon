@@ -3,8 +3,13 @@ package com.seal.hackathon.authprofile.service;
 import com.seal.hackathon.authprofile.dto.AssignRoleRequest;
 import com.seal.hackathon.authprofile.dto.AuthResponse;
 import com.seal.hackathon.authprofile.dto.CurrentUserResponse;
+import com.seal.hackathon.authprofile.dto.LoginRequest;
+import com.seal.hackathon.authprofile.dto.RegisterRequest;
+import com.seal.hackathon.authprofile.dto.SetPasswordRequest;
 import com.seal.hackathon.authprofile.dto.UpdateProfileRequest;
 import com.seal.hackathon.authprofile.dto.UserSummaryResponse;
+import com.seal.hackathon.authprofile.security.AuthCredentialPolicy;
+import com.seal.hackathon.authprofile.security.EmailDomainPolicy;
 import com.seal.hackathon.authprofile.entity.User;
 import com.seal.hackathon.authprofile.entity.UserRole;
 import com.seal.hackathon.authprofile.repository.UserRepository;
@@ -14,6 +19,7 @@ import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.authprofile.security.GoogleIdTokenVerifierService;
 import com.seal.hackathon.authprofile.security.JwtService;
 import com.seal.hackathon.authprofile.security.VerifiedGoogleUser;
+import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.common.enums.SystemRole;
 import com.seal.hackathon.common.enums.UserStatus;
 import java.time.OffsetDateTime;
@@ -25,6 +31,7 @@ import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -40,7 +47,10 @@ public class AuthProfileService {
     private final GoogleIdTokenVerifierService googleIdTokenVerifierService;
     private final JwtService jwtService;
     private final CurrentUserProvider currentUserProvider;
+    private final PasswordEncoder passwordEncoder;
+    private final EmailDomainPolicy emailDomainPolicy;
     private final String bootstrapOrganizerEmail;
+    private final NotificationService notificationService;
 
     public AuthProfileService(
             UserRepository userRepository,
@@ -48,12 +58,18 @@ public class AuthProfileService {
             GoogleIdTokenVerifierService googleIdTokenVerifierService,
             JwtService jwtService,
             CurrentUserProvider currentUserProvider,
+            PasswordEncoder passwordEncoder,
+            EmailDomainPolicy emailDomainPolicy,
+            NotificationService notificationService,
             @Value("${app.auth.bootstrap-organizer-email:}") String bootstrapOrganizerEmailRaw) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
         this.googleIdTokenVerifierService = googleIdTokenVerifierService;
         this.jwtService = jwtService;
         this.currentUserProvider = currentUserProvider;
+        this.passwordEncoder = passwordEncoder;
+        this.emailDomainPolicy = emailDomainPolicy;
+        this.notificationService = notificationService;
         this.bootstrapOrganizerEmail = normalizeEmailNullable(bootstrapOrganizerEmailRaw);
     }
 
@@ -61,16 +77,90 @@ public class AuthProfileService {
     public AuthResponse googleLogin(String idToken) {
         VerifiedGoogleUser verifiedUser = googleIdTokenVerifierService.verify(idToken);
         User user = findOrCreateGoogleUser(verifiedUser);
+        return issueAuthResponse(user);
+    }
+
+    @Transactional
+    public AuthResponse register(RegisterRequest request) {
+        String email = normalizeEmailNullable(request.getEmail());
+        if (email == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "email must not be blank");
+        }
+        emailDomainPolicy.assertAllowed(email);
+        AuthCredentialPolicy.assertPassword(request.getPassword());
+
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS");
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        User user = userRepository.save(User.builder()
+                .email(email)
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .fullName(displayNameFromEmail(email))
+                .status(UserStatus.ACTIVE)
+                .profileCompleted(true)
+                .createdAt(now)
+                .updatedAt(now)
+                .build());
+
+        return issueAuthResponse(user);
+    }
+
+    @Transactional(readOnly = true)
+    public AuthResponse login(LoginRequest request) {
+        String email = normalizeEmailNullable(request.getEmail());
+        if (email == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "email must not be blank");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS"));
 
         if (user.getStatus() == UserStatus.DISABLED) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is disabled");
         }
+        if (!StringUtils.hasText(user.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "PASSWORD_NOT_SET");
+        }
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
+        }
 
-        ensureBootstrapOrganizerRole(user);
+        return issueAuthResponse(user);
+    }
+
+    @Transactional
+    public CurrentUserResponse setPassword(SetPasswordRequest request) {
+        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
+        User user = userRepository.findById(principal.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized"));
+
+        AuthCredentialPolicy.assertPassword(request.getNewPassword());
+
+        if (StringUtils.hasText(user.getPasswordHash())) {
+            if (!StringUtils.hasText(request.getCurrentPassword())
+                    || !passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CURRENT_PASSWORD");
+            }
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.setUpdatedAt(OffsetDateTime.now());
+        userRepository.save(user);
 
         Set<String> roles = loadRoles(user.getId());
-        String accessToken = jwtService.generateToken(user, roles);
+        return toCurrentUserResponse(user, roles);
+    }
 
+    private AuthResponse issueAuthResponse(User user) {
+        if (user.getStatus() == UserStatus.DISABLED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is disabled");
+        }
+        notificationService.backfillUserIdOnLogin(user.getId(), user.getEmail());
+        ensureBootstrapOrganizerRole(user);
+        Set<String> roles = loadRoles(user.getId());
+        String accessToken = jwtService.generateToken(user, roles);
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .tokenType("Bearer")
@@ -176,6 +266,7 @@ public class AuthProfileService {
                     .fullName(verifiedUser.getFullName())
                     .avatarUrl(verifiedUser.getAvatarUrl())
                     .status(UserStatus.ACTIVE)
+                    .profileCompleted(true)
                     .createdAt(now)
                     .updatedAt(now)
                     .build();
@@ -183,6 +274,7 @@ public class AuthProfileService {
         }
 
         boolean changed = false;
+
         if (!verifiedUser.getGoogleSub().equals(targetUser.getGoogleSub())) {
             targetUser.setGoogleSub(verifiedUser.getGoogleSub());
             changed = true;
@@ -244,13 +336,24 @@ public class AuthProfileService {
         return CurrentUserResponse.builder()
                 .id(user.getId())
                 .email(user.getEmail())
+                .username(user.getUsername())
                 .fullName(user.getFullName())
                 .studentId(user.getStudentId())
                 .university(user.getUniversity())
                 .avatarUrl(user.getAvatarUrl())
                 .status(user.getStatus())
+                .profileCompleted(user.getProfileCompleted())
+                .hasPassword(StringUtils.hasText(user.getPasswordHash()))
                 .roles(roles)
                 .build();
+    }
+
+    private String displayNameFromEmail(String email) {
+        int at = email.indexOf('@');
+        if (at > 0) {
+            return email.substring(0, at);
+        }
+        return email;
     }
 
     private String normalizeEmailNullable(String email) {

@@ -10,7 +10,10 @@ import lombok.Data;
 public class CurrentUserResponse {
     private Long id;
     private String email;
+    private String username;
     private String fullName;
+    private Boolean profileCompleted;
+    private Boolean hasPassword;
     private String studentId;
     private String university;
     private String avatarUrl;

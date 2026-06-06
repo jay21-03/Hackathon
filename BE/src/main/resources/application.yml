@@ -17,7 +17,7 @@ spring:
         format_sql: true
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/migration,classpath:db/seed
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
@@ -40,9 +40,11 @@ app:
     secret: ${JWT_SECRET:change_me}
     expiration-minutes: ${JWT_EXPIRATION_MINUTES:1440}
   auth:
-    google-client-id: ${GOOGLE_CLIENT_ID:}
+    # Public OAuth client id (also in FE VITE_GOOGLE_CLIENT_ID). Override via GOOGLE_CLIENT_ID in prod.
+    google-client-id: ${GOOGLE_CLIENT_ID:375393891941-invk4kstp7pq1r1n2c9qspupn6hen025.apps.googleusercontent.com}
     allowed-email-domains: ${ALLOWED_EMAIL_DOMAINS:}
     bootstrap-organizer-email: ${APP_BOOTSTRAP_ORGANIZER_EMAIL:${DEV_BOOTSTRAP_ORGANIZER_EMAIL:}}
+    password-reset-expiration-minutes: ${PASSWORD_RESET_EXPIRATION_MINUTES:60}
     dev-auth-enabled: ${DEV_AUTH_ENABLED:false}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}

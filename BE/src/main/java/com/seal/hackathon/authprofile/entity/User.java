@@ -32,7 +32,12 @@ public class User {
 
     private String googleSub;
     private String passwordHash;
+    @Column(unique = true)
+    private String username;
     private String fullName;
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean profileCompleted = true;
     private String studentId;
     private String university;
     private String avatarUrl;
