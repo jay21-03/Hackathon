@@ -5,6 +5,7 @@ import { queryKeys } from "./queryKeys";
 export async function invalidateAfterBoardMutation(queryClient: QueryClient) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.myBoard.all }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.myProblem.all })
+    queryClient.invalidateQueries({ queryKey: queryKeys.myProblem.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.submission.all })
   ]);
 }

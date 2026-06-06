@@ -39,6 +39,7 @@ import {
 } from "../../services/contestApi";
 import { fetchEventTeams, type TeamDetailResponse } from "../../services/registrationService";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
+import { isRoundRunning, pickActiveRound } from "../../utils/pickActiveRound";
 
 interface BoardWithSlots {
   board: BoardResponse;
@@ -64,6 +65,31 @@ function defaultRoundTimes(startDate: string, endDate: string) {
   const start = startDate ? `${startDate}T08:00` : "";
   const end = endDate ? `${endDate}T17:00` : "";
   return { start, end };
+}
+
+function suggestNextRound(rounds: RoundResponse[]) {
+  const maxOrder = rounds.reduce((max, round) => Math.max(max, round.roundOrder), 0);
+  const nextOrder = maxOrder + 1;
+  const lastRound = [...rounds].sort((a, b) => b.roundOrder - a.roundOrder)[0];
+  const hasFinal = rounds.some((round) => round.roundType === "FINAL");
+
+  let startAt = "";
+  let endAt = "";
+  if (lastRound?.endAt) {
+    const lastEnd = new Date(lastRound.endAt);
+    const nextStart = new Date(lastEnd.getTime() + 60 * 60 * 1000);
+    const nextEnd = new Date(lastEnd.getTime() + 24 * 60 * 60 * 1000);
+    startAt = toLocalInput(nextStart.toISOString());
+    endAt = toLocalInput(nextEnd.toISOString());
+  }
+
+  return {
+    name: !hasFinal && nextOrder >= 2 ? "Chung kết" : `Vòng ${nextOrder}`,
+    roundType: (!hasFinal && nextOrder >= 2 ? "FINAL" : "GROUP_STAGE") as "GROUP_STAGE" | "FINAL",
+    roundOrder: nextOrder,
+    startAt,
+    endAt
+  };
 }
 
 export function BoardManagementPage() {
@@ -102,6 +128,7 @@ export function BoardManagementPage() {
   const [boardEdits, setBoardEdits] = useState<
     Record<number, { name: string; boardOrder: number; description: string }>
   >({});
+  const [showAddRound, setShowAddRound] = useState(false);
 
   const teamMap = useMemo(
     () => Object.fromEntries(teams.map((team) => [team.id, team.name])),
@@ -159,6 +186,8 @@ export function BoardManagementPage() {
     () => rounds.find((round) => round.id === selectedRoundId) ?? null,
     [rounds, selectedRoundId]
   );
+
+  const activeRound = useMemo(() => pickActiveRound(rounds), [rounds]);
 
   useEffect(() => {
     if (!selectedRound) return;
@@ -240,6 +269,7 @@ export function BoardManagementPage() {
         endAt: toIsoFromLocal(roundEndAt)
       });
       setSelectedRoundId(created.id);
+      setShowAddRound(false);
       await refreshRounds();
       notify("Đã tạo vòng thi. Tiếp theo: thêm bảng bên dưới.", "success");
       scrollToAnchor("#board-step-board");
@@ -248,6 +278,17 @@ export function BoardManagementPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function openAddRoundForm() {
+    const next = suggestNextRound(rounds);
+    setRoundName(next.name);
+    setRoundType(next.roundType);
+    setRoundOrder(next.roundOrder);
+    setRoundStartAt(next.startAt);
+    setRoundEndAt(next.endAt);
+    setShowAddRound(true);
+    scrollToAnchor("#board-step-round");
   }
 
   async function handleCreateBoard() {
@@ -415,10 +456,18 @@ export function BoardManagementPage() {
       const result = await randomAssignTeams(selectedRoundId);
       await loadBoardData(selectedRoundId);
       await invalidateAfterBoardMutation(queryClient);
-      notify(
-        `Đã phân công ${result?.assignedCount ?? 0} đội. Bạn có thể sang Cấu hình đề thi (nút ở panel phía trên).`,
-        "success"
-      );
+      const count = result?.assignedCount ?? 0;
+      if (count === 0) {
+        notify(
+          "Không gán thêm đội nào — kiểm tra: có đội CONFIRMED chưa gán slot và còn slot trống.",
+          "warning"
+        );
+      } else {
+        notify(
+          `Đã phân công ${count} đội. Bạn có thể sang Cấu hình đề thi (nút ở panel phía trên).`,
+          "success"
+        );
+      }
     } catch (err) {
       notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Phân công ngẫu nhiên thất bại.")), "danger");
     } finally {
@@ -495,6 +544,8 @@ export function BoardManagementPage() {
                 {rounds.map((round) => (
                   <option key={round.id} value={round.id}>
                     {round.name}
+                    {activeRound?.id === round.id && isRoundRunning(round) ? " · đang diễn ra" : ""}
+                    {activeRound?.id === round.id && !isRoundRunning(round) ? " · vòng hiện tại" : ""}
                   </option>
                 ))}
               </select>
@@ -530,59 +581,92 @@ export function BoardManagementPage() {
         id="board-step-round"
         className="scroll-mt-24 rounded-xl border border-outline-variant bg-surface-container p-lg space-y-md"
       >
-        <h2 className="font-headline-sm text-on-surface">Thiết lập cấu trúc — Vòng thi</h2>
-        {rounds.length === 0 ? (
-          <div className="grid gap-md md:grid-cols-2 lg:grid-cols-3">
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Tên vòng
-              <input className="form-input" value={roundName} onChange={(e) => setRoundName(e.target.value)} />
-            </label>
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Loại vòng
-              <select
-                className="form-input"
-                value={roundType}
-                onChange={(e) => setRoundType(e.target.value as "GROUP_STAGE" | "FINAL")}
+        <div className="flex flex-wrap items-center justify-between gap-sm">
+          <h2 className="font-headline-sm text-on-surface">Thiết lập cấu trúc — Vòng thi</h2>
+          {rounds.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-sm">
+              {activeRound ? (
+                <Badge tone={isRoundRunning(activeRound) ? "success" : "neutral"}>
+                  Vòng hiện tại: {activeRound.name}
+                  {isRoundRunning(activeRound) ? " (đang diễn ra)" : ""}
+                </Badge>
+              ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                icon={<Icon name="add" />}
+                disabled={busy || showAddRound}
+                onClick={openAddRoundForm}
               >
-                <option value="GROUP_STAGE">Vòng bảng</option>
-                <option value="FINAL">Chung kết</option>
-              </select>
-            </label>
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Thứ tự
-              <input
-                type="number"
-                min={1}
-                className="form-input"
-                value={roundOrder}
-                onChange={(e) => setRoundOrder(Number(e.target.value))}
-              />
-            </label>
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Bắt đầu
-              <input
-                type="datetime-local"
-                className="form-input"
-                value={roundStartAt}
-                onChange={(e) => setRoundStartAt(e.target.value)}
-              />
-            </label>
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Kết thúc
-              <input
-                type="datetime-local"
-                className="form-input"
-                value={roundEndAt}
-                onChange={(e) => setRoundEndAt(e.target.value)}
-              />
-            </label>
-            <div className="flex items-end">
-              <Button type="button" disabled={busy} onClick={handleCreateRound}>
-                Tạo vòng thi
+                Thêm vòng mới
               </Button>
             </div>
+          ) : null}
+        </div>
+        {rounds.length === 0 || showAddRound ? (
+          <div className="rounded-lg border border-outline-variant bg-surface-container-low p-md space-y-md">
+            {showAddRound ? (
+              <p className="font-label-md text-on-surface">Tạo vòng mới</p>
+            ) : null}
+            <div className="grid gap-md md:grid-cols-2 lg:grid-cols-3">
+              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
+                Tên vòng
+                <input className="form-input" value={roundName} onChange={(e) => setRoundName(e.target.value)} />
+              </label>
+              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
+                Loại vòng
+                <select
+                  className="form-input"
+                  value={roundType}
+                  onChange={(e) => setRoundType(e.target.value as "GROUP_STAGE" | "FINAL")}
+                >
+                  <option value="GROUP_STAGE">Vòng bảng</option>
+                  <option value="FINAL">Chung kết</option>
+                </select>
+              </label>
+              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
+                Thứ tự
+                <input
+                  type="number"
+                  min={1}
+                  className="form-input"
+                  value={roundOrder}
+                  onChange={(e) => setRoundOrder(Number(e.target.value))}
+                />
+              </label>
+              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
+                Bắt đầu
+                <input
+                  type="datetime-local"
+                  className="form-input"
+                  value={roundStartAt}
+                  onChange={(e) => setRoundStartAt(e.target.value)}
+                />
+              </label>
+              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
+                Kết thúc
+                <input
+                  type="datetime-local"
+                  className="form-input"
+                  value={roundEndAt}
+                  onChange={(e) => setRoundEndAt(e.target.value)}
+                />
+              </label>
+              <div className="flex flex-wrap items-end gap-sm">
+                <Button type="button" disabled={busy} onClick={handleCreateRound}>
+                  {showAddRound ? "Tạo vòng" : "Tạo vòng thi"}
+                </Button>
+                {showAddRound ? (
+                  <Button type="button" variant="ghost" disabled={busy} onClick={() => setShowAddRound(false)}>
+                    Hủy
+                  </Button>
+                ) : null}
+              </div>
+            </div>
           </div>
-        ) : (
+        ) : null}
+        {rounds.length > 0 ? (
           <div className="space-y-md">
             {selectedRoundId ? (
               <div className="rounded-lg border border-outline-variant bg-surface-container-low p-md space-y-md">
@@ -671,7 +755,7 @@ export function BoardManagementPage() {
               </Button>
             </div>
           </div>
-        )}
+        ) : null}
       </section>
 
       {rounds.length > 0 ? (
@@ -774,14 +858,14 @@ export function BoardManagementPage() {
               description: board.description ?? ""
             };
             return (
-            <article key={board.id} className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-              <div className="flex items-start justify-between gap-md">
-                <div>
-                  <h2 className="font-headline-sm text-on-surface">{board.name}</h2>
+          <article key={board.id} className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+            <div className="flex items-start justify-between gap-md">
+              <div>
+                <h2 className="font-headline-sm text-on-surface">{board.name}</h2>
                   <p className="font-body-sm text-on-surface-variant">Bảng #{board.id}</p>
-                </div>
-                <Badge tone={getStatusTone(board.status)}>{getStatusLabel(board.status)}</Badge>
               </div>
+              <Badge tone={getStatusTone(board.status)}>{getStatusLabel(board.status)}</Badge>
+            </div>
 
               <div className="mt-md grid gap-sm sm:grid-cols-2">
                 <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant sm:col-span-2">
@@ -923,11 +1007,11 @@ export function BoardManagementPage() {
                     </div>
                   ))
                 )}
-              </div>
-            </article>
+            </div>
+          </article>
             );
           })}
-        </section>
+      </section>
       )}
 
       {boards.length > 0 && allSlots.length === 0 ? (

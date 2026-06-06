@@ -1,19 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchPublicEventRounds, fetchRoundCountdown, type RoundResponse } from "../services/contestApi";
+import { fetchPublicEventRounds, fetchRoundCountdown } from "../services/contestApi";
 import { queryKeys } from "../lib/queryKeys";
 import { getApiErrorMessage } from "../utils/apiError";
+import { pickActiveRound } from "../utils/pickActiveRound";
 
 export function useEventRound(eventId: number | null) {
   const roundsQuery = useQuery({
     queryKey: queryKeys.rounds.publicByEvent(eventId),
-    queryFn: async (): Promise<RoundResponse | null> => {
-      const rounds = await fetchPublicEventRounds(eventId!);
-      return rounds[0] ?? null;
-    },
+    queryFn: () => fetchPublicEventRounds(eventId!),
     enabled: Boolean(eventId)
   });
 
-  const round = roundsQuery.data ?? null;
+  const rounds = roundsQuery.data ?? [];
+  const round = pickActiveRound(rounds);
   const roundId = round?.id ?? null;
 
   const countdownQuery = useQuery({
@@ -24,6 +23,7 @@ export function useEventRound(eventId: number | null) {
   });
 
   return {
+    rounds,
     round,
     roundId,
     countdown: countdownQuery.data ?? null,

@@ -66,7 +66,7 @@ export function useBoardSetupProgress(
     ];
 
     let nextAction: NextStepAction;
-    let completedMacroIndex = 0;
+    let completedMacroIndex: number;
 
     if (!hasRounds) {
       nextAction = {
