@@ -4,6 +4,9 @@ interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string;
   readonly VITE_GOOGLE_CLIENT_ID: string;
   readonly VITE_ENABLE_ROLE_SWITCHER?: string;
+  readonly VITE_ENABLE_PHASE_7?: string;
+  readonly VITE_ENABLE_SCORING?: string;
+  readonly VITE_ENABLE_SUBMISSIONS?: string;
 }
 
 interface ImportMeta {

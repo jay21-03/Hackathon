@@ -40,7 +40,7 @@ export function ShellLayout({ sidebar, children, drawerTitle = "Menu" }: ShellLa
         {sidebar}
       </aside>
 
-      <div className="flex min-h-screen w-full min-w-0 flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col md:pl-[264px]">
         <header className="sticky top-0 z-30 flex items-center gap-sm border-b border-outline-variant/60 bg-surface/95 px-page py-sm backdrop-blur-xl md:hidden">
           <button
             type="button"
@@ -53,7 +53,7 @@ export function ShellLayout({ sidebar, children, drawerTitle = "Menu" }: ShellLa
           <p className="truncate font-label-md text-on-surface">{drawerTitle}</p>
         </header>
 
-        <main className="min-h-0 w-full min-w-0 flex-1 md:ml-[264px]">
+        <main className="min-h-0 min-w-0 flex-1">
           <div className="mx-auto min-w-0 max-w-workspace space-y-lg overflow-x-hidden p-page md:p-margin-desktop">
             <div className="pointer-events-none fixed inset-0 -z-10 bg-grid-pattern opacity-80" />
             {children}

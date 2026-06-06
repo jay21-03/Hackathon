@@ -38,7 +38,7 @@ export function OrganizerApiGate() {
           description={
             error
               ? "Không kiểm tra được quyền tài khoản. Hãy đăng nhập lại."
-              : "Tài khoản Google hiện tại chưa được gán vai trò ORGANIZER trên hệ thống. Vào Quản lý người dùng (bằng tài khoản admin) để gán quyền, sau đó đăng xuất và đăng nhập lại."
+              : "Tài khoản hiện tại chưa có quyền ban tổ chức. Liên hệ quản trị viên để được gán quyền, sau đó đăng xuất và đăng nhập lại."
           }
         />
         <div className="flex flex-wrap gap-sm">
@@ -49,7 +49,7 @@ export function OrganizerApiGate() {
         </div>
         {import.meta.env.DEV && import.meta.env.VITE_ENABLE_ROLE_SWITCHER === "true" ? (
           <p className="rounded-lg border border-warning/40 bg-warning-container/30 p-md font-body-sm text-on-surface">
-            Dev: đổi vai trò UI (Role Switcher) không thay JWT — cần role ORGANIZER thật trong database.
+            Dev: đổi vai trò trên giao diện không thay quyền thật — cần gán quyền ban tổ chức trong hệ thống.
           </p>
         ) : null}
       </div>

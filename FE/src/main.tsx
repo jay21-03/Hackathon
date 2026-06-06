@@ -4,7 +4,10 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AppRouter } from "./app/AppRouter";
 import { ToastProvider } from "./components/feedback/ToastProvider";
 import { QueryProvider } from "./providers/QueryProvider";
+import { installExtensionConsoleGuard } from "./utils/extensionConsoleGuard";
 import "./index.css";
+
+installExtensionConsoleGuard();
 
 // Monkey-patch localStorage.setItem to emit storage and custom events
 // so in-window calls (e.g., test page.evaluate) are observed by app listeners.
@@ -49,7 +52,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <GoogleOAuthProvider clientId={googleClientId || "missing-client-id.apps.googleusercontent.com"}>
     <QueryProvider>
       <ToastProvider>
-        <BrowserRouter>
+        <BrowserRouter
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true
+          }}
+        >
           <AppRouter />
         </BrowserRouter>
       </ToastProvider>

@@ -1,8 +1,9 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { setAuthenticated } from "../../auth/authSession";
 import { Icon } from "../ui/Icon";
-import { getVisibleNavItems, navItemUsesEnd, type NavItem } from "../../config/navigation";
+import { getVisibleNavItems, isNotificationsNavItem, navItemUsesEnd, type NavItem } from "../../config/navigation";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useUnreadNotificationCount } from "../../hooks/useNotifications";
 import { RoleSwitcher } from "../auth/RoleSwitcher";
 import { useToast } from "../feedback/ToastProvider";
 import { ButtonLink, buttonClassName } from "../ui/Button";
@@ -29,6 +30,8 @@ export function WorkspaceShell({
   const location = useLocation();
   const { event } = useActiveEvent({ autoSelectFirst: showActiveEventSubtitle });
   const visibleNavItems = getVisibleNavItems(navItems);
+  const unreadQuery = useUnreadNotificationCount();
+  const unreadCount = unreadQuery.data ?? 0;
   const resolvedSubtitle = showActiveEventSubtitle
     ? event?.name ?? "Chọn cuộc thi trong sidebar"
     : subtitle;
@@ -45,7 +48,7 @@ export function WorkspaceShell({
     <button
       type="button"
       onClick={() => {
-        notify(`${primaryAction.label} sẽ khả dụng khi backend bổ sung API.`, "warning");
+        notify(`${primaryAction.label} chưa khả dụng.`, "warning");
       }}
       className={buttonClassName({ className: "w-full" })}
     >
@@ -92,11 +95,18 @@ export function WorkspaceShell({
               >
                 {({ isActive }) => (
                   <>
-                    <Icon
-                      name={item.icon}
-                      filled={isActive}
-                      className={`text-[20px] ${isActive ? "text-primary" : ""}`}
-                    />
+                    <span className="relative inline-flex shrink-0">
+                      <Icon
+                        name={item.icon}
+                        filled={isActive}
+                        className={`text-[20px] ${isActive ? "text-primary" : ""}`}
+                      />
+                      {isNotificationsNavItem(item.to) && unreadCount > 0 ? (
+                        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold leading-none text-on-error">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      ) : null}
+                    </span>
                     {item.label}
                   </>
                 )}
