@@ -5,6 +5,7 @@ import { apiClient } from "./apiClient";
 export interface EventDetail {
   id: number;
   name: string;
+  description?: string | null;
   status: string;
   startDate: string;
   endDate: string;

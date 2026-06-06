@@ -73,7 +73,7 @@ export function InvitationStatusPage() {
         <EmptyState
           icon="groups"
           title="Chưa có thành viên"
-          description="Đăng ký đội hoặc mời thành viên từ trang Đội của tôi."
+          description="Đăng ký đội hoặc mời thêm thành viên từ trang Đội của tôi (đội trưởng)."
         />
       ) : (
       <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">

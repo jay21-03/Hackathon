@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "../../components/ui/Badge";
 import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
@@ -9,6 +10,9 @@ import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { fetchEventDetail, type EventDetail } from "../../services/eventsApi";
 import type { EventListItem } from "../../types/entities";
+import { enableAnnouncements, enableRanking } from "../../config/features";
+import { queryKeys } from "../../lib/queryKeys";
+import { fetchPublishedAnnouncements } from "../../services/announcementService";
 import { rememberActiveEvent } from "../../utils/enterEvent";
 import {
   canRegisterForEvent,
@@ -40,6 +44,12 @@ export function EventDetailPage() {
   const { team, loading: teamLoading } = useMyTeam(
     authenticated && session.role === "participant" ? eventIdNum : null
   );
+
+  const announcementsQuery = useQuery({
+    queryKey: queryKeys.announcements.byEvent(eventIdNum),
+    queryFn: () => fetchPublishedAnnouncements(eventIdNum!),
+    enabled: enableAnnouncements && eventIdNum != null && !Number.isNaN(eventIdNum)
+  });
 
   useEffect(() => {
     if (!eventIdParam) return;
@@ -104,6 +114,7 @@ export function EventDetailPage() {
     event.registrationStartAt,
     event.registrationEndAt
   );
+  const publishedAnnouncements = announcementsQuery.data ?? [];
 
   function handlePrimaryClick() {
     if (eventIdNum != null && !Number.isNaN(eventIdNum)) {
@@ -128,6 +139,9 @@ export function EventDetailPage() {
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-md">
           <div>
             <h1 className="font-headline-lg text-on-surface">{event.name}</h1>
+            {event.description ? (
+              <p className="font-body-md text-on-surface-variant mt-sm whitespace-pre-wrap">{event.description}</p>
+            ) : null}
             <p className="font-body-md text-on-surface-variant mt-xs">
               {team
                 ? `Bạn đã có đội trong cuộc thi này: ${team.name} (${getStatusLabel(team.status)}).`
@@ -219,8 +233,32 @@ export function EventDetailPage() {
               Vào {roleLabel}
             </Link>
           )}
+          {enableRanking ? (
+            <Link
+              to={`/events/${event.id}/results`}
+              className="inline-flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-container-high"
+            >
+              <Icon name="leaderboard" className="text-[18px]" />
+              Xem kết quả
+            </Link>
+          ) : null}
         </div>
       </article>
+
+      {enableAnnouncements && publishedAnnouncements.length > 0 ? (
+        <section className="space-y-sm rounded-xl border border-outline-variant bg-surface p-lg shadow-sm">
+          <h2 className="font-headline-sm text-on-surface">Thông báo từ ban tổ chức</h2>
+          <ul className="space-y-sm">
+            {publishedAnnouncements.map((item) => (
+              <li key={item.id} className="rounded-lg border border-outline-variant/50 bg-surface-container-low p-md">
+                <p className="font-headline-sm text-on-surface">{item.title}</p>
+                <p className="mt-xs font-label-sm text-outline">{formatDateTime(item.publishedAt ?? item.createdAt)}</p>
+                <p className="mt-sm whitespace-pre-wrap font-body-md text-on-surface-variant">{item.content}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }
