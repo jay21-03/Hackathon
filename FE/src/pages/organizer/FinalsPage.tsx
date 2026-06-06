@@ -6,7 +6,6 @@ export function FinalsPage() {
       eyebrow="Chung kết"
       title="Vòng chung kết"
       description="Chọn đội vào vòng chung kết và quản lý bảng CK."
-      beNote="BE: API finals/advancement (chua co)."
     />
   );
 }

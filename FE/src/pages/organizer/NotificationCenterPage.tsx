@@ -1,12 +1,11 @@
-import { FeatureUnavailable } from "../../components/feedback/FeatureUnavailable";
+import { NotificationsPage } from "../shared/NotificationsPage";
 
 export function NotificationCenterPage() {
   return (
-    <FeatureUnavailable
-      eyebrow="Thông báo"
+    <NotificationsPage
+      eyebrow="Ban tổ chức"
       title="Trung tâm thông báo"
-      description="Lịch sử và trạng thái gửi thông báo."
-      beNote="BE phase 9: GET/POST /api/v1/notifications."
+      description="Thông báo gửi tới tài khoản của bạn (lời mời, công bố kết quả, …)."
     />
   );
 }

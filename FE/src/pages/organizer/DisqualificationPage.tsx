@@ -6,7 +6,6 @@ export function DisqualificationPage() {
       eyebrow="Ky luat"
       title="Xử lý vi phạm"
       description="Ghi nhận và xử lý trừ điểm / loại đội."
-      beNote="BE: API violations/disqualifications (chua co trong phase 1-6)."
     />
   );
 }
