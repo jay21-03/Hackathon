@@ -50,6 +50,7 @@ import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.ProblemRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
+import com.seal.hackathon.notification.service.NotificationService;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
@@ -57,6 +58,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.EnumSet;
@@ -87,6 +89,7 @@ public class ContestManagementService {
     private final TeamRepository teamRepository;
     private final PlatformTransactionManager transactionManager;
     private final CurrentUserProvider currentUserProvider;
+    private final NotificationService notificationService;
 
     @Transactional
     public EventResponse createEvent(CreateEventRequest request) {
@@ -455,6 +458,12 @@ public class ContestManagementService {
                 .build();
         auditRepository.save(audit);
 
+        Event event = eventRepository.findById(round.getEventId()).orElse(null);
+        Board board = boardRepository.findById(slot.getBoardId()).orElse(null);
+        if (event != null && board != null) {
+            notificationService.notifySlotAssigned(event, board, slot, teamEntity);
+        }
+
         return AssignResponse.builder()
                 .slotId(slot.getId())
                 .boardId(slot.getBoardId())
@@ -658,9 +667,7 @@ public class ContestManagementService {
     @Transactional
     public RandomAssignResponse randomAssign(Long roundId, RandomAssignRequest request) {
         Round round = getRoundEntity(roundId);
-        if (round.getStatus() != RoundStatus.DRAFT && round.getStatus() != RoundStatus.UPCOMING) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ROUND_NOT_PLANNED");
-        }
+        assertRoundAllowsAssignment(round);
 
         // fetch confirmed teams for the event and exclude already assigned in this round
         List<com.seal.hackathon.registration.entity.Team> confirmedTeams = teamRepository.findByEventIdAndStatus(round.getEventId(), com.seal.hackathon.common.enums.TeamStatus.CONFIRMED);
@@ -785,6 +792,17 @@ public class ContestManagementService {
             for (int i = mappingCount; i < teamsToAssign.size(); i++) unassigned.add(teamsToAssign.get(i).getId());
         }
 
+        if (!details.isEmpty()) {
+            Event event = eventRepository.findById(round.getEventId()).orElse(null);
+            if (event != null) {
+                List<NotificationService.SlotAssignmentEntry> entries = details.stream()
+                        .map(d -> new NotificationService.SlotAssignmentEntry(
+                                d.getBoardId(), d.getSlotId(), d.getTeamId()))
+                        .toList();
+                notificationService.notifyRandomSlotAssignments(event, entries);
+            }
+        }
+
         return RandomAssignResponse.builder()
                 .assignedCount(details.size())
                 .details(details)
@@ -871,7 +889,9 @@ public class ContestManagementService {
                 .updatedAt(now)
                 .build();
 
-        return toProblemResponse(problemRepository.save(problem));
+        Problem saved = problemRepository.save(problem);
+        notifyProblemReleasedIfOpen(saved);
+        return toProblemResponse(saved);
     }
 
     @Transactional
@@ -880,6 +900,7 @@ public class ContestManagementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "boardId and createdBy are immutable in Phase 2");
         }
         Problem problem = getProblemEntity(problemId);
+        boolean wasReleased = isProblemReleasedNow(problem);
 
         if (request.getTitle() != null) {
             problem.setTitle(normalizeRequired(request.getTitle(), "title must not be blank"));
@@ -911,7 +932,11 @@ public class ContestManagementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title must not be blank");
         }
         problem.setUpdatedAt(OffsetDateTime.now());
-        return toProblemResponse(problemRepository.save(problem));
+        Problem saved = problemRepository.save(problem);
+        if (!wasReleased && isProblemReleasedNow(saved)) {
+            notifyProblemReleasedIfOpen(saved);
+        }
+        return toProblemResponse(saved);
     }
 
     @Transactional
@@ -1030,6 +1055,33 @@ public class ContestManagementService {
                 .build();
     }
 
+    private boolean isProblemReleasedNow(Problem problem) {
+        OffsetDateTime now = OffsetDateTime.now();
+        if (problem.getReleaseAt() == null || now.isBefore(problem.getReleaseAt())) {
+            return false;
+        }
+        return problem.getCloseAt() == null || now.isBefore(problem.getCloseAt());
+    }
+
+    private void notifyProblemReleasedIfOpen(Problem problem) {
+        if (!isProblemReleasedNow(problem)) {
+            return;
+        }
+        Board board = boardRepository.findById(problem.getBoardId()).orElse(null);
+        if (board == null) {
+            return;
+        }
+        Round round = roundRepository.findById(board.getRoundId()).orElse(null);
+        if (round == null) {
+            return;
+        }
+        Event event = eventRepository.findById(round.getEventId()).orElse(null);
+        if (event == null) {
+            return;
+        }
+        notificationService.notifyProblemReleased(event, board, problem);
+    }
+
     private void validateProblemWindow(OffsetDateTime releaseAt, OffsetDateTime closeAt) {
         if (releaseAt == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "releaseAt must not be null");
@@ -1058,17 +1110,72 @@ public class ContestManagementService {
             return null;
         }
 
-        return slots.stream()
+        List<BoardSlot> eventSlots = slots.stream()
                 .filter(slot -> {
                     Round round = roundRepository.findById(slot.getRoundId()).orElse(null);
                     return round != null && eventId.equals(round.getEventId());
                 })
-                .min(Comparator.comparing(
-                        slot -> roundRepository.findById(slot.getRoundId())
-                                .map(Round::getRoundOrder)
-                                .orElse(Integer.MAX_VALUE),
-                        Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+        if (eventSlots.isEmpty()) {
+            return null;
+        }
+
+        List<Round> eventRounds = roundRepository.findByEventId(eventId);
+        Round activeRound = resolveActiveRound(eventRounds, OffsetDateTime.now()).orElse(null);
+        if (activeRound == null) {
+            return eventSlots.stream()
+                    .min(Comparator.comparing(
+                            slot -> roundRepository.findById(slot.getRoundId())
+                                    .map(Round::getRoundOrder)
+                                    .orElse(Integer.MAX_VALUE),
+                            Comparator.nullsLast(Integer::compareTo)))
+                    .orElse(null);
+        }
+
+        return eventSlots.stream()
+                .filter(slot -> activeRound.getId().equals(slot.getRoundId()))
+                .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Running round (startAt <= now < endAt, lowest roundOrder),
+     * else nearest upcoming, else latest by roundOrder.
+     */
+    private Optional<Round> resolveActiveRound(List<Round> rounds, OffsetDateTime now) {
+        if (rounds == null || rounds.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<Round> sorted = rounds.stream()
+                .sorted(Comparator.comparing(Round::getRoundOrder, Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+
+        List<Round> running = sorted.stream()
+                .filter(round -> round.getStartAt() != null
+                        && round.getEndAt() != null
+                        && !now.isBefore(round.getStartAt())
+                        && now.isBefore(round.getEndAt()))
+                .toList();
+        if (!running.isEmpty()) {
+            return Optional.of(running.get(0));
+        }
+
+        Optional<Round> upcoming = sorted.stream()
+                .filter(round -> round.getStartAt() != null && now.isBefore(round.getStartAt()))
+                .min(Comparator.comparing(Round::getStartAt));
+        if (upcoming.isPresent()) {
+            return upcoming;
+        }
+
+        return Optional.of(sorted.get(sorted.size() - 1));
+    }
+
+    /** Cho phep gan doi khi vong chua cham diem / chua ket thuc. */
+    private void assertRoundAllowsAssignment(Round round) {
+        if (round.getStatus() == RoundStatus.SCORING || round.getStatus() == RoundStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ROUND_NOT_PLANNED");
+        }
     }
 
     private void validateEventState(

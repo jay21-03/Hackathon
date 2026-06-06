@@ -14,6 +14,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -41,6 +43,11 @@ public class SecurityConfig {
     }
 
     @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
@@ -56,11 +63,19 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
-                .requestMatchers("/api/v1/auth/google-login").permitAll()
+                .requestMatchers(
+                        "/api/v1/auth/google-login",
+                        "/api/v1/auth/register",
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/forgot-password",
+                        "/api/v1/auth/reset-password")
+                .permitAll()
                 .requestMatchers("/api/v1/team-invitations/confirm", "/api/v1/team-invitations/decline").authenticated()
+                .requestMatchers("/api/v1/staff-invitations/accept").authenticated()
                 .requestMatchers("/api/v1/admin/**").hasRole("ORGANIZER")
                 .requestMatchers("/api/v1/my/**").authenticated()
-                .requestMatchers("/api/v1/me", "/api/v1/me/profile").authenticated()
+                .requestMatchers("/api/v1/me", "/api/v1/me/**").authenticated()
+                .requestMatchers("/api/v1/judge/**").hasRole("JUDGE")
                 .anyRequest().permitAll())
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
