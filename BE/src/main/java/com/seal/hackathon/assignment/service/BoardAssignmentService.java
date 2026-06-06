@@ -10,7 +10,14 @@ import com.seal.hackathon.authprofile.repository.UserRoleRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.common.enums.SystemRole;
+import com.seal.hackathon.contest.entity.Board;
+import com.seal.hackathon.contest.entity.Event;
+import com.seal.hackathon.contest.entity.Round;
 import com.seal.hackathon.contest.repository.BoardRepository;
+import com.seal.hackathon.contest.repository.EventRepository;
+import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.scoring.entity.ScoreSheet;
+import com.seal.hackathon.scoring.repository.ScoreSheetRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -27,8 +34,11 @@ public class BoardAssignmentService {
     private final MentorAssignmentRepository mentorAssignmentRepository;
     private final JudgeAssignmentRepository judgeAssignmentRepository;
     private final BoardRepository boardRepository;
+    private final RoundRepository roundRepository;
+    private final EventRepository eventRepository;
     private final UserRoleRepository userRoleRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final ScoreSheetRepository scoreSheetRepository;
 
     public String skeletonStatus() {
         return "ok";
@@ -137,10 +147,46 @@ public class BoardAssignmentService {
     }
 
     @Transactional
+    public void completeStaffAssignment(Long boardId, Long userId, SystemRole role, Long createdBy) {
+        boardRepository.findById(boardId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        OffsetDateTime now = OffsetDateTime.now();
+        if (role == SystemRole.MENTOR) {
+            if (!mentorAssignmentRepository.existsByBoardIdAndMentorId(boardId, userId)) {
+                mentorAssignmentRepository.save(MentorAssignment.builder()
+                        .boardId(boardId)
+                        .mentorId(userId)
+                        .createdAt(now)
+                        .createdBy(createdBy)
+                        .build());
+            }
+            return;
+        }
+        if (role == SystemRole.JUDGE) {
+            if (!judgeAssignmentRepository.existsByBoardIdAndJudgeId(boardId, userId)) {
+                judgeAssignmentRepository.save(JudgeAssignment.builder()
+                        .boardId(boardId)
+                        .judgeId(userId)
+                        .createdAt(now)
+                        .createdBy(createdBy)
+                        .build());
+            }
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role must be MENTOR or JUDGE");
+    }
+
+    @Transactional
     public void deleteJudgeAssignment(Long boardId, Long judgeId) {
         CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
         if (principal.getRoles() == null || !principal.getRoles().contains("ORGANIZER")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
+        }
+        boardRepository.findById(boardId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+
+        List<ScoreSheet> scoreSheets = scoreSheetRepository.findByBoardIdAndJudgeId(boardId, judgeId);
+        if (!scoreSheets.isEmpty()) {
+            scoreSheetRepository.deleteAll(scoreSheets);
         }
         judgeAssignmentRepository.deleteByBoardIdAndJudgeId(boardId, judgeId);
     }
@@ -153,23 +199,52 @@ public class BoardAssignmentService {
     }
 
     private AssignmentResponse toResponse(MentorAssignment m) {
-        return AssignmentResponse.builder()
+        return enrichBoardContext(AssignmentResponse.builder()
                 .id(m.getId())
                 .boardId(m.getBoardId())
                 .assigneeId(m.getMentorId())
                 .createdAt(m.getCreatedAt())
                 .createdBy(m.getCreatedBy())
-                .build();
+                .build());
     }
 
     private AssignmentResponse toResponse(JudgeAssignment j) {
-        return AssignmentResponse.builder()
+        return enrichBoardContext(AssignmentResponse.builder()
                 .id(j.getId())
                 .boardId(j.getBoardId())
                 .assigneeId(j.getJudgeId())
                 .createdAt(j.getCreatedAt())
                 .createdBy(j.getCreatedBy())
-                .build();
+                .build());
+    }
+
+    private AssignmentResponse enrichBoardContext(AssignmentResponse response) {
+        if (response.getBoardId() == null) {
+            return response;
+        }
+        Board board = boardRepository.findById(response.getBoardId()).orElse(null);
+        if (board == null) {
+            return response;
+        }
+        response.setBoardName(board.getName());
+        response.setRoundId(board.getRoundId());
+        if (board.getRoundId() == null) {
+            return response;
+        }
+        Round round = roundRepository.findById(board.getRoundId()).orElse(null);
+        if (round == null) {
+            return response;
+        }
+        response.setRoundName(round.getName());
+        response.setEventId(round.getEventId());
+        if (round.getEventId() == null) {
+            return response;
+        }
+        Event event = eventRepository.findById(round.getEventId()).orElse(null);
+        if (event != null) {
+            response.setEventName(event.getName());
+        }
+        return response;
     }
 }
 

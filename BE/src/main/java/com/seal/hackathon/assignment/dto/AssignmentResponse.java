@@ -13,6 +13,11 @@ import lombok.NoArgsConstructor;
 public class AssignmentResponse {
     private Long id;
     private Long boardId;
+    private String boardName;
+    private Long roundId;
+    private String roundName;
+    private Long eventId;
+    private String eventName;
     private Long assigneeId; // mentorId or judgeId
     private OffsetDateTime createdAt;
     private Long createdBy;

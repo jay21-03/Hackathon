@@ -7,6 +7,7 @@ import com.seal.hackathon.authprofile.entity.UserRole;
 import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.authprofile.repository.UserRoleRepository;
 import com.seal.hackathon.authprofile.security.JwtService;
+import com.seal.hackathon.support.IntegrationTestConfig;
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.assignment.repository.MentorAssignmentRepository;
 import com.seal.hackathon.contest.entity.Board;
@@ -54,11 +55,8 @@ public class AssignmentIntegrationTest {
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
-        registry.add("app.jwt.secret", () -> "integration-test-secret-which-is-long-enough-for-hs256");
+        IntegrationTestConfig.registerPostgres(
+                registry, postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
     }
 
     @Autowired
