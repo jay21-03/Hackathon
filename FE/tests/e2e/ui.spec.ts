@@ -21,16 +21,27 @@ test("organizer dashboard loads with event selector", async ({ page }) => {
   await expect(page.locator("body")).toContainText("SEAL Hackathon 2026");
 });
 
-test("login page renders Google sign-in", async ({ page }) => {
+test("login page renders auth shell", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.locator("body")).toContainText("Đăng nhập bằng tài khoản Google");
+  await expect(page.locator("body")).toContainText("Đăng nhập SEAL Hackathon");
+  await expect(page.locator("body")).toContainText("Quên mật khẩu?");
 });
 
-test("phase 7 route redirects to dashboard when feature flag off", async ({ page }) => {
+test("submission page loads with API data", async ({ page }) => {
+  await seedAuth(page, "participant");
+  await page.goto("/me/submission");
+  await waitForWorkspace(page, "Bài nộp");
+  await expect(page.locator("body")).toContainText("Bản nháp");
+  await expect(page.getByPlaceholder("https://github.com/org/repo")).toHaveValue(
+    "https://github.com/seal/e2e-demo"
+  );
+});
+
+test("scoring progress page loads with API data", async ({ page }) => {
   await seedAuth(page, "organizer");
   await page.goto("/organizer/scoring");
-  await expect(page).toHaveURL(/\/organizer\/dashboard/);
-  await expect(page.locator("body")).not.toContainText("Chưa kết nối API");
+  await waitForWorkspace(page, "Tiến độ chấm");
+  await expect(page.locator("body")).toContainText("Đội E2E Alpha");
 });
 
 test("theme toggle switches html class", async ({ page }) => {

@@ -11,6 +11,9 @@ const protectedRoutes: Array<{ role: E2ERole; path: string; expectText: RegExp }
   { role: "organizer", path: "/organizer/events", expectText: /Quản lý cấu hình|Tạo cuộc thi/i },
   { role: "organizer", path: "/organizer/events/new", expectText: /Tạo cuộc thi mới/i },
   { role: "organizer", path: "/organizer/invitations", expectText: /Lời mời|Thành viên đội/i },
+  { role: "organizer", path: "/organizer/ranking", expectText: /Bảng xếp hạng|Tính bảng/i },
+  { role: "organizer", path: "/organizer/publish-results", expectText: /Công bố kết quả/i },
+  { role: "participant", path: "/me/results", expectText: /Kết quả|chưa được ban tổ chức công bố/i },
   { role: "mentor", path: "/mentor/dashboard", expectText: /Mentor|đội/i },
   { role: "judge", path: "/judge/dashboard", expectText: /Giám khảo|đội/i }
 ];
@@ -37,6 +40,11 @@ for (const route of protectedRoutes) {
 test("unauthenticated user is redirected to login from workspace", async ({ page }) => {
   await page.goto("/organizer/dashboard");
   await expect(page).toHaveURL(/\/login/);
+});
+
+test("public event results route renders without login", async ({ page }) => {
+  await page.goto("/events/1/results");
+  await expect(page.locator("body")).toContainText(/Kết quả|chưa công bố|chưa được ban tổ chức/i);
 });
 
 test("participant cannot access organizer dashboard", async ({ page }) => {

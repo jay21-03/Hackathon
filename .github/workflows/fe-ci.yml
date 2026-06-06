@@ -1,3 +1,5 @@
+# Kiểm tra FE khi push/PR — chỉ lint + build (không E2E).
+# E2E chạy local: cd FE && npm run test:e2e
 name: FE CI
 
 on:
@@ -17,21 +19,18 @@ jobs:
       run:
         working-directory: FE
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: FE/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: Typecheck
+      - name: Lint & typecheck
         run: npm run lint
 
-      - name: Build
+      - name: Production build
         run: npm run build
