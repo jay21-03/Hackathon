@@ -7,3 +7,4 @@ target/
 .vscode/
 *.log
 *.tsbuildinfo
+BE/src/main/resources/db/seed/
