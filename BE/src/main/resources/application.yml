@@ -49,6 +49,15 @@ app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   ai-review-interval-minutes: ${AI_REVIEW_INTERVAL_MINUTES:30}
+  github:
+    mode: ${GITHUB_MODE:pat}
+    org: ${GITHUB_ORG:}
+    pat: ${GITHUB_PAT:}
+    default-branch: ${GITHUB_DEFAULT_BRANCH:main}
+    api-base-url: ${GITHUB_API_BASE_URL:https://api.github.com}
+    api-version: ${GITHUB_API_VERSION:2026-03-10}
+    template-owner: ${GITHUB_TEMPLATE_OWNER:}
+    template-repo: ${GITHUB_TEMPLATE_REPO:}
   file-storage-path: ${FILE_STORAGE_PATH:./storage}
   mail:
     enabled: ${MAIL_ENABLED:false}

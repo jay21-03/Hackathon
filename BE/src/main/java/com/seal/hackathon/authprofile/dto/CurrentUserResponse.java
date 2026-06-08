@@ -11,6 +11,7 @@ public class CurrentUserResponse {
     private Long id;
     private String email;
     private String username;
+    private String githubUsername;
     private String fullName;
     private Boolean profileCompleted;
     private Boolean hasPassword;

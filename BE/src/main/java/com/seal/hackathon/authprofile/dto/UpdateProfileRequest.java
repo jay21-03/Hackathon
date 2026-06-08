@@ -12,4 +12,5 @@ public class UpdateProfileRequest {
     private String studentId;
     private String university;
     private String avatarUrl;
+    private String githubUsername;
 }
