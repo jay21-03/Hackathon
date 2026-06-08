@@ -97,6 +97,11 @@ public class NotificationService {
         if (StringUtils.hasText(dedupeKey) && notificationRepository.existsByDedupeKey(dedupeKey)) {
             return notificationRepository.findByDedupeKey(dedupeKey).orElse(null);
         }
+          if (userId != null && !userRepository.existsById(userId)) {
+        log.warn("[Notification] Invalid userId detected: {} (email={}) - fallback to email mode",
+                userId, email);
+        userId = null;
+    }
 
         Notification saved = notificationRepository.save(Notification.builder()
                 .userId(userId)

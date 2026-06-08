@@ -157,7 +157,7 @@ public class AuthProfileService {
         if (user.getStatus() == UserStatus.DISABLED) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is disabled");
         }
-        notificationService.backfillUserIdOnLogin(user.getId(), user.getEmail());
+        // notificationService.backfillUserIdOnLogin(user.getId(), user.getEmail());
         ensureBootstrapOrganizerRole(user);
         Set<String> roles = loadRoles(user.getId());
         String accessToken = jwtService.generateToken(user, roles);
