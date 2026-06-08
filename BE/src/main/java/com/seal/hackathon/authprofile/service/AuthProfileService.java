@@ -192,6 +192,7 @@ public class AuthProfileService {
         user.setStudentId(normalizeTextNullable(request.getStudentId()));
         user.setUniversity(normalizeTextNullable(request.getUniversity()));
         user.setAvatarUrl(normalizeTextNullable(request.getAvatarUrl()));
+        user.setGithubUsername(normalizeTextNullable(request.getGithubUsername()));
         user.setUpdatedAt(OffsetDateTime.now());
         userRepository.save(user);
 
@@ -337,6 +338,7 @@ public class AuthProfileService {
                 .id(user.getId())
                 .email(user.getEmail())
                 .username(user.getUsername())
+                .githubUsername(user.getGithubUsername())
                 .fullName(user.getFullName())
                 .studentId(user.getStudentId())
                 .university(user.getUniversity())

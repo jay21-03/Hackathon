@@ -34,6 +34,7 @@ public class User {
     private String passwordHash;
     @Column(unique = true)
     private String username;
+    private String githubUsername;
     private String fullName;
     @Builder.Default
     @Column(nullable = false)

@@ -100,8 +100,7 @@ public class SubmissionService {
             if (team == null) {
                 continue;
             }
-            com.seal.hackathon.aireview.entity.TeamRepository repo =
-                    teamRepositoryEntityRepository.findByTeamId(teamId).orElse(null);
+            com.seal.hackathon.aireview.entity.TeamRepository repo = findTeamLevelRepository(teamId);
             Board board = slot.getBoardId() != null ? boardById.get(slot.getBoardId()) : null;
             results.add(AdminTeamSubmissionResponse.builder()
                     .teamId(teamId)
@@ -130,8 +129,7 @@ public class SubmissionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TEAM_NOT_FOUND"));
         assertOrganizerOwnsEvent(principal, team.getEventId());
 
-        com.seal.hackathon.aireview.entity.TeamRepository entity =
-                teamRepositoryEntityRepository.findByTeamId(teamId).orElse(null);
+        com.seal.hackathon.aireview.entity.TeamRepository entity = findTeamLevelRepository(teamId);
         OffsetDateTime deadline = resolveDeadlineForTeam(teamId, team.getEventId());
         return buildAdminResponse(team, entity, deadline);
     }
@@ -141,7 +139,7 @@ public class SubmissionService {
         SubmissionContext ctx = resolveContext(eventId, userId);
         com.seal.hackathon.aireview.entity.TeamRepository entity = ctx.teamId() == null
                 ? null
-                : teamRepositoryEntityRepository.findByTeamId(ctx.teamId()).orElse(null);
+                : findTeamLevelRepository(ctx.teamId());
         return buildResponse(ctx, entity);
     }
 
@@ -172,9 +170,7 @@ public class SubmissionService {
 
         String url = StringUtils.hasText(request.getRepositoryUrl())
                 ? normalizeUrl(request.getRepositoryUrl())
-                : teamRepositoryEntityRepository.findByTeamId(ctx.teamId())
-                        .map(com.seal.hackathon.aireview.entity.TeamRepository::getRepositoryUrl)
-                        .orElse(null);
+                : repositoryUrl(findTeamLevelRepository(ctx.teamId()));
 
         if (!StringUtils.hasText(url)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "REPOSITORY_URL_REQUIRED");
@@ -183,9 +179,7 @@ public class SubmissionService {
 
         String name = StringUtils.hasText(request.getRepositoryName())
                 ? request.getRepositoryName().trim()
-                : teamRepositoryEntityRepository.findByTeamId(ctx.teamId())
-                        .map(com.seal.hackathon.aireview.entity.TeamRepository::getRepositoryName)
-                        .orElse(null);
+                : repositoryName(findTeamLevelRepository(ctx.teamId()));
 
         OffsetDateTime now = OffsetDateTime.now();
         com.seal.hackathon.aireview.entity.TeamRepository entity = upsertRepository(ctx.teamId(), userId, url, name, SubmissionStatus.SUBMITTED, now);
@@ -205,8 +199,7 @@ public class SubmissionService {
             SubmissionStatus status,
             OffsetDateTime submittedAt) {
         OffsetDateTime now = OffsetDateTime.now();
-        com.seal.hackathon.aireview.entity.TeamRepository entity =
-                teamRepositoryEntityRepository.findByTeamId(teamId).orElse(null);
+        com.seal.hackathon.aireview.entity.TeamRepository entity = findTeamLevelRepository(teamId);
 
         if (entity == null) {
             entity = com.seal.hackathon.aireview.entity.TeamRepository.builder()
@@ -264,11 +257,12 @@ public class SubmissionService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "SUBMISSION_DEADLINE_PASSED");
         }
         if (ctx.teamId() != null) {
-            teamRepositoryEntityRepository.findByTeamId(ctx.teamId()).ifPresent(entity -> {
+            com.seal.hackathon.aireview.entity.TeamRepository entity = findTeamLevelRepository(ctx.teamId());
+            if (entity != null) {
                 if (entity.getStatus() == SubmissionStatus.SUBMITTED) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "SUBMISSION_ALREADY_SUBMITTED");
                 }
-            });
+            }
         }
     }
 
@@ -276,6 +270,20 @@ public class SubmissionService {
         if (ctx.deadlineAt() != null && !OffsetDateTime.now().isBefore(ctx.deadlineAt())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "SUBMISSION_DEADLINE_PASSED");
         }
+    }
+
+    private com.seal.hackathon.aireview.entity.TeamRepository findTeamLevelRepository(Long teamId) {
+        return teamRepositoryEntityRepository
+                .findFirstByTeamIdAndProblemIdIsNullOrderByUpdatedAtDesc(teamId)
+                .orElse(null);
+    }
+
+    private String repositoryUrl(com.seal.hackathon.aireview.entity.TeamRepository repository) {
+        return repository == null ? null : repository.getRepositoryUrl();
+    }
+
+    private String repositoryName(com.seal.hackathon.aireview.entity.TeamRepository repository) {
+        return repository == null ? null : repository.getRepositoryName();
     }
 
     private SubmissionContext resolveContext(Long eventId, Long userId) {

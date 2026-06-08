@@ -1,6 +1,8 @@
 package com.seal.hackathon.aireview.entity;
 
 import com.seal.hackathon.common.enums.SubmissionStatus;
+import com.seal.hackathon.common.enums.RepositoryAccessStatus;
+import com.seal.hackathon.common.enums.RepositoryProvisionStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -28,8 +30,14 @@ public class TeamRepository {
     private Long id;
 
     private Long teamId;
+    private Long roundId;
+    private Long boardId;
+    private Long problemId;
     private String repositoryUrl;
     private String repositoryName;
+    private String githubOwner;
+    private String githubRepoName;
+    private Long githubRepoId;
     private OffsetDateTime lastReviewedAt;
     private OffsetDateTime nextReviewAt;
     private Integer reviewIntervalMinutes;
@@ -42,4 +50,17 @@ public class TeamRepository {
     private SubmissionStatus status;
 
     private OffsetDateTime submittedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private RepositoryAccessStatus accessStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private RepositoryProvisionStatus provisionStatus;
+
+    private OffsetDateTime openedAt;
+    private OffsetDateTime closedAt;
+    private OffsetDateTime provisionedAt;
+    private String lastError;
 }
