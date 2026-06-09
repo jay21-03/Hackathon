@@ -21,6 +21,10 @@ import com.seal.hackathon.authprofile.security.JwtService;
 import com.seal.hackathon.authprofile.security.VerifiedGoogleUser;
 import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.common.enums.SystemRole;
+import com.seal.hackathon.common.response.PagedResult;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import com.seal.hackathon.common.enums.UserStatus;
 import java.time.OffsetDateTime;
 import java.util.EnumSet;
@@ -29,7 +33,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -157,7 +160,7 @@ public class AuthProfileService {
         if (user.getStatus() == UserStatus.DISABLED) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is disabled");
         }
-        // notificationService.backfillUserIdOnLogin(user.getId(), user.getEmail());
+        notificationService.backfillUserIdOnLogin(user.getId(), user.getEmail());
         ensureBootstrapOrganizerRole(user);
         Set<String> roles = loadRoles(user.getId());
         String accessToken = jwtService.generateToken(user, roles);
@@ -202,8 +205,16 @@ public class AuthProfileService {
 
     @Transactional(readOnly = true)
     public List<UserSummaryResponse> listUsers() {
-        List<User> users = userRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
-        return users.stream()
+        return listUsersPaged(0, 500).getItems();
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResult<UserSummaryResponse> listUsersPaged(int page, int size) {
+        int resolvedSize = Math.min(Math.max(size, 1), 200);
+        int resolvedPage = Math.max(page, 0);
+        Page<User> userPage = userRepository.findAll(
+                PageRequest.of(resolvedPage, resolvedSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+        List<UserSummaryResponse> items = userPage.getContent().stream()
                 .map(user -> UserSummaryResponse.builder()
                         .id(user.getId())
                         .email(user.getEmail())
@@ -213,6 +224,13 @@ public class AuthProfileService {
                         .createdAt(user.getCreatedAt())
                         .build())
                 .toList();
+        return PagedResult.<UserSummaryResponse>builder()
+                .items(items)
+                .page(resolvedPage)
+                .size(resolvedSize)
+                .total(userPage.getTotalElements())
+                .totalPages(userPage.getTotalPages())
+                .build();
     }
 
     @Transactional

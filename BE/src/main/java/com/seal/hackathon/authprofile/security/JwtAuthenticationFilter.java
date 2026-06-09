@@ -2,7 +2,9 @@ package com.seal.hackathon.authprofile.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.authprofile.entity.User;
+import com.seal.hackathon.authprofile.entity.UserRole;
 import com.seal.hackathon.authprofile.repository.UserRepository;
+import com.seal.hackathon.authprofile.repository.UserRoleRepository;
 import com.seal.hackathon.common.enums.UserStatus;
 import com.seal.hackathon.common.response.ApiResponse;
 import io.jsonwebtoken.Claims;
@@ -33,11 +35,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
     private final ObjectMapper objectMapper;
 
-    public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository, ObjectMapper objectMapper) {
+    public JwtAuthenticationFilter(
+            JwtService jwtService,
+            UserRepository userRepository,
+            UserRoleRepository userRoleRepository,
+            ObjectMapper objectMapper) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
+        this.userRoleRepository = userRoleRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -69,7 +77,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is disabled");
             }
 
-            LinkedHashSet<String> roles = new LinkedHashSet<>(jwtService.extractRoles(claims));
+            LinkedHashSet<String> roles = userRoleRepository.findByUserId(user.getId()).stream()
+                    .map(UserRole::getRole)
+                    .map(Enum::name)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
             roles.add("PARTICIPANT");
 
             Set<GrantedAuthority> authorities = roles.stream()
