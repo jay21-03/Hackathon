@@ -29,6 +29,12 @@ spring:
           auth: ${MAIL_SMTP_AUTH:true}
           starttls:
             enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
 springdoc:
   api-docs:
     enabled: true
@@ -63,5 +69,9 @@ app:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:${MAIL_USERNAME:no-reply@seal-hackathon.local}}
     invitation-base-url: ${INVITATION_BASE_URL:http://localhost:5173}
+    api-base-url: ${MAIL_API_BASE_URL:http://localhost:8085}
   invitation:
     token-secret: ${APP_INVITATION_TOKEN_SECRET:dev-invite-secret-change-me}
+    reminder-enabled: ${INVITATION_REMINDER_ENABLED:true}
+    reminder-hours-before-expiry: ${INVITATION_REMINDER_HOURS:24}
+    reminder-poll-ms: ${INVITATION_REMINDER_POLL_MS:3600000}

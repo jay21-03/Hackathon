@@ -3,6 +3,7 @@ package com.seal.hackathon.common.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.authprofile.security.JwtAuthenticationFilter;
 import com.seal.hackathon.common.response.ApiResponse;
+import com.seal.hackathon.common.security.RateLimitFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Arrays;
@@ -30,14 +31,17 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final ObjectMapper objectMapper;
     private final String corsAllowedOrigins;
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
+            RateLimitFilter rateLimitFilter,
             ObjectMapper objectMapper,
             @Value("${app.cors.allowed-origins:http://localhost:5173}") String corsAllowedOrigins) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.rateLimitFilter = rateLimitFilter;
         this.objectMapper = objectMapper;
         this.corsAllowedOrigins = corsAllowedOrigins;
     }
@@ -62,6 +66,7 @@ public class SecurityConfig {
                         writeError(response, HttpStatus.FORBIDDEN, "Forbidden")))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                 .requestMatchers(
                         "/api/v1/auth/google-login",
@@ -70,13 +75,22 @@ public class SecurityConfig {
                         "/api/v1/auth/forgot-password",
                         "/api/v1/auth/reset-password")
                 .permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/events").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/events/*").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/events/*/rounds").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/events/*/results").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/events/*/announcements").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/rounds/*/countdown").permitAll()
+                .requestMatchers("/api/v1/public/email-tracking/**").permitAll()
+                .requestMatchers("/api/v1/staff-invitations/decline").permitAll()
                 .requestMatchers("/api/v1/team-invitations/confirm", "/api/v1/team-invitations/decline").authenticated()
                 .requestMatchers("/api/v1/staff-invitations/accept").authenticated()
                 .requestMatchers("/api/v1/admin/**").hasRole("ORGANIZER")
                 .requestMatchers("/api/v1/my/**").authenticated()
                 .requestMatchers("/api/v1/me", "/api/v1/me/**").authenticated()
                 .requestMatchers("/api/v1/judge/**").hasRole("JUDGE")
-                .anyRequest().permitAll())
+                .anyRequest().authenticated())
+            .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
