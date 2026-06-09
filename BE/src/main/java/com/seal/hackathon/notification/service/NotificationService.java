@@ -431,6 +431,30 @@ public class NotificationService {
     }
 
     @Transactional
+    public void notifyOrganizerScoringIncomplete(Event event, Board board, int submitted, int expected) {
+        if (event.getCreatedBy() == null || submitted >= expected) {
+            return;
+        }
+        User organizer = userRepository.findById(event.getCreatedBy()).orElse(null);
+        if (organizer == null) {
+            return;
+        }
+        String title = "Ti?n ?? ch?m ch?a ho?n t?t";
+        String content = "B?ng ?" + board.getName() + "? t?i " + event.getName() + ": "
+                + submitted + "/" + expected + " phi?u ?? n?p.";
+        String linkUrl = "/organizer/scoring?eventId=" + event.getId() + "&boardId=" + board.getId();
+        create(
+                organizer.getId(),
+                organizer.getEmail(),
+                event.getId(),
+                NotificationType.SCORING_REMINDER,
+                title,
+                content,
+                linkUrl,
+                "scoring-reminder:b" + board.getId());
+    }
+
+    @Transactional
     public void notifyRankingPublished(Event event, Board board, List<RankingResult> rows) {
         for (RankingResult row : rows) {
             Team team = teamRepository.findById(row.getTeamId()).orElse(null);

@@ -9,5 +9,6 @@ public enum NotificationType {
     SLOT_ASSIGNED,
     SUBMISSION,
     PROBLEM_RELEASED,
+    SCORING_REMINDER,
     GENERAL
 }
