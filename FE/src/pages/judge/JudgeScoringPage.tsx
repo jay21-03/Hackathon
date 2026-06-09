@@ -7,6 +7,8 @@ import { Button, ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
+import { buildJudgeWorkflowSteps } from "../../domain/judgeWorkflow";
 import { StatCard } from "../../components/ui/StatCard";
 import { useJudgeAssignments } from "../../hooks/useJudgeAssignments";
 import { useScoreMatrix } from "../../hooks/useScoreMatrix";
@@ -16,7 +18,7 @@ import {
   submitScoreMatrix,
   type ScoreMatrixResponse
 } from "../../services/scoringApi";
-import { getApiErrorMessage } from "../../utils/apiError";
+import { resolveApiError } from "../../utils/apiError";
 import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
 
 type CellKey = `${number}-${number}`;
@@ -131,7 +133,7 @@ export function JudgeScoringPage() {
       await invalidateAfterScoreMatrixMutation(queryClient, boardId);
       notify("Đã lưu nháp.", "success");
     } catch (err) {
-      const msg = mapOrganizerErrorMessage(getApiErrorMessage(err, "Lưu nháp thất bại."));
+      const msg = resolveApiError(err, "Lưu nháp thất bại.");
       setActionError(msg);
       notify(msg, "danger");
     } finally {
@@ -161,7 +163,7 @@ export function JudgeScoringPage() {
       await invalidateAfterScoreMatrixMutation(queryClient, boardId);
       await refetchMatrix();
     } catch (err) {
-      const msg = mapOrganizerErrorMessage(getApiErrorMessage(err, "Nộp phiếu thất bại."));
+      const msg = resolveApiError(err, "Nộp phiếu thất bại.");
       setActionError(msg);
       notify(msg, "danger");
     } finally {
@@ -185,6 +187,21 @@ export function JudgeScoringPage() {
           ) : null
         }
       />
+
+      <WorkflowSteps
+        title="Quy trình chấm"
+        description="Chọn bảng rồi điền ma trận và nộp phiếu."
+        steps={buildJudgeWorkflowSteps("scoring", assignments.length > 0)}
+      />
+
+      {matrix && draftTeams.length > 0 && matrix.summary.submittedCount < matrix.summary.teamCount ? (
+        <div className="rounded-xl border border-warning-container bg-warning-container/25 p-md">
+          <p className="font-body-sm text-on-surface">
+            Còn {draftTeams.length} phiếu chưa nộp. Rubric có thể bị khóa sau khi BTC bắt đầu công bố
+            kết quả — hãy hoàn tất và nộp phiếu sớm.
+          </p>
+        </div>
+      ) : null}
 
       <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
         <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
@@ -249,7 +266,7 @@ export function JudgeScoringPage() {
                   <>
                     <div className="mb-sm flex items-center justify-between">
                       <h3 className="font-title-sm text-on-surface">
-                        {criterion.code} — {criterion.name}
+                        {criterion.name}
                       </h3>
                       <Button type="button" size="sm" variant="ghost" onClick={() => setExpandedCriteriaId(null)}>
                         Đóng
@@ -316,7 +333,19 @@ export function JudgeScoringPage() {
                   >
                     <td className="sticky left-0 z-10 bg-surface-container px-md py-sm">
                       <span className="font-label-md">{row.teamName}</span>
-                      <span className="block text-on-surface-variant">Slot {row.slotNumber}</span>
+                      <span className="block text-on-surface-variant">Vị trí #{row.slotNumber}</span>
+                      {row.repositoryUrl ? (
+                        <a
+                          href={row.repositoryUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 block truncate font-body-sm text-primary hover:underline"
+                        >
+                          Repository
+                        </a>
+                      ) : (
+                        <span className="mt-1 block font-body-sm text-on-surface-variant">Chưa nộp repo</span>
+                      )}
                     </td>
                     {matrix.criteria.map((c) => {
                       const key = cellKey(row.teamId, c.id);

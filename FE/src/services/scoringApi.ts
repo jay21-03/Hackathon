@@ -59,6 +59,7 @@ export interface ScoreItemResponse {
 export interface MatrixTeamRowResponse {
   teamId: number;
   teamName: string;
+  repositoryUrl?: string | null;
   slotNumber: number;
   sheetId: number;
   status: "DRAFT" | "SUBMITTED";
@@ -187,18 +188,57 @@ export const DEFAULT_LEVEL_DESCRIPTORS: LevelDescriptor[] = [
   { level: "UNSATISFACTORY", label: "Chưa đạt", minScore: 0, maxScore: 4.9, description: "" }
 ];
 
+export function deriveCriteriaScoreRange(levelDescriptors: LevelDescriptor[]): {
+  minScore: number;
+  maxScore: number;
+} {
+  const mins = levelDescriptors.map((l) => Number(l.minScore));
+  const maxs = levelDescriptors.map((l) => Number(l.maxScore));
+  return {
+    minScore: Math.min(...mins),
+    maxScore: Math.max(...maxs)
+  };
+}
+
+const HACKATHON_CRITERIA_TEMPLATE: Array<{ code: string; name: string; weight: number }> = [
+  { code: "R1_01", name: "Tính đúng đắn & Hoàn thiện chức năng", weight: 30 },
+  { code: "R1_02", name: "Ứng dụng AI trong giải pháp", weight: 25 },
+  { code: "R1_03", name: "Thiết kế & Kiến trúc phần mềm", weight: 15 },
+  { code: "R1_04", name: "Thuyết trình & Demo", weight: 20 },
+  { code: "R1_05", name: "Teamwork & Tinh thần làm việc", weight: 10 }
+];
+
 export function createEmptyCriteria(index: number): CriteriaRequestItem {
   const n = String(index + 1).padStart(2, "0");
+  const levels = DEFAULT_LEVEL_DESCRIPTORS.map((d) => ({ ...d }));
+  const { minScore, maxScore } = deriveCriteriaScoreRange(levels);
   return {
     code: `R1_${n}`,
     name: "",
     weight: 0,
-    minScore: 0,
-    maxScore: 10,
+    minScore,
+    maxScore,
     description: "",
     sortOrder: index + 1,
-    levelDescriptors: DEFAULT_LEVEL_DESCRIPTORS.map((d) => ({ ...d }))
+    levelDescriptors: levels
   };
+}
+
+export function createDefaultHackathonRubric(): CriteriaRequestItem[] {
+  return HACKATHON_CRITERIA_TEMPLATE.map((item, index) => {
+    const levels = DEFAULT_LEVEL_DESCRIPTORS.map((d) => ({ ...d }));
+    const { minScore, maxScore } = deriveCriteriaScoreRange(levels);
+    return {
+      code: item.code,
+      name: item.name,
+      weight: item.weight,
+      minScore,
+      maxScore,
+      description: "",
+      sortOrder: index + 1,
+      levelDescriptors: levels
+    };
+  });
 }
 
 /** BTC — rubric theo round */
@@ -232,6 +272,17 @@ export async function fetchScoreProgress(boardId: number) {
     throw new Error(data.message || "Không tải được tiến độ chấm.");
   }
   return data.data;
+}
+
+/** BTC — gửi thông báo nhắc giám khảo nộp phiếu chấm */
+export async function sendScoringReminder(boardId: number) {
+  const { data } = await apiClient.post<ApiResponse<string>>(
+    `/v1/admin/boards/${boardId}/scoring-reminders`
+  );
+  if (!data.success) {
+    throw new Error(data.message || "Gửi nhắc chấm thất bại.");
+  }
+  return data.data ?? data.message ?? "OK";
 }
 
 /** Judge — ma trận chấm điểm */

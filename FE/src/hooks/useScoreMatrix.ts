@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../lib/queryKeys";
 import { fetchScoreMatrix } from "../services/scoringApi";
-import { getApiErrorMessage } from "../utils/apiError";
-import { mapOrganizerErrorMessage } from "../utils/organizerErrors";
+import { resolveApiError } from "../utils/apiError";
 
 export function useScoreMatrix(boardId: number | null) {
   const query = useQuery({
@@ -15,7 +14,7 @@ export function useScoreMatrix(boardId: number | null) {
     matrix: query.data ?? null,
     loading: query.isLoading,
     error: query.isError
-      ? mapOrganizerErrorMessage(getApiErrorMessage(query.error, "Không tải được ma trận chấm điểm."))
+      ? resolveApiError(query.error, "Không tải được ma trận chấm điểm.")
       : null,
     refetch: query.refetch
   };

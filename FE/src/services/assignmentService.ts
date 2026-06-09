@@ -67,3 +67,18 @@ export async function fetchBoardJudges(boardId: number) {
   );
   return data.data ?? [];
 }
+
+export interface MentorBoardTeam {
+  slotId: number;
+  slotNumber: number;
+  teamId: number;
+  teamName: string;
+  teamStatus?: string | null;
+}
+
+export async function fetchMentorBoardTeams(boardId: number) {
+  const { data } = await apiClient.get<ApiResponse<MentorBoardTeam[]>>(
+    `/v1/mentors/boards/${boardId}/teams`
+  );
+  return data.data ?? [];
+}

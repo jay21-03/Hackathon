@@ -1,95 +1,68 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { StaffAssignmentDashboard } from "../../components/staff/StaffAssignmentDashboard";
 import { Badge } from "../../components/ui/Badge";
-import { EmptyState } from "../../components/ui/EmptyState";
-import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
-import { PageHeader } from "../../components/ui/PageHeader";
-import { StatCard } from "../../components/ui/StatCard";
-import { fetchMentorAssignments } from "../../services/assignmentService";
-import { getApiErrorMessage } from "../../utils/apiError";
+import { fetchMentorAssignments, fetchMentorBoardTeams } from "../../services/assignmentService";
+import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 export function MentorDashboardPage() {
   const query = useQuery({
     queryKey: ["assignments", "mentor"],
     queryFn: fetchMentorAssignments
   });
+  const [expandedBoardId, setExpandedBoardId] = useState<number | null>(null);
 
-  const assignments = query.data ?? [];
-  const error = query.isError
-    ? getApiErrorMessage(query.error, "Không tải được danh sách phân công mentor.")
-    : null;
-
-  if (query.isLoading) return <ModuleSkeleton rows={4} />;
+  const teamsQuery = useQuery({
+    queryKey: ["mentor", "board-teams", expandedBoardId],
+    queryFn: () => fetchMentorBoardTeams(expandedBoardId!),
+    enabled: expandedBoardId != null
+  });
 
   return (
-    <div className="space-y-lg">
-      <PageHeader
-        eyebrow="Mentor"
-        title="Bảng được phân công"
-        description="Theo dõi các bảng bạn phụ trách và hỗ trợ đội trong suốt cuộc thi."
-        actions={<Badge tone={error ? "danger" : "success"}>{error ? "Lỗi tải dữ liệu" : "Đã cập nhật"}</Badge>}
-      />
-
-      {error ? (
-        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface-variant">{error}</p>
-        </div>
-      ) : null}
-
-      <section className="grid gap-md md:grid-cols-2">
-        <StatCard
-          label="Phân công"
-          value={assignments.length}
-          helper="Bảng bạn được phân công hỗ trợ"
-          icon="view_module"
-        />
-        <StatCard
-          label="Bảng khác nhau"
-          value={new Set(assignments.map((item) => item.boardId)).size}
-          helper="Mỗi bảng một phân công"
-          icon="groups"
-          tone="success"
-        />
-      </section>
-
-      {assignments.length === 0 && !error ? (
-        <EmptyState
-          icon="view_module"
-          title="Chưa có phân công"
-          description="Ban tổ chức sẽ gán mentor cho bảng tại trang Phân công."
-        />
-      ) : (
-        <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left">
-              <thead className="table-header-bg">
-                <tr className="font-label-sm text-on-surface-variant">
-                  <th className="px-md py-sm">Bảng</th>
-                  <th className="px-md py-sm">Gán lúc</th>
-                  <th className="px-md py-sm">Gán bởi</th>
-                </tr>
-              </thead>
-              <tbody className="table-divider">
-                {assignments.map((assignment) => (
-                  <tr key={assignment.id} className="font-body-sm text-on-surface">
-                    <td className="px-md py-md font-label-md">
-                      {assignment.boardName ?? `Bảng #${assignment.boardId}`}
-                      {assignment.eventName ? (
-                        <span className="ml-1 font-body-sm text-on-surface-variant">
-                          · {assignment.eventName}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-md py-md">
-                      {new Date(assignment.createdAt).toLocaleString("vi-VN")}
-                    </td>
-                    <td className="px-md py-md">BTC #{assignment.createdBy}</td>
-                  </tr>
+    <StaffAssignmentDashboard
+      eyebrow="Mentor"
+      title="Bảng được phân công"
+      description="Theo dõi các bảng bạn phụ trách và danh sách đội (chỉ xem)."
+      assignments={query.data ?? []}
+      loading={query.isLoading}
+      error={query.error}
+      emptyTitle="Chưa có phân công"
+      emptyDescription="Ban tổ chức sẽ gán mentor cho bảng tại trang Phân công."
+      boardFooter={(assignment) => (
+        <div className="space-y-sm border-t border-outline-variant pt-sm">
+          <button
+            type="button"
+            className="font-label-sm text-primary hover:underline"
+            onClick={() =>
+              setExpandedBoardId((prev) =>
+                prev === assignment.boardId ? null : assignment.boardId
+              )
+            }
+          >
+            {expandedBoardId === assignment.boardId ? "Ẩn danh sách đội" : "Xem đội trên bảng"}
+          </button>
+          {expandedBoardId === assignment.boardId ? (
+            teamsQuery.isLoading ? (
+              <p className="font-body-sm text-on-surface-variant">Đang tải…</p>
+            ) : (teamsQuery.data ?? []).length === 0 ? (
+              <p className="font-body-sm text-on-surface-variant">Chưa gán đội vào bảng thi.</p>
+            ) : (
+              <ul className="space-y-xs font-body-sm">
+                {(teamsQuery.data ?? []).map((team) => (
+                  <li key={team.teamId} className="flex items-center justify-between gap-sm">
+                    <span>
+                      #{team.slotNumber} {team.teamName}
+                    </span>
+                    {team.teamStatus ? (
+                      <Badge tone={getStatusTone(team.teamStatus)}>{getStatusLabel(team.teamStatus)}</Badge>
+                    ) : null}
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+              </ul>
+            )
+          ) : null}
+        </div>
       )}
-    </div>
+    />
   );
 }

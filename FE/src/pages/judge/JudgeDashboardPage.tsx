@@ -1,12 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { Badge } from "../../components/ui/Badge";
-import { ButtonLink } from "../../components/ui/Button";
-import { EmptyState } from "../../components/ui/EmptyState";
-import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
-import { PageHeader } from "../../components/ui/PageHeader";
-import { StatCard } from "../../components/ui/StatCard";
+import { StaffAssignmentDashboard } from "../../components/staff/StaffAssignmentDashboard";
+import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
+import { buildJudgeWorkflowSteps } from "../../domain/judgeWorkflow";
 import { fetchJudgeAssignments } from "../../services/assignmentService";
-import { getApiErrorMessage } from "../../utils/apiError";
 
 export function JudgeDashboardPage() {
   const query = useQuery({
@@ -15,92 +11,25 @@ export function JudgeDashboardPage() {
   });
 
   const assignments = query.data ?? [];
-  const error = query.isError
-    ? getApiErrorMessage(query.error, "Không tải được danh sách phân công giám khảo.")
-    : null;
-
-  if (query.isLoading) return <ModuleSkeleton rows={4} />;
 
   return (
-    <div className="space-y-lg">
-      <PageHeader
-        eyebrow="Giám khảo"
-        title="Bảng cần chấm"
-        description="Giám khảo chỉ chấm đội thuộc bảng đã phân công. Mở ma trận chấm điểm cho từng bảng."
-        actions={<Badge tone={error ? "danger" : "success"}>{error ? "Lỗi tải dữ liệu" : "Đã cập nhật"}</Badge>}
-      />
-
-      {error ? (
-        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface-variant">{error}</p>
-        </div>
-      ) : null}
-
-      <section className="grid gap-md md:grid-cols-2">
-        <StatCard
-          label="Phân công"
-          value={assignments.length}
-          helper="Bảng bạn được phân công chấm"
-          icon="groups"
+    <StaffAssignmentDashboard
+      eyebrow="Giám khảo"
+      title="Bảng cần chấm"
+      description="Giám khảo chỉ chấm đội thuộc bảng đã phân công. Mở ma trận chấm điểm cho từng bảng."
+      assignments={assignments}
+      loading={query.isLoading}
+      error={query.error}
+      scorePath={(boardId) => `/judge/scoring?boardId=${boardId}`}
+      emptyTitle="Chưa có phân công"
+      emptyDescription="Ban tổ chức sẽ gán giám khảo cho bảng tại trang Phân công."
+      workflow={
+        <WorkflowSteps
+          title="Quy trình chấm"
+          description="Chọn bảng từ danh sách rồi mở phiếu chấm."
+          steps={buildJudgeWorkflowSteps("dashboard", assignments.length > 0)}
         />
-        <StatCard
-          label="Bảng khác nhau"
-          value={new Set(assignments.map((item) => item.boardId)).size}
-          helper="Mỗi bảng một phân công"
-          icon="view_module"
-          tone="success"
-        />
-      </section>
-
-      {assignments.length === 0 && !error ? (
-        <EmptyState
-          icon="fact_check"
-          title="Chưa có phân công"
-          description="Ban tổ chức sẽ gán giám khảo cho bảng tại trang Phân công."
-        />
-      ) : (
-        <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left">
-              <thead className="table-header-bg">
-                <tr className="font-label-sm text-on-surface-variant">
-                  <th className="px-md py-sm">Bảng</th>
-                  <th className="px-md py-sm">Gán lúc</th>
-                  <th className="px-md py-sm">Gán bởi</th>
-                  <th className="px-md py-sm" />
-                </tr>
-              </thead>
-              <tbody className="table-divider">
-                {assignments.map((assignment) => (
-                  <tr key={assignment.id} className="font-body-sm text-on-surface">
-                    <td className="px-md py-md font-label-md">
-                      {assignment.boardName ?? `Bảng #${assignment.boardId}`}
-                      {assignment.roundName ? (
-                        <span className="ml-1 font-body-sm text-on-surface-variant">
-                          · {assignment.roundName}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-md py-md">
-                      {new Date(assignment.createdAt).toLocaleString("vi-VN")}
-                    </td>
-                    <td className="px-md py-md">BTC #{assignment.createdBy}</td>
-                    <td className="px-md py-md">
-                      <ButtonLink
-                        to={`/judge/scoring?boardId=${assignment.boardId}`}
-                        variant="secondary"
-                        size="sm"
-                      >
-                        Chấm điểm
-                      </ButtonLink>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-    </div>
+      }
+    />
   );
 }
