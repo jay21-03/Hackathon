@@ -35,7 +35,6 @@ import com.seal.hackathon.registration.repository.TeamMemberRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,6 +43,9 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -338,7 +340,7 @@ public class NotificationService {
         String title = "Nhân sự đã chấp nhận lời mời";
         String content = acceptee + " đã chấp nhận làm " + roleLabel + " cho bảng «" + board.getName()
                 + "» tại " + event.getName() + ".";
-        String linkUrl = "/organizer/events/" + event.getId() + "/staff";
+        String linkUrl = "/organizer/invitations?eventId=" + event.getId();
 
         create(
                 organizer.getId(),
@@ -439,9 +441,9 @@ public class NotificationService {
         if (organizer == null) {
             return;
         }
-        String title = "Ti?n ?? ch?m ch?a ho?n t?t";
-        String content = "B?ng ?" + board.getName() + "? t?i " + event.getName() + ": "
-                + submitted + "/" + expected + " phi?u ?? n?p.";
+        String title = "Tiến độ chấm chưa hoàn tất";
+        String content = "Bảng «" + board.getName() + "» tại " + event.getName() + ": "
+                + submitted + "/" + expected + " phiếu đã nộp.";
         String linkUrl = "/organizer/scoring?eventId=" + event.getId() + "&boardId=" + board.getId();
         create(
                 organizer.getId(),
@@ -488,31 +490,18 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public NotificationListResponse listForCurrentUser(Integer page, Integer size, NotificationType type) {
         CurrentUserPrincipal user = currentUserProvider.getCurrentUser();
-        Map<Long, Notification> merged = new LinkedHashMap<>();
-
-        if (user.getUserId() != null) {
-            for (Notification notification : notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getUserId())) {
-                merged.put(notification.getId(), notification);
-            }
-        }
-        if (StringUtils.hasText(user.getEmail())) {
-            for (Notification notification :
-                    notificationRepository.findByEmailIgnoreCaseOrderByCreatedAtDesc(user.getEmail())) {
-                merged.putIfAbsent(notification.getId(), notification);
-            }
-        }
-
-        List<Notification> sorted = merged.values().stream()
-                .filter(row -> type == null || row.getNotificationType() == type)
-                .sorted(Comparator.comparing(Notification::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
-
-        long unread = countUnread(user);
         int resolvedPage = page == null || page < 0 ? 0 : page;
         int resolvedSize = resolvePageSize(size);
-        int fromIndex = Math.min(resolvedPage * resolvedSize, sorted.size());
-        int toIndex = Math.min(fromIndex + resolvedSize, sorted.size());
-        List<Notification> pageItems = sorted.subList(fromIndex, toIndex);
+        Pageable pageable = PageRequest.of(resolvedPage, resolvedSize);
+
+        Long userId = user.getUserId();
+        String email = StringUtils.hasText(user.getEmail()) ? user.getEmail() : "";
+
+        Page<Notification> notificationPage =
+                notificationRepository.findPageForUser(userId, email, type, pageable);
+        List<Notification> pageItems = notificationPage.getContent();
+        long total = notificationRepository.countForUser(userId, email, type);
+        long unread = countUnread(user);
 
         Map<Long, String> eventNames = loadEventNames(pageItems);
         List<NotificationResponse> items = pageItems.stream()
@@ -522,7 +511,7 @@ public class NotificationService {
         return NotificationListResponse.builder()
                 .items(items)
                 .unreadCount(unread)
-                .total(sorted.size())
+                .total(total)
                 .page(resolvedPage)
                 .size(resolvedSize)
                 .build();
@@ -570,20 +559,9 @@ public class NotificationService {
     }
 
     private long countUnread(CurrentUserPrincipal user) {
-        Set<Long> unreadIds = new HashSet<>();
-        if (user.getUserId() != null) {
-            for (Notification notification :
-                    notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(user.getUserId())) {
-                unreadIds.add(notification.getId());
-            }
-        }
-        if (StringUtils.hasText(user.getEmail())) {
-            for (Notification notification :
-                    notificationRepository.findByEmailIgnoreCaseAndIsReadFalseOrderByCreatedAtDesc(user.getEmail())) {
-                unreadIds.add(notification.getId());
-            }
-        }
-        return unreadIds.size();
+        Long userId = user.getUserId();
+        String email = StringUtils.hasText(user.getEmail()) ? user.getEmail() : "";
+        return notificationRepository.countUnreadForUser(userId, email);
     }
 
     private int resolvePageSize(Integer size) {

@@ -16,11 +16,13 @@ import com.seal.hackathon.common.enums.UserStatus;
 import com.seal.hackathon.contest.entity.Event;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.notification.repository.NotificationRepository;
+import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.entity.TeamMember;
 import com.seal.hackathon.registration.repository.TeamMemberRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.support.IntegrationTestConfig;
+import com.seal.hackathon.support.IntegrationTestDataCleaner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
@@ -87,6 +89,12 @@ public class NotificationIntegrationTest {
     @Autowired
     NotificationRepository notificationRepository;
 
+    @Autowired
+    NotificationService notificationService;
+
+    @Autowired
+    IntegrationTestDataCleaner dataCleaner;
+
     User organizer;
     User participant;
     Event event;
@@ -94,7 +102,7 @@ public class NotificationIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        notificationRepository.deleteAll();
+        dataCleaner.clearEventMessaging();
         teamMemberRepository.deleteAll();
         teamRepository.deleteAll();
         eventRepository.deleteAll();
@@ -110,7 +118,11 @@ public class NotificationIntegrationTest {
                 .createdAt(now)
                 .updatedAt(now)
                 .build());
-        userRoleRepository.save(UserRole.builder().userId(organizer.getId()).role(SystemRole.ORGANIZER).build());
+        userRoleRepository.save(UserRole.builder()
+                .userId(organizer.getId())
+                .role(SystemRole.ORGANIZER)
+                .createdAt(now)
+                .build());
 
         participant = userRepository.save(User.builder()
                 .email("participant-notif@example.com")
@@ -124,6 +136,9 @@ public class NotificationIntegrationTest {
         event = eventRepository.save(Event.builder()
                 .name("Notification Test Event")
                 .status(EventStatus.REGISTRATION_OPEN)
+                .maxTeams(50)
+                .minTeamSize(1)
+                .maxTeamSize(5)
                 .createdBy(organizer.getId())
                 .createdAt(now)
                 .updatedAt(now)
@@ -132,6 +147,8 @@ public class NotificationIntegrationTest {
         team = teamRepository.save(Team.builder()
                 .eventId(event.getId())
                 .name("Team Alpha")
+                .contactEmail(participant.getEmail())
+                .contactUserId(participant.getId())
                 .status(TeamStatus.CONFIRMED)
                 .createdAt(now)
                 .updatedAt(now)
@@ -202,7 +219,7 @@ public class NotificationIntegrationTest {
         assertThat(notificationRepository.findByEmailIgnoreCaseOrderByCreatedAtDesc(participant.getEmail()))
                 .allMatch(row -> row.getUserId() == null);
 
-        notificationRepository.backfillUserIdByEmail(participant.getId(), participant.getEmail());
+        notificationService.backfillUserIdOnLogin(participant.getId(), participant.getEmail());
 
         assertThat(notificationRepository.findByUserIdOrderByCreatedAtDesc(participant.getId()))
                 .hasSize(1)
@@ -261,7 +278,11 @@ public class NotificationIntegrationTest {
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build());
-        userRoleRepository.save(UserRole.builder().userId(judge.getId()).role(SystemRole.JUDGE).build());
+        userRoleRepository.save(UserRole.builder()
+                .userId(judge.getId())
+                .role(SystemRole.JUDGE)
+                .createdAt(OffsetDateTime.now())
+                .build());
 
         mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/events/" + event.getId() + "/announcements")
                         .header("Authorization", orgToken)

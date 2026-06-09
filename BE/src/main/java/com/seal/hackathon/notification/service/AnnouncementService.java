@@ -2,6 +2,7 @@ package com.seal.hackathon.notification.service;
 
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
+import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.enums.AnnouncementAudience;
 import com.seal.hackathon.contest.entity.Event;
 import com.seal.hackathon.contest.repository.EventRepository;
@@ -26,13 +27,12 @@ public class AnnouncementService {
     private final EventRepository eventRepository;
     private final NotificationService notificationService;
     private final CurrentUserProvider currentUserProvider;
+    private final OrganizerAuthorizationService organizerAuthorizationService;
 
     @Transactional
     public AnnouncementResponse create(Long eventId, CreateAnnouncementRequest request) {
-        CurrentUserPrincipal principal = requireOrganizer();
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND"));
-        assertOrganizerOwnsEvent(principal, event);
+        CurrentUserPrincipal principal = organizerAuthorizationService.requireOrganizer();
+        Event event = organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
 
         boolean publishNow = request.getPublishNow() == null || Boolean.TRUE.equals(request.getPublishNow());
         AnnouncementAudience audience = request.getAudience() != null ? request.getAudience() : AnnouncementAudience.ALL;
@@ -60,10 +60,8 @@ public class AnnouncementService {
 
     @Transactional(readOnly = true)
     public List<AnnouncementResponse> listForOrganizer(Long eventId) {
-        CurrentUserPrincipal principal = requireOrganizer();
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND"));
-        assertOrganizerOwnsEvent(principal, event);
+        CurrentUserPrincipal principal = organizerAuthorizationService.requireOrganizer();
+        Event event = organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
 
         return announcementRepository.findByEventIdOrderByPublishedAtDescCreatedAtDesc(eventId).stream()
                 .map(row -> toResponse(row, event.getName(), row.getRecipientCount() != null ? row.getRecipientCount() : 0))
@@ -95,17 +93,4 @@ public class AnnouncementService {
                 .build();
     }
 
-    private CurrentUserPrincipal requireOrganizer() {
-        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
-        if (principal == null || !principal.getRoles().contains("ORGANIZER")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
-        }
-        return principal;
-    }
-
-    private void assertOrganizerOwnsEvent(CurrentUserPrincipal principal, Event event) {
-        if (event.getCreatedBy() != null && !event.getCreatedBy().equals(principal.getUserId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "EVENT_ACCESS_DENIED");
-        }
-    }
 }
