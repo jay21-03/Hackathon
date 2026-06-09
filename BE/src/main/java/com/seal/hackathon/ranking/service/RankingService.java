@@ -1,7 +1,6 @@
 package com.seal.hackathon.ranking.service;
 
-import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
-import com.seal.hackathon.authprofile.security.CurrentUserProvider;
+import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.enums.ScoreSheetStatus;
 import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.contest.entity.Board;
@@ -12,7 +11,10 @@ import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
+import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.notification.service.NotificationService;
+import com.seal.hackathon.registration.service.AuditLogWriter;
 import com.seal.hackathon.ranking.dto.BoardRankingResponse;
 import com.seal.hackathon.ranking.dto.CalculateRankingResponse;
 import com.seal.hackathon.ranking.dto.EventRankingsResponse;
@@ -55,18 +57,21 @@ public class RankingService {
     private final ScoreCriteriaRepository scoreCriteriaRepository;
     private final ScoreSheetRepository scoreSheetRepository;
     private final ScoreItemRepository scoreItemRepository;
-    private final CurrentUserProvider currentUserProvider;
+    private final OrganizerAuthorizationService organizerAuthorizationService;
     private final NotificationService notificationService;
+    private final PublishReadinessService publishReadinessService;
+    private final CurrentUserProvider currentUserProvider;
+    private final AuditLogWriter auditLogWriter;
 
     @Transactional(readOnly = true)
     public BoardRankingResponse getBoardRanking(Long boardId) {
-        assertOrganizerOwnsBoard(boardId);
+        organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
         return buildBoardRankingResponse(loadBoard(boardId), false);
     }
 
     @Transactional(readOnly = true)
     public EventRankingsResponse getEventRankings(Long eventId) {
-        assertOrganizerOwnsEvent(requireOrganizer(), eventId);
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
         List<BoardRankingResponse> boards = new ArrayList<>();
@@ -124,7 +129,7 @@ public class RankingService {
 
     @Transactional
     public BoardRankingResponse calculateBoardRanking(Long boardId, boolean force) {
-        assertOrganizerOwnsBoard(boardId);
+        organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
         Board board = loadBoard(boardId);
         if (!force && rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(boardId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "RANKING_PUBLISHED");
@@ -137,7 +142,7 @@ public class RankingService {
     public CalculateRankingResponse calculateRoundRanking(Long roundId, boolean force) {
         Round round = roundRepository.findById(roundId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Round not found"));
-        assertOrganizerOwnsEvent(requireOrganizer(), round.getEventId());
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(round.getEventId());
         int boardsCalculated = 0;
         int teamsRanked = 0;
         for (Board board : boardRepository.findByRoundId(roundId)) {
@@ -157,7 +162,8 @@ public class RankingService {
 
     @Transactional
     public BoardRankingResponse publishBoardRanking(Long boardId) {
-        assertOrganizerOwnsBoard(boardId);
+        organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
+        publishReadinessService.requireBoardReadyToPublish(boardId);
         Board board = loadBoard(boardId);
         if (!rankingResultRepository.existsByBoardId(boardId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "RANKING_NOT_CALCULATED");
@@ -173,12 +179,21 @@ public class RankingService {
         Event event = eventRepository.findById(round.getEventId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
         notificationService.notifyRankingPublished(event, board, rows);
+        CurrentUserPrincipal actor = currentUserProvider.getCurrentUser();
+        auditLogWriter.write(
+                actor.getUserId(),
+                actor.getEmail(),
+                "RANKING_PUBLISHED",
+                "Board",
+                boardId,
+                null,
+                "{\"boardId\":" + boardId + ",\"teamCount\":" + rows.size() + "}");
         return buildBoardRankingResponse(board, true);
     }
 
     @Transactional
     public CalculateRankingResponse publishEventRankings(Long eventId) {
-        assertOrganizerOwnsEvent(requireOrganizer(), eventId);
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         int publishedBoards = 0;
         int newlyPublishedBoards = 0;
         int teamsPublished = 0;
@@ -201,6 +216,15 @@ public class RankingService {
         if (publishedBoards == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "RANKING_NOT_CALCULATED");
         }
+        CurrentUserPrincipal actor = currentUserProvider.getCurrentUser();
+        auditLogWriter.write(
+                actor.getUserId(),
+                actor.getEmail(),
+                "EVENT_RANKINGS_PUBLISHED",
+                "Event",
+                eventId,
+                null,
+                "{\"eventId\":" + eventId + ",\"boardsPublished\":" + publishedBoards + ",\"newlyPublished\":" + newlyPublishedBoards + "}");
         return CalculateRankingResponse.builder()
                 .boardsCalculated(publishedBoards)
                 .teamsRanked(teamsPublished)
@@ -376,32 +400,6 @@ public class RankingService {
     private Board loadBoard(Long boardId) {
         return boardRepository.findById(boardId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
-    }
-
-    private CurrentUserPrincipal requireOrganizer() {
-        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
-        if (principal == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
-        }
-        if (principal.getRoles() == null || !principal.getRoles().contains("ORGANIZER")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
-        }
-        return principal;
-    }
-
-    private void assertOrganizerOwnsBoard(Long boardId) {
-        Board board = loadBoard(boardId);
-        Round round = roundRepository.findById(board.getRoundId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Round not found"));
-        assertOrganizerOwnsEvent(requireOrganizer(), round.getEventId());
-    }
-
-    private void assertOrganizerOwnsEvent(CurrentUserPrincipal principal, Long eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
-        if (event.getCreatedBy() != null && !event.getCreatedBy().equals(principal.getUserId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "EVENT_ACCESS_DENIED");
-        }
     }
 
     private record ScoredTeam(

@@ -3,6 +3,7 @@ package com.seal.hackathon.ranking;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
+import com.seal.hackathon.support.IntegrationTestDataCleaner;
 import com.seal.hackathon.support.IntegrationTestConfig;
 import com.seal.hackathon.authprofile.entity.User;
 import com.seal.hackathon.authprofile.entity.UserRole;
@@ -115,6 +116,9 @@ class RankingIntegrationTest {
     @Autowired
     RankingResultRepository rankingResultRepository;
 
+    @Autowired
+    IntegrationTestDataCleaner dataCleaner;
+
     User organizer;
     User judge;
     Event event;
@@ -133,6 +137,7 @@ class RankingIntegrationTest {
         teamRepository.deleteAll();
         boardRepository.deleteAll();
         roundRepository.deleteAll();
+        dataCleaner.clearNotifications();
         eventRepository.deleteAll();
         userRoleRepository.deleteAll();
         userRepository.deleteAll();

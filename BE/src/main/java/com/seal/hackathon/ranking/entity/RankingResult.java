@@ -4,7 +4,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
@@ -31,4 +33,8 @@ public class RankingResult {
     private BigDecimal averageScore;
     private OffsetDateTime calculatedAt;
     private OffsetDateTime publishedAt;
+
+    @Version
+    @Column(nullable = false)
+    private Integer version;
 }
