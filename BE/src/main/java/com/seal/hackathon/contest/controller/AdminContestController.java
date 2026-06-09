@@ -1,6 +1,7 @@
 package com.seal.hackathon.contest.controller;
 
 import com.seal.hackathon.common.response.ApiResponse;
+import com.seal.hackathon.common.response.PagedResult;
 import com.seal.hackathon.contest.dto.BoardResponse;
 import com.seal.hackathon.contest.dto.BoardSlotResponse;
 import com.seal.hackathon.contest.dto.BoardTeamResponse;
@@ -17,6 +18,8 @@ import com.seal.hackathon.contest.dto.UpdateBoardSlotRequest;
 import com.seal.hackathon.contest.dto.UpdateEventRequest;
 import com.seal.hackathon.contest.dto.UpdateProblemRequest;
 import com.seal.hackathon.contest.dto.UpdateRoundRequest;
+import com.seal.hackathon.authprofile.security.CurrentUserProvider;
+import com.seal.hackathon.common.idempotency.IdempotencyExecutor;
 import com.seal.hackathon.contest.service.ContestManagementService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
@@ -28,7 +31,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.seal.hackathon.contest.dto.AssignRequest;
 import com.seal.hackathon.contest.dto.AssignResponse;
@@ -46,6 +51,8 @@ import com.seal.hackathon.contest.dto.RandomAssignResponse;
 public class AdminContestController {
 
     private final ContestManagementService contestManagementService;
+    private final IdempotencyExecutor idempotencyExecutor;
+    private final CurrentUserProvider currentUserProvider;
 
     @PostMapping("/events")
     public ApiResponse<EventResponse> createEvent(@Valid @RequestBody CreateEventRequest request) {
@@ -71,14 +78,19 @@ public class AdminContestController {
 
     @GetMapping("/events/{eventId}/rounds")
     public ApiResponse<List<RoundResponse>> getRoundsByEvent(@PathVariable Long eventId) {
-        return ApiResponse.ok(contestManagementService.listRoundsByEvent(eventId));
+        return ApiResponse.ok(contestManagementService.listAdminRoundsByEvent(eventId));
     }
 
     @PostMapping("/events/{eventId}/rounds")
     public ApiResponse<RoundResponse> createRound(
             @PathVariable Long eventId,
-            @Valid @RequestBody CreateRoundRequest request) {
-        return ApiResponse.ok(contestManagementService.createRound(eventId, request));
+            @Valid @RequestBody CreateRoundRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Long userId = currentUserProvider.getCurrentUser().getUserId();
+        String path = "/api/v1/admin/events/" + eventId + "/rounds";
+        return ApiResponse.ok(idempotencyExecutor.execute(
+                userId, idempotencyKey, "POST", path, request, RoundResponse.class,
+                () -> contestManagementService.createRound(eventId, request)));
     }
 
     @GetMapping("/rounds/{roundId}")
@@ -94,15 +106,28 @@ public class AdminContestController {
     }
 
     @GetMapping("/rounds/{roundId}/boards")
-    public ApiResponse<List<BoardResponse>> getBoardsByRound(@PathVariable Long roundId) {
+    public ApiResponse<?> getBoardsByRound(
+            @PathVariable Long roundId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        if (page != null || size != null) {
+            int resolvedPage = page != null ? page : 0;
+            int resolvedSize = size != null ? size : 50;
+            return ApiResponse.ok(contestManagementService.listBoardsByRoundPaged(roundId, resolvedPage, resolvedSize));
+        }
         return ApiResponse.ok(contestManagementService.listBoardsByRound(roundId));
     }
 
     @PostMapping("/rounds/{roundId}/boards")
     public ApiResponse<BoardResponse> createBoard(
             @PathVariable Long roundId,
-            @Valid @RequestBody CreateBoardRequest request) {
-        return ApiResponse.ok(contestManagementService.createBoard(roundId, request));
+            @Valid @RequestBody CreateBoardRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Long userId = currentUserProvider.getCurrentUser().getUserId();
+        String path = "/api/v1/admin/rounds/" + roundId + "/boards";
+        return ApiResponse.ok(idempotencyExecutor.execute(
+                userId, idempotencyKey, "POST", path, request, BoardResponse.class,
+                () -> contestManagementService.createBoard(roundId, request)));
     }
 
     @GetMapping("/boards/{boardId}")
@@ -145,8 +170,18 @@ public class AdminContestController {
     public ApiResponse<AssignResponse> assignTeamToSlot(
             @PathVariable Long roundId,
             @PathVariable Long slotId,
-            @Valid @RequestBody AssignRequest request) {
-        return ApiResponse.ok(contestManagementService.assignTeamToSlot(roundId, slotId, request));
+            @Valid @RequestBody AssignRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Long userId = currentUserProvider.getCurrentUser().getUserId();
+        String path = "/api/v1/admin/rounds/" + roundId + "/boards/slots/" + slotId + "/assign";
+        return ApiResponse.ok(idempotencyExecutor.execute(
+                userId,
+                idempotencyKey,
+                "POST",
+                path,
+                request,
+                AssignResponse.class,
+                () -> contestManagementService.assignTeamToSlot(roundId, slotId, request)));
     }
 
     @PostMapping("/rounds/{roundId}/boards/slots/{slotId}/unassign")
@@ -164,22 +199,38 @@ public class AdminContestController {
     @PostMapping("/rounds/{roundId}/boards/slots/move")
     public ApiResponse<MoveResponse> moveTeamBetweenSlots(
             @PathVariable Long roundId,
-            @Valid @RequestBody MoveRequest request) {
-        return ApiResponse.ok(contestManagementService.moveTeamBetweenSlots(roundId, request.getFromSlotId(), request.getToSlotId()));
+            @Valid @RequestBody MoveRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Long userId = currentUserProvider.getCurrentUser().getUserId();
+        String path = "/api/v1/admin/rounds/" + roundId + "/boards/slots/move";
+        return ApiResponse.ok(idempotencyExecutor.execute(
+                userId, idempotencyKey, "POST", path, request, MoveResponse.class,
+                () -> contestManagementService.moveTeamBetweenSlots(
+                        roundId, request.getFromSlotId(), request.getToSlotId())));
     }
 
     @PostMapping("/rounds/{roundId}/boards/slots/swap")
     public ApiResponse<SwapResponse> swapSlots(
             @PathVariable Long roundId,
-            @Valid @RequestBody SwapRequest request) {
-        return ApiResponse.ok(contestManagementService.swapSlots(roundId, request.getSlotAId(), request.getSlotBId()));
+            @Valid @RequestBody SwapRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Long userId = currentUserProvider.getCurrentUser().getUserId();
+        String path = "/api/v1/admin/rounds/" + roundId + "/boards/slots/swap";
+        return ApiResponse.ok(idempotencyExecutor.execute(
+                userId, idempotencyKey, "POST", path, request, SwapResponse.class,
+                () -> contestManagementService.swapSlots(roundId, request.getSlotAId(), request.getSlotBId())));
     }
 
     @PostMapping("/rounds/{roundId}/boards/assign/random")
     public ApiResponse<RandomAssignResponse> randomAssign(
             @PathVariable Long roundId,
-            @Valid @RequestBody RandomAssignRequest request) {
-        return ApiResponse.ok(contestManagementService.randomAssign(roundId, request));
+            @Valid @RequestBody RandomAssignRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Long userId = currentUserProvider.getCurrentUser().getUserId();
+        String path = "/api/v1/admin/rounds/" + roundId + "/boards/assign/random";
+        return ApiResponse.ok(idempotencyExecutor.execute(
+                userId, idempotencyKey, "POST", path, request, RandomAssignResponse.class,
+                () -> contestManagementService.randomAssign(roundId, request)));
     }
 
     @GetMapping("/boards/{boardId}/problems")
@@ -190,8 +241,13 @@ public class AdminContestController {
     @PostMapping("/boards/{boardId}/problems")
     public ApiResponse<ProblemResponse> createProblem(
             @PathVariable Long boardId,
-            @Valid @RequestBody CreateProblemRequest request) {
-        return ApiResponse.ok(contestManagementService.createProblem(boardId, request));
+            @Valid @RequestBody CreateProblemRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Long userId = currentUserProvider.getCurrentUser().getUserId();
+        String path = "/api/v1/admin/boards/" + boardId + "/problems";
+        return ApiResponse.ok(idempotencyExecutor.execute(
+                userId, idempotencyKey, "POST", path, request, ProblemResponse.class,
+                () -> contestManagementService.createProblem(boardId, request)));
     }
 
     @GetMapping("/problems/{problemId}")

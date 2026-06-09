@@ -15,5 +15,7 @@ public class EventListItemResponse {
     private LocalDate endDate;
     private OffsetDateTime registrationStartAt;
     private OffsetDateTime registrationEndAt;
+    private Integer minTeamSize;
+    private Integer maxTeamSize;
     private EventStatus status;
 }
