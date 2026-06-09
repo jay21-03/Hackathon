@@ -31,23 +31,28 @@ export interface TeamDetailResponse {
   rejectedReason?: string | null;
 }
 
+export async function fetchEventTeams(eventId: number): Promise<TeamDetailResponse[]>;
+export async function fetchEventTeams(
+  eventId: number,
+  options: { page?: number; size?: number; status?: string }
+): Promise<PagedResult<TeamDetailResponse>>;
 export async function fetchEventTeams(
   eventId: number,
   options?: { page?: number; size?: number; status?: string }
-) {
+): Promise<TeamDetailResponse[] | PagedResult<TeamDetailResponse>> {
   const { data } = await apiClient.get<ApiResponse<PagedResult<TeamDetailResponse>>>(
     `/v1/events/${eventId}/teams`,
     { params: options }
   );
-  return (
+  const paged =
     data.data ?? {
       items: [],
       page: 0,
       size: 0,
       total: 0,
       totalPages: 0
-    }
-  );
+    };
+  return options ? paged : paged.items;
 }
 
 export async function updateTeamStatus(teamId: number, status: string, reason?: string) {
