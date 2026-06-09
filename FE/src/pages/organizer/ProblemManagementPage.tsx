@@ -1,28 +1,24 @@
-import { useCallback, useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
-import { invalidateAfterBoardMutation } from "../../lib/invalidateBoardQueries";
 import { Button, ButtonLink } from "../../components/ui/Button";
 import { NextStepPanel } from "../../components/ui/NextStepPanel";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { EventSelector } from "../../components/ui/EventSelector";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { problemFormSchema } from "../../domain/schemas";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
-import { getApiErrorMessage } from "../../utils/apiError";
+import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
+import { useProblemManagement } from "../../hooks/useProblemManagement";
+import { resolveApiError } from "../../utils/apiError";
+import { createIdempotencyKey } from "../../utils/idempotency";
 import { zodFirstError } from "../../utils/formValidation";
-import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
 import {
   createProblem,
   deleteProblem,
-  fetchBoardProblems,
-  fetchEventRounds,
-  fetchRoundBoards,
-  updateProblem,
-  type BoardResponse,
-  type ProblemResponse
+  updateProblem
 } from "../../services/contestApi";
 
 function toLocalInput(iso: string) {
@@ -37,91 +33,43 @@ function toIsoFromLocal(value: string) {
 
 export function ProblemManagementPage() {
   const { notify } = useToast();
-  const queryClient = useQueryClient();
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const [boards, setBoards] = useState<BoardResponse[]>([]);
-  const [boardId, setBoardId] = useState<number | null>(null);
-  const [problem, setProblem] = useState<ProblemResponse | null>(null);
+  const { steps: setupSteps } = useEventSetupProgress(eventId, "/organizer/problems");
+  const {
+    rounds,
+    selectedRoundId,
+    setSelectedRoundId,
+    boards,
+    boardId,
+    setBoardId,
+    problem,
+    loading,
+    error,
+    invalidate
+  } = useProblemManagement(eventId);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [releaseAt, setReleaseAt] = useState("");
   const [closeAt, setCloseAt] = useState("");
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const loadBoards = useCallback(async () => {
-    if (!eventId) {
-      setBoards([]);
-      setBoardId(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const rounds = await fetchEventRounds(eventId);
-      const round = rounds[0];
-      if (!round) {
-        setBoards([]);
-        setBoardId(null);
-        return;
-      }
-      const list = await fetchRoundBoards(round.id);
-      setBoards(list);
-      setBoardId((current) => current ?? list[0]?.id ?? null);
-    } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Không tải được danh sách bảng.")), "danger");
-    } finally {
-      setLoading(false);
-    }
-  }, [eventId, notify]);
-
   useEffect(() => {
-    void loadBoards();
-  }, [loadBoards]);
-
-  useEffect(() => {
-    if (!boardId) {
-      setProblem(null);
-      setTitle("");
-      setDescription("");
-      setReleaseAt("");
-      setCloseAt("");
-      return;
-    }
-    let cancelled = false;
-    fetchBoardProblems(boardId)
-      .then((list) => {
-        if (cancelled) return;
-        const current = list[0] ?? null;
-        setProblem(current);
-        setTitle(current?.title ?? "");
-        setDescription(current?.description ?? "");
-        setReleaseAt(current ? toLocalInput(current.releaseAt) : "");
-        setCloseAt(current?.closeAt ? toLocalInput(current.closeAt) : "");
-      })
-      .catch(() => {
-        if (!cancelled) notify("Không tải được đề thi.", "danger");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [boardId, notify]);
+    setTitle(problem?.title ?? "");
+    setDescription(problem?.description ?? "");
+    setReleaseAt(problem ? toLocalInput(problem.releaseAt) : "");
+    setCloseAt(problem?.closeAt ? toLocalInput(problem.closeAt) : "");
+  }, [problem]);
 
   async function handleDeleteProblem() {
     if (!problem) return;
     setDeleting(true);
     try {
       await deleteProblem(problem.id);
-      await invalidateAfterBoardMutation(queryClient);
-      setProblem(null);
-      setTitle("");
-      setDescription("");
-      setReleaseAt("");
-      setCloseAt("");
+      await invalidate();
       notify("Đã xóa đề thi.", "success");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Không xóa được đề thi.")), "danger");
+      notify(resolveApiError(err, "Không xóa được đề thi."), "danger");
     } finally {
       setDeleting(false);
     }
@@ -142,10 +90,12 @@ export function ProblemManagementPage() {
         releaseAt: toIsoFromLocal(parsed.data.releaseAt),
         closeAt: toIsoFromLocal(parsed.data.closeAt)
       };
-      const saved = problem
-        ? await updateProblem(problem.id, payload)
-        : await createProblem(boardId, payload);
-      setProblem(saved);
+      if (problem) {
+        await updateProblem(problem.id, payload);
+      } else {
+        await createProblem(boardId, payload, createIdempotencyKey(`create-problem-${boardId}`));
+      }
+      await invalidate();
       notify(
         problem
           ? "Đã cập nhật đề thi."
@@ -153,7 +103,7 @@ export function ProblemManagementPage() {
         "success"
       );
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Không lưu được đề thi.")), "danger");
+      notify(resolveApiError(err, "Không lưu được đề thi."), "danger");
     } finally {
       setSaving(false);
     }
@@ -184,6 +134,19 @@ export function ProblemManagementPage() {
         }
       />
 
+      <WorkflowSteps
+        title="Quy trình thiết lập"
+        description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
+        steps={setupSteps}
+        activeHref="/organizer/problems"
+      />
+
+      {error ? (
+        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
+          <p className="font-body-sm text-on-surface">{error}</p>
+        </div>
+      ) : null}
+
       {boards.length === 0 ? (
         <EmptyState
           icon="grid_view"
@@ -198,6 +161,22 @@ export function ProblemManagementPage() {
       ) : (
         <section className="grid gap-lg lg:grid-cols-[1fr_320px]">
           <form className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
+            {rounds.length > 1 ? (
+              <label className="flex flex-col gap-xs">
+                <span className="font-label-sm normal-case text-on-surface-variant">Vòng thi</span>
+                <select
+                  className="form-input"
+                  value={selectedRoundId ?? ""}
+                  onChange={(e) => setSelectedRoundId(Number(e.target.value))}
+                >
+                  {rounds.map((round) => (
+                    <option key={round.id} value={round.id}>
+                      {round.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label className="flex flex-col gap-xs">
               <span className="font-label-sm normal-case text-on-surface-variant">Bảng thi</span>
               <select

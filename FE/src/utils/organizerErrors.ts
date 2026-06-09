@@ -3,29 +3,27 @@ import { getApiErrorMessage } from "./apiError";
 const organizerErrorMap: Record<string, string> = {
   DATA_INTEGRITY_VIOLATION:
     "Không thể gỡ vì còn dữ liệu liên quan (ví dụ phiếu chấm). Hệ thống sẽ tự xóa phiếu nháp khi gỡ giám khảo.",
-  ONLY_ORGANIZER:
-    "Tài khoản chưa có quyền ban tổ chức. Gán role ORGANIZER rồi đăng nhập lại.",
-  "Organizer role required":
-    "Tài khoản chưa có quyền ban tổ chức. Gán role ORGANIZER rồi đăng nhập lại.",
-  TARGET_NOT_MENTOR: "Người được chọn chưa có role MENTOR.",
-  TARGET_NOT_JUDGE: "Người được chọn chưa có role JUDGE.",
-  SLOT_OCCUPIED: "Slot đã có đội — bật «Ghi đè» hoặc gỡ đội trước.",
-  TEAM_NOT_CONFIRMED: "Chỉ gán đội ở trạng thái Đã xác nhận.",
-  TEAM_ALREADY_ASSIGNED: "Đội đã được gán vào một slot khác trong vòng này.",
+  ONLY_ORGANIZER: "Tài khoản chưa có quyền ban tổ chức. Liên hệ quản trị để được cấp quyền.",
+  "Organizer role required": "Tài khoản chưa có quyền ban tổ chức. Liên hệ quản trị để được cấp quyền.",
+  TARGET_NOT_MENTOR: "Người được chọn chưa có vai trò mentor.",
+  TARGET_NOT_JUDGE: "Người được chọn chưa có vai trò giám khảo.",
+  SLOT_OCCUPIED: "Vị trí đã có đội — bật «Ghi đè» hoặc gỡ đội trước.",
+  TEAM_NOT_CONFIRMED: "Chỉ gán đội ở trạng thái đã xác nhận.",
+  TEAM_ALREADY_ASSIGNED: "Đội đã được gán vào một vị trí khác trong vòng này.",
   TEAM_EVENT_MISMATCH: "Đội không thuộc cuộc thi của vòng đang chọn.",
   ROUND_NOT_PLANNED:
     "Vòng đã vào giai đoạn chấm điểm hoặc đã kết thúc — không thể phân công ngẫu nhiên.",
-  FROM_SLOT_EMPTY: "Slot nguồn đang trống.",
-  TO_SLOT_OCCUPIED: "Slot đích đã có đội.",
-  SLOT_EMPTY: "Slot đang trống, không cần gỡ.",
-  SLOT_HAS_TEAM: "Chỉ xóa được slot trống — gỡ đội trước.",
+  FROM_SLOT_EMPTY: "Vị trí nguồn đang trống.",
+  TO_SLOT_OCCUPIED: "Vị trí đích đã có đội.",
+  SLOT_EMPTY: "Vị trí đang trống, không cần gỡ.",
+  SLOT_HAS_TEAM: "Chỉ xóa được vị trí trống — gỡ đội trước.",
   "startAt must be before endAt": "Thời gian kết thúc vòng phải sau thời gian bắt đầu.",
   "closeAt must be after releaseAt": "Thời gian đóng đề phải sau thời gian mở đề.",
   "Registration end date has passed": "Đã qua hạn đóng đăng ký — cập nhật ngày đăng ký trước.",
-  "teamId must not be null": "Chọn đội để gán vào slot.",
+  "teamId must not be null": "Chọn đội để gán vào vị trí.",
   "userId must not be null": "Chọn người để phân công.",
-  "fromSlotId must not be null": "Chọn slot nguồn.",
-  "toSlotId must not be null": "Chọn slot đích.",
+  "fromSlotId must not be null": "Chọn vị trí nguồn.",
+  "toSlotId must not be null": "Chọn vị trí đích.",
   RUBRIC_LOCKED: "Tiêu chí chấm đã khóa — có phiếu chấm đã nộp, không thể sửa.",
   RUBRIC_NOT_CONFIGURED: "Chưa cấu hình tiêu chí chấm cho vòng này.",
   INVALID_WEIGHT_SUM: "Tổng trọng số phải bằng 100%.",
@@ -50,27 +48,42 @@ const organizerErrorMap: Record<string, string> = {
   EVENT_ACCESS_DENIED: "Bạn không có quyền quản lý cuộc thi này.",
   STAFF_INVITATION_ALREADY_PENDING: "Đã có lời mời đang chờ cho email và vai trò này trên bảng.",
   STAFF_INVITE_EMAIL_MISMATCH: "Email đăng nhập không khớp email được mời.",
-  RANKING_PUBLISHED: "Bảng đã công bố — dùng «Tính lại (force)» để tính lại.",
+  RANKING_PUBLISHED: "Bảng đã công bố — dùng «Tính lại» để tính lại.",
   RANKING_NOT_CALCULATED: "Chưa tính xếp hạng — tính xếp hạng trước khi công bố.",
-  NO_BOARDS_CALCULATED: "Không bảng nào được tính — thiếu phiếu SUBMITTED hoặc bảng đã công bố (dùng force).",
+  NO_BOARDS_CALCULATED:
+    "Không bảng nào được tính — thiếu phiếu chấm đã nộp hoặc bảng đã công bố (dùng tính lại).",
   ALREADY_PUBLISHED: "Tất cả bảng đã được công bố trước đó.",
   NOTIFICATION_NOT_FOUND: "Không tìm thấy thông báo.",
   NOTIFICATION_FORBIDDEN: "Bạn không có quyền xem thông báo này.",
-  EVENT_NOT_FOUND: "Không tìm thấy cuộc thi."
+  EVENT_NOT_FOUND: "Không tìm thấy cuộc thi.",
+  CONCURRENT_MODIFICATION: "Dữ liệu vừa được cập nhật bởi người khác — tải lại và thử lại.",
+  TEAM_WAITLIST: "Đội đang trong danh sách chờ.",
+  TEAM_REJECTED: "Hồ sơ đội đã bị từ chối.",
+  PUBLISH_NOT_READY: "Chưa đủ điều kiện công bố — hoàn tất tiêu chí chấm, phân công GK và chấm điểm trước.",
+  "Chưa phân công giám khảo.": "Chưa phân công giám khảo cho bảng này.",
+  "Chưa gán đội vào slot.": "Chưa gán đội vào bảng thi.",
+  "Chấm điểm chưa hoàn tất": "Chấm điểm chưa hoàn tất — còn phiếu chưa nộp."
 };
 
+/** Alias của `resolveApiError` — giữ tương thích import cũ. */
 export function resolveOrganizerApiError(error: unknown, fallback: string) {
   return mapOrganizerErrorMessage(getApiErrorMessage(error, fallback));
 }
 
+
 export function mapOrganizerErrorMessage(message: string) {
   const trimmed = message.trim();
+  if (organizerErrorMap[trimmed]) return organizerErrorMap[trimmed];
+
   const lower = trimmed.toLowerCase();
   if (lower.includes("forbidden") || lower.includes("organizer role required")) {
     return organizerErrorMap.ONLY_ORGANIZER;
   }
   for (const [key, vi] of Object.entries(organizerErrorMap)) {
     if (trimmed.includes(key)) return vi;
+  }
+  if (/^[A-Z][A-Z0-9_]+$/.test(trimmed)) {
+    return "Không thực hiện được thao tác. Vui lòng thử lại hoặc liên hệ ban tổ chức.";
   }
   return trimmed;
 }
