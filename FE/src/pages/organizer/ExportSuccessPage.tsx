@@ -12,8 +12,9 @@ import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { queryKeys } from "../../lib/queryKeys";
 import { fetchEventRankings } from "../../services/rankingApi";
-import { getApiErrorMessage } from "../../utils/apiError";
+import { resolveApiError } from "../../utils/apiError";
 import { downloadRankingsCsv } from "../../utils/exportRankingsCsv";
+import { downloadRankingsPdf } from "../../utils/exportRankingsPdf";
 import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 
 export function ExportSuccessPage() {
@@ -27,9 +28,13 @@ export function ExportSuccessPage() {
     enabled: Boolean(eventId)
   });
 
-  function handleExport(publishedOnly: boolean) {
+  function filteredBoards(publishedOnly: boolean) {
     const boards = rankingsQuery.data?.boards ?? [];
-    const filtered = publishedOnly ? boards.filter((b) => b.published) : boards;
+    return publishedOnly ? boards.filter((b) => b.published) : boards;
+  }
+
+  function handleExportCsv(publishedOnly: boolean) {
+    const filtered = filteredBoards(publishedOnly);
     if (filtered.length === 0 || filtered.every((b) => b.entries.length === 0)) {
       notify("Không có dữ liệu để xuất.", "warning");
       return;
@@ -38,6 +43,23 @@ export function ExportSuccessPage() {
     try {
       downloadRankingsCsv(filtered, `rankings-event-${eventId}${publishedOnly ? "-published" : ""}.csv`);
       notify("Đã tải file CSV.", "success");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function handleExportPdf(publishedOnly: boolean) {
+    const filtered = filteredBoards(publishedOnly);
+    if (filtered.length === 0 || filtered.every((b) => b.entries.length === 0)) {
+      notify("Không có dữ liệu để xuất.", "warning");
+      return;
+    }
+    setExporting(true);
+    try {
+      downloadRankingsPdf(filtered, `rankings-event-${eventId}${publishedOnly ? "-published" : ""}.pdf`);
+      notify("Đã mở bản in PDF — chọn «Lưu thành PDF» trong hộp thoại in.", "success");
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Xuất PDF thất bại.", "danger");
     } finally {
       setExporting(false);
     }
@@ -67,7 +89,7 @@ export function ExportSuccessPage() {
 
       {rankingsQuery.error ? (
         <RetryPanel
-          message={getApiErrorMessage(rankingsQuery.error)}
+          message={resolveApiError(rankingsQuery.error, "Không tải được dữ liệu xuất báo cáo.")}
           onRetry={() => void rankingsQuery.refetch()}
         />
       ) : null}
@@ -87,11 +109,17 @@ export function ExportSuccessPage() {
         />
       ) : (
         <div className="flex flex-wrap gap-md">
-          <Button type="button" loading={exporting} onClick={() => handleExport(false)}>
-            Xuất tất cả (nháp + đã công bố)
+          <Button type="button" loading={exporting} onClick={() => handleExportCsv(false)}>
+            Xuất CSV (tất cả)
           </Button>
-          <Button type="button" variant="secondary" loading={exporting} onClick={() => handleExport(true)}>
-            Chỉ bảng đã công bố
+          <Button type="button" variant="secondary" loading={exporting} onClick={() => handleExportCsv(true)}>
+            Xuất CSV (đã công bố)
+          </Button>
+          <Button type="button" variant="ghost" loading={exporting} onClick={() => handleExportPdf(false)}>
+            In / PDF (tất cả)
+          </Button>
+          <Button type="button" variant="ghost" loading={exporting} onClick={() => handleExportPdf(true)}>
+            In / PDF (đã công bố)
           </Button>
           {eventId ? (
             <Link

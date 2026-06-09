@@ -13,20 +13,28 @@ import { NextStepPanel } from "../../components/ui/NextStepPanel";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
+import { enableScoring } from "../../config/features";
 import { queryKeys } from "../../lib/queryKeys";
 import {
   fetchEventRankings,
+  fetchPublishReadiness,
   publishBoardRanking,
   publishEventRankings
 } from "../../services/rankingApi";
-import { getApiErrorMessage } from "../../utils/apiError";
-import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
+import { createIdempotencyKey } from "../../utils/idempotency";
+import { invalidateAfterPublish } from "../../lib/invalidateRankingQueries";
+import { resolveApiError } from "../../utils/apiError";
 import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 
 export function PublishResultsPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { context: setupContext, loading: setupLoading } = useEventSetupProgress(
+    eventId,
+    "/organizer/publish-results"
+  );
   const [publishing, setPublishing] = useState(false);
   const [publishingBoardId, setPublishingBoardId] = useState<number | null>(null);
 
@@ -36,16 +44,31 @@ export function PublishResultsPage() {
     enabled: Boolean(eventId)
   });
 
+  const readinessQuery = useQuery({
+    queryKey: [...queryKeys.rankings.event(eventId), "publish-readiness"],
+    queryFn: () => fetchPublishReadiness(eventId!),
+    enabled: Boolean(eventId)
+  });
+
   async function invalidateRankings() {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.rankings.event(eventId) });
-    await queryClient.invalidateQueries({ queryKey: queryKeys.rankings.all });
+    await invalidateAfterPublish(queryClient, eventId);
+    await queryClient.invalidateQueries({
+      queryKey: [...queryKeys.rankings.event(eventId), "publish-readiness"]
+    });
+  }
+
+  const publishReady = readinessQuery.data?.ready !== false;
+
+  function isBoardPublishReady(boardId: number) {
+    const board = readinessQuery.data?.boards.find((row) => row.boardId === boardId);
+    return board?.ready ?? publishReady;
   }
 
   async function handlePublishAll() {
     if (!eventId) return;
     setPublishing(true);
     try {
-      const result = await publishEventRankings(eventId);
+      const result = await publishEventRankings(eventId, createIdempotencyKey("publish-all"));
       await invalidateRankings();
       const count = result.newlyPublishedBoards ?? result.boardsCalculated;
       if (result.message === "ALREADY_PUBLISHED" || count === 0) {
@@ -54,7 +77,7 @@ export function PublishResultsPage() {
         notify(`Đã công bố ${count} bảng mới.`, "success");
       }
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Công bố thất bại.")), "danger");
+      notify(resolveApiError(err, "Công bố thất bại."), "danger");
     } finally {
       setPublishing(false);
     }
@@ -63,18 +86,47 @@ export function PublishResultsPage() {
   async function handlePublishBoard(boardId: number) {
     setPublishingBoardId(boardId);
     try {
-      await publishBoardRanking(boardId);
+      await publishBoardRanking(boardId, createIdempotencyKey(`publish-board-${boardId}`));
       await invalidateRankings();
       notify("Đã công bố bảng này.", "success");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Công bố thất bại.")), "danger");
+      notify(resolveApiError(err, "Công bố thất bại."), "danger");
     } finally {
       setPublishingBoardId(null);
     }
   }
 
-  if (eventLoading || rankingsQuery.isLoading) {
+  if (eventLoading || setupLoading || rankingsQuery.isLoading) {
     return <ModuleSkeleton rows={5} variant="table" />;
+  }
+
+  if (!setupContext.hasBoards || (enableScoring && !setupContext.hasRubric)) {
+    return (
+      <div className="space-y-lg">
+        <PageHeader
+          eyebrow="Công bố"
+          title="Công bố kết quả"
+          description="Hoàn tất chấm điểm và tính xếp hạng trước khi công bố."
+          actions={<EventSelector events={events} eventId={eventId} onChange={setEventId} />}
+        />
+        <EmptyState
+          icon="campaign"
+          title="Chưa sẵn sàng công bố"
+          description={
+            !setupContext.hasBoards
+              ? "Cần tạo bảng thi và gán đội trước."
+              : "Thiết lập tiêu chí chấm và hoàn tất chấm điểm trước khi công bố."
+          }
+          action={
+            <Link to={!setupContext.hasBoards ? "/organizer/boards" : "/organizer/rubric"}>
+              <Button type="button" variant="ghost">
+                {!setupContext.hasBoards ? "Đến Bảng thi" : "Đến Tiêu chí chấm"}
+              </Button>
+            </Link>
+          }
+        />
+      </div>
+    );
   }
 
   const data = rankingsQuery.data;
@@ -99,9 +151,27 @@ export function PublishResultsPage() {
 
       {rankingsQuery.error ? (
         <RetryPanel
-          message={getApiErrorMessage(rankingsQuery.error)}
+          message={resolveApiError(rankingsQuery.error, "Không tải được dữ liệu công bố.")}
           onRetry={() => void rankingsQuery.refetch()}
         />
+      ) : null}
+
+      {readinessQuery.data && !readinessQuery.data.ready ? (
+        <section className="rounded-xl border border-warning-container bg-warning-container/20 p-lg">
+          <h2 className="font-headline-sm text-on-surface">Chưa đủ điều kiện công bố</h2>
+          <ul className="mt-sm list-disc space-y-xs pl-md font-body-sm text-on-surface-variant">
+            {readinessQuery.data.blockers.map((blocker) => (
+              <li key={blocker}>{blocker}</li>
+            ))}
+            {readinessQuery.data.boards.flatMap((board) =>
+              board.blockers.map((blocker) => (
+                <li key={`${board.boardId}-${blocker}`}>
+                  {board.boardName}: {blocker}
+                </li>
+              ))
+            )}
+          </ul>
+        </section>
       ) : null}
 
       {boards.length === 0 ? (
@@ -154,6 +224,7 @@ export function PublishResultsPage() {
                         type="button"
                         variant="secondary"
                         loading={publishingBoardId === board.boardId}
+                        disabled={!isBoardPublishReady(board.boardId)}
                         onClick={(e) => {
                           e.preventDefault();
                           void handlePublishBoard(board.boardId);
@@ -199,7 +270,7 @@ export function PublishResultsPage() {
               confirmLabel="Công bố tất cả"
               onConfirm={() => void handlePublishAll()}
             >
-              <Button type="button" loading={publishing}>
+              <Button type="button" loading={publishing} disabled={!publishReady}>
                 Công bố tất cả bảng đã tính ({draftBoards.length})
               </Button>
             </ConfirmAction>

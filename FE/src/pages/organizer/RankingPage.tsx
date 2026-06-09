@@ -23,8 +23,7 @@ import {
   fetchBoardRanking,
   type BoardRanking
 } from "../../services/rankingApi";
-import { getApiErrorMessage } from "../../utils/apiError";
-import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
+import { resolveApiError } from "../../utils/apiError";
 import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 
 export function RankingPage() {
@@ -64,7 +63,7 @@ export function RankingPage() {
       await invalidateRankingQueries();
       notify("Đã tính xếp hạng cho bảng.", "success");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Tính xếp hạng thất bại.")), "danger");
+      notify(resolveApiError(err, "Tính xếp hạng thất bại."), "danger");
     } finally {
       setCalculating(false);
     }
@@ -80,14 +79,14 @@ export function RankingPage() {
       await invalidateRankingQueries();
       if (result.message === "NO_BOARDS_CALCULATED" || result.boardsCalculated === 0) {
         notify(
-          "Không bảng nào được tính — có thể đã công bố (dùng «Tính lại cả vòng») hoặc thiếu phiếu SUBMITTED.",
+          "Không bảng nào được tính — có thể đã công bố (dùng «Tính lại cả vòng») hoặc thiếu phiếu chấm đã nộp.",
           "warning"
         );
       } else {
         notify(`Đã tính ${result.boardsCalculated} bảng, ${result.teamsRanked} đội.`, "success");
       }
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Tính xếp hạng thất bại.")), "danger");
+      notify(resolveApiError(err, "Tính xếp hạng thất bại."), "danger");
     } finally {
       setCalculating(false);
     }
@@ -103,7 +102,7 @@ export function RankingPage() {
         <PageHeader
           eyebrow="Kết quả"
           title="Bảng xếp hạng"
-          description="Cần có bảng thi và phiếu chấm SUBMITTED trước khi tính xếp hạng."
+          description="Cần có bảng thi và phiếu chấm đã nộp trước khi tính xếp hạng."
         />
         <EmptyState
           icon="leaderboard"
@@ -132,7 +131,7 @@ export function RankingPage() {
       <PageHeader
         eyebrow="Kết quả"
         title="Bảng xếp hạng"
-        description="Tính điểm trung bình từ phiếu chấm đã nộp (SUBMITTED). Đội DISQUALIFIED không được xếp hạng."
+        description="Tính điểm trung bình từ phiếu chấm đã nộp. Đội bị loại không được xếp hạng."
         actions={
           <Badge tone={ranking?.published ? "success" : hasRanking ? "warning" : "neutral"}>
             {ranking?.published ? "Đã công bố" : hasRanking ? "Bản nháp" : "Chưa tính"}
@@ -196,7 +195,7 @@ export function RankingPage() {
             onConfirm={() => void handleCalculateRound(true)}
           >
             <Button type="button" variant="ghost">
-              Tính lại cả vòng (force)
+              Tính lại cả vòng
             </Button>
           </ConfirmAction>
         ) : null}
@@ -208,7 +207,7 @@ export function RankingPage() {
             onConfirm={() => void handleCalculateBoard(true)}
           >
             <Button type="button" variant="ghost">
-              Tính lại bảng (force)
+              Tính lại bảng
             </Button>
           </ConfirmAction>
         ) : null}
@@ -217,7 +216,7 @@ export function RankingPage() {
       {rankingQuery.isLoading ? <ModuleSkeleton rows={5} /> : null}
       {rankingQuery.error ? (
         <RetryPanel
-          message={getApiErrorMessage(rankingQuery.error)}
+          message={resolveApiError(rankingQuery.error, "Không tải được bảng xếp hạng.")}
           onRetry={() => void rankingQuery.refetch()}
         />
       ) : null}
@@ -225,7 +224,7 @@ export function RankingPage() {
       {incompleteEntries.length > 0 ? (
         <div className="rounded-xl border border-warning/40 bg-warning-container/30 p-md">
           <p className="font-body-sm text-on-surface">
-            {incompleteEntries.length} đội chưa đủ phiếu SUBMITTED từ mọi giám khảo — vẫn được xếp hạng
+            {incompleteEntries.length} đội chưa đủ phiếu chấm từ mọi giám khảo — vẫn được xếp hạng
             theo điểm đã có.{" "}
             <Link to="/organizer/scoring" className="text-primary hover:underline">
               Xem tiến độ chấm
@@ -238,7 +237,7 @@ export function RankingPage() {
         <EmptyState
           icon="leaderboard"
           title="Chưa có xếp hạng"
-          description="Cần phiếu chấm SUBMITTED và đội trên slot. Bấm «Tính bảng này» sau khi giám khảo nộp điểm."
+          description="Cần phiếu chấm đã nộp và đội trên bảng. Bấm «Tính bảng này» sau khi giám khảo nộp điểm."
           action={
             <Link to="/organizer/scoring" className="font-label-md text-primary hover:underline">
               Kiểm tra tiến độ chấm →
@@ -265,7 +264,7 @@ export function RankingPage() {
                   <tr className="font-label-sm text-on-surface-variant">
                     <th className="px-md py-sm">Hạng</th>
                     <th className="px-md py-sm">Đội</th>
-                    <th className="px-md py-sm">Slot</th>
+                    <th className="px-md py-sm">Vị trí</th>
                     <th className="px-md py-sm">Điểm TB</th>
                     <th className="px-md py-sm">GK đã nộp</th>
                   </tr>

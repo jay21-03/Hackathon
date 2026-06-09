@@ -1,4 +1,4 @@
-import type { ApiResponse } from "../types/api";
+import type { ApiResponse, PagedResult } from "../types/api";
 import { apiClient } from "./apiClient";
 
 export type SubmissionStatus = "DRAFT" | "SUBMITTED" | null;
@@ -53,12 +53,29 @@ export interface AdminTeamSubmissionResponse {
   submittedAt: string | null;
 }
 
-export async function fetchEventSubmissions(eventId: number, boardId?: number | null) {
-  const { data } = await apiClient.get<ApiResponse<AdminTeamSubmissionResponse[]>>(
+export async function fetchEventSubmissions(
+  eventId: number,
+  options?: { boardId?: number | null; page?: number; size?: number }
+) {
+  const { data } = await apiClient.get<ApiResponse<PagedResult<AdminTeamSubmissionResponse>>>(
     `/v1/admin/events/${eventId}/submissions`,
-    { params: boardId ? { boardId } : undefined }
+    {
+      params: {
+        page: options?.page ?? 0,
+        size: options?.size ?? 50,
+        ...(options?.boardId ? { boardId: options.boardId } : {})
+      }
+    }
   );
-  return data.data ?? [];
+  return (
+    data.data ?? {
+      items: [],
+      page: 0,
+      size: options?.size ?? 50,
+      total: 0,
+      totalPages: 0
+    }
+  );
 }
 
 export async function fetchTeamSubmission(teamId: number) {

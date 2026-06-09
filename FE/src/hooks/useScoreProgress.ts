@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../lib/queryKeys";
 import { fetchScoreProgress } from "../services/scoringApi";
-import { getApiErrorMessage } from "../utils/apiError";
-import { mapOrganizerErrorMessage } from "../utils/organizerErrors";
+import { resolveApiError } from "../utils/apiError";
 
 export function useScoreProgress(boardId: number | null) {
   const query = useQuery({
@@ -15,7 +14,7 @@ export function useScoreProgress(boardId: number | null) {
     progress: query.data ?? null,
     loading: query.isLoading,
     error: query.isError
-      ? mapOrganizerErrorMessage(getApiErrorMessage(query.error, "Không tải được tiến độ chấm."))
+      ? resolveApiError(query.error, "Không tải được tiến độ chấm.")
       : null,
     refetch: query.refetch
   };

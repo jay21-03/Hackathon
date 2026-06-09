@@ -1,13 +1,22 @@
-import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
 import { EventSelector } from "../../components/ui/EventSelector";
+import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
+import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 import { useEventBoards } from "../../hooks/useEventBoards";
 import { useScoreProgress } from "../../hooks/useScoreProgress";
-import type { JudgeSheetStatusDto } from "../../services/scoringApi";
+import { queryKeys } from "../../lib/queryKeys";
+import { sendScoringReminder, type JudgeSheetStatusDto } from "../../services/scoringApi";
+import { resolveApiError } from "../../utils/apiError";
 
 function cellTone(status: string): string {
   if (status === "SUBMITTED") return "bg-success-container text-on-success-container";
@@ -33,14 +42,65 @@ function cellTitle(cell: JudgeSheetStatusDto, judgeName: string, teamName: strin
 }
 
 export function ScoringProgressPage() {
+  const { notify } = useToast();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const eventIdParam = searchParams.get("eventId");
+  const boardIdParam = searchParams.get("boardId");
+  const deepLinkEventApplied = useRef(false);
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, boards, loading: boardsLoading, error: boardsError } = useEventBoards(eventId);
-  const [boardId, setBoardId] = useState<number | null>(null);
+  const [boardId, setBoardId] = useState<number | null>(() => {
+    if (!boardIdParam) return null;
+    const parsed = Number(boardIdParam);
+    return Number.isFinite(parsed) ? parsed : null;
+  });
+  const [reminding, setReminding] = useState(false);
   const { progress, loading: progressLoading, error: progressError } = useScoreProgress(boardId);
 
   useEffect(() => {
+    if (!eventIdParam || deepLinkEventApplied.current || !events.length) return;
+    const parsed = Number(eventIdParam);
+    if (!Number.isFinite(parsed)) return;
+    if (events.some((event) => event.id === parsed)) {
+      setEventId(parsed);
+      deepLinkEventApplied.current = true;
+    }
+  }, [eventIdParam, events, setEventId]);
+
+  useEffect(() => {
+    const urlBoardId = boardIdParam ? Number(boardIdParam) : null;
+    if (urlBoardId && boards.some((board) => board.id === urlBoardId)) {
+      setBoardId(urlBoardId);
+      return;
+    }
     setBoardId((prev) => (prev && boards.some((b) => b.id === prev) ? prev : boards[0]?.id ?? null));
-  }, [boards]);
+  }, [boards, boardIdParam]);
+
+  useEffect(() => {
+    if (!eventId || !boardId) return;
+    const next = new URLSearchParams();
+    next.set("eventId", String(eventId));
+    next.set("boardId", String(boardId));
+    setSearchParams(next, { replace: true });
+  }, [eventId, boardId, setSearchParams]);
+
+  async function handleRemindScoring() {
+    if (!boardId) return;
+    setReminding(true);
+    try {
+      await sendScoringReminder(boardId);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+      notify("Đã gửi thông báo nhắc chấm cho giám khảo.", "success");
+    } catch (err) {
+      notify(
+        resolveApiError(err, "Gửi nhắc chấm thất bại."),
+        "danger"
+      );
+    } finally {
+      setReminding(false);
+    }
+  }
 
   const roundNameById = Object.fromEntries(rounds.map((r) => [r.id, r.name]));
   const judgeNameById = Object.fromEntries(
@@ -58,12 +118,30 @@ export function ScoringProgressPage() {
         title="Tiến độ chấm"
         description="Theo dõi giám khảo đã nộp phiếu chấm cho từng đội trên bảng."
         actions={
-          progress ? (
-            <Badge tone={progress.summary.completionPercent >= 100 ? "success" : "warning"}>
-              {Number(progress.summary.completionPercent).toFixed(0)}% hoàn thành
-            </Badge>
-          ) : null
+          <div className="flex flex-wrap items-center gap-sm">
+            {progress && progress.summary.completionPercent < 100 ? (
+              <Button
+                variant="secondary"
+                icon={<Icon name="notifications_active" />}
+                disabled={reminding || !boardId}
+                onClick={() => void handleRemindScoring()}
+              >
+                {reminding ? "Đang gửi…" : "Nhắc chấm"}
+              </Button>
+            ) : null}
+            {progress ? (
+              <Badge tone={progress.summary.completionPercent >= 100 ? "success" : "warning"}>
+                {Number(progress.summary.completionPercent).toFixed(0)}% hoàn thành
+              </Badge>
+            ) : null}
+          </div>
         }
+      />
+
+      <WorkflowSteps
+        title="Quy trình chấm & kết quả"
+        description="Theo dõi tiến độ chấm trước khi tính xếp hạng."
+        steps={buildRankingWorkflowSteps("scoring")}
       />
 
       <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
@@ -154,7 +232,7 @@ export function ScoringProgressPage() {
                             <td key={judge.judgeId} className="px-1 py-1">
                               <span
                                 className={`inline-flex h-8 w-10 items-center justify-center rounded-md font-label-sm ${cellTone(cell.status)}`}
-                                title={cellTitle(cell, judgeNameById[judge.judgeId] ?? `GK#${judge.judgeId}`, team.teamName)}
+                                title={cellTitle(cell, judgeNameById[judge.judgeId] ?? `Giám khảo #${judge.judgeId}`, team.teamName)}
                               >
                                 {cellLabel(cell)}
                               </span>
@@ -238,7 +316,7 @@ export function ScoringProgressPage() {
                                     : "neutral"
                               }
                             >
-                              GK#{j.judgeId}:{" "}
+                              {judgeNameById[j.judgeId] ?? `GK ${j.judgeId}`}:{" "}
                               {j.status === "SUBMITTED"
                                 ? j.judgeTeamScore != null
                                   ? `${Number(j.judgeTeamScore).toFixed(1)}đ`

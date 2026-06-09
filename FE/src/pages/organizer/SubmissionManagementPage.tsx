@@ -4,6 +4,8 @@ import { Button } from "../../components/ui/Button";
 import { EventSelector } from "../../components/ui/EventSelector";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
+import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 import { StatCard } from "../../components/ui/StatCard";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
@@ -13,7 +15,7 @@ import {
   fetchTeamSubmission,
   type AdminTeamSubmissionResponse
 } from "../../services/submissionApi";
-import { getApiErrorMessage } from "../../utils/apiError";
+import { resolveApiError } from "../../utils/apiError";
 
 type StatusFilter = "ALL" | "SUBMITTED" | "DRAFT" | "NONE";
 type SortKey = "team" | "status" | "submittedAt";
@@ -42,13 +44,23 @@ export function SubmissionManagementPage() {
   const [boardId, setBoardId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("team");
+  const [listPage, setListPage] = useState(0);
   const [detail, setDetail] = useState<AdminTeamSubmissionResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const { submissions, loading, error } = useEventSubmissions(eventId, boardId);
+  const { submissions, total, totalPages, loading, error } = useEventSubmissions(
+    eventId,
+    boardId,
+    listPage,
+    25
+  );
 
   useEffect(() => {
     setBoardId((prev) => (prev && boards.some((b) => b.id === prev) ? prev : null));
   }, [boards, eventId]);
+
+  useEffect(() => {
+    setListPage(0);
+  }, [eventId, boardId]);
 
   const filtered = useMemo(() => {
     const rows = submissions.filter((row) => {
@@ -80,7 +92,7 @@ export function SubmissionManagementPage() {
       const row = await fetchTeamSubmission(teamId);
       setDetail(row);
     } catch (err) {
-      notify(getApiErrorMessage(err, "Không tải được chi tiết bài nộp."), "danger");
+      notify(resolveApiError(err, "Không tải được chi tiết bài nộp."), "danger");
     } finally {
       setDetailLoading(false);
     }
@@ -99,9 +111,15 @@ export function SubmissionManagementPage() {
         description="Xem link GitHub/GitLab mà các đội đã lưu nháp hoặc nộp chính thức."
         actions={
           <Badge tone={pageError ? "danger" : "success"}>
-            {pageError ? "Lỗi tải dữ liệu" : `${submissions.length} đội trên bảng`}
+            {pageError ? "Lỗi tải dữ liệu" : `${total} đội trên bảng`}
           </Badge>
         }
+      />
+
+      <WorkflowSteps
+        title="Quy trình chấm & kết quả"
+        description="Theo dõi bài nộp trước khi chấm và xếp hạng."
+        steps={buildRankingWorkflowSteps("scoring")}
       />
 
       <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
@@ -156,7 +174,7 @@ export function SubmissionManagementPage() {
       ) : null}
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Đã nộp" value={submittedCount} helper="Trạng thái SUBMITTED" icon="task_alt" tone="success" />
+        <StatCard label="Đã nộp" value={submittedCount} helper="Bài đã gửi chính thức" icon="task_alt" tone="success" />
         <StatCard label="Bản nháp" value={draftCount} helper="Chưa nộp chính thức" icon="edit_note" tone="warning" />
         <StatCard
           label="Chưa nộp"
@@ -193,7 +211,7 @@ export function SubmissionManagementPage() {
                     <td className="px-md py-md">
                       {row.boardName ?? (row.boardId ? `Bảng #${row.boardId}` : "—")}
                       {row.slotNumber != null ? (
-                        <span className="ml-1 text-on-surface-variant">· Slot {row.slotNumber}</span>
+                        <span className="ml-1 text-on-surface-variant">· Vị trí #{row.slotNumber}</span>
                       ) : null}
                     </td>
                     <td className="px-md py-md">
@@ -229,13 +247,39 @@ export function SubmissionManagementPage() {
         </section>
       )}
 
+      {totalPages > 1 ? (
+        <div className="flex items-center justify-between gap-md rounded-xl border border-outline-variant bg-surface-container px-md py-sm">
+          <p className="font-body-sm text-on-surface-variant">
+            Trang {listPage + 1}/{totalPages} · {total} đội
+          </p>
+          <div className="flex gap-sm">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={listPage <= 0}
+              onClick={() => setListPage((p) => Math.max(0, p - 1))}
+            >
+              Trước
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={listPage >= totalPages - 1}
+              onClick={() => setListPage((p) => p + 1)}
+            >
+              Sau
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {detailLoading ? <ModuleSkeleton rows={2} /> : null}
       {detail ? (
         <section className="rounded-xl border border-outline-variant bg-surface-container p-md space-y-sm">
           <h2 className="font-headline-sm text-on-surface">Chi tiết — {detail.teamName}</h2>
           <p className="font-body-sm text-on-surface-variant">
             Bảng: {detail.boardName ?? "—"}
-            {detail.slotNumber != null ? ` · Slot ${detail.slotNumber}` : ""}
+            {detail.slotNumber != null ? ` · Vị trí #${detail.slotNumber}` : ""}
           </p>
           <p className="font-body-sm">
             Trạng thái: <Badge tone={statusTone(detail.status)}>{statusLabel(detail.status)}</Badge>

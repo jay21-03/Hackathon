@@ -81,17 +81,38 @@ export async function fetchEventRankings(eventId: number) {
   return data.data;
 }
 
-export async function publishBoardRanking(boardId: number) {
+export async function publishBoardRanking(boardId: number, idempotencyKey?: string) {
+  const headers = idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined;
   const { data } = await apiClient.post<ApiResponse<BoardRanking>>(
-    `/v1/admin/boards/${boardId}/rankings/publish`
+    `/v1/admin/boards/${boardId}/rankings/publish`,
+    null,
+    { headers }
   );
   if (!data.data) throw new Error(data.message || "Công bố thất bại.");
   return data.data;
 }
 
-export async function publishEventRankings(eventId: number) {
+export interface PublishReadiness {
+  eventId: number;
+  ready: boolean;
+  blockers: string[];
+  boards: { boardId: number; boardName: string; ready: boolean; blockers: string[] }[];
+}
+
+export async function fetchPublishReadiness(eventId: number) {
+  const { data } = await apiClient.get<ApiResponse<PublishReadiness>>(
+    `/v1/admin/events/${eventId}/publish-readiness`
+  );
+  if (!data.data) throw new Error(data.message || "Không kiểm tra được điều kiện công bố.");
+  return data.data;
+}
+
+export async function publishEventRankings(eventId: number, idempotencyKey?: string) {
+  const headers = idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined;
   const { data } = await apiClient.post<ApiResponse<CalculateRankingResult>>(
-    `/v1/admin/events/${eventId}/rankings/publish`
+    `/v1/admin/events/${eventId}/rankings/publish`,
+    null,
+    { headers }
   );
   if (!data.data) throw new Error(data.message || "Công bố thất bại.");
   return data.data;

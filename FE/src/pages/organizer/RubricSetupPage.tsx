@@ -1,23 +1,29 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { EventSelector } from "../../components/ui/EventSelector";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
+import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 import { useEventRounds } from "../../hooks/useEventRounds";
 import { useRubric } from "../../hooks/useRubric";
 import { invalidateAfterRubricMutation } from "../../lib/invalidateScoringQueries";
 import {
+  createDefaultHackathonRubric,
   createEmptyCriteria,
+  deriveCriteriaScoreRange,
   saveRubric,
   type CriteriaRequestItem,
   type LevelDescriptor
 } from "../../services/scoringApi";
-import { getApiErrorMessage } from "../../utils/apiError";
-import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
+import { resolveApiError } from "../../utils/apiError";
 
 function toFormCriteria(items: CriteriaRequestItem[]): CriteriaRequestItem[] {
   return items.map((c, i) => ({
@@ -31,7 +37,7 @@ function toFormCriteria(items: CriteriaRequestItem[]): CriteriaRequestItem[] {
 
 function rubricToForm(criteria: CriteriaRequestItem[] | undefined): CriteriaRequestItem[] {
   if (!criteria?.length) {
-    return [createEmptyCriteria(0), createEmptyCriteria(1), createEmptyCriteria(2)];
+    return createDefaultHackathonRubric();
   }
   return toFormCriteria(criteria);
 }
@@ -40,6 +46,10 @@ export function RubricSetupPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { steps: setupSteps, context: setupContext, loading: setupLoading } = useEventSetupProgress(
+    eventId,
+    "/organizer/rubric"
+  );
   const { rounds, loading: roundsLoading, error: roundsError } = useEventRounds(eventId);
   const [roundId, setRoundId] = useState<number | null>(null);
   const activeRoundId =
@@ -48,7 +58,6 @@ export function RubricSetupPage() {
   const [criteria, setCriteria] = useState<CriteriaRequestItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [expandedCode, setExpandedCode] = useState<string | null>(null);
 
   useEffect(() => {
     setRoundId(null);
@@ -96,7 +105,8 @@ export function RubricSetupPage() {
         if (i !== index) return c;
         const levels = [...c.levelDescriptors];
         levels[levelIndex] = { ...levels[levelIndex], ...patch };
-        return { ...c, levelDescriptors: levels };
+        const range = deriveCriteriaScoreRange(levels);
+        return { ...c, levelDescriptors: levels, ...range };
       })
     );
   }
@@ -117,19 +127,27 @@ export function RubricSetupPage() {
     setSaveError(null);
     try {
       await saveRubric(roundId, {
-        criteria: criteria.map((c, i) => ({
-          ...c,
-          weight: Number(c.weight),
-          minScore: Number(c.minScore),
-          maxScore: Number(c.maxScore),
-          sortOrder: i + 1
-        })),
+        criteria: criteria.map((c, i) => {
+          const range = deriveCriteriaScoreRange(c.levelDescriptors);
+          return {
+            ...c,
+            weight: Number(c.weight),
+            minScore: range.minScore,
+            maxScore: range.maxScore,
+            levelDescriptors: c.levelDescriptors.map((l) => ({
+              ...l,
+              minScore: Number(l.minScore),
+              maxScore: Number(l.maxScore)
+            })),
+            sortOrder: i + 1
+          };
+        }),
         replaceExisting: true
       });
       await invalidateAfterRubricMutation(queryClient, roundId);
       notify("Đã lưu tiêu chí chấm.", "success");
     } catch (err) {
-      const msg = mapOrganizerErrorMessage(getApiErrorMessage(err, "Không lưu được tiêu chí chấm."));
+      const msg = resolveApiError(err, "Không lưu được tiêu chí chấm.");
       setSaveError(msg);
       notify(msg, "danger");
     } finally {
@@ -137,7 +155,30 @@ export function RubricSetupPage() {
     }
   }
 
-  if (eventLoading) return <ModuleSkeleton rows={4} />;
+  if (eventLoading || setupLoading) return <ModuleSkeleton rows={4} />;
+
+  if (!setupContext.hasBoards) {
+    return (
+      <div className="space-y-lg">
+        <PageHeader
+          eyebrow="Chấm điểm"
+          title="Tiêu chí chấm"
+          description="Cấu hình rubric sau khi đã tạo bảng thi và gán đội."
+          actions={<EventSelector events={events} eventId={eventId} onChange={setEventId} />}
+        />
+        <EmptyState
+          icon="grid_view"
+          title="Chưa có bảng thi"
+          description="Tạo vòng, bảng và gán đội trước khi thiết lập tiêu chí chấm."
+          action={
+            <Link to="/organizer/boards" className="font-label-md text-primary hover:underline">
+              Đến Bảng thi →
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-lg">
@@ -150,6 +191,18 @@ export function RubricSetupPage() {
             {locked ? "Đã khóa" : `Tổng trọng số: ${weightSum}%`}
           </Badge>
         }
+      />
+
+      <WorkflowSteps
+        title="Quy trình thiết lập"
+        description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
+        steps={setupSteps}
+      />
+
+      <WorkflowSteps
+        title="Quy trình chấm & kết quả"
+        description="Tiêu chí chấm là bước đầu trước tiến độ chấm và xếp hạng."
+        steps={buildRankingWorkflowSteps("rubric")}
       />
 
       <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
@@ -198,29 +251,19 @@ export function RubricSetupPage() {
               >
                 <div className="mb-md flex flex-wrap items-center justify-between gap-sm">
                   <h3 className="font-title-sm text-on-surface">Tiêu chí #{index + 1}</h3>
-                  <div className="flex gap-sm">
+                  {!locked && criteria.length > 1 ? (
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="danger"
                       size="sm"
-                      onClick={() => setExpandedCode(expandedCode === item.code ? null : item.code)}
+                      onClick={() => setCriteria((prev) => prev.filter((_, i) => i !== index))}
                     >
-                      {expandedCode === item.code ? "Ẩn mức điểm" : "Mức điểm"}
+                      Xóa
                     </Button>
-                    {!locked && criteria.length > 1 ? (
-                      <Button
-                        type="button"
-                        variant="danger"
-                        size="sm"
-                        onClick={() => setCriteria((prev) => prev.filter((_, i) => i !== index))}
-                      >
-                        Xóa
-                      </Button>
-                    ) : null}
-                  </div>
+                  ) : null}
                 </div>
 
-                <div className="grid gap-md md:grid-cols-2 lg:grid-cols-6">
+                <div className="grid gap-md md:grid-cols-2 lg:grid-cols-4">
                   <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
                     Mã
                     <input
@@ -252,28 +295,6 @@ export function RubricSetupPage() {
                       onChange={(e) => updateCriteria(index, { weight: Number(e.target.value) })}
                     />
                   </label>
-                  <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
-                    Điểm min
-                    <input
-                      type="number"
-                      step={0.1}
-                      className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
-                      value={item.minScore}
-                      disabled={locked}
-                      onChange={(e) => updateCriteria(index, { minScore: Number(e.target.value) })}
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
-                    Điểm max
-                    <input
-                      type="number"
-                      step={0.1}
-                      className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
-                      value={item.maxScore}
-                      disabled={locked}
-                      onChange={(e) => updateCriteria(index, { maxScore: Number(e.target.value) })}
-                    />
-                  </label>
                 </div>
 
                 <label className="mt-md flex flex-col gap-1 font-label-sm text-on-surface-variant">
@@ -287,38 +308,88 @@ export function RubricSetupPage() {
                   />
                 </label>
 
-                {expandedCode === item.code ? (
-                  <div className="mt-md grid gap-sm md:grid-cols-2">
-                    {item.levelDescriptors.map((level, li) => (
-                      <div
-                        key={level.level}
-                        className="rounded-lg border border-outline-variant/60 bg-surface p-sm"
-                      >
-                        <p className="mb-1 font-label-sm text-on-surface">{level.label}</p>
-                        <textarea
-                          className="min-h-[4rem] w-full rounded border border-outline-variant bg-surface-container px-2 py-1 font-body-sm"
-                          value={level.description}
-                          disabled={locked}
-                          placeholder={`Mô tả ${level.label} (${level.minScore}–${level.maxScore})`}
-                          onChange={(e) => updateLevel(index, li, { description: e.target.value })}
-                        />
-                      </div>
-                    ))}
+                <div className="mt-md">
+                  <p className="mb-sm font-label-sm text-on-surface">
+                    Mức chấm điểm
+                    <span className="ml-2 font-body-sm text-on-surface-variant">
+                      (phạm vi nhập điểm: {item.minScore}–{item.maxScore})
+                    </span>
+                  </p>
+                  <div className="overflow-x-auto rounded-lg border border-outline-variant/60">
+                    <table className="min-w-full text-left">
+                      <thead className="bg-surface-container-high">
+                        <tr className="font-label-sm text-on-surface-variant">
+                          <th className="px-sm py-2">Mức</th>
+                          <th className="px-sm py-2">Điểm min</th>
+                          <th className="px-sm py-2">Điểm max</th>
+                          <th className="min-w-[16rem] px-sm py-2">Mô tả theo mức</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-outline-variant/40">
+                        {item.levelDescriptors.map((level, li) => (
+                          <tr key={level.level} className="font-body-sm text-on-surface">
+                            <td className="whitespace-nowrap px-sm py-2 font-label-sm">{level.label}</td>
+                            <td className="px-sm py-2">
+                              <input
+                                type="number"
+                                step={0.1}
+                                disabled={locked}
+                                className="w-20 rounded border border-outline-variant bg-surface px-2 py-1 text-center"
+                                value={level.minScore}
+                                onChange={(e) =>
+                                  updateLevel(index, li, { minScore: Number(e.target.value) })
+                                }
+                              />
+                            </td>
+                            <td className="px-sm py-2">
+                              <input
+                                type="number"
+                                step={0.1}
+                                disabled={locked}
+                                className="w-20 rounded border border-outline-variant bg-surface px-2 py-1 text-center"
+                                value={level.maxScore}
+                                onChange={(e) =>
+                                  updateLevel(index, li, { maxScore: Number(e.target.value) })
+                                }
+                              />
+                            </td>
+                            <td className="px-sm py-2">
+                              <textarea
+                                className="min-h-[3rem] w-full rounded border border-outline-variant bg-surface px-2 py-1 font-body-sm"
+                                value={level.description}
+                                disabled={locked}
+                                placeholder={`Mô tả ${level.label}`}
+                                onChange={(e) => updateLevel(index, li, { description: e.target.value })}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ) : null}
+                </div>
               </article>
             ))}
           </section>
 
           <div className="flex flex-wrap gap-md">
             {!locked ? (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setCriteria((prev) => [...prev, createEmptyCriteria(prev.length)])}
-              >
-                Thêm tiêu chí
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setCriteria((prev) => [...prev, createEmptyCriteria(prev.length)])}
+                >
+                  Thêm tiêu chí
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setCriteria(createDefaultHackathonRubric())}
+                >
+                  Dùng mẫu 5 tiêu chí
+                </Button>
+              </>
             ) : null}
             <Button type="button" loading={saving} disabled={locked || !criteria.length} onClick={() => void handleSave()}>
               Lưu tiêu chí

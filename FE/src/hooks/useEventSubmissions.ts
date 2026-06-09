@@ -1,21 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../lib/queryKeys";
 import { fetchEventSubmissions } from "../services/submissionApi";
-import { getApiErrorMessage } from "../utils/apiError";
-import { mapOrganizerErrorMessage } from "../utils/organizerErrors";
+import { resolveApiError } from "../utils/apiError";
 
-export function useEventSubmissions(eventId: number | null, boardId?: number | null) {
+export function useEventSubmissions(
+  eventId: number | null,
+  boardId?: number | null,
+  page = 0,
+  size = 50
+) {
   const query = useQuery({
-    queryKey: queryKeys.submission.byEvent(eventId, boardId),
-    queryFn: () => fetchEventSubmissions(eventId!, boardId ?? undefined),
+    queryKey: [...queryKeys.submission.byEvent(eventId, boardId), page, size],
+    queryFn: () => fetchEventSubmissions(eventId!, { boardId, page, size }),
     enabled: Boolean(eventId)
   });
 
   return {
-    submissions: query.data ?? [],
+    submissions: query.data?.items ?? [],
+    total: query.data?.total ?? 0,
+    totalPages: query.data?.totalPages ?? 0,
+    page: query.data?.page ?? page,
     loading: query.isLoading,
     error: query.isError
-      ? mapOrganizerErrorMessage(getApiErrorMessage(query.error, "Không tải được danh sách bài nộp."))
+      ? resolveApiError(query.error, "Không tải được danh sách bài nộp.")
       : null,
     refetch: query.refetch
   };

@@ -1,9 +1,9 @@
 import type { WorkflowStep } from "../components/ui/WorkflowSteps";
 
-export type RankingWorkflowPhase = "scoring" | "ranking" | "publish" | "export";
+export type RankingWorkflowPhase = "rubric" | "scoring" | "ranking" | "publish" | "export";
 
 export function buildRankingWorkflowSteps(active: RankingWorkflowPhase): WorkflowStep[] {
-  const order: RankingWorkflowPhase[] = ["scoring", "ranking", "publish", "export"];
+  const order: RankingWorkflowPhase[] = ["rubric", "scoring", "ranking", "publish", "export"];
   const activeIndex = order.indexOf(active);
 
   function stateFor(phase: RankingWorkflowPhase): WorkflowStep["state"] {
@@ -14,6 +14,12 @@ export function buildRankingWorkflowSteps(active: RankingWorkflowPhase): Workflo
   }
 
   return [
+    {
+      label: "Tiêu chí chấm",
+      detail: "Cấu hình rubric cho vòng thi.",
+      to: "/organizer/rubric",
+      state: stateFor("rubric")
+    },
     {
       label: "Tiến độ chấm",
       detail: "Giám khảo nộp phiếu SUBMITTED.",
