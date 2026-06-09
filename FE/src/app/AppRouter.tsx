@@ -88,7 +88,6 @@ const ProfilePage = lazyPage(() => import("../pages/participant/ProfilePage"), "
 const ProblemPage = lazyPage(() => import("../pages/participant/ProblemPage"), "ProblemPage");
 const SubmissionPage = lazyPage(() => import("../pages/participant/SubmissionPage"), "SubmissionPage");
 const TeamOverviewPage = lazyPage(() => import("../pages/participant/TeamOverviewPage"), "TeamOverviewPage");
-const TeamStatusPage = lazyPage(() => import("../pages/participant/TeamStatusPage"), "TeamStatusPage");
 const NotificationsPage = lazyPage(
   () => import("../pages/participant/NotificationsPage"),
   "NotificationsPage"
@@ -221,12 +220,12 @@ export function AppRouter() {
           <Route path="me" element={<ParticipantEventGate />}>
             <Route index element={routeElement(<ParticipantOverviewPage />)} />
             <Route path="team" element={routeElement(<TeamOverviewPage />)} />
-            <Route path="status" element={routeElement(<TeamStatusPage />)} />
+            <Route path="status" element={<Navigate to="/me/team" replace />} />
             <Route path="board" element={routeElement(<AssignedBoardPage />)} />
             <Route path="profile" element={<Navigate to="/profile" replace />} />
             <Route path="check-in" element={gatedRoute("/me", <CheckInPage />)} />
             <Route path="problem" element={routeElement(<ProblemPage />)} />
-            <Route path="countdown" element={routeElement(<ProblemPage />)} />
+            <Route path="countdown" element={<Navigate to="/me/problem" replace />} />
             <Route path="submission" element={gatedSubmissionRoute("/me", <SubmissionPage />)} />
             <Route path="ai-review" element={gatedRoute("/me", <AiReviewPage />)} />
             <Route

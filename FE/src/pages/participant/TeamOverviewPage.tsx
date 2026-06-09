@@ -9,14 +9,15 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { TextField } from "../../components/ui/FormField";
 import { Icon } from "../../components/ui/Icon";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
+import { ParticipantWorkflowBar } from "../../components/participant/ParticipantWorkflowBar";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { ProgressBar } from "../../components/ui/ProgressBar";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
-import { inviteTeamMember, resendTeamInvitation } from "../../services/registrationService";
-import { getApiErrorMessage } from "../../utils/apiError";
+import { cancelPendingInvitation, inviteTeamMember, resendTeamInvitation } from "../../services/registrationService";
+import { resolveApiError } from "../../utils/apiError";
 import { canRegisterForEvent, mapRegistrationErrorMessage } from "../../utils/registrationErrors";
 
 function buildMemberName(email: string) {
@@ -43,6 +44,10 @@ function canResendInvitation(status: string, contactPerson?: boolean) {
   return !contactPerson && status !== "CONFIRMED";
 }
 
+function canCancelInvitation(status: string, contactPerson?: boolean) {
+  return !contactPerson && status !== "CONFIRMED" && status !== "DECLINED";
+}
+
 export function TeamOverviewPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -52,6 +57,7 @@ export function TeamOverviewPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [resendingId, setResendingId] = useState<number | null>(null);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
 
   if (eventLoading || teamLoading) {
     return <ModuleSkeleton rows={4} />;
@@ -89,8 +95,8 @@ export function TeamOverviewPage() {
 
   const members = team.members ?? [];
   const confirmedMembers = members.filter((member) => member.status === "CONFIRMED").length;
-  const minTeamSize = 1;
-  const maxTeamSize = 5;
+  const minTeamSize = event?.minTeamSize ?? 1;
+  const maxTeamSize = event?.maxTeamSize ?? 5;
   const registrationOpen = canRegisterForEvent(
     event?.status,
     event?.registrationStartAt,
@@ -116,13 +122,13 @@ export function TeamOverviewPage() {
       await inviteTeamMember(team.id, {
         email: trimmedEmail,
         fullName: buildMemberName(trimmedEmail)
-      });
+      }, { idempotencyKey: `invite-${team.id}-${trimmedEmail.toLowerCase()}` });
       setInviteEmail("");
       await invalidateAfterTeamMutation(queryClient);
       await refetch();
       notify("Đã gửi lời mời thành viên.", "success");
     } catch (err) {
-      const message = mapRegistrationErrorMessage(getApiErrorMessage(err, "Mời thành viên thất bại."));
+      const message = mapRegistrationErrorMessage(resolveApiError(err, "Mời thành viên thất bại."));
       notify(message, "danger");
     } finally {
       setInviting(false);
@@ -137,10 +143,25 @@ export function TeamOverviewPage() {
       await refetch();
       notify("Đã gửi lại lời mời.", "success");
     } catch (err) {
-      const message = mapRegistrationErrorMessage(getApiErrorMessage(err, "Gửi lại lời mời thất bại."));
+      const message = mapRegistrationErrorMessage(resolveApiError(err, "Gửi lại lời mời thất bại."));
       notify(message, "danger");
     } finally {
       setResendingId(null);
+    }
+  }
+
+  async function cancelMember(teamMemberId: number) {
+    setCancellingId(teamMemberId);
+    try {
+      await cancelPendingInvitation(team.id, teamMemberId);
+      await invalidateAfterTeamMutation(queryClient);
+      await refetch();
+      notify("Đã huỷ lời mời thành viên.", "success");
+    } catch (err) {
+      const message = mapRegistrationErrorMessage(resolveApiError(err, "Huỷ lời mời thất bại."));
+      notify(message, "danger");
+    } finally {
+      setCancellingId(null);
     }
   }
 
@@ -175,6 +196,8 @@ export function TeamOverviewPage() {
         }
       />
 
+      <ParticipantWorkflowBar active="team" />
+
       <section className="grid gap-lg lg:grid-cols-[1fr_320px]">
         <article className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
           <div className="border-b border-outline-variant p-lg">
@@ -203,7 +226,7 @@ export function TeamOverviewPage() {
             >
               <h3 className="font-label-md text-on-surface">Mời thêm thành viên</h3>
               <p className="mt-xs font-body-sm text-on-surface-variant">
-                Còn thêm được {slotsRemaining} thành viên. Lời mời gửi qua email.
+                Còn thêm được {slotsRemaining} thành viên. Mời gửi qua email.
               </p>
               <div className="mt-md flex flex-col gap-md sm:flex-row sm:items-end">
                 <TextField
@@ -253,15 +276,28 @@ export function TeamOverviewPage() {
                   </p>
                   <Badge tone={getStatusTone(member.status)}>{getStatusLabel(member.status)}</Badge>
                   {canManageInvites && canResendInvitation(member.status, member.contactPerson) ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={resendingId === member.id}
-                      onClick={() => void resendMember(member.id)}
-                    >
-                      Gửi lại
-                    </Button>
+                    <div className="flex flex-wrap gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={resendingId === member.id || cancellingId === member.id}
+                        onClick={() => void resendMember(member.id)}
+                      >
+                        Gửi lại
+                      </Button>
+                      {canCancelInvitation(member.status, member.contactPerson) ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={resendingId === member.id || cancellingId === member.id}
+                          onClick={() => void cancelMember(member.id)}
+                        >
+                          Huỷ mời
+                        </Button>
+                      ) : null}
+                    </div>
                   ) : (
                     <span />
                   )}

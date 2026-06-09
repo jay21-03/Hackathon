@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchMyProblem } from "../services/contestApi";
 import { queryKeys } from "../lib/queryKeys";
-import { getApiErrorMessage } from "../utils/apiError";
+import { resolveApiError } from "../utils/apiError";
 
 export function useMyProblem(eventId: number | null) {
   const query = useQuery({
@@ -14,7 +14,7 @@ export function useMyProblem(eventId: number | null) {
     problemState: query.data ?? null,
     loading: query.isLoading,
     error: query.isError
-      ? getApiErrorMessage(query.error, "Không tải được đề thi.")
+      ? resolveApiError(query.error, "Không tải được đề thi.")
       : null,
     refetch: query.refetch
   };

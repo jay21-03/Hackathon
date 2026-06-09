@@ -6,20 +6,25 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
+import { ParticipantWorkflowBar } from "../../components/participant/ParticipantWorkflowBar";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { repositoryUrlSchema } from "../../domain/schemas";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useMySubmission } from "../../hooks/useMySubmission";
 import { useMyTeam } from "../../hooks/useMyTeam";
+import { useParticipantTeamGuard } from "../../hooks/useParticipantTeamGuard";
+import { ParticipantTeamBlocked } from "../../components/participant/ParticipantTeamBlocked";
 import { queryKeys } from "../../lib/queryKeys";
 import { saveSubmissionDraft, submitSubmission } from "../../services/submissionApi";
-import { getApiErrorMessage } from "../../utils/apiError";
-import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
+import { resolveApiError } from "../../utils/apiError";
 import { zodFirstError } from "../../utils/formValidation";
 
 const blockReasonLabels: Record<string, string> = {
   NO_TEAM: "Chưa có đội thi.",
+  TEAM_WAITLIST: "Đội đang trong danh sách chờ.",
+  TEAM_REJECTED: "Hồ sơ đội đã bị từ chối.",
+  TEAM_DISQUALIFIED: "Đội đã bị loại.",
   TEAM_NOT_CONFIRMED: "Đội chưa được xác nhận.",
   NOT_ASSIGNED: "Chưa được phân bảng.",
   NO_PROBLEM: "Ban tổ chức chưa cấu hình đề cho bảng của bạn.",
@@ -33,7 +38,7 @@ const blockReasonLabels: Record<string, string> = {
 };
 
 function mapSubmissionError(error: unknown, fallback: string) {
-  return mapOrganizerErrorMessage(getApiErrorMessage(error, fallback));
+  return resolveApiError(error, fallback);
 }
 
 function statusLabel(status: string | null | undefined) {
@@ -58,6 +63,7 @@ export function SubmissionPage() {
   const [repositoryName, setRepositoryName] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"draft" | "submit" | null>(null);
+  const teamGuard = useParticipantTeamGuard(team);
 
   useEffect(() => {
     if (submission) {
@@ -130,6 +136,15 @@ export function SubmissionPage() {
     );
   }
 
+  if (teamGuard.blocked && teamGuard.message) {
+    return (
+      <div className="space-y-lg">
+        <PageHeader eyebrow="Bài nộp" title={team.name} description={event?.name ?? ""} />
+        <ParticipantTeamBlocked message={teamGuard.message} />
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="space-y-lg">
@@ -151,6 +166,8 @@ export function SubmissionPage() {
         description="Gửi link repository GitHub hoặc GitLab trước deadline."
         actions={<Badge tone={statusTone(submission?.status ?? null)}>{displayStatus}</Badge>}
       />
+
+      <ParticipantWorkflowBar active="submission" />
 
       {blocked ? (
         <div className="rounded-xl border border-warning/40 bg-warning-container/30 p-md">
@@ -221,7 +238,7 @@ export function SubmissionPage() {
             </Button>
             <ConfirmAction
               title="Nộp bài chính thức"
-              message="Sau khi nộp, ban tổ chức và giám khảo sẽ dùng link này. Bạn vẫn có thể cập nhật trước deadline."
+              message="Sau khi nộp, ban tổ chức và giám khảo sẽ dùng link này. Bạn không thể sửa hoặc nộp lại sau khi đã nộp chính thức."
               confirmLabel="Nộp bài"
               onConfirm={() => void handleSubmit()}
             >

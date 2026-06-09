@@ -3,24 +3,24 @@ import { ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { RoundCountdown } from "../../components/ui/RoundCountdown";
 import { StatCard } from "../../components/ui/StatCard";
-import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
+import { ParticipantDeadlineStrip } from "../../components/participant/ParticipantDeadlineStrip";
+import { ParticipantWorkflowBar } from "../../components/participant/ParticipantWorkflowBar";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
-import { useEventRound } from "../../hooks/useEventRound";
 import { useMyBoard } from "../../hooks/useMyBoard";
+import { useMySubmission } from "../../hooks/useMySubmission";
 import { useMyTeam } from "../../hooks/useMyTeam";
-import { enableRanking, enableSubmissions } from "../../config/features";
+import { enableSubmissions } from "../../config/features";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 export function ParticipantOverviewPage() {
   const { eventId, event, loading: eventLoading } = useActiveEvent();
-  const { roundId, countdown, loading: roundLoading } = useEventRound(eventId);
   const { team, loading: teamLoading, error } = useMyTeam(eventId);
   const { board, loading: boardLoading } = useMyBoard(eventId);
+  const { submission, loading: submissionLoading } = useMySubmission(eventId);
 
-  if (eventLoading || teamLoading || boardLoading) {
+  if (eventLoading || teamLoading || boardLoading || submissionLoading) {
     return <ModuleSkeleton rows={4} />;
   }
 
@@ -69,13 +69,13 @@ export function ParticipantOverviewPage() {
         actions={<Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>}
       />
 
-      <RoundCountdown roundId={roundId} countdown={countdown} loading={roundLoading} />
+      <ParticipantDeadlineStrip />
 
-      <section className="grid gap-md md:grid-cols-2">
+      <section className="grid gap-md md:grid-cols-3">
         <StatCard
           label="Thành viên xác nhận"
           value={`${confirmedMembers}/${totalMembers}`}
-          helper="Đội hợp lệ từ 1–5 thành viên"
+          helper={`Đội hợp lệ từ ${event?.minTeamSize ?? 1}–${event?.maxTeamSize ?? 5} thành viên`}
           icon="groups"
           tone="success"
         />
@@ -86,58 +86,28 @@ export function ParticipantOverviewPage() {
               ? `${board?.boardName ?? "—"} · #${board?.slotNumber ?? "—"}`
               : "Chưa gán"
           }
-          helper={hasBoard ? "Xem chi tiết tại mục Bảng thi" : "Chờ BTC gán sau khi đội được xác nhận"}
+          helper={
+            !isConfirmed
+              ? "Đội cần được BTC xác nhận trước khi gán bảng"
+              : hasBoard
+                ? "Xem chi tiết tại mục Bảng thi"
+                : "Chờ BTC gán sau khi đội được xác nhận"
+          }
           icon="grid_view"
           tone={hasBoard ? "primary" : "warning"}
         />
+        {enableSubmissions ? (
+          <StatCard
+            label="Bài nộp"
+            value={submission?.status === "SUBMITTED" ? "Đã nộp" : submission?.status === "DRAFT" ? "Bản nháp" : "Chưa nộp"}
+            helper={submission?.repositoryUrl ? "Đã có link repository" : "Nộp tại mục Bài nộp"}
+            icon="upload"
+            tone={submission?.status === "SUBMITTED" ? "success" : "warning"}
+          />
+        ) : null}
       </section>
 
-      <WorkflowSteps
-        title="Các bước tiếp theo"
-        description="Bấm từng bước để mở trang tương ứng."
-        steps={[
-          {
-            label: "Đội thi",
-            detail: "Thành viên và tiến độ xác nhận.",
-            to: "/me/team",
-            state: isConfirmed ? "done" : "active"
-          },
-          {
-            label: "Bảng thi",
-            detail: hasBoard
-              ? `${board?.boardName} — slot #${board?.slotNumber}`
-              : "Chờ ban tổ chức gán bảng.",
-            to: "/me/board",
-            state: !isConfirmed ? "blocked" : hasBoard ? "done" : "active"
-          },
-          {
-            label: "Đề thi",
-            detail: "Mở theo lịch ban tổ chức cấu hình.",
-            to: "/me/problem",
-            state: !isConfirmed || !hasBoard ? "blocked" : "next"
-          },
-          ...(enableSubmissions
-            ? [
-                {
-                  label: "Bài nộp",
-                  detail: "Gửi link GitHub/GitLab trước deadline.",
-                  to: "/me/submission",
-                  state: !isConfirmed || !hasBoard ? ("blocked" as const) : ("next" as const)
-                }
-              ]
-            : []),
-          ...(enableRanking
-            ? [
-                {
-                  label: "Kết quả",
-                  detail: "Xem bảng xếp hạng sau khi BTC công bố.",
-                  to: "/me/results",
-                  state: !isConfirmed || !hasBoard ? ("blocked" as const) : ("next" as const)
-                }
-              ]
-            : [])
-        ]}
-      />
+      <ParticipantWorkflowBar active="team" />
     </div>
   );
 }

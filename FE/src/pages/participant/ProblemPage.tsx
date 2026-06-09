@@ -1,6 +1,7 @@
 import { Badge } from "../../components/ui/Badge";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
+import { ParticipantWorkflowBar } from "../../components/participant/ParticipantWorkflowBar";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { RoundCountdown } from "../../components/ui/RoundCountdown";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
@@ -9,6 +10,8 @@ import { useEventRound } from "../../hooks/useEventRound";
 import { useMyBoard } from "../../hooks/useMyBoard";
 import { useMyProblem } from "../../hooks/useMyProblem";
 import { useMyTeam } from "../../hooks/useMyTeam";
+import { useParticipantTeamGuard } from "../../hooks/useParticipantTeamGuard";
+import { ParticipantTeamBlocked } from "../../components/participant/ParticipantTeamBlocked";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 function formatReleaseAt(iso?: string) {
@@ -21,6 +24,9 @@ const reasonLabels: Record<string, string> = {
   NO_PROBLEM: "Ban tổ chức chưa cấu hình đề cho bảng của bạn.",
   NOT_RELEASED: "Đề chưa tới giờ mở — xem thời gian bên dưới.",
   PROBLEM_CLOSED: "Đề đã đóng — không còn xem được nội dung.",
+  TEAM_WAITLIST: "Đội đang trong danh sách chờ.",
+  TEAM_REJECTED: "Hồ sơ đội đã bị từ chối.",
+  TEAM_DISQUALIFIED: "Đội đã bị loại.",
   TEAM_NOT_CONFIRMED: "Đội chưa xác nhận.",
   NO_TEAM: "Chưa có đội thi."
 };
@@ -31,6 +37,7 @@ export function ProblemPage() {
   const { team, loading: teamLoading } = useMyTeam(eventId);
   const { board, loading: boardLoading } = useMyBoard(eventId);
   const { problemState, loading: problemLoading, error, refetch } = useMyProblem(eventId);
+  const teamGuard = useParticipantTeamGuard(team);
 
   if (eventLoading || teamLoading || boardLoading || problemLoading) {
     return <ModuleSkeleton rows={4} />;
@@ -41,6 +48,15 @@ export function ProblemPage() {
       <div className="space-y-lg">
         <PageHeader eyebrow="Đề thi" title="Chưa có đội" description="Đăng ký đội để xem đề thi." />
         <EmptyState icon="code" title="Chưa có đội thi" description="Đăng ký đội trước khi xem đề." />
+      </div>
+    );
+  }
+
+  if (teamGuard.blocked && teamGuard.message) {
+    return (
+      <div className="space-y-lg">
+        <PageHeader eyebrow="Đề thi" title={team.name} description={event?.name ?? ""} />
+        <ParticipantTeamBlocked message={teamGuard.message} />
       </div>
     );
   }
@@ -98,6 +114,7 @@ export function ProblemPage() {
           description={[board.boardName, event?.name].filter(Boolean).join(" · ")}
           actions={<Badge tone="success">Đã mở đề</Badge>}
         />
+        <ParticipantWorkflowBar active="problem" />
         <RoundCountdown roundId={activeRoundId} countdown={countdown} loading={roundLoading} />
         {problem.closeAt ? (
           <p className="font-body-sm text-on-surface-variant">

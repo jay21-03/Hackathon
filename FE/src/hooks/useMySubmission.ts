@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../lib/queryKeys";
 import { fetchMySubmission } from "../services/submissionApi";
-import { getApiErrorMessage } from "../utils/apiError";
-import { mapOrganizerErrorMessage } from "../utils/organizerErrors";
+import { resolveApiError } from "../utils/apiError";
 
 export function useMySubmission(eventId: number | null) {
   const query = useQuery({
@@ -15,7 +14,7 @@ export function useMySubmission(eventId: number | null) {
     submission: query.data ?? null,
     loading: query.isLoading,
     error: query.isError
-      ? mapOrganizerErrorMessage(getApiErrorMessage(query.error, "Không tải được bài nộp."))
+      ? resolveApiError(query.error, "Không tải được bài nộp.")
       : null,
     refetch: query.refetch
   };

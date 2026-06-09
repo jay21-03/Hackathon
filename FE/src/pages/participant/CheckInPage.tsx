@@ -6,6 +6,7 @@ export function CheckInPage() {
       eyebrow="Check-in"
       title="Check-in ngày thi"
       description="Xác nhận mặt hoặc QR check-in."
+      homeTo="/me"
     />
   );
 }

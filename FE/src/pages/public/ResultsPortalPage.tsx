@@ -9,7 +9,7 @@ import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { queryKeys } from "../../lib/queryKeys";
 import { fetchPublicEventResults } from "../../services/rankingApi";
-import { getApiErrorMessage } from "../../utils/apiError";
+import { resolveApiError } from "../../utils/apiError";
 
 interface ResultsPortalPageProps {
   participantView?: boolean;
@@ -42,7 +42,7 @@ export function ResultsPortalPage({ participantView }: ResultsPortalPageProps) {
 
   const results = resultsQuery.data;
   const error = resultsQuery.error
-    ? getApiErrorMessage(resultsQuery.error, "Không tải được kết quả.")
+    ? resolveApiError(resultsQuery.error, "Không tải được kết quả.")
     : null;
 
   return (
