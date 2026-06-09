@@ -12,11 +12,13 @@ import { TextField } from "../../components/ui/FormField";
 import { EventSelector } from "../../components/ui/EventSelector";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
+import { queryKeys } from "../../lib/queryKeys";
 import { Badge } from "../../components/ui/Badge";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { fetchEventDetail, openEventRegistration, updateEvent, type EventDetail } from "../../services/eventsApi";
+import { openEventRegistration, updateEvent, type EventDetail } from "../../services/eventsApi";
+import { useEventDetail } from "../../hooks/useEventDetail";
 import { canOpenRegistration, isRegistrationOpen } from "../../utils/registrationErrors";
-import { resolveOrganizerApiError } from "../../utils/organizerErrors";
+import { resolveApiError } from "../../utils/apiError";
 import { toIsoFromLocal, toLocalDateInput, toLocalDateTimeInput } from "../../utils/dateTimeInput";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
 
@@ -24,6 +26,7 @@ export function EventBasicInfoPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { eventId, events, setEventId, loading: eventsLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { event: fetchedEvent, loading: detailLoading, error: detailQueryError, refetch } = useEventDetail(eventId);
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [name, setName] = useState("");
   const [quota, setQuota] = useState(0);
@@ -35,35 +38,27 @@ export function EventBasicInfoPage() {
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [opening, setOpening] = useState(false);
-  const { steps: setupSteps, loading: setupLoading } = useEventSetupProgress(eventId);
+  const { steps: setupSteps, loading: setupLoading } = useEventSetupProgress(eventId, "/organizer/events/basic-info");
 
   useEffect(() => {
-    if (!eventId) return;
-    let cancelled = false;
-    fetchEventDetail(String(eventId))
-      .then((result) => {
-        if (cancelled || !result) return;
-        setEvent(result);
-        setName(result.name);
-        setQuota(result.maxTeams);
-        setStartDate(toLocalDateInput(result.startDate));
-        setEndDate(toLocalDateInput(result.endDate));
-        setRegistrationStartAt(
-          result.registrationStartAt ? toLocalDateTimeInput(result.registrationStartAt) : ""
-        );
-        setRegistrationEndAt(
-          result.registrationEndAt ? toLocalDateTimeInput(result.registrationEndAt) : ""
-        );
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLoadError("Không tải được thông tin cuộc thi.");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId]);
+    if (!fetchedEvent) return;
+    setEvent(fetchedEvent);
+    setName(fetchedEvent.name);
+    setQuota(fetchedEvent.maxTeams);
+    setStartDate(toLocalDateInput(fetchedEvent.startDate));
+    setEndDate(toLocalDateInput(fetchedEvent.endDate));
+    setRegistrationStartAt(
+      fetchedEvent.registrationStartAt ? toLocalDateTimeInput(fetchedEvent.registrationStartAt) : ""
+    );
+    setRegistrationEndAt(
+      fetchedEvent.registrationEndAt ? toLocalDateTimeInput(fetchedEvent.registrationEndAt) : ""
+    );
+    setLoadError("");
+  }, [fetchedEvent]);
+
+  useEffect(() => {
+    if (detailQueryError) setLoadError(detailQueryError);
+  }, [detailQueryError]);
 
   async function openRegistration() {
     if (!eventId) return;
@@ -78,9 +73,11 @@ export function EventBasicInfoPage() {
         setEvent(updated);
       }
       await invalidateAfterTeamMutation(queryClient);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.events.detail(String(eventId)) });
+      await refetch();
       notify("Đã mở đăng ký cho thí sinh.", "success");
     } catch (err) {
-      notify(resolveOrganizerApiError(err, "Không mở được đăng ký."), "danger");
+      notify(resolveApiError(err, "Không mở được đăng ký."), "danger");
     } finally {
       setOpening(false);
     }
@@ -125,15 +122,17 @@ export function EventBasicInfoPage() {
         );
       }
       await invalidateAfterTeamMutation(queryClient);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.events.detail(String(eventId)) });
+      await refetch();
       notify("Đã lưu thông tin cuộc thi.", "success");
     } catch (err) {
-      notify(resolveOrganizerApiError(err, "Không thể lưu cấu hình cuộc thi."), "danger");
+      notify(resolveApiError(err, "Không thể lưu cấu hình cuộc thi."), "danger");
     } finally {
       setSaving(false);
     }
   }
 
-  if (eventsLoading || setupLoading || (!event && !loadError && eventId)) {
+  if (eventsLoading || detailLoading || setupLoading || (!event && !loadError && eventId)) {
     return <ModuleSkeleton rows={5} />;
   }
 

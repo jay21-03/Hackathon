@@ -11,7 +11,7 @@ import { createEventSchema } from "../../domain/schemas";
 import { createEvent } from "../../services/eventsApi";
 import { toIsoFromLocal } from "../../utils/dateTimeInput";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
-import { resolveOrganizerApiError } from "../../utils/organizerErrors";
+import { resolveApiError } from "../../utils/apiError";
 
 export function CreateEventPage() {
   const navigate = useNavigate();
@@ -63,7 +63,7 @@ export function CreateEventPage() {
         }
       });
     } catch (error) {
-      notify(resolveOrganizerApiError(error, "Không tạo được cuộc thi."), "danger");
+      notify(resolveApiError(error, "Không tạo được cuộc thi."), "danger");
     } finally {
       setSaving(false);
     }

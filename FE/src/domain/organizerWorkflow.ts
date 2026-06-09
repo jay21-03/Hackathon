@@ -23,14 +23,14 @@ export const ORGANIZER_MACRO_STEPS: OrganizerMacroStep[] = [
   },
   {
     id: "invitations",
-    label: "Lời mời",
-    detail: "Theo dõi thư mời thành viên",
+    label: "Mời thành viên",
+    detail: "Theo dõi và gửi lại mời thành viên",
     path: "/organizer/invitations"
   },
   {
     id: "boards",
     label: "Bảng thi",
-    detail: "Vòng, bảng, slot, gán đội",
+    detail: "Vòng, bảng, vị trí, gán đội",
     path: "/organizer/boards"
   },
   {
@@ -44,19 +44,12 @@ export const ORGANIZER_MACRO_STEPS: OrganizerMacroStep[] = [
     label: "Phân công",
     detail: "Mentor & giám khảo",
     path: "/organizer/assignments"
+  },
+  {
+    id: "rubric",
+    label: "Tiêu chí chấm",
+    detail: "Rubric trước khi chấm điểm",
+    path: "/organizer/rubric"
   }
 ];
 
-export function macroStepState(
-  stepId: string,
-  currentPageId: string,
-  completedThroughIndex: number
-): WorkflowStepState {
-  const index = ORGANIZER_MACRO_STEPS.findIndex((s) => s.id === stepId);
-  const currentIndex = ORGANIZER_MACRO_STEPS.findIndex((s) => s.id === currentPageId);
-  if (index < 0) return "next";
-  if (index <= completedThroughIndex) return "done";
-  if (index === currentIndex) return "active";
-  if (index === currentIndex + 1) return "next";
-  return "blocked";
-}

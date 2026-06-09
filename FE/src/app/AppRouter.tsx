@@ -59,7 +59,6 @@ const AiInsightsPage = lazyPage(() => import("../pages/organizer/AiInsightsPage"
 const AssignmentManagementPage = lazyPage(() => import("../pages/organizer/AssignmentManagementPage"), "AssignmentManagementPage");
 const BoardManagementPage = lazyPage(() => import("../pages/organizer/BoardManagementPage"), "BoardManagementPage");
 const CheckInManagementPage = lazyPage(() => import("../pages/organizer/CheckInManagementPage"), "CheckInManagementPage");
-const DisqualificationPage = lazyPage(() => import("../pages/organizer/DisqualificationPage"), "DisqualificationPage");
 const EventBasicInfoPage = lazyPage(() => import("../pages/organizer/EventBasicInfoPage"), "EventBasicInfoPage");
 const EventManagementPage = lazyPage(() => import("../pages/organizer/EventManagementPage"), "EventManagementPage");
 const CreateEventPage = lazyPage(() => import("../pages/organizer/CreateEventPage"), "CreateEventPage");
@@ -271,10 +270,7 @@ export function AppRouter() {
           />
           <Route path="ranking" element={gatedRankingRoute("/organizer/dashboard", <RankingPage />)} />
           <Route path="finals" element={gatedRoute("/organizer/dashboard", <FinalsPage />)} />
-          <Route
-            path="disqualifications"
-            element={gatedRoute("/organizer/dashboard", <DisqualificationPage />)}
-          />
+          <Route path="disqualifications" element={<Navigate to="/organizer/registrations" replace />} />
           <Route path="ai-auditor" element={gatedRoute("/organizer/dashboard", <AiAuditorPage />)} />
           <Route path="ai-insights" element={gatedRoute("/organizer/dashboard", <AiInsightsPage />)} />
           <Route path="announcements" element={gatedAnnouncementRoute("/organizer/dashboard", <AnnouncementPage />)} />

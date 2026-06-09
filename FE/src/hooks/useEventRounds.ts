@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../lib/queryKeys";
 import { fetchEventRounds } from "../services/contestApi";
-import { getApiErrorMessage } from "../utils/apiError";
-import { mapOrganizerErrorMessage } from "../utils/organizerErrors";
+import { resolveApiError } from "../utils/apiError";
 
 export function useEventRounds(eventId: number | null) {
   const query = useQuery({
@@ -15,7 +14,7 @@ export function useEventRounds(eventId: number | null) {
     rounds: query.data ?? [],
     loading: query.isLoading,
     error: query.isError
-      ? mapOrganizerErrorMessage(getApiErrorMessage(query.error, "Không tải được danh sách vòng."))
+      ? resolveApiError(query.error, "Không tải được danh sách vòng.")
       : null,
     refetch: query.refetch
   };
