@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../lib/queryKeys";
 import { fetchEventRounds, fetchRoundBoards, type BoardResponse } from "../services/contestApi";
-import { getApiErrorMessage } from "../utils/apiError";
-import { mapOrganizerErrorMessage } from "../utils/organizerErrors";
+import { resolveApiError } from "../utils/apiError";
 
 export interface EventBoardsData {
   rounds: Awaited<ReturnType<typeof fetchEventRounds>>;
@@ -28,7 +27,7 @@ export function useEventBoards(eventId: number | null) {
     boards: query.data?.boards ?? [],
     loading: query.isLoading,
     error: query.isError
-      ? mapOrganizerErrorMessage(getApiErrorMessage(query.error, "Không tải được danh sách bảng."))
+      ? resolveApiError(query.error, "Không tải được danh sách bảng.")
       : null,
     refetch: query.refetch
   };

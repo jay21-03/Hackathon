@@ -44,18 +44,14 @@ export function useBoardSetupProgress(
         anchor: "#board-step-board"
       },
       {
-        label: "Slot",
-        detail: hasSlots ? `${slotsCount} slot` : "Thêm slot trên từng bảng",
-        state: !hasBoards ? "blocked" : hasSlots ? "done" : "active",
-        anchor: "#board-step-slot"
-      },
-      {
-        label: "Gán đội",
-        detail: hasAssignments
-          ? `${assignedCount} đã gán`
-          : "Random hoặc gán thủ công",
-        state: !hasSlots ? "blocked" : hasAssignments ? "done" : "active",
-        anchor: "#board-step-assign"
+        label: "Vị trí & gán đội",
+        detail: hasSlots
+          ? hasAssignments
+            ? `${assignedCount}/${slotsCount} vị trí đã gán`
+            : `${slotsCount} vị trí — chưa gán`
+          : "Thêm vị trí và gán đội trên cùng màn",
+        state: !hasBoards ? "blocked" : hasAssignments ? "done" : hasSlots ? "active" : "next",
+        anchor: "#board-step-slots"
       },
       {
         label: "Tiếp theo",
@@ -71,7 +67,7 @@ export function useBoardSetupProgress(
     if (!hasRounds) {
       nextAction = {
         title: "Bước tiếp: Tạo vòng thi",
-        description: "Nhập tên vòng, thời gian và bấm «Tạo vòng thi» (hoặc «Lưu vòng» nếu đã có form sửa).",
+        description: "Nhập tên vòng, thời gian và bấm «Tạo vòng thi».",
         href: "#board-step-round",
         cta: "Đi tới form vòng"
       };
@@ -84,21 +80,13 @@ export function useBoardSetupProgress(
         cta: "Đi tới form bảng"
       };
       completedMacroIndex = 2;
-    } else if (!hasSlots) {
+    } else if (!hasSlots || !hasAssignments) {
       nextAction = {
-        title: "Bước tiếp: Thêm slot",
-        description: "Trên mỗi bảng, nhập số vị trí và bấm «Thêm slot».",
-        href: "#board-step-slot",
-        cta: "Xem danh sách bảng"
-      };
-      completedMacroIndex = 2;
-    } else if (!hasAssignments) {
-      nextAction = {
-        title: "Bước tiếp: Gán đội vào slot",
+        title: "Bước tiếp: Vị trí & gán đội",
         description:
-          "Dùng «Phân công ngẫu nhiên» trên header, hoặc chọn đội từng slot (đội phải Đã xác nhận).",
-        href: "#board-step-assign",
-        cta: "Đi tới gán đội"
+          "Thêm vị trí và gán đội ngay trên cùng màn — dùng «Phân công ngẫu nhiên» hoặc chọn từng vị trí.",
+        href: "#board-step-slots",
+        cta: "Đi tới vị trí & gán đội"
       };
       completedMacroIndex = 3;
     } else {

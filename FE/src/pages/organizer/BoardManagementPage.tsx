@@ -1,10 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { invalidateAfterBoardMutation } from "../../lib/invalidateBoardQueries";
-import { ConfirmAction } from "../../components/feedback/ConfirmAction";
+import { useEffect, useMemo, useState } from "react";
+import { useBoardManagement } from "../../hooks/useBoardManagement";
+import { BoardListSection } from "../../components/organizer/board-management/BoardListSection";
+import { BoardRoundSection } from "../../components/organizer/board-management/BoardRoundSection";
+import { BoardSlotsSection } from "../../components/organizer/board-management/BoardSlotsSection";
+import { TeamDetailModal } from "../../components/organizer/TeamDetailModal";
 import { useToast } from "../../components/feedback/ToastProvider";
-import { Badge } from "../../components/ui/Badge";
-import { Button, ButtonLink } from "../../components/ui/Button";
+import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { EventSelector } from "../../components/ui/EventSelector";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
@@ -12,97 +14,63 @@ import { NextStepPanel } from "../../components/ui/NextStepPanel";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { boardFormSchema, roundFormSchema, slotNumberSchema } from "../../domain/schemas";
-import { getApiErrorMessage } from "../../utils/apiError";
-import { zodFirstError } from "../../utils/formValidation";
-import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
 import { useBoardSetupProgress } from "../../hooks/useBoardSetupProgress";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
-import { fetchEventDetail } from "../../services/eventsApi";
+import { invalidateAfterBoardMutation } from "../../lib/invalidateBoardQueries";
+import { queryKeys } from "../../lib/queryKeys";
+import type { BoardWithSlots } from "./boardManagementUtils";
+import { createIdempotencyKey } from "../../utils/idempotency";
 import {
   assignTeamToSlot,
   createBoard,
   createBoardSlot,
   createRound,
   deleteBoardSlot,
-  fetchBoardSlots,
-  fetchEventRounds,
-  fetchRoundBoards,
   moveTeamBetweenSlots,
   randomAssignTeams,
   swapBoardSlots,
   unassignTeamFromSlot,
   updateBoard,
   updateRound,
-  type BoardResponse,
-  type BoardSlotResponse,
-  type RoundResponse
+  type BoardSlotResponse
 } from "../../services/contestApi";
-import { fetchEventTeams, type TeamDetailResponse } from "../../services/registrationService";
-import { getStatusLabel, getStatusTone } from "../../domain/status";
+import { fetchTeam, type TeamDetailResponse } from "../../services/registrationService";
+import { resolveApiError } from "../../utils/apiError";
+import { zodFirstError } from "../../utils/formValidation";
 import { isRoundRunning, pickActiveRound } from "../../utils/pickActiveRound";
-
-interface BoardWithSlots {
-  board: BoardResponse;
-  slots: BoardSlotResponse[];
-}
-
-function toIsoFromLocal(value: string) {
-  return new Date(value).toISOString();
-}
-
-function toLocalInput(iso: string) {
-  const date = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function scrollToAnchor(anchor: string) {
-  if (typeof document === "undefined") return;
-  document.querySelector(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function defaultRoundTimes(startDate: string, endDate: string) {
-  const start = startDate ? `${startDate}T08:00` : "";
-  const end = endDate ? `${endDate}T17:00` : "";
-  return { start, end };
-}
-
-function suggestNextRound(rounds: RoundResponse[]) {
-  const maxOrder = rounds.reduce((max, round) => Math.max(max, round.roundOrder), 0);
-  const nextOrder = maxOrder + 1;
-  const lastRound = [...rounds].sort((a, b) => b.roundOrder - a.roundOrder)[0];
-  const hasFinal = rounds.some((round) => round.roundType === "FINAL");
-
-  let startAt = "";
-  let endAt = "";
-  if (lastRound?.endAt) {
-    const lastEnd = new Date(lastRound.endAt);
-    const nextStart = new Date(lastEnd.getTime() + 60 * 60 * 1000);
-    const nextEnd = new Date(lastEnd.getTime() + 24 * 60 * 60 * 1000);
-    startAt = toLocalInput(nextStart.toISOString());
-    endAt = toLocalInput(nextEnd.toISOString());
-  }
-
-  return {
-    name: !hasFinal && nextOrder >= 2 ? "Chung kết" : `Vòng ${nextOrder}`,
-    roundType: (!hasFinal && nextOrder >= 2 ? "FINAL" : "GROUP_STAGE") as "GROUP_STAGE" | "FINAL",
-    roundOrder: nextOrder,
-    startAt,
-    endAt
-  };
-}
+import {
+  defaultRoundTimes,
+  normalizeBoardStep,
+  resolveBoardSetupStep,
+  suggestNextRound,
+  toIsoFromLocal,
+  toLocalInput,
+  type BoardSetupStep
+} from "./boardManagementUtils";
 
 export function BoardManagementPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const [rounds, setRounds] = useState<RoundResponse[]>([]);
-  const [selectedRoundId, setSelectedRoundId] = useState<number | null>(null);
-  const [boards, setBoards] = useState<BoardWithSlots[]>([]);
-  const [teams, setTeams] = useState<TeamDetailResponse[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    rounds,
+    selectedRoundId,
+    setSelectedRoundId,
+    boards,
+    teams,
+    loading,
+    error,
+    slotTeamPick,
+    setSlotTeamPick,
+    boardEdits,
+    setBoardEdits,
+    invalidate,
+    eventDetail,
+    teamMap,
+    confirmedTeams,
+    assignedTeamIds
+  } = useBoardManagement(eventId);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const [roundName, setRoundName] = useState("Vòng 1");
   const [roundType, setRoundType] = useState<"GROUP_STAGE" | "FINAL">("GROUP_STAGE");
@@ -113,32 +81,38 @@ export function BoardManagementPage() {
   const [boardName, setBoardName] = useState("");
   const [boardOrder, setBoardOrder] = useState(1);
   const [slotTeamNumber, setSlotTeamNumber] = useState<Record<number, string>>({});
-  const [slotTeamPick, setSlotTeamPick] = useState<Record<number, string>>({});
   const [moveFromId, setMoveFromId] = useState("");
   const [moveToId, setMoveToId] = useState("");
   const [swapAId, setSwapAId] = useState("");
   const [swapBId, setSwapBId] = useState("");
   const [forceReplace, setForceReplace] = useState(false);
+  const [detailTeam, setDetailTeam] = useState<TeamDetailResponse | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailContext, setDetailContext] = useState<string | undefined>();
 
   const [editRoundName, setEditRoundName] = useState("");
   const [editRoundType, setEditRoundType] = useState<"GROUP_STAGE" | "FINAL">("GROUP_STAGE");
   const [editRoundOrder, setEditRoundOrder] = useState(1);
   const [editRoundStartAt, setEditRoundStartAt] = useState("");
   const [editRoundEndAt, setEditRoundEndAt] = useState("");
-  const [boardEdits, setBoardEdits] = useState<
-    Record<number, { name: string; boardOrder: number; description: string }>
-  >({});
   const [showAddRound, setShowAddRound] = useState(false);
 
-  const teamMap = useMemo(
-    () => Object.fromEntries(teams.map((team) => [team.id, team.name])),
+  const teamById = useMemo(
+    () => Object.fromEntries(teams.map((team) => [team.id, team])),
     [teams]
   );
 
-  const confirmedTeams = useMemo(
-    () => teams.filter((team) => team.status === "CONFIRMED"),
-    [teams]
-  );
+  function teamsForSlot(slotId: number, currentTeamId: number | null) {
+    return confirmedTeams.filter(
+      (team) => team.id === currentTeamId || !assignedTeamIds.has(team.id)
+    );
+  }
+
+  function slotPickValue(slot: BoardSlotResponse) {
+    const picked = slotTeamPick[slot.id];
+    if (picked !== undefined && picked !== "") return picked;
+    return slot.teamId ? String(slot.teamId) : "";
+  }
 
   const allSlots = useMemo(
     () =>
@@ -151,36 +125,14 @@ export function BoardManagementPage() {
     [boards]
   );
 
-  const loadBoardData = useCallback(
-    async (roundId: number) => {
-      const [boardList, teamList] = await Promise.all([
-        fetchRoundBoards(roundId),
-        eventId ? fetchEventTeams(eventId) : Promise.resolve([])
-      ]);
-      const withSlots = await Promise.all(
-        boardList.map(async (board) => ({
-          board,
-          slots: await fetchBoardSlots(board.id)
-        }))
-      );
-      setBoards(withSlots);
-      setTeams(teamList);
-      setBoardOrder(boardList.length + 1);
-      setBoardEdits(
-        Object.fromEntries(
-          boardList.map((board) => [
-            board.id,
-            {
-              name: board.name,
-              boardOrder: board.boardOrder,
-              description: board.description ?? ""
-            }
-          ])
-        )
-      );
-    },
-    [eventId]
-  );
+  const { microSteps, nextAction, stats } = useBoardSetupProgress(rounds.length, boards);
+  const [activeStep, setActiveStep] = useState<BoardSetupStep | null>(null);
+  const currentStep = activeStep ?? resolveBoardSetupStep(microSteps);
+  const setupComplete = stats.assignedCount > 0;
+
+  function goToStep(anchor: string) {
+    setActiveStep(normalizeBoardStep(anchor));
+  }
 
   const selectedRound = useMemo(
     () => rounds.find((round) => round.id === selectedRoundId) ?? null,
@@ -198,54 +150,16 @@ export function BoardManagementPage() {
     setEditRoundEndAt(toLocalInput(selectedRound.endAt));
   }, [selectedRound]);
 
-  const refreshRounds = useCallback(async () => {
-    if (!eventId) return;
-    const roundList = await fetchEventRounds(eventId);
-    setRounds(roundList);
-    const roundId = selectedRoundId && roundList.some((r) => r.id === selectedRoundId)
-      ? selectedRoundId
-      : (roundList[0]?.id ?? null);
-    setSelectedRoundId(roundId);
-    if (roundId) await loadBoardData(roundId);
-  }, [eventId, loadBoardData, selectedRoundId]);
+  useEffect(() => {
+    if (!eventDetail) return;
+    const defaults = defaultRoundTimes(eventDetail.startDate ?? "", eventDetail.endDate ?? "");
+    setRoundStartAt(defaults.start);
+    setRoundEndAt(defaults.end);
+  }, [eventId, eventDetail]);
 
   useEffect(() => {
-    if (!eventId) {
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    Promise.all([fetchEventRounds(eventId), fetchEventDetail(String(eventId))])
-      .then(([roundList, eventDetail]) => {
-        if (cancelled) return;
-        setRounds(roundList);
-        const defaults = defaultRoundTimes(eventDetail?.startDate ?? "", eventDetail?.endDate ?? "");
-        setRoundStartAt(defaults.start);
-        setRoundEndAt(defaults.end);
-        const roundId = roundList[0]?.id ?? null;
-        setSelectedRoundId(roundId);
-        if (roundId) return loadBoardData(roundId);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Không tải được thông tin bảng thi.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId, loadBoardData]);
-
-  useEffect(() => {
-    if (!selectedRoundId) return;
-    loadBoardData(selectedRoundId).catch(() => setError("Không tải được slot bảng thi."));
-  }, [selectedRoundId, loadBoardData]);
+    setBoardOrder(boards.length + 1);
+  }, [boards.length, selectedRoundId]);
 
   async function handleCreateRound() {
     if (!eventId) return;
@@ -270,11 +184,11 @@ export function BoardManagementPage() {
       });
       setSelectedRoundId(created.id);
       setShowAddRound(false);
-      await refreshRounds();
+      await invalidate(created.id);
       notify("Đã tạo vòng thi. Tiếp theo: thêm bảng bên dưới.", "success");
-      scrollToAnchor("#board-step-board");
+      goToStep("#board-step-board");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Tạo vòng thi thất bại.")), "danger");
+      notify(resolveApiError(err, "Tạo vòng thi thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -288,7 +202,7 @@ export function BoardManagementPage() {
     setRoundStartAt(next.startAt);
     setRoundEndAt(next.endAt);
     setShowAddRound(true);
-    scrollToAnchor("#board-step-round");
+    goToStep("#board-step-round");
   }
 
   async function handleCreateBoard() {
@@ -308,11 +222,11 @@ export function BoardManagementPage() {
         boardOrder: parsed.data.boardOrder
       });
       setBoardName("");
-      await loadBoardData(selectedRoundId);
-      notify("Đã tạo bảng thi. Tiếp theo: thêm slot trên bảng vừa tạo.", "success");
-      scrollToAnchor("#board-step-slot");
+      await invalidate();
+      notify("Đã tạo bảng thi. Tiếp theo: thêm vị trí trên bảng vừa tạo.", "success");
+      goToStep("#board-step-slots");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Tạo bảng thi thất bại.")), "danger");
+      notify(resolveApiError(err, "Tạo bảng thi thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -330,11 +244,10 @@ export function BoardManagementPage() {
     try {
       await createBoardSlot(boardId, teamNumber);
       setSlotTeamNumber((current) => ({ ...current, [boardId]: "" }));
-      await loadBoardData(selectedRoundId);
-      notify("Đã thêm slot. Tiếp theo: gán đội (random hoặc từng slot).", "success");
-      scrollToAnchor("#board-step-assign");
+      await invalidate();
+      notify("Đã thêm vị trí — chọn đội ngay bên dưới hoặc dùng phân công ngẫu nhiên.", "success");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Thêm slot thất bại.")), "danger");
+      notify(resolveApiError(err, "Thêm vị trí thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -345,12 +258,12 @@ export function BoardManagementPage() {
     setBusy(true);
     try {
       await unassignTeamFromSlot(selectedRoundId, slotId);
-      await loadBoardData(selectedRoundId);
+      await invalidate();
       await invalidateAfterBoardMutation(queryClient);
       setSlotTeamPick((current) => ({ ...current, [slotId]: "" }));
-      notify("Đã gỡ đội khỏi slot.", "success");
+      notify("Đã gỡ đội khỏi vị trí.", "success");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Gỡ đội thất bại.")), "danger");
+      notify(resolveApiError(err, "Gỡ đội thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -361,34 +274,79 @@ export function BoardManagementPage() {
     setBusy(true);
     try {
       await deleteBoardSlot(slotId);
-      await loadBoardData(selectedRoundId);
-      notify("Đã xóa slot trống.", "success");
+      await invalidate();
+      notify("Đã xóa vị trí trống.", "success");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Không xóa được slot.")), "danger");
+      notify(resolveApiError(err, "Không xóa được vị trí."), "danger");
     } finally {
       setBusy(false);
     }
   }
 
+  async function openTeamDetail(teamId: number, contextLabel?: string) {
+    setDetailLoading(true);
+    setDetailTeam(null);
+    setDetailContext(contextLabel);
+    try {
+      const team = await fetchTeam(teamId);
+      setDetailTeam(team);
+    } catch (err) {
+      notify(resolveApiError(err, "Không tải được chi tiết đội."), "danger");
+      setDetailContext(undefined);
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  function closeTeamDetail() {
+    setDetailTeam(null);
+    setDetailContext(undefined);
+    setDetailLoading(false);
+  }
+
   async function handleAssignSlot(slotId: number, slotOccupied: boolean) {
     if (!selectedRoundId) return;
-    const teamId = Number(slotTeamPick[slotId] ?? "");
+    const slot = boards.flatMap(({ slots }) => slots).find((item) => item.id === slotId);
+    const teamId = Number(slot ? slotPickValue(slot) : slotTeamPick[slotId] ?? "");
     if (!teamId) {
-      notify("Chọn đội để gán vào slot.", "warning");
+      notify("Chọn đội để gán vào vị trí.", "warning");
       return;
     }
     if (slotOccupied && !forceReplace) {
-      notify("Slot đã có đội — bật «Ghi đè» hoặc chọn slot trống.", "warning");
+      notify("Vị trí đã có đội — bật «Ghi đè» hoặc chọn vị trí trống.", "warning");
       return;
     }
+    const boardKey = queryKeys.boards.roundDetail(eventId, selectedRoundId);
+    const previousBoards = queryClient.getQueryData<BoardWithSlots[]>(boardKey);
+    if (previousBoards) {
+      queryClient.setQueryData<BoardWithSlots[]>(
+        boardKey,
+        previousBoards.map((entry) => ({
+          ...entry,
+          slots: entry.slots.map((s) => (s.id === slotId ? { ...s, teamId } : s))
+        }))
+      );
+    }
+    setSlotTeamPick((current) => ({ ...current, [slotId]: String(teamId) }));
+
     setBusy(true);
     try {
-      await assignTeamToSlot(selectedRoundId, slotId, teamId, slotOccupied && forceReplace);
-      await loadBoardData(selectedRoundId);
+      await assignTeamToSlot(
+        selectedRoundId,
+        slotId,
+        teamId,
+        slotOccupied && forceReplace,
+        createIdempotencyKey(`assign-slot-${slotId}`)
+      );
+      await invalidate();
       await invalidateAfterBoardMutation(queryClient);
-      notify(slotOccupied ? "Đã ghi đè đội trong slot." : "Đã gán đội vào slot.", "success");
+      notify(slotOccupied ? "Đã ghi đè đội trong vị trí." : "Đã gán đội vào vị trí.", "success");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Gán đội thất bại.")), "danger");
+      if (previousBoards) {
+        queryClient.setQueryData(boardKey, previousBoards);
+      }
+      setSlotTeamPick((current) => ({ ...current, [slotId]: slot?.teamId ? String(slot.teamId) : "" }));
+      notify(resolveApiError(err, "Gán đội thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -415,11 +373,11 @@ export function BoardManagementPage() {
         startAt: toIsoFromLocal(parsed.data.startAt),
         endAt: toIsoFromLocal(parsed.data.endAt)
       });
-      await refreshRounds();
+      await invalidate();
       notify("Đã lưu vòng thi.", "success");
-      if (boards.length === 0) scrollToAnchor("#board-step-board");
+      if (boards.length === 0) goToStep("#board-step-board");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Cập nhật vòng thi thất bại.")), "danger");
+      notify(resolveApiError(err, "Cập nhật vòng thi thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -440,10 +398,10 @@ export function BoardManagementPage() {
         boardOrder: parsed.data.boardOrder,
         description: edit.description.trim() || undefined
       });
-      await loadBoardData(selectedRoundId);
+      await invalidate();
       notify("Đã lưu bảng thi.", "success");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Cập nhật bảng thi thất bại.")), "danger");
+      notify(resolveApiError(err, "Cập nhật bảng thi thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -454,12 +412,12 @@ export function BoardManagementPage() {
     setBusy(true);
     try {
       const result = await randomAssignTeams(selectedRoundId);
-      await loadBoardData(selectedRoundId);
+      await invalidate();
       await invalidateAfterBoardMutation(queryClient);
       const count = result?.assignedCount ?? 0;
       if (count === 0) {
         notify(
-          "Không gán thêm đội nào — kiểm tra: có đội CONFIRMED chưa gán slot và còn slot trống.",
+          "Không gán thêm đội nào — kiểm tra: có đội đã xác nhận chưa gán vị trí và còn vị trí trống.",
           "warning"
         );
       } else {
@@ -469,7 +427,7 @@ export function BoardManagementPage() {
         );
       }
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Phân công ngẫu nhiên thất bại.")), "danger");
+      notify(resolveApiError(err, "Phân công ngẫu nhiên thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -477,20 +435,25 @@ export function BoardManagementPage() {
 
   async function handleMove() {
     if (!selectedRoundId || !moveFromId || !moveToId) {
-      notify("Chọn slot nguồn và slot đích.", "warning");
+      notify("Chọn vị trí nguồn và vị trí đích.", "warning");
       return;
     }
     if (moveFromId === moveToId) {
-      notify("Slot nguồn và đích phải khác nhau.", "warning");
+      notify("Vị trí nguồn và đích phải khác nhau.", "warning");
       return;
     }
     setBusy(true);
     try {
-      await moveTeamBetweenSlots(selectedRoundId, Number(moveFromId), Number(moveToId));
-      await loadBoardData(selectedRoundId);
-      notify("Đã di chuyển đội giữa các slot.", "success");
+      await moveTeamBetweenSlots(
+        selectedRoundId,
+        Number(moveFromId),
+        Number(moveToId),
+        createIdempotencyKey(`move-${moveFromId}-${moveToId}`)
+      );
+      await invalidate();
+      notify("Đã di chuyển đội giữa các vị trí.", "success");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Di chuyển thất bại.")), "danger");
+      notify(resolveApiError(err, "Di chuyển thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -498,28 +461,29 @@ export function BoardManagementPage() {
 
   async function handleSwap() {
     if (!selectedRoundId || !swapAId || !swapBId) {
-      notify("Chọn hai slot để hoán đổi.", "warning");
+      notify("Chọn hai vị trí để hoán đổi.", "warning");
       return;
     }
     if (swapAId === swapBId) {
-      notify("Hai slot hoán đổi phải khác nhau.", "warning");
+      notify("Hai vị trí hoán đổi phải khác nhau.", "warning");
       return;
     }
     setBusy(true);
     try {
-      await swapBoardSlots(selectedRoundId, Number(swapAId), Number(swapBId));
-      await loadBoardData(selectedRoundId);
-      notify("Đã hoán đổi hai slot.", "success");
+      await swapBoardSlots(
+        selectedRoundId,
+        Number(swapAId),
+        Number(swapBId),
+        createIdempotencyKey(`swap-${swapAId}-${swapBId}`)
+      );
+      await invalidate();
+      notify("Đã hoán đổi hai vị trí.", "success");
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Hoán đổi thất bại.")), "danger");
+      notify(resolveApiError(err, "Hoán đổi thất bại."), "danger");
     } finally {
       setBusy(false);
     }
   }
-
-  const { microSteps, nextAction, stats } = useBoardSetupProgress(rounds.length, boards);
-
-  const setupComplete = stats.assignedCount > 0;
 
   if (eventLoading || loading) return <ModuleSkeleton rows={4} />;
 
@@ -528,7 +492,7 @@ export function BoardManagementPage() {
       <PageHeader
         eyebrow="Bảng thi và phân công"
         title="Quản lý bảng thi"
-        description="Làm tuần tự: vòng → bảng → slot → gán đội."
+        description="Vòng → bảng → vị trí & gán đội trên cùng một màn."
         actions={
           <>
             <ButtonLink to="/organizer/events/basic-info" variant="ghost" icon={<Icon name="settings" />}>
@@ -550,9 +514,6 @@ export function BoardManagementPage() {
                 ))}
               </select>
             ) : null}
-            <Button type="button" disabled={!selectedRoundId || busy} onClick={handleRandomAssign}>
-              Phân công ngẫu nhiên
-            </Button>
           </>
         }
       />
@@ -563,11 +524,17 @@ export function BoardManagementPage() {
         </div>
       ) : null}
 
-      <NextStepPanel action={nextAction} variant={setupComplete ? "success" : "primary"} />
+      <NextStepPanel
+        action={nextAction}
+        variant={setupComplete ? "success" : "primary"}
+        onHrefClick={goToStep}
+      />
 
       <WorkflowSteps
         title="Các bước trên trang này"
-        description="Bấm từng ô để nhảy tới phần form tương ứng."
+        description="Chọn một bước — mỗi lần chỉ hiện form của bước đó."
+        activeHref={currentStep}
+        onStepSelect={(href) => goToStep(href)}
         steps={microSteps.map((step) => ({
           label: step.label,
           detail: step.detail,
@@ -577,456 +544,119 @@ export function BoardManagementPage() {
         }))}
       />
 
-      <section
-        id="board-step-round"
-        className="scroll-mt-24 rounded-xl border border-outline-variant bg-surface-container p-lg space-y-md"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-sm">
-          <h2 className="font-headline-sm text-on-surface">Thiết lập cấu trúc — Vòng thi</h2>
-          {rounds.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-sm">
-              {activeRound ? (
-                <Badge tone={isRoundRunning(activeRound) ? "success" : "neutral"}>
-                  Vòng hiện tại: {activeRound.name}
-                  {isRoundRunning(activeRound) ? " (đang diễn ra)" : ""}
-                </Badge>
-              ) : null}
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                icon={<Icon name="add" />}
-                disabled={busy || showAddRound}
-                onClick={openAddRoundForm}
-              >
-                Thêm vòng mới
-              </Button>
-            </div>
-          ) : null}
-        </div>
-        {rounds.length === 0 || showAddRound ? (
-          <div className="rounded-lg border border-outline-variant bg-surface-container-low p-md space-y-md">
-            {showAddRound ? (
-              <p className="font-label-md text-on-surface">Tạo vòng mới</p>
-            ) : null}
-            <div className="grid gap-md md:grid-cols-2 lg:grid-cols-3">
-              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                Tên vòng
-                <input className="form-input" value={roundName} onChange={(e) => setRoundName(e.target.value)} />
-              </label>
-              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                Loại vòng
-                <select
-                  className="form-input"
-                  value={roundType}
-                  onChange={(e) => setRoundType(e.target.value as "GROUP_STAGE" | "FINAL")}
-                >
-                  <option value="GROUP_STAGE">Vòng bảng</option>
-                  <option value="FINAL">Chung kết</option>
-                </select>
-              </label>
-              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                Thứ tự
-                <input
-                  type="number"
-                  min={1}
-                  className="form-input"
-                  value={roundOrder}
-                  onChange={(e) => setRoundOrder(Number(e.target.value))}
-                />
-              </label>
-              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                Bắt đầu
-                <input
-                  type="datetime-local"
-                  className="form-input"
-                  value={roundStartAt}
-                  onChange={(e) => setRoundStartAt(e.target.value)}
-                />
-              </label>
-              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                Kết thúc
-                <input
-                  type="datetime-local"
-                  className="form-input"
-                  value={roundEndAt}
-                  onChange={(e) => setRoundEndAt(e.target.value)}
-                />
-              </label>
-              <div className="flex flex-wrap items-end gap-sm">
-                <Button type="button" disabled={busy} onClick={handleCreateRound}>
-                  {showAddRound ? "Tạo vòng" : "Tạo vòng thi"}
-                </Button>
-                {showAddRound ? (
-                  <Button type="button" variant="ghost" disabled={busy} onClick={() => setShowAddRound(false)}>
-                    Hủy
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : null}
-        {rounds.length > 0 ? (
-          <div className="space-y-md">
-            {selectedRoundId ? (
-              <div className="rounded-lg border border-outline-variant bg-surface-container-low p-md space-y-md">
-                <p className="font-label-md text-on-surface">Sửa vòng đang chọn</p>
-                <div className="grid gap-md md:grid-cols-2 lg:grid-cols-3">
-                  <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                    Tên vòng
-                    <input
-                      className="form-input"
-                      value={editRoundName}
-                      onChange={(e) => setEditRoundName(e.target.value)}
-                    />
-                  </label>
-                  <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                    Loại vòng
-                    <select
-                      className="form-input"
-                      value={editRoundType}
-                      onChange={(e) => setEditRoundType(e.target.value as "GROUP_STAGE" | "FINAL")}
-                    >
-                      <option value="GROUP_STAGE">Vòng bảng</option>
-                      <option value="FINAL">Chung kết</option>
-                    </select>
-                  </label>
-                  <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                    Thứ tự
-                    <input
-                      type="number"
-                      min={1}
-                      className="form-input"
-                      value={editRoundOrder}
-                      onChange={(e) => setEditRoundOrder(Number(e.target.value))}
-                    />
-                  </label>
-                  <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                    Bắt đầu
-                    <input
-                      type="datetime-local"
-                      className="form-input"
-                      value={editRoundStartAt}
-                      onChange={(e) => setEditRoundStartAt(e.target.value)}
-                    />
-                  </label>
-                  <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                    Kết thúc
-                    <input
-                      type="datetime-local"
-                      className="form-input"
-                      value={editRoundEndAt}
-                      onChange={(e) => setEditRoundEndAt(e.target.value)}
-                    />
-                  </label>
-                  <div className="flex items-end">
-                    <Button type="button" disabled={busy} onClick={handleSaveRound}>
-                      Lưu vòng
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-            <div
-              id="board-step-board"
-              className="scroll-mt-24 flex flex-wrap items-end gap-sm border-t border-outline-variant pt-md"
-            >
-              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                Tên bảng mới
-                <input
-                  className="form-input min-w-[200px]"
-                  value={boardName}
-                  onChange={(e) => setBoardName(e.target.value)}
-                  placeholder="Bảng A"
-                />
-              </label>
-              <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                Thứ tự bảng
-                <input
-                  type="number"
-                  min={1}
-                  className="form-input w-24"
-                  value={boardOrder}
-                  onChange={(e) => setBoardOrder(Number(e.target.value))}
-                />
-              </label>
-              <Button type="button" variant="secondary" disabled={busy || !selectedRoundId} onClick={handleCreateBoard}>
-                Thêm bảng
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </section>
+      {currentStep === "#board-step-round" ? (
+        <BoardRoundSection
+          rounds={rounds}
+          activeRound={activeRound}
+          selectedRoundId={selectedRoundId}
+          busy={busy}
+          showAddRound={showAddRound}
+          roundName={roundName}
+          roundType={roundType}
+          roundOrder={roundOrder}
+          roundStartAt={roundStartAt}
+          roundEndAt={roundEndAt}
+          editRoundName={editRoundName}
+          editRoundType={editRoundType}
+          editRoundOrder={editRoundOrder}
+          editRoundStartAt={editRoundStartAt}
+          editRoundEndAt={editRoundEndAt}
+          onRoundNameChange={setRoundName}
+          onRoundTypeChange={setRoundType}
+          onRoundOrderChange={setRoundOrder}
+          onRoundStartAtChange={setRoundStartAt}
+          onRoundEndAtChange={setRoundEndAt}
+          onEditRoundNameChange={setEditRoundName}
+          onEditRoundTypeChange={setEditRoundType}
+          onEditRoundOrderChange={setEditRoundOrder}
+          onEditRoundStartAtChange={setEditRoundStartAt}
+          onEditRoundEndAtChange={setEditRoundEndAt}
+          onOpenAddRoundForm={openAddRoundForm}
+          onCreateRound={() => void handleCreateRound()}
+          onCancelAddRound={() => setShowAddRound(false)}
+          onSaveRound={() => void handleSaveRound()}
+        />
+      ) : null}
 
-      {rounds.length > 0 ? (
-        <label className="inline-flex items-center gap-sm font-body-sm text-on-surface-variant">
-          <input
-            type="checkbox"
-            checked={forceReplace}
-            onChange={(e) => setForceReplace(e.target.checked)}
-            className="h-4 w-4 rounded border-outline-variant"
+      {currentStep === "#board-step-board" ? (
+        rounds.length === 0 ? (
+          <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+            <p className="font-body-md text-on-surface-variant">Hoàn thành bước «Vòng thi» trước khi thêm bảng.</p>
+          </div>
+        ) : (
+          <BoardListSection
+            selectedRound={selectedRound}
+            boards={boards}
+            boardEdits={boardEdits}
+            boardName={boardName}
+            boardOrder={boardOrder}
+            busy={busy}
+            selectedRoundId={selectedRoundId}
+            onBoardNameChange={setBoardName}
+            onBoardOrderChange={setBoardOrder}
+            onBoardEditsChange={setBoardEdits}
+            onCreateBoard={() => void handleCreateBoard()}
+            onSaveBoard={(boardId) => void handleSaveBoard(boardId)}
           />
-          Ghi đè khi gán vào slot đã có đội (forceReplace)
-        </label>
+        )
       ) : null}
 
-      {selectedRoundId && allSlots.length > 0 ? (
-        <section
-          id="board-step-assign"
-          className="scroll-mt-24 rounded-xl border border-outline-variant bg-surface-container p-lg space-y-md"
-        >
-          <h2 className="font-headline-sm text-on-surface">Gán đội — Di chuyển / hoán đổi slot</h2>
-          <div className="flex flex-wrap gap-md items-end">
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Từ slot
-              <select
-                className="form-input min-w-[220px]"
-                value={moveFromId}
-                onChange={(e) => setMoveFromId(e.target.value)}
-              >
-                <option value="">—</option>
-                {allSlots.map(({ slot, label }) => (
-                  <option key={slot.id} value={slot.id}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Đến slot
-              <select
-                className="form-input min-w-[220px]"
-                value={moveToId}
-                onChange={(e) => setMoveToId(e.target.value)}
-              >
-                <option value="">—</option>
-                {allSlots.map(({ slot, label }) => (
-                  <option key={slot.id} value={slot.id}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button type="button" variant="secondary" disabled={busy} onClick={handleMove}>
-              Di chuyển
-            </Button>
+      {currentStep === "#board-step-slots" ? (
+        boards.length === 0 ? (
+          <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+            <p className="font-body-md text-on-surface-variant">
+              Hoàn thành bước «Bảng» trước khi thêm vị trí và gán đội.
+            </p>
           </div>
-          <div className="flex flex-wrap gap-md items-end border-t border-outline-variant pt-md">
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Slot A
-              <select className="form-input min-w-[220px]" value={swapAId} onChange={(e) => setSwapAId(e.target.value)}>
-                <option value="">—</option>
-                {allSlots.map(({ slot, label }) => (
-                  <option key={slot.id} value={slot.id}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Slot B
-              <select className="form-input min-w-[220px]" value={swapBId} onChange={(e) => setSwapBId(e.target.value)}>
-                <option value="">—</option>
-                {allSlots.map(({ slot, label }) => (
-                  <option key={slot.id} value={slot.id}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button type="button" variant="secondary" disabled={busy} onClick={handleSwap}>
-              Hoán đổi
-            </Button>
-          </div>
-        </section>
+        ) : (
+          <BoardSlotsSection
+            boards={boards}
+            teams={teams}
+            confirmedTeams={confirmedTeams}
+            teamMap={teamMap}
+            teamById={teamById}
+            allSlots={allSlots}
+            stats={stats}
+            busy={busy}
+            selectedRoundId={selectedRoundId}
+            forceReplace={forceReplace}
+            slotTeamNumber={slotTeamNumber}
+            moveFromId={moveFromId}
+            moveToId={moveToId}
+            swapAId={swapAId}
+            swapBId={swapBId}
+            onForceReplaceChange={setForceReplace}
+            onSlotTeamNumberChange={(boardId, value) =>
+              setSlotTeamNumber((current) => ({ ...current, [boardId]: value }))
+            }
+            onSlotTeamPickChange={(slotId, value) =>
+              setSlotTeamPick((current) => ({ ...current, [slotId]: value }))
+            }
+            onMoveFromIdChange={setMoveFromId}
+            onMoveToIdChange={setMoveToId}
+            onSwapAIdChange={setSwapAId}
+            onSwapBIdChange={setSwapBId}
+            slotPickValue={slotPickValue}
+            teamsForSlot={teamsForSlot}
+            onRandomAssign={() => void handleRandomAssign()}
+            onMove={() => void handleMove()}
+            onSwap={() => void handleSwap()}
+            onCreateSlot={(boardId) => void handleCreateSlot(boardId)}
+            onAssignSlot={(slotId, occupied) => void handleAssignSlot(slotId, occupied)}
+            onUnassignSlot={(slotId) => void handleUnassignSlot(slotId)}
+            onDeleteSlot={(slotId) => void handleDeleteSlot(slotId)}
+            onOpenTeamDetail={(teamId, contextLabel) => void openTeamDetail(teamId, contextLabel)}
+          />
+        )
       ) : null}
 
-      {boards.length === 0 ? (
-        <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-          <p className="font-body-md text-on-surface-variant">
-            {rounds.length === 0
-              ? "Tạo vòng thi trước, sau đó thêm bảng và slot."
-              : "Chưa có bảng cho vòng này — dùng form «Thêm bảng» phía trên."}
-          </p>
-        </div>
-      ) : (
-        <section id="board-step-slot" className="scroll-mt-24 grid gap-md lg:grid-cols-2">
-          {boards.map(({ board, slots }) => {
-            const edit = boardEdits[board.id] ?? {
-              name: board.name,
-              boardOrder: board.boardOrder,
-              description: board.description ?? ""
-            };
-            return (
-          <article key={board.id} className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-            <div className="flex items-start justify-between gap-md">
-              <div>
-                <h2 className="font-headline-sm text-on-surface">{board.name}</h2>
-                  <p className="font-body-sm text-on-surface-variant">Bảng #{board.id}</p>
-              </div>
-              <Badge tone={getStatusTone(board.status)}>{getStatusLabel(board.status)}</Badge>
-            </div>
-
-              <div className="mt-md grid gap-sm sm:grid-cols-2">
-                <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant sm:col-span-2">
-                  Tên bảng
-                  <input
-                    className="form-input"
-                    value={edit.name}
-                    onChange={(e) =>
-                      setBoardEdits((current) => ({
-                        ...current,
-                        [board.id]: { ...edit, name: e.target.value }
-                      }))
-                    }
-                  />
-                </label>
-                <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                  Thứ tự
-                  <input
-                    type="number"
-                    min={1}
-                    className="form-input"
-                    value={edit.boardOrder}
-                    onChange={(e) =>
-                      setBoardEdits((current) => ({
-                        ...current,
-                        [board.id]: { ...edit, boardOrder: Number(e.target.value) }
-                      }))
-                    }
-                  />
-                </label>
-                <div className="flex items-end">
-                  <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => handleSaveBoard(board.id)}>
-                    Lưu bảng
-                  </Button>
-                </div>
-                <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant sm:col-span-2">
-                  Mô tả
-                  <input
-                    className="form-input"
-                    value={edit.description}
-                    onChange={(e) =>
-                      setBoardEdits((current) => ({
-                        ...current,
-                        [board.id]: { ...edit, description: e.target.value }
-                      }))
-                    }
-                  />
-                </label>
-              </div>
-
-              <div className="mt-md flex flex-wrap gap-sm items-end">
-                <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                  Số vị trí slot mới
-                  <input
-                    type="number"
-                    min={1}
-                    className="form-input w-28"
-                    value={slotTeamNumber[board.id] ?? ""}
-                    onChange={(e) =>
-                      setSlotTeamNumber((current) => ({ ...current, [board.id]: e.target.value }))
-                    }
-                  />
-                </label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => handleCreateSlot(board.id)}
-                >
-                  Thêm slot
-                </Button>
-              </div>
-
-              <div className="mt-md space-y-sm">
-                {slots.length === 0 ? (
-                  <p className="font-body-sm text-on-surface-variant">Chưa có slot.</p>
-                ) : (
-                  slots.map((slot) => (
-                    <div
-                      key={slot.id}
-                      className="rounded-lg border border-outline-variant bg-surface-container-low px-md py-sm space-y-sm"
-                    >
-                      <div className="flex items-center justify-between gap-sm">
-                        <span className="font-label-md">Vị trí #{slot.teamNumber}</span>
-                        <span className="font-body-sm text-on-surface-variant">
-                          {slot.teamId ? teamMap[slot.teamId] ?? `Đội #${slot.teamId}` : "Trống"}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-sm items-center">
-                        <select
-                          className="form-input min-w-[160px] flex-1"
-                          value={slotTeamPick[slot.id] ?? ""}
-                          onChange={(e) =>
-                            setSlotTeamPick((current) => ({ ...current, [slot.id]: e.target.value }))
-                          }
-                        >
-                          <option value="">
-                            {slot.teamId ? "Đổi sang đội khác" : "Chọn đội đã duyệt"}
-                          </option>
-                          {confirmedTeams.map((team) => (
-                            <option key={team.id} value={team.id}>
-                              {team.name}
-                            </option>
-                          ))}
-                        </select>
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={busy}
-                          onClick={() => handleAssignSlot(slot.id, Boolean(slot.teamId))}
-                        >
-                          {slot.teamId ? "Ghi đè" : "Gán"}
-                        </Button>
-                        {slot.teamId ? (
-                          <ConfirmAction
-                            title="Gỡ đội khỏi slot?"
-                            message={`Gỡ «${teamMap[slot.teamId] ?? `Đội #${slot.teamId}`}» khỏi vị trí #${slot.teamNumber}. Đội vẫn trong sự kiện, chỉ không còn trên bảng này.`}
-                            confirmLabel="Gỡ đội"
-                            onConfirm={() => void handleUnassignSlot(slot.id)}
-                          >
-                            <Button type="button" size="sm" variant="danger" disabled={busy}>
-                              Gỡ đội
-                            </Button>
-                          </ConfirmAction>
-                        ) : (
-                          <ConfirmAction
-                            title="Xóa slot trống?"
-                            message={`Xóa vị trí #${slot.teamNumber} trên bảng «${board.name}». Thao tác không hoàn tác được.`}
-                            confirmLabel="Xóa slot"
-                            onConfirm={() => void handleDeleteSlot(slot.id)}
-                          >
-                            <Button type="button" size="sm" variant="ghost" disabled={busy}>
-                              Xóa slot
-                            </Button>
-                          </ConfirmAction>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-            </div>
-          </article>
-            );
-          })}
-      </section>
-      )}
-
-      {boards.length > 0 && allSlots.length === 0 ? (
-        <p className="font-body-sm text-on-surface-variant">
-          Chưa có slot — trên từng bảng, nhập «Số vị trí slot mới» và bấm «Thêm slot».
-        </p>
-      ) : null}
-
-      <p className="font-body-sm text-on-surface-variant">
-        {confirmedTeams.length} đội đã xác nhận (dùng cho gán thủ công). Nếu chưa đủ đội, quay lại{" "}
-        <a href="/organizer/registrations" className="text-primary hover:underline">
-          Duyệt đăng ký
-        </a>
-        .
-      </p>
+      <TeamDetailModal
+        open={detailLoading || detailTeam !== null}
+        loading={detailLoading}
+        team={detailTeam}
+        contextLabel={detailContext}
+        onClose={closeTeamDetail}
+      />
 
       {setupComplete ? (
         <NextStepPanel

@@ -153,11 +153,14 @@ export async function assignTeamToSlot(
   roundId: number,
   slotId: number,
   teamId: number,
-  forceReplace = false
+  forceReplace = false,
+  idempotencyKey?: string
 ) {
+  const headers = idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined;
   const { data } = await apiClient.post<ApiResponse<unknown>>(
     `/v1/admin/rounds/${roundId}/boards/slots/${slotId}/assign`,
-    { teamId, forceReplace }
+    { teamId, forceReplace },
+    { headers }
   );
   return data.data;
 }
@@ -182,13 +185,18 @@ export interface CreateProblemPayload {
   closeAt: string;
 }
 
-export async function createProblem(boardId: number, payload: CreateProblemPayload) {
+export async function createProblem(
+  boardId: number,
+  payload: CreateProblemPayload,
+  idempotencyKey?: string
+) {
   const { data } = await apiClient.post<ApiResponse<ProblemResponse>>(
     `/v1/admin/boards/${boardId}/problems`,
-    payload
+    payload,
+    idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : undefined
   );
   if (!data.data) {
-    throw new Error(data.message || "Tạo đề thi that bai");
+    throw new Error(data.message || "Tạo đề thi thất bại");
   }
   return data.data;
 }
@@ -281,23 +289,35 @@ export async function createBoardSlot(boardId: number, teamNumber: number) {
     { teamNumber }
   );
   if (!data.data) {
-    throw new Error(data.message || "Tạo slot thất bại");
+    throw new Error(data.message || "Tạo vị trí thất bại");
   }
   return data.data;
 }
 
-export async function moveTeamBetweenSlots(roundId: number, fromSlotId: number, toSlotId: number) {
+export async function moveTeamBetweenSlots(
+  roundId: number,
+  fromSlotId: number,
+  toSlotId: number,
+  idempotencyKey?: string
+) {
   const { data } = await apiClient.post<ApiResponse<unknown>>(
     `/v1/admin/rounds/${roundId}/boards/slots/move`,
-    { fromSlotId, toSlotId }
+    { fromSlotId, toSlotId },
+    idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : undefined
   );
   return data.data;
 }
 
-export async function swapBoardSlots(roundId: number, slotAId: number, slotBId: number) {
+export async function swapBoardSlots(
+  roundId: number,
+  slotAId: number,
+  slotBId: number,
+  idempotencyKey?: string
+) {
   const { data } = await apiClient.post<ApiResponse<unknown>>(
     `/v1/admin/rounds/${roundId}/boards/slots/swap`,
-    { slotAId, slotBId }
+    { slotAId, slotBId },
+    idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : undefined
   );
   return data.data;
 }
