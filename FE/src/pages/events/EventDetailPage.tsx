@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "../../components/ui/Badge";
@@ -8,7 +7,7 @@ import { getAuthSession, getRoleHome, isAuthenticated, roleLabels } from "../../
 import { resolveEventCardAction } from "../../domain/eventParticipantFlow";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { useMyTeam } from "../../hooks/useMyTeam";
-import { fetchEventDetail, type EventDetail } from "../../services/eventsApi";
+import { useEventDetail } from "../../hooks/useEventDetail";
 import type { EventListItem } from "../../types/entities";
 import { enableAnnouncements, enableRanking } from "../../config/features";
 import { queryKeys } from "../../lib/queryKeys";
@@ -38,9 +37,7 @@ export function EventDetailPage() {
   const roleLabel = roleLabels[session.role];
   const { eventId: eventIdParam } = useParams();
   const eventIdNum = eventIdParam ? Number(eventIdParam) : null;
-  const [event, setEvent] = useState<EventDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { event, loading, error } = useEventDetail(eventIdParam);
   const { team, loading: teamLoading } = useMyTeam(
     authenticated && session.role === "participant" ? eventIdNum : null
   );
@@ -51,27 +48,9 @@ export function EventDetailPage() {
     enabled: enableAnnouncements && eventIdNum != null && !Number.isNaN(eventIdNum)
   });
 
-  useEffect(() => {
-    if (!eventIdParam) return;
-    let cancelled = false;
-    fetchEventDetail(eventIdParam)
-      .then((result) => {
-        if (cancelled) return;
-        setEvent(result);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setError("Không tải được thông tin cuộc thi.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [eventIdParam]);
+  const pageLoading = loading || (authenticated && session.role === "participant" && teamLoading);
 
-  if (loading || (authenticated && session.role === "participant" && teamLoading)) {
+  if (pageLoading) {
     return <ModuleSkeleton rows={3} />;
   }
 

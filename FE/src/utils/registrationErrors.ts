@@ -16,7 +16,9 @@ const registrationErrorMap: Record<string, string> = {
   "Duplicate request in progress": "Đang xử lý yêu cầu trước. Đợi vài giây rồi thử lại.",
   "name must not be blank": "Tên đội không hợp lệ.",
   "Reason is required for this status transition": "Cần nhập lý do khi từ chối hoặc loại đội.",
-  "Invalid team status transition": "Không thể chuyển sang trạng thái này."
+  "Invalid team status transition": "Không thể chuyển sang trạng thái này.",
+  STUDENT_ID_REQUIRED: "MSSV là bắt buộc cho mỗi thành viên.",
+  UNIVERSITY_REQUIRED: "Trường là bắt buộc cho mỗi thành viên."
 };
 
 export function mapRegistrationErrorMessage(message: string) {

@@ -7,6 +7,7 @@ import { Icon } from "../ui/Icon";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { rememberActiveEvent } from "../../utils/enterEvent";
 import { EventProgressStrip } from "./EventProgressStrip";
+import { buildParticipantWorkflowSteps } from "../../domain/participantWorkflow";
 import type { ProgressStepState } from "../../hooks/useParticipantEventProgress";
 
 function formatDateRange(start: string, end: string) {
@@ -32,12 +33,17 @@ interface EventCardProps {
 }
 
 function teamProgressSteps(team: TeamDetailResponse): { label: string; state: ProgressStepState }[] {
-  const confirmed = team.status === "CONFIRMED";
-  return [
-    { label: "Đội", state: confirmed ? "done" : "active" },
-    { label: "Bảng", state: confirmed ? "next" : "blocked" },
-    { label: "Đề", state: "blocked" }
-  ];
+  const isConfirmed = team.status === "CONFIRMED";
+  return buildParticipantWorkflowSteps({
+    active: isConfirmed ? "board" : "team",
+    isConfirmed,
+    hasBoard: false,
+    hasSubmitted: false,
+    resultsPublished: false
+  }).map((step) => ({
+    label: step.label,
+    state: step.state as ProgressStepState
+  }));
 }
 
 export function EventCard({ event, action, team, highlight }: EventCardProps) {
@@ -84,7 +90,9 @@ export function EventCard({ event, action, team, highlight }: EventCardProps) {
           </div>
           <div className="flex items-center gap-2">
             <Icon name="groups" className="shrink-0 text-[18px] text-primary" />
-            <span className="font-label-sm normal-case tracking-normal">Đội 1–5 người</span>
+            <span className="font-label-sm normal-case tracking-normal">
+              Đội {event.minTeamSize ?? 1}–{event.maxTeamSize ?? 5} người
+            </span>
           </div>
         </div>
 

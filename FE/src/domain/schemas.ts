@@ -67,35 +67,36 @@ export const createEventSchema = z
     }
   );
 
-export const teamRegistrationSchema = z
-  .object({
-    teamName: z
-      .string()
-      .trim()
-      .min(3, "Tên đội cần ít nhất 3 ký tự.")
-      .max(100, "Tên đội tối đa 100 ký tự."),
-    memberEmails: z
-      .array(z.string().trim().email("Email thành viên chưa đúng định dạng."))
-      .min(1, "Đội thi phải có từ 1 đến 5 thành viên.")
-      .max(5, "Đội thi phải có từ 1 đến 5 thành viên.")
-  })
-  .refine((data) => uniqueNormalizedEmails(data.memberEmails).length === data.memberEmails.length, {
-    message: "Trùng email thành viên trong form.",
-    path: ["memberEmails"]
-  });
+const memberProfileSchema = z.object({
+  email: z.string().trim().email("Email thành viên chưa đúng định dạng."),
+  studentId: z.string().trim().min(1, "MSSV là bắt buộc."),
+  university: z.string().trim().min(1, "Trường là bắt buộc.")
+});
 
 export function teamRegistrationSchemaForEvent(minSize: number, maxSize: number) {
-  return teamRegistrationSchema.refine(
-    (data) => {
-      const count = uniqueNormalizedEmails(data.memberEmails).length;
-      return count >= minSize && count <= maxSize;
-    },
-    {
-      message: `Đội thi phải có từ ${minSize} đến ${maxSize} thành viên (theo quy định cuộc thi).`,
-      path: ["memberEmails"]
-    }
-  );
+  const sizeMessage = `Đội thi phải có từ ${minSize} đến ${maxSize} thành viên (theo quy định cuộc thi).`;
+  return z
+    .object({
+      teamName: z
+        .string()
+        .trim()
+        .min(3, "Tên đội cần ít nhất 3 ký tự.")
+        .max(100, "Tên đội tối đa 100 ký tự."),
+      members: z.array(memberProfileSchema).min(minSize, sizeMessage).max(maxSize, sizeMessage)
+    })
+    .refine(
+      (data) =>
+        uniqueNormalizedEmails(data.members.map((member) => member.email)).length ===
+        data.members.length,
+      {
+        message: "Trùng email thành viên trong form.",
+        path: ["members"]
+      }
+    );
 }
+
+/** @deprecated Dùng teamRegistrationSchemaForEvent(min, max) */
+export const teamRegistrationSchema = teamRegistrationSchemaForEvent(1, 5);
 
 export const roundFormSchema = z
   .object({
@@ -129,7 +130,7 @@ export const boardFormSchema = z.object({
   boardOrder: z.number().int().positive("Thứ tự bảng phải ≥ 1.")
 });
 
-export const slotNumberSchema = z.number().int().positive("Số vị trí slot phải ≥ 1.");
+export const slotNumberSchema = z.number().int().positive("Số vị trí phải ≥ 1.");
 
 export const teamStatusRejectSchema = z.object({
   reason: z.string().trim().min(1, "Cần nhập lý do khi từ chối hoặc loại đội.")
