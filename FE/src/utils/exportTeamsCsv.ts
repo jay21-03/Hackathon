@@ -9,22 +9,59 @@ function escapeCsv(value: string) {
 }
 
 export function downloadTeamsCsv(teams: TeamDetailResponse[], filename: string) {
-  const headers = ["team_id", "team_name", "status", "member_count", "members", "confirmed_at"];
-  const rows = teams.map((team) => {
-    const members = (team.members ?? [])
-      .map((m) => `${m.fullName} <${m.email}> (${getStatusLabel(m.status)})`)
-      .join("; ");
-    return [
-      String(team.id),
-      team.name,
-      getStatusLabel(team.status),
-      String(team.members?.length ?? 0),
-      members,
-      team.confirmedAt ?? ""
-    ]
-      .map(escapeCsv)
-      .join(",");
-  });
+  const headers = [
+    "team_id",
+    "team_name",
+    "status",
+    "member_email",
+    "member_name",
+    "student_id",
+    "university",
+    "member_status",
+    "contact_person",
+    "confirmed_at"
+  ];
+  const rows: string[] = [];
+  for (const team of teams) {
+    const members = team.members ?? [];
+    if (members.length === 0) {
+      rows.push(
+        [
+          String(team.id),
+          team.name,
+          getStatusLabel(team.status),
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          team.confirmedAt ?? ""
+        ]
+          .map(escapeCsv)
+          .join(",")
+      );
+      continue;
+    }
+    for (const member of members) {
+      rows.push(
+        [
+          String(team.id),
+          team.name,
+          getStatusLabel(team.status),
+          member.email,
+          member.fullName,
+          member.studentId ?? "",
+          member.university ?? "",
+          getStatusLabel(member.status),
+          member.contactPerson ? "yes" : "no",
+          team.confirmedAt ?? ""
+        ]
+          .map(escapeCsv)
+          .join(",")
+      );
+    }
+  }
 
   const csv = [headers.join(","), ...rows].join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });

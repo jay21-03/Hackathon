@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import type { PagedResult } from "../../types/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
@@ -11,7 +12,9 @@ import { NextStepPanel } from "../../components/ui/NextStepPanel";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { TableToolbar } from "../../components/ui/TableToolbar";
+import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
 import { useEventTeams } from "../../hooks/useEventTeams";
 import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
 import { queryKeys } from "../../lib/queryKeys";
@@ -23,21 +26,46 @@ import {
   type TeamDetailResponse
 } from "../../services/registrationService";
 import { downloadTeamsCsv } from "../../utils/exportTeamsCsv";
-import { getApiErrorMessage } from "../../utils/apiError";
-import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
+import { resolveApiError } from "../../utils/apiError";
+import { formatAuditAction } from "../../utils/auditActionLabels";
 import { Icon } from "../../components/ui/Icon";
+import { TeamDetailModal } from "../../components/organizer/TeamDetailModal";
+import { fetchEventAuditLogs } from "../../services/auditApi";
 
-type Filter = "ALL" | "PENDING" | "CONFIRMED" | "WAITLIST" | "REJECTED";
+type Filter = "ALL" | "PENDING" | "CONFIRMED" | "WAITLIST" | "REJECTED" | "DISQUALIFIED";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function summarizeAuditDetail(raw: string) {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof parsed.teamStatus === "string") {
+      return `Trạng thái mới: ${getStatusLabel(parsed.teamStatus)}`;
+    }
+    if (typeof parsed.boardId === "number" && typeof parsed.teamCount === "number") {
+      return `Bảng #${parsed.boardId} · ${parsed.teamCount} đội`;
+    }
+    if (typeof parsed.eventId === "number" && typeof parsed.boardsPublished === "number") {
+      return `Cuộc thi #${parsed.eventId} · ${parsed.boardsPublished} bảng đã công bố`;
+    }
+  } catch {
+    return raw;
+  }
+  return raw.length > 120 ? `${raw.slice(0, 120)}…` : raw;
 }
 
 export function RegistrationManagementPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const { teams: registrations, loading, error } = useEventTeams(eventId);
+  const { steps: setupSteps } = useEventSetupProgress(eventId, "/organizer/registrations");
+  const [listPage, setListPage] = useState(0);
+  const { teams: registrations, loading, error, total, totalPages } = useEventTeams(eventId, {
+    page: listPage,
+    size: 50
+  });
 
   const detailQuery = useQuery({
     queryKey: queryKeys.events.detail(eventId ?? ""),
@@ -50,7 +78,13 @@ export function RegistrationManagementPage() {
   const [search, setSearch] = useState("");
   const [detailTeam, setDetailTeam] = useState<TeamDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const detailPanelRef = useRef<HTMLElement>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  const auditQuery = useQuery({
+    queryKey: [...queryKeys.events.detail(eventId ?? ""), "audit-logs"],
+    queryFn: () => fetchEventAuditLogs(eventId!),
+    enabled: Boolean(eventId)
+  });
 
   function memberCount(team: TeamDetailResponse) {
     return team.members?.length ?? 0;
@@ -69,16 +103,14 @@ export function RegistrationManagementPage() {
   );
 
   async function openTeamDetail(teamId: number) {
+    setDetailOpen(true);
     setDetailLoading(true);
     setDetailTeam(null);
     try {
       const team = await fetchTeam(teamId);
       setDetailTeam(team);
-      requestAnimationFrame(() => {
-        detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Không tải được chi tiết đội.")), "danger");
+      notify(resolveApiError(err, "Không tải được chi tiết đội."), "danger");
     } finally {
       setDetailLoading(false);
     }
@@ -99,6 +131,18 @@ export function RegistrationManagementPage() {
     const targetId = id ?? registrations.find((item) => item.status === "PENDING")?.id ?? null;
     if (targetId == null) return;
 
+    const teamsKey = [...queryKeys.teams.byEvent(eventId!), listPage, 50];
+    await queryClient.cancelQueries({ queryKey: teamsKey });
+    const previous = queryClient.getQueryData<PagedResult<TeamDetailResponse>>(teamsKey);
+    if (previous) {
+      queryClient.setQueryData<PagedResult<TeamDetailResponse>>(teamsKey, {
+        ...previous,
+        items: previous.items.map((row) =>
+          row.id === targetId ? { ...row, status } : row
+        )
+      });
+    }
+
     try {
       const updated = await updateTeamStatus(targetId, status, reason);
       await invalidateAfterTeamMutation(queryClient);
@@ -107,9 +151,10 @@ export function RegistrationManagementPage() {
       }
       notify(`Đã cập nhật hồ sơ: ${getStatusLabel(status)}.`, "success");
     } catch (err) {
-      const msg = mapOrganizerErrorMessage(
-        getApiErrorMessage(err, "Không cập nhật được trạng thái đội.")
-      );
+      if (previous) {
+        queryClient.setQueryData(teamsKey, previous);
+      }
+      const msg = resolveApiError(err, "Không cập nhật được trạng thái đội.");
       notify(msg, "danger");
     }
   }
@@ -145,12 +190,19 @@ export function RegistrationManagementPage() {
         }
       />
 
+      <WorkflowSteps
+        title="Quy trình thiết lập"
+        description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
+        steps={setupSteps}
+        activeHref="/organizer/registrations"
+      />
+
       {confirmed > 0 ? (
         <NextStepPanel
           variant={pending === 0 ? "success" : "primary"}
           action={{
             title: "Bước tiếp: Thiết lập bảng thi",
-            description: `Đã có ${confirmed} đội xác nhận. Tạo vòng, bảng, slot và gán đội trước khi cấu hình đề.`,
+            description: `Đã có ${confirmed} đội xác nhận. Tạo vòng, bảng, vị trí và gán đội trước khi cấu hình đề.`,
             to: "/organizer/boards",
             cta: "Đi tới Bảng thi"
           }}
@@ -185,7 +237,7 @@ export function RegistrationManagementPage() {
           onSearchChange={setSearch}
           filters={
             <div className="flex gap-2 overflow-x-auto no-scrollbar">
-              {(["ALL", "PENDING", "CONFIRMED", "WAITLIST", "REJECTED"] as Filter[]).map((item) => (
+              {(["ALL", "PENDING", "CONFIRMED", "WAITLIST", "REJECTED", "DISQUALIFIED"] as Filter[]).map((item) => (
                 <button
                   key={item}
                   type="button"
@@ -255,45 +307,88 @@ export function RegistrationManagementPage() {
                       Từ chối
                     </Button>
                   </ConfirmAction>
+                  <ConfirmAction
+                    title="Loại đội khỏi cuộc thi?"
+                    message="Đội bị loại sẽ không được chấm điểm. Cần ghi rõ lý do vi phạm."
+                    confirmLabel="Loại đội"
+                    onConfirm={() =>
+                      updateStatus(registration.id, "DISQUALIFIED", "Vi phạm quy chế — loại bởi ban tổ chức")
+                    }
+                  >
+                    <Button
+                      type="button"
+                      variant="danger"
+                      disabled={registration.status === "DISQUALIFIED"}
+                    >
+                      Loại đội
+                    </Button>
+                  </ConfirmAction>
                 </div>
               </td>
             </tr>
           ))}
         </DataTable>
+
+        {totalPages > 1 ? (
+          <div className="flex flex-wrap items-center justify-between gap-sm pt-sm">
+            <p className="font-body-sm text-on-surface-variant">
+              {total} đội · trang {listPage + 1}/{totalPages}
+            </p>
+            <div className="flex gap-sm">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={listPage === 0}
+                onClick={() => setListPage((page) => Math.max(0, page - 1))}
+              >
+                Trước
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={listPage >= totalPages - 1}
+                onClick={() => setListPage((page) => page + 1)}
+              >
+                Sau
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      {detailLoading || detailTeam ? (
-        <section
-          ref={detailPanelRef}
-          className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg scroll-mt-24"
-        >
-          <div className="flex items-center justify-between gap-sm">
-            <h2 className="font-headline-sm text-on-surface">
-              {detailLoading ? "Đang tải chi tiết…" : detailTeam?.name}
-            </h2>
-            <Button type="button" variant="ghost" onClick={() => setDetailTeam(null)}>
-              Đóng
-            </Button>
-          </div>
-          {detailTeam ? (
-            <>
-              <p className="font-body-sm text-on-surface-variant">
-                {getStatusLabel(detailTeam.status)}
-              </p>
-              <ul className="divide-y divide-outline-variant/60 rounded-lg border border-outline-variant">
-                {(detailTeam.members ?? []).map((member) => (
-                  <li key={member.id} className="flex flex-wrap justify-between gap-sm px-md py-sm font-body-sm">
-                    <span>
-                      {member.fullName} — {member.email}
-                    </span>
-                    <Badge tone={getStatusTone(member.status)}>{getStatusLabel(member.status)}</Badge>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+      {auditQuery.data && auditQuery.data.length > 0 ? (
+        <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+          <h2 className="font-headline-sm text-on-surface">Nhật ký thao tác</h2>
+          <ul className="mt-sm max-h-64 space-y-xs overflow-y-auto font-body-sm text-on-surface-variant">
+            {auditQuery.data.map((log) => (
+              <li key={log.id} className="border-b border-outline-variant/40 py-xs">
+                <span className="font-label-sm text-on-surface">{formatAuditAction(log.action)}</span>
+                {" · "}
+                {log.actorEmail ?? "hệ thống"} —{" "}
+                {new Date(log.createdAt).toLocaleString("vi-VN")}
+                {log.afterState ? (
+                  <span className="mt-xs block font-body-sm text-on-surface-variant">
+                    {summarizeAuditDetail(log.afterState)}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
+
+      <TeamDetailModal
+        open={detailOpen}
+        loading={detailLoading}
+        team={detailTeam}
+        contextLabel={detailTeam ? `Đội #${detailTeam.id}` : undefined}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetailTeam(null);
+        }}
+      />
     </div>
   );
 }
