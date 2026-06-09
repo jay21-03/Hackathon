@@ -1,4 +1,4 @@
-import type { ApiResponse } from "../types/api";
+import type { ApiResponse, PagedResult } from "../types/api";
 import { apiClient } from "./apiClient";
 import type { CurrentUserResponse } from "./profileService";
 
@@ -19,9 +19,20 @@ export async function fetchCurrentUser() {
   return data.data;
 }
 
-export async function fetchAdminUsers() {
-  const { data } = await apiClient.get<ApiResponse<UserSummaryResponse[]>>("/v1/admin/users");
-  return data.data ?? [];
+export async function fetchAdminUsers(params?: { page?: number; size?: number }) {
+  const { data } = await apiClient.get<ApiResponse<PagedResult<UserSummaryResponse>>>(
+    "/v1/admin/users",
+    { params: { page: params?.page ?? 0, size: params?.size ?? 100 } }
+  );
+  return (
+    data.data ?? {
+      items: [],
+      page: 0,
+      size: params?.size ?? 100,
+      total: 0,
+      totalPages: 0
+    }
+  );
 }
 
 export async function assignUserRole(userId: number, role: "ORGANIZER" | "MENTOR" | "JUDGE") {
