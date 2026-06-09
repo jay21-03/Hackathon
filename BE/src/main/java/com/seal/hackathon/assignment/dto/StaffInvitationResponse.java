@@ -20,4 +20,12 @@ public class StaffInvitationResponse {
     private StaffInvitationStatus status;
     private OffsetDateTime invitedAt;
     private OffsetDateTime inviteExpiresAt;
+    private OffsetDateTime acceptedAt;
+    private OffsetDateTime declinedAt;
+    private Integer resendCount;
+    private OffsetDateTime lastResentAt;
+    private Integer emailOpenCount;
+    private OffsetDateTime emailOpenedAt;
+    private OffsetDateTime emailAcceptClickedAt;
+    private OffsetDateTime emailDeclineClickedAt;
 }

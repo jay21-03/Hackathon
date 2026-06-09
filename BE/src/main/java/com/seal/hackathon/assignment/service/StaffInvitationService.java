@@ -1,6 +1,13 @@
 package com.seal.hackathon.assignment.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seal.hackathon.assignment.dto.BulkCreateStaffInvitationRequest;
+import com.seal.hackathon.assignment.dto.BulkStaffInvitationFailure;
+import com.seal.hackathon.assignment.dto.BulkStaffInvitationItem;
+import com.seal.hackathon.assignment.dto.BulkStaffInvitationResponse;
 import com.seal.hackathon.assignment.dto.CreateStaffInvitationRequest;
+import com.seal.hackathon.common.response.PagedResult;
+import com.seal.hackathon.common.util.OutboxPayloadBuilder;
 import com.seal.hackathon.assignment.dto.StaffInvitationResponse;
 import com.seal.hackathon.assignment.entity.StaffInvitation;
 import com.seal.hackathon.assignment.repository.StaffInvitationRepository;
@@ -10,6 +17,8 @@ import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.authprofile.repository.UserRoleRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
+import com.seal.hackathon.common.security.InvitationTokenCrypto;
+import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.enums.StaffInvitationStatus;
 import com.seal.hackathon.common.enums.SystemRole;
 import com.seal.hackathon.common.exception.BusinessException;
@@ -21,23 +30,24 @@ import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.registration.entity.OutboxMessage;
 import com.seal.hackathon.registration.repository.OutboxMessageRepository;
+import com.seal.hackathon.mail.dto.EmailTrackingSummary;
+import com.seal.hackathon.mail.service.EmailTrackingService;
 import com.seal.hackathon.notification.service.NotificationService;
-import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Base64;
-import java.util.HexFormat;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Set;
 import java.util.stream.Collectors;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,8 +58,6 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class StaffInvitationService {
 
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-
     private final StaffInvitationRepository staffInvitationRepository;
     private final BoardRepository boardRepository;
     private final RoundRepository roundRepository;
@@ -58,86 +66,148 @@ public class StaffInvitationService {
     private final UserRoleRepository userRoleRepository;
     private final BoardAssignmentService boardAssignmentService;
     private final CurrentUserProvider currentUserProvider;
+    private final OrganizerAuthorizationService organizerAuthorizationService;
     private final OutboxMessageRepository outboxMessageRepository;
     private final NotificationService notificationService;
+    private final EmailTrackingService emailTrackingService;
+    private final ObjectMapper objectMapper;
 
     @Value("${app.invitation.token-secret:dev-invite-secret-change-me}")
     private String tokenSecret;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<StaffInvitationResponse> listPending(Long eventId, Long boardId, SystemRole role) {
-        CurrentUserPrincipal principal = requireOrganizer();
-        assertOrganizerOwnsEvent(principal, eventId);
+        return listFiltered(eventId, boardId, role, StaffInvitationStatus.INVITED, null, 0, 200).getItems();
+    }
+
+    @Transactional
+    public PagedResult<StaffInvitationResponse> listFiltered(
+            Long eventId,
+            Long boardId,
+            SystemRole role,
+            StaffInvitationStatus status,
+            String email,
+            int page,
+            int size) {
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         List<Long> boardIds = resolveBoardIds(eventId, boardId);
+        int resolvedSize = Math.min(Math.max(size, 1), 200);
+        int resolvedPage = Math.max(page, 0);
         if (boardIds.isEmpty()) {
-            return List.of();
+            return emptyPage(resolvedPage, resolvedSize);
         }
-        List<StaffInvitation> invitations = role == null
-                ? staffInvitationRepository.findByBoardIdInAndStatusOrderByInvitedAtDesc(
-                        boardIds, StaffInvitationStatus.INVITED)
-                : staffInvitationRepository.findByBoardIdInAndRoleAndStatusOrderByInvitedAtDesc(
-                        boardIds, role, StaffInvitationStatus.INVITED);
+        expireStaleInvitations(boardIds);
+        String emailFilter = StringUtils.hasText(email) ? email.trim() : null;
+        PageRequest pageable = PageRequest.of(
+                resolvedPage, resolvedSize, Sort.by(Sort.Direction.DESC, "invitedAt"));
+        Page<StaffInvitation> invitationPage = staffInvitationRepository.findFiltered(
+                boardIds, status, role, emailFilter, pageable);
         Map<Long, Board> boardsById = boardRepository.findAllById(boardIds).stream()
                 .collect(Collectors.toMap(Board::getId, b -> b));
-        return invitations.stream()
-                .map(inv -> toResponse(inv, boardsById.get(inv.getBoardId()), eventId))
+        List<Long> invitationIds = invitationPage.getContent().stream().map(StaffInvitation::getId).toList();
+        Map<Long, EmailTrackingSummary> trackingById = emailTrackingService.summariesForStaff(invitationIds);
+        List<StaffInvitationResponse> items = invitationPage.getContent().stream()
+                .map(inv -> toResponse(
+                        inv, boardsById.get(inv.getBoardId()), eventId, trackingById.get(inv.getId())))
                 .toList();
+        return PagedResult.<StaffInvitationResponse>builder()
+                .items(items)
+                .page(resolvedPage)
+                .size(resolvedSize)
+                .total(invitationPage.getTotalElements())
+                .totalPages(invitationPage.getTotalPages())
+                .build();
+    }
+
+    @Transactional
+    public PagedResult<StaffInvitationResponse> listPendingPaged(
+            Long eventId, Long boardId, SystemRole role, int page, int size) {
+        return listFiltered(eventId, boardId, role, StaffInvitationStatus.INVITED, null, page, size);
     }
 
     @Transactional
     public StaffInvitationResponse create(Long boardId, CreateStaffInvitationRequest request) {
-        CurrentUserPrincipal principal = requireOrganizer();
-        Board board = boardRepository.findById(boardId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        CurrentUserPrincipal principal = organizerAuthorizationService.requireOrganizer();
+        Board board = requireBoard(boardId);
         Long eventId = resolveEventId(board);
-        assertOrganizerOwnsEvent(principal, eventId);
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        return createSingle(board, eventId, principal.getUserId(), request.getEmail(), request.getRole());
+    }
 
-        if (request.getRole() != SystemRole.MENTOR && request.getRole() != SystemRole.JUDGE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role must be MENTOR or JUDGE");
+    @Transactional
+    public BulkStaffInvitationResponse createBulk(Long boardId, BulkCreateStaffInvitationRequest request) {
+        CurrentUserPrincipal principal = organizerAuthorizationService.requireOrganizer();
+        Board board = requireBoard(boardId);
+        Long eventId = resolveEventId(board);
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        validateStaffRole(request.getDefaultRole());
+
+        List<StaffInvitationResponse> succeeded = new ArrayList<>();
+        List<BulkStaffInvitationFailure> failed = new ArrayList<>();
+        Set<String> seenInBatch = new HashSet<>();
+
+        for (BulkStaffInvitationItem item : request.getItems()) {
+            SystemRole role = item.getRole() != null ? item.getRole() : request.getDefaultRole();
+            String email;
+            try {
+                email = normalizeEmail(item.getEmail());
+            } catch (ResponseStatusException ex) {
+                failed.add(BulkStaffInvitationFailure.builder()
+                        .email(item.getEmail())
+                        .role(role)
+                        .reason(ex.getReason())
+                        .build());
+                continue;
+            }
+            String batchKey = email + "|" + role.name();
+            if (!seenInBatch.add(batchKey)) {
+                failed.add(BulkStaffInvitationFailure.builder()
+                        .email(email)
+                        .role(role)
+                        .reason("DUPLICATE_IN_BATCH")
+                        .build());
+                continue;
+            }
+            try {
+                validateStaffRole(role);
+                succeeded.add(createSingle(board, eventId, principal.getUserId(), email, role));
+            } catch (ResponseStatusException ex) {
+                failed.add(BulkStaffInvitationFailure.builder()
+                        .email(email)
+                        .role(role)
+                        .reason(ex.getReason())
+                        .build());
+            }
         }
 
-        String email = normalizeEmail(request.getEmail());
-        staffInvitationRepository
-                .findByBoardIdAndEmailIgnoreCaseAndRoleAndStatus(
-                        boardId, email, request.getRole(), StaffInvitationStatus.INVITED)
-                .ifPresent(existing -> {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "STAFF_INVITATION_ALREADY_PENDING");
-                });
-
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        StaffInvitation invitation = StaffInvitation.builder()
-                .boardId(boardId)
-                .email(email)
-                .role(request.getRole())
-                .status(StaffInvitationStatus.INVITED)
-                .invitedAt(now)
-                .createdBy(principal.getUserId())
-                .createdAt(now)
+        return BulkStaffInvitationResponse.builder()
+                .total(request.getItems().size())
+                .succeededCount(succeeded.size())
+                .failedCount(failed.size())
+                .succeeded(succeeded)
+                .failed(failed)
                 .build();
-        invitation = staffInvitationRepository.save(invitation);
-        String rawToken = refreshInvitationToken(invitation, now);
-        invitation = staffInvitationRepository.save(invitation);
-        enqueueEmail(invitation, rawToken, now);
-        notificationService.notifyStaffInvited(invitation, board, eventId, request.getRole());
-        return toResponse(invitation, board, eventId);
     }
 
     @Transactional
     public StaffInvitationResponse resend(Long staffInvitationId) {
-        CurrentUserPrincipal principal = requireOrganizer();
+        organizerAuthorizationService.requireOrganizer();
         StaffInvitation invitation = staffInvitationRepository
                 .findByIdAndStatus(staffInvitationId, StaffInvitationStatus.INVITED)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff invitation not found"));
         Board board = boardRepository.findById(invitation.getBoardId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
         Long eventId = resolveEventId(board);
-        assertOrganizerOwnsEvent(principal, eventId);
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         String rawToken = refreshInvitationToken(invitation, now);
         invitation.setInvitedAt(now);
+        int resendCount = invitation.getResendCount() == null ? 0 : invitation.getResendCount();
+        invitation.setResendCount(resendCount + 1);
+        invitation.setLastResentAt(now);
         invitation = staffInvitationRepository.save(invitation);
-        enqueueEmail(invitation, rawToken, now);
+        enqueueEmail(invitation, rawToken, now, board, eventId);
         return toResponse(invitation, board, eventId);
     }
 
@@ -194,30 +264,71 @@ public class StaffInvitationService {
     }
 
     private String refreshInvitationToken(StaffInvitation invitation, OffsetDateTime now) {
-        String rawToken = generateRawToken();
-        String nonce = generateNonce();
+        String rawToken = InvitationTokenCrypto.generateRawToken();
+        String nonce = InvitationTokenCrypto.generateNonce();
         invitation.setInviteNonce(nonce);
-        invitation.setInviteTokenHash(hashToken(invitation.getBoardId(), invitation.getId(), nonce, rawToken));
+        invitation.setInviteTokenHash(InvitationTokenCrypto.hashToken(
+                tokenSecret, invitation.getBoardId(), invitation.getId(), nonce, rawToken));
         invitation.setInviteExpiresAt(now.plusDays(7));
         return rawToken;
     }
 
-    private void enqueueEmail(StaffInvitation invitation, String rawToken, OffsetDateTime now) {
-        String invitationToken = invitation.getBoardId() + "." + invitation.getId() + "."
-                + invitation.getInviteNonce() + "." + rawToken;
-        String payload = "{\"staffInvitationId\": " + invitation.getId()
-                + ", \"boardId\": " + invitation.getBoardId()
-                + ", \"email\": \"" + escapeJson(invitation.getEmail()) + "\""
-                + ", \"role\": \"" + invitation.getRole().name() + "\""
-                + ", \"inviteToken\": \"" + escapeJson(invitationToken) + "\""
-                + ", \"inviteExpiresAt\": \"" + invitation.getInviteExpiresAt() + "\"}";
+    private StaffInvitationResponse createSingle(
+            Board board, Long eventId, Long actorId, String rawEmail, SystemRole role) {
+        validateStaffRole(role);
+        String email = normalizeEmail(rawEmail);
+        staffInvitationRepository
+                .findByBoardIdAndEmailIgnoreCaseAndRoleAndStatus(
+                        board.getId(), email, role, StaffInvitationStatus.INVITED)
+                .ifPresent(existing -> {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "STAFF_INVITATION_ALREADY_PENDING");
+                });
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        StaffInvitation invitation = StaffInvitation.builder()
+                .boardId(board.getId())
+                .email(email)
+                .role(role)
+                .status(StaffInvitationStatus.INVITED)
+                .invitedAt(now)
+                .resendCount(0)
+                .createdBy(actorId)
+                .createdAt(now)
+                .build();
+        invitation = staffInvitationRepository.save(invitation);
+        String rawToken = refreshInvitationToken(invitation, now);
+        invitation = staffInvitationRepository.save(invitation);
+        enqueueEmail(invitation, rawToken, now, board, eventId);
+        notificationService.notifyStaffInvited(invitation, board, eventId, role);
+        return toResponse(invitation, board, eventId);
+    }
+
+    private void enqueueEmail(
+            StaffInvitation invitation, String rawToken, OffsetDateTime now, Board board, Long eventId) {
+        String invitationToken = InvitationTokenCrypto.buildToken(
+                invitation.getBoardId(), invitation.getId(), invitation.getInviteNonce(), rawToken);
+        Event event = eventId == null ? null : eventRepository.findById(eventId).orElse(null);
+        String eventName = event == null || event.getName() == null ? "cuộc thi" : event.getName();
+        String boardName = board == null || board.getName() == null ? "bảng thi" : board.getName();
+        Map<String, Object> payloadFields = new LinkedHashMap<>();
+        payloadFields.put("staffInvitationId", invitation.getId());
+        payloadFields.put("eventId", eventId);
+        payloadFields.put("boardId", invitation.getBoardId());
+        payloadFields.put("boardName", boardName);
+        payloadFields.put("eventName", eventName);
+        payloadFields.put("email", invitation.getEmail());
+        payloadFields.put("role", invitation.getRole().name());
+        payloadFields.put("inviteToken", invitationToken);
+        payloadFields.put("inviteExpiresAt", invitation.getInviteExpiresAt().toString());
+
         outboxMessageRepository.save(OutboxMessage.builder()
                 .aggregateType("StaffInvitation")
                 .aggregateId(invitation.getId())
                 .eventType("StaffInvitationSent")
-                .payload(payload)
+                .payload(OutboxPayloadBuilder.invitationSent(objectMapper, payloadFields))
                 .attempts(0)
                 .processed(false)
+                .deadLetter(false)
                 .createdAt(now)
                 .build());
     }
@@ -236,7 +347,8 @@ public class StaffInvitationService {
             staffInvitationRepository.save(invitation);
             throw new BusinessException("Invitation has expired");
         }
-        String expectedHash = hashToken(parts.boardId(), parts.invitationId(), parts.nonce(), parts.rawToken());
+        String expectedHash = InvitationTokenCrypto.hashToken(
+                tokenSecret, parts.boardId(), parts.invitationId(), parts.nonce(), parts.rawToken());
         if (!expectedHash.equals(invitation.getInviteTokenHash())) {
             throw new BusinessException("Invalid invitation token");
         }
@@ -276,14 +388,15 @@ public class StaffInvitationService {
         return round.getEventId();
     }
 
-    private StaffInvitationResponse toResponse(StaffInvitation invitation, Board board, Long eventId) {
+    private StaffInvitationResponse toResponse(
+            StaffInvitation invitation, Board board, Long eventId, EmailTrackingSummary tracking) {
         String boardName = board == null ? null : board.getName();
         String eventName = null;
         if (eventId != null) {
             Event event = eventRepository.findById(eventId).orElse(null);
             eventName = event == null ? null : event.getName();
         }
-        return StaffInvitationResponse.builder()
+        StaffInvitationResponse.StaffInvitationResponseBuilder builder = StaffInvitationResponse.builder()
                 .id(invitation.getId())
                 .boardId(invitation.getBoardId())
                 .boardName(boardName)
@@ -294,26 +407,49 @@ public class StaffInvitationService {
                 .status(invitation.getStatus())
                 .invitedAt(invitation.getInvitedAt())
                 .inviteExpiresAt(invitation.getInviteExpiresAt())
+                .acceptedAt(invitation.getAcceptedAt())
+                .declinedAt(invitation.getDeclinedAt())
+                .resendCount(invitation.getResendCount() == null ? 0 : invitation.getResendCount())
+                .lastResentAt(invitation.getLastResentAt());
+        if (tracking != null) {
+            builder
+                    .emailOpenCount(tracking.getOpenCount())
+                    .emailOpenedAt(tracking.getOpenedAt())
+                    .emailAcceptClickedAt(tracking.getAcceptClickedAt())
+                    .emailDeclineClickedAt(tracking.getDeclineClickedAt());
+        }
+        return builder.build();
+    }
+
+    private StaffInvitationResponse toResponse(StaffInvitation invitation, Board board, Long eventId) {
+        return toResponse(invitation, board, eventId, null);
+    }
+
+    private Board requireBoard(Long boardId) {
+        return boardRepository.findById(boardId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+    }
+
+    private void validateStaffRole(SystemRole role) {
+        if (role != SystemRole.MENTOR && role != SystemRole.JUDGE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role must be MENTOR or JUDGE");
+        }
+    }
+
+    private void expireStaleInvitations(List<Long> boardIds) {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        staffInvitationRepository.markExpired(
+                boardIds, StaffInvitationStatus.INVITED, StaffInvitationStatus.EXPIRED, now);
+    }
+
+    private PagedResult<StaffInvitationResponse> emptyPage(int page, int size) {
+        return PagedResult.<StaffInvitationResponse>builder()
+                .items(List.of())
+                .page(page)
+                .size(size)
+                .total(0)
+                .totalPages(0)
                 .build();
-    }
-
-    private CurrentUserPrincipal requireOrganizer() {
-        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
-        if (principal == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
-        }
-        if (principal.getRoles() == null || !principal.getRoles().contains("ORGANIZER")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
-        }
-        return principal;
-    }
-
-    private void assertOrganizerOwnsEvent(CurrentUserPrincipal principal, Long eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
-        if (event.getCreatedBy() != null && !event.getCreatedBy().equals(principal.getUserId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "EVENT_ACCESS_DENIED");
-        }
     }
 
     private String normalizeEmail(String email) {
@@ -323,33 +459,4 @@ public class StaffInvitationService {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
-    private String generateRawToken() {
-        byte[] buffer = new byte[32];
-        SECURE_RANDOM.nextBytes(buffer);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
-    }
-
-    private String generateNonce() {
-        return UUID.randomUUID().toString().replace("-", "");
-    }
-
-    private String hashToken(Long boardId, Long invitationId, String nonce, String rawToken) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            SecretKeySpec keySpec = new SecretKeySpec(tokenSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-            mac.init(keySpec);
-            String payload = boardId + ":" + invitationId + ":" + nonce + ":" + rawToken;
-            byte[] digest = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (Exception ex) {
-            throw new IllegalStateException("Failed to generate invitation token hash", ex);
-        }
-    }
-
-    private String escapeJson(String raw) {
-        if (raw == null) {
-            return "";
-        }
-        return raw.replace("\\", "\\\\").replace("\"", "\\\"");
-    }
 }

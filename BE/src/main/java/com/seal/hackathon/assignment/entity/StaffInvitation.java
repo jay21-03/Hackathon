@@ -46,4 +46,7 @@ public class StaffInvitation {
     private Long acceptedUserId;
     private Long createdBy;
     private OffsetDateTime createdAt;
+    private Integer resendCount;
+    private OffsetDateTime lastResentAt;
+    private OffsetDateTime reminderSentAt;
 }

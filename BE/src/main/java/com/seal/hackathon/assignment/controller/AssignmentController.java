@@ -3,6 +3,7 @@ package com.seal.hackathon.assignment.controller;
 import com.seal.hackathon.assignment.dto.AssignmentResponse;
 import com.seal.hackathon.assignment.dto.CreateAssignmentRequest;
 import com.seal.hackathon.assignment.service.BoardAssignmentService;
+import com.seal.hackathon.contest.dto.BoardTeamResponse;
 import com.seal.hackathon.common.response.ApiResponse;
 import java.util.List;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -61,6 +62,11 @@ public class AssignmentController {
     @GetMapping("/mentors/assignments")
     public ApiResponse<List<AssignmentResponse>> myMentorAssignments() {
         return ApiResponse.ok(boardAssignmentService.listMentorAssignmentsForCurrentUser());
+    }
+
+    @GetMapping("/mentors/boards/{boardId}/teams")
+    public ApiResponse<List<BoardTeamResponse>> mentorBoardTeams(@PathVariable Long boardId) {
+        return ApiResponse.ok(boardAssignmentService.listTeamsForMentor(boardId));
     }
 
     @GetMapping("/judges/assignments")

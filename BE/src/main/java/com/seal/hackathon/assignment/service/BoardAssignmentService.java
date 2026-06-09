@@ -9,13 +9,19 @@ import com.seal.hackathon.assignment.repository.MentorAssignmentRepository;
 import com.seal.hackathon.authprofile.repository.UserRoleRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
+import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.enums.SystemRole;
+import com.seal.hackathon.contest.dto.BoardTeamResponse;
 import com.seal.hackathon.contest.entity.Board;
+import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Event;
 import com.seal.hackathon.contest.entity.Round;
 import com.seal.hackathon.contest.repository.BoardRepository;
+import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.registration.entity.Team;
+import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.scoring.entity.ScoreSheet;
 import com.seal.hackathon.scoring.repository.ScoreSheetRepository;
 import java.time.OffsetDateTime;
@@ -34,25 +40,19 @@ public class BoardAssignmentService {
     private final MentorAssignmentRepository mentorAssignmentRepository;
     private final JudgeAssignmentRepository judgeAssignmentRepository;
     private final BoardRepository boardRepository;
+    private final BoardSlotRepository boardSlotRepository;
+    private final TeamRepository teamRepository;
     private final RoundRepository roundRepository;
     private final EventRepository eventRepository;
     private final UserRoleRepository userRoleRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final OrganizerAuthorizationService organizerAuthorizationService;
     private final ScoreSheetRepository scoreSheetRepository;
-
-    public String skeletonStatus() {
-        return "ok";
-    }
 
     @Transactional
     public AssignmentResponse assignMentor(Long boardId, CreateAssignmentRequest request) {
-        // only organizers
-        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
-        if (principal.getRoles() == null || !principal.getRoles().contains("ORGANIZER")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
-        }
-
-        boardRepository.findById(boardId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        CurrentUserPrincipal principal = organizerAuthorizationService.requireOrganizer();
+        organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
 
         Long mentorId = request.getUserId();
         if (mentorId == null) {
@@ -81,11 +81,8 @@ public class BoardAssignmentService {
 
     @Transactional
     public AssignmentResponse assignJudge(Long boardId, CreateAssignmentRequest request) {
-        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
-        if (principal.getRoles() == null || !principal.getRoles().contains("ORGANIZER")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
-        }
-        boardRepository.findById(boardId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        CurrentUserPrincipal principal = organizerAuthorizationService.requireOrganizer();
+        organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
 
         Long judgeId = request.getUserId();
         if (judgeId == null) {
@@ -113,15 +110,13 @@ public class BoardAssignmentService {
 
     @Transactional(readOnly = true)
     public List<AssignmentResponse> listMentorsByBoard(Long boardId) {
-        requireOrganizer();
-        boardRepository.findById(boardId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
         return mentorAssignmentRepository.findByBoardId(boardId).stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<AssignmentResponse> listJudgesByBoard(Long boardId) {
-        requireOrganizer();
-        boardRepository.findById(boardId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
         return judgeAssignmentRepository.findByBoardId(boardId).stream().map(this::toResponse).collect(Collectors.toList());
     }
 
@@ -137,12 +132,33 @@ public class BoardAssignmentService {
         return judgeAssignmentRepository.findByJudgeId(principal.getUserId()).stream().map(this::toResponse).collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public List<BoardTeamResponse> listTeamsForMentor(Long boardId) {
+        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
+        if (principal == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+        }
+        if (!mentorAssignmentRepository.existsByBoardIdAndMentorId(boardId, principal.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "MENTOR_NOT_ASSIGNED");
+        }
+        return boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(boardId).stream()
+                .filter(slot -> slot.getTeamId() != null)
+                .map(slot -> {
+                    Team team = teamRepository.findById(slot.getTeamId()).orElse(null);
+                    return BoardTeamResponse.builder()
+                            .slotId(slot.getId())
+                            .slotNumber(slot.getTeamNumber())
+                            .teamId(slot.getTeamId())
+                            .teamName(team != null ? team.getName() : "Team " + slot.getTeamId())
+                            .teamStatus(team != null && team.getStatus() != null ? team.getStatus().name() : null)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public void deleteMentorAssignment(Long boardId, Long mentorId) {
-        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
-        if (principal.getRoles() == null || !principal.getRoles().contains("ORGANIZER")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
-        }
+        organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
         mentorAssignmentRepository.deleteByBoardIdAndMentorId(boardId, mentorId);
     }
 
@@ -177,25 +193,13 @@ public class BoardAssignmentService {
 
     @Transactional
     public void deleteJudgeAssignment(Long boardId, Long judgeId) {
-        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
-        if (principal.getRoles() == null || !principal.getRoles().contains("ORGANIZER")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
-        }
-        boardRepository.findById(boardId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
 
         List<ScoreSheet> scoreSheets = scoreSheetRepository.findByBoardIdAndJudgeId(boardId, judgeId);
         if (!scoreSheets.isEmpty()) {
             scoreSheetRepository.deleteAll(scoreSheets);
         }
         judgeAssignmentRepository.deleteByBoardIdAndJudgeId(boardId, judgeId);
-    }
-
-    private void requireOrganizer() {
-        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
-        if (principal.getRoles() == null || !principal.getRoles().contains("ORGANIZER")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
-        }
     }
 
     private AssignmentResponse toResponse(MentorAssignment m) {
