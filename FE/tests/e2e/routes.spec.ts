@@ -10,7 +10,7 @@ const protectedRoutes: Array<{ role: E2ERole; path: string; expectText: RegExp }
   { role: "organizer", path: "/organizer/dashboard", expectText: /Tổng quan|SEAL Hackathon/i },
   { role: "organizer", path: "/organizer/events", expectText: /Quản lý cấu hình|Tạo cuộc thi/i },
   { role: "organizer", path: "/organizer/events/new", expectText: /Tạo cuộc thi mới/i },
-  { role: "organizer", path: "/organizer/invitations", expectText: /Lời mời|Thành viên đội/i },
+  { role: "organizer", path: "/organizer/invitations", expectText: /Theo dõi lời mời|Thành viên đội/i },
   { role: "organizer", path: "/organizer/ranking", expectText: /Bảng xếp hạng|Tính bảng/i },
   { role: "organizer", path: "/organizer/publish-results", expectText: /Công bố kết quả/i },
   { role: "participant", path: "/me/results", expectText: /Kết quả|chưa được ban tổ chức công bố/i },

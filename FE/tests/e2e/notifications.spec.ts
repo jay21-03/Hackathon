@@ -14,7 +14,7 @@ test("participant notifications page lists items and mark read", async ({ page }
   await waitForWorkspace(page, "Thông báo");
 
   await expect(page.getByText("Thông báo E2E")).toBeVisible();
-  await expect(page.getByRole("link", { name: /Xem chi tiết/i }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Xem chi tiết/i }).first()).toBeVisible();
 
   const markRead = page.getByRole("button", { name: "Đánh dấu đã đọc" }).first();
   if (await markRead.isVisible()) {

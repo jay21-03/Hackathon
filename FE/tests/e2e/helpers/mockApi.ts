@@ -6,7 +6,9 @@ const sampleEvent = {
   startDate: "2026-06-01",
   endDate: "2026-06-02",
   registrationStartAt: "2026-05-01T08:00:00+07:00",
-  registrationEndAt: "2026-05-31T23:59:00+07:00",
+  registrationEndAt: "2026-12-31T23:59:00+07:00",
+  minTeamSize: 1,
+  maxTeamSize: 5,
   status: "REGISTRATION_OPEN"
 };
 
@@ -21,7 +23,7 @@ const sampleRound = {
   status: "ACTIVE"
 };
 
-const sampleTeam = {
+export const sampleTeam = {
   id: 10,
   eventId: 1,
   name: "Đội E2E Alpha",
@@ -118,7 +120,13 @@ export async function mockCoreApis(page: Page) {
 
   await page.route("**/api/v1/events/*/teams**", async (route) => {
     if (route.request().method() === "GET") {
-      await json(route, ok([sampleTeam]));
+      await json(route, ok({
+        items: [sampleTeam],
+        page: 0,
+        size: 100,
+        total: 1,
+        totalPages: 1
+      }));
     } else {
       await route.continue();
     }
@@ -161,16 +169,22 @@ export async function mockCoreApis(page: Page) {
   await page.route("**/api/v1/admin/users**", async (route) => {
     await json(
       route,
-      ok([
-        {
-          id: 1,
-          email: "organizer@seal.edu.vn",
-          fullName: "Organizer",
-          status: "ACTIVE",
-          roles: ["ORGANIZER"],
-          createdAt: "2026-01-01T00:00:00+07:00"
-        }
-      ])
+      ok({
+        items: [
+          {
+            id: 1,
+            email: "organizer@seal.edu.vn",
+            fullName: "Organizer",
+            status: "ACTIVE",
+            roles: ["ORGANIZER"],
+            createdAt: "2026-01-01T00:00:00+07:00"
+          }
+        ],
+        page: 0,
+        size: 100,
+        total: 1,
+        totalPages: 1
+      })
     );
   });
 

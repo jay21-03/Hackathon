@@ -23,7 +23,7 @@ test("event list uses API data when system API responds", async ({ page }) => {
   });
 
   await page.goto("/events");
-  await expect(page.locator("body")).toContainText("API Challenge");
+  await expect(page.getByText("API Challenge")).toBeVisible({ timeout: 15000 });
 });
 
 test("event list shows error when API is unavailable", async ({ page }) => {
