@@ -15,15 +15,12 @@ export function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
-  const [devResetUrl, setDevResetUrl] = useState<string | null>(null);
-
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const result = await requestPasswordReset(email.trim());
-      setDevResetUrl(result.devResetUrl ?? null);
+      await requestPasswordReset(email.trim());
       setSent(true);
     } catch (err) {
       setError(mapAuthErrorMessage(err instanceof Error ? err.message : "Gửi email thất bại."));
@@ -47,19 +44,7 @@ export function ForgotPasswordPage() {
     >
       {sent ? (
         <AuthAlert tone="warning">
-          {devResetUrl ? (
-            <>
-              Mail dev đang tắt — dùng liên kết đặt lại mật khẩu:{" "}
-              <a href={devResetUrl} className="break-all text-primary hover:underline">
-                {devResetUrl}
-              </a>
-            </>
-          ) : (
-            <>
-              Nếu email đã đăng ký, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu. Kiểm tra hộp thư (và thư
-              rác).
-            </>
-          )}
+          Nếu email đã đăng ký, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu. Kiểm tra hộp thư (và thư rác).
         </AuthAlert>
       ) : null}
       {error ? <AuthAlert tone="error">{error}</AuthAlert> : null}
