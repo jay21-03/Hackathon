@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <title>Nhắc lời mời đội</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f7fb;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fb;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="620" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border-radius:14px;border:1px solid #e5e7eb;">
+          <tr>
+            <td style="background:#b45309;padding:24px 28px;color:#ffffff;">
+              <h1 style="margin:0;font-size:22px;">Nhắc xác nhận lời mời đội</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 28px;font-size:15px;line-height:1.7;">
+              <p>Lời mời tham gia đội <strong th:text="${teamName}">đội</strong> tại <strong th:text="${eventName}">cuộc thi</strong> sắp hết hạn.</p>
+              <p th:if="${expiresAt != null}">Hạn phản hồi: <strong th:text="${expiresAt}">hạn</strong>.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 28px 24px 28px;">
+              <a th:href="${acceptUrl}" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:10px;margin-right:12px;">Đồng ý</a>
+              <a th:href="${declineUrl}" style="display:inline-block;background:#dc2626;color:#fff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:10px;">Từ chối</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <img th:if="${trackingPixelUrl != null}" th:src="${trackingPixelUrl}" width="1" height="1" alt="" style="display:none;border:0;" />
+</body>
+</html>

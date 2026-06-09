@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lời mời staff - SEAL Hackathon</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f7fb;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fb;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="620" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb;">
+          <tr>
+            <td style="background:linear-gradient(135deg,#0f766e,#155e75);padding:24px 28px;color:#ffffff;">
+              <h1 style="margin:0;font-size:22px;line-height:1.3;">Ban tổ chức mời bạn tham gia</h1>
+              <p style="margin:8px 0 0 0;font-size:14px;opacity:0.95;" th:text="${eventName}">Cuộc thi</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 28px 8px 28px;font-size:15px;line-height:1.7;">
+              <p style="margin:0 0 12px 0;">Xin chào,</p>
+              <p style="margin:0 0 12px 0;">
+                Ban tổ chức cuộc thi <strong th:text="${eventName}">cuộc thi</strong> mời bạn làm
+                <strong th:text="${roleLabel}">vai trò</strong> cho bảng <strong th:text="${boardName}">bảng</strong>.
+              </p>
+              <p style="margin:0 0 16px 0;" th:if="${expiresAt != null}">
+                Hạn phản hồi: <strong th:text="${expiresAt}">hạn</strong>.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 28px 24px 28px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding-right:12px;">
+                    <a th:href="${acceptUrl}" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:10px;">Đồng ý</a>
+                  </td>
+                  <td>
+                    <a th:href="${declineUrl}" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:10px;">Từ chối</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 28px 24px 28px;font-size:13px;line-height:1.7;color:#4b5563;">
+              <p style="margin:0 0 6px 0;word-break:break-all;"><strong>Đồng ý:</strong> <a th:href="${acceptUrl}" th:text="${acceptUrl}">link</a></p>
+              <p style="margin:0;word-break:break-all;"><strong>Từ chối:</strong> <a th:href="${declineUrl}" th:text="${declineUrl}">link</a></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 28px 22px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;color:#6b7280;font-size:12px;line-height:1.6;">
+              Email tự động từ hệ thống SEAL Hackathon. Nếu bạn không mong đợi lời mời này, hãy bỏ qua.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <img th:if="${trackingPixelUrl != null}" th:src="${trackingPixelUrl}" width="1" height="1" alt="" style="display:none;border:0;" />
+</body>
+</html>
