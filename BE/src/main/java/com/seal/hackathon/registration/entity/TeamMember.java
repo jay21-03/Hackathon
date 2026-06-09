@@ -60,4 +60,10 @@ public class TeamMember {
     private OffsetDateTime confirmedAt;
     @Column(name = "declined_at")
     private OffsetDateTime declinedAt;
+    @Column(name = "resend_count", nullable = false)
+    private Integer resendCount;
+    @Column(name = "last_resent_at")
+    private OffsetDateTime lastResentAt;
+    @Column(name = "reminder_sent_at")
+    private OffsetDateTime reminderSentAt;
 }

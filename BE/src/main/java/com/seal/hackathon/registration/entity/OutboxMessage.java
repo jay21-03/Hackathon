@@ -48,6 +48,9 @@ public class OutboxMessage {
     @Column(name = "processed", nullable = false)
     private Boolean processed;
 
+    @Column(name = "dead_letter", nullable = false)
+    private Boolean deadLetter;
+
     @Column(name = "processed_at")
     private OffsetDateTime processedAt;
 

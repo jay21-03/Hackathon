@@ -6,6 +6,8 @@ public class TeamMemberDto {
     private Long id;
     private String email;
     private String fullName;
+    private String studentId;
+    private String university;
     private String status;
     private boolean contactPerson;
     private OffsetDateTime invitedAt;
@@ -36,6 +38,22 @@ public class TeamMemberDto {
 
     public void setFullName(String fullName) {
         this.fullName = fullName;
+    }
+
+    public String getStudentId() {
+        return studentId;
+    }
+
+    public void setStudentId(String studentId) {
+        this.studentId = studentId;
+    }
+
+    public String getUniversity() {
+        return university;
+    }
+
+    public void setUniversity(String university) {
+        this.university = university;
     }
 
     public String getStatus() {

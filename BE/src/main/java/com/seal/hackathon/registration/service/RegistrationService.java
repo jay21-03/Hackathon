@@ -1,7 +1,11 @@
 package com.seal.hackathon.registration.service;
 
+import com.seal.hackathon.registration.dto.AuditLogResponse;
+import com.seal.hackathon.registration.dto.BulkInviteTeamMembersRequest;
+import com.seal.hackathon.registration.dto.BulkTeamInvitationResponse;
 import com.seal.hackathon.registration.dto.MemberRequest;
 import com.seal.hackathon.registration.dto.RegisterTeamRequest;
+import com.seal.hackathon.common.response.PagedResult;
 import com.seal.hackathon.registration.dto.TeamDetailDto;
 import java.util.List;
 
@@ -18,11 +22,32 @@ public interface RegistrationService {
 
     TeamDetailDto resendInvitation(Long teamMemberId, Long actorUserId, String actorEmail, boolean organizer);
 
-    TeamDetailDto inviteTeamMember(Long teamId, MemberRequest member, Long actorUserId, String actorEmail, boolean organizer);
+    TeamDetailDto inviteTeamMember(
+            Long teamId,
+            MemberRequest member,
+            Long actorUserId,
+            String actorEmail,
+            boolean organizer,
+            String idempotencyKey,
+            String requestPath);
+
+    TeamDetailDto cancelPendingInvitation(Long teamId, Long teamMemberId, Long actorUserId, String actorEmail, boolean organizer);
+
+    BulkTeamInvitationResponse bulkInviteTeamMembers(
+            Long teamId,
+            BulkInviteTeamMembersRequest request,
+            Long actorUserId,
+            String actorEmail,
+            boolean organizer);
 
     List<TeamDetailDto> getMyTeams(Long eventId, Long userId);
 
     List<TeamDetailDto> getEventTeams(Long eventId);
 
     List<TeamDetailDto> getEventTeams(Long eventId, com.seal.hackathon.common.enums.TeamStatus status);
+
+    PagedResult<TeamDetailDto> getEventTeamsPaged(
+            Long eventId, com.seal.hackathon.common.enums.TeamStatus status, int page, int size);
+
+    List<AuditLogResponse> getEventAuditLogs(Long eventId, int limit);
 }

@@ -7,8 +7,19 @@ import com.seal.hackathon.common.enums.EventStatus;
 import com.seal.hackathon.common.enums.TeamMemberStatus;
 import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.exception.BusinessException;
+import com.seal.hackathon.common.security.OrganizerAuthorizationService;
+import com.seal.hackathon.common.response.PagedResult;
+import com.seal.hackathon.contest.entity.Board;
+import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Event;
+import com.seal.hackathon.contest.entity.Round;
+import com.seal.hackathon.contest.repository.BoardRepository;
+import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
+import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.registration.dto.BulkInviteTeamMembersRequest;
+import com.seal.hackathon.registration.dto.BulkTeamInvitationFailure;
+import com.seal.hackathon.registration.dto.BulkTeamInvitationResponse;
 import com.seal.hackathon.registration.dto.MemberRequest;
 import com.seal.hackathon.registration.dto.RegisterTeamRequest;
 import com.seal.hackathon.registration.dto.TeamDetailDto;
@@ -37,7 +48,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -49,6 +62,9 @@ import org.springframework.web.server.ResponseStatusException;
 public class RegistrationServiceImpl implements RegistrationService {
 
     private final EventRepository eventRepository;
+    private final RoundRepository roundRepository;
+    private final BoardRepository boardRepository;
+    private final BoardSlotRepository boardSlotRepository;
     private final UserRepository userRepository;
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
@@ -59,9 +75,13 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
+    private final OrganizerAuthorizationService organizerAuthorizationService;
 
     public RegistrationServiceImpl(
             EventRepository eventRepository,
+            RoundRepository roundRepository,
+            BoardRepository boardRepository,
+            BoardSlotRepository boardSlotRepository,
             UserRepository userRepository,
             TeamRepository teamRepository,
             TeamMemberRepository teamMemberRepository,
@@ -71,8 +91,12 @@ public class RegistrationServiceImpl implements RegistrationService {
             InvitationService invitationService,
             IdempotencyKeyRepository idempotencyKeyRepository,
             ObjectMapper objectMapper,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            OrganizerAuthorizationService organizerAuthorizationService) {
         this.eventRepository = eventRepository;
+        this.roundRepository = roundRepository;
+        this.boardRepository = boardRepository;
+        this.boardSlotRepository = boardSlotRepository;
         this.userRepository = userRepository;
         this.teamRepository = teamRepository;
         this.teamMemberRepository = teamMemberRepository;
@@ -83,6 +107,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         this.idempotencyKeyRepository = idempotencyKeyRepository;
         this.objectMapper = objectMapper;
         this.notificationService = notificationService;
+        this.organizerAuthorizationService = organizerAuthorizationService;
     }
 
     @Override
@@ -191,6 +216,7 @@ public class RegistrationServiceImpl implements RegistrationService {
                     .invitedAt(isContactPerson ? null : now)
                     .confirmedAt(isContactPerson ? now : null)
                     .declinedAt(null)
+                    .resendCount(0)
                     .build();
             savedMembers.add(teamMemberRepository.save(member));
         }
@@ -216,6 +242,7 @@ public class RegistrationServiceImpl implements RegistrationService {
                 .attempts(0)
                 .lastError(null)
                 .processed(false)
+                .deadLetter(false)
                 .processedAt(null)
                 .createdAt(now)
                 .build();
@@ -267,6 +294,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(team.getEventId());
 
         TeamStatus currentStatus = team.getStatus();
         if (currentStatus == status) {
@@ -279,12 +307,22 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         String trimmedReason = reason == null ? null : reason.trim();
+        TeamStatus beforeStatus = team.getStatus();
 
         switch (status) {
             case CONFIRMED -> {
-                team.setStatus(TeamStatus.CONFIRMED);
-                team.setConfirmedAt(now);
-                team.setRejectedReason(null);
+                Event event = eventRepository.findById(team.getEventId())
+                        .orElseThrow(() -> new BusinessException("Event not found"));
+                long confirmedTeams = teamRepository.countByEventIdAndStatus(team.getEventId(), TeamStatus.CONFIRMED);
+                if (confirmedTeams >= event.getMaxTeams()) {
+                    team.setStatus(TeamStatus.WAITLIST);
+                    team.setConfirmedAt(null);
+                    team.setRejectedReason(null);
+                } else {
+                    team.setStatus(TeamStatus.CONFIRMED);
+                    team.setConfirmedAt(now);
+                    team.setRejectedReason(null);
+                }
             }
             case WAITLIST -> {
                 team.setStatus(TeamStatus.WAITLIST);
@@ -307,6 +345,21 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         String payload = "{\"teamId\": " + team.getId() + ", \"teamStatus\": \"" + team.getStatus() + "\", \"reason\": " + (trimmedReason == null ? "null" : "\"" + escapeJson(trimmedReason) + "\"") + "}";
         appendLifecycleArtifacts(team, "TEAM_STATUS_UPDATED", "TeamStatusUpdated", actorUserId, actorEmail, now, payload);
+        String auditAction = team.getStatus() == TeamStatus.DISQUALIFIED
+                ? "TEAM_DISQUALIFIED"
+                : team.getStatus() == TeamStatus.REJECTED
+                        ? "TEAM_REJECTED"
+                        : "TEAM_STATUS_CHANGED";
+        auditLogRepository.save(AuditLog.builder()
+                .actorId(actorUserId)
+                .actorEmail(actorEmail)
+                .action(auditAction)
+                .entityType("Team")
+                .entityId(team.getId())
+                .beforeState("{\"status\":\"" + beforeStatus + "\"}")
+                .afterState(payload)
+                .createdAt(now)
+                .build());
 
         notificationService.notifyTeamStatusChanged(team, status);
 
@@ -426,6 +479,9 @@ public class RegistrationServiceImpl implements RegistrationService {
         member.setDeclinedAt(null);
         member.setInviteConsumedAt(null);
         member.setInvitedAt(now);
+        int resendCount = member.getResendCount() == null ? 0 : member.getResendCount();
+        member.setResendCount(resendCount + 1);
+        member.setLastResentAt(now);
         teamMemberRepository.save(member);
 
         invitationService.issueInvitations(team, List.of(member), actorUserId);
@@ -444,7 +500,57 @@ public class RegistrationServiceImpl implements RegistrationService {
 
     @Override
     @Transactional
-    public TeamDetailDto inviteTeamMember(Long teamId, MemberRequest memberRequest, Long actorUserId, String actorEmail, boolean organizer) {
+    public TeamDetailDto inviteTeamMember(
+            Long teamId,
+            MemberRequest memberRequest,
+            Long actorUserId,
+            String actorEmail,
+            boolean organizer,
+            String idempotencyKey,
+            String requestPath) {
+        String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+        String requestHash = hashInviteMemberRequest(teamId, memberRequest, actorUserId, actorEmail, organizer);
+
+        IdempotencyKey reservation = null;
+        if (normalizedIdempotencyKey != null) {
+            Optional<IdempotencyKey> existing = idempotencyKeyRepository.findByKeyAndUserIdAndRequestMethodAndRequestPath(
+                    normalizedIdempotencyKey,
+                    actorUserId,
+                    "POST",
+                    requestPath);
+            if (existing.isPresent() && existing.get().getResponseBody() != null) {
+                verifySameRequest(existing.get(), requestHash);
+                return readStoredResponse(existing.get());
+            }
+            if (existing.isPresent() && existing.get().getRequestHash() != null
+                    && !Objects.equals(existing.get().getRequestHash(), requestHash)) {
+                throw new BusinessException("Idempotency key already used for a different request");
+            }
+            reservation = IdempotencyKey.builder()
+                    .key(normalizedIdempotencyKey)
+                    .userId(actorUserId)
+                    .requestMethod("POST")
+                    .requestPath(requestPath)
+                    .requestHash(requestHash)
+                    .responseCode(null)
+                    .responseBody(null)
+                    .createdAt(OffsetDateTime.now())
+                    .expiresAt(OffsetDateTime.now().plusHours(24))
+                    .build();
+            try {
+                idempotencyKeyRepository.saveAndFlush(reservation);
+            } catch (DataIntegrityViolationException ex) {
+                IdempotencyKey stored = idempotencyKeyRepository.findByKeyAndUserIdAndRequestMethodAndRequestPath(
+                                normalizedIdempotencyKey, actorUserId, "POST", requestPath)
+                        .orElseThrow(() -> new BusinessException("Duplicate request in progress"));
+                if (stored.getResponseBody() != null) {
+                    verifySameRequest(stored, requestHash);
+                    return readStoredResponse(stored);
+                }
+                throw new BusinessException("Duplicate request in progress");
+            }
+        }
+
         if (memberRequest == null || memberRequest.getEmail() == null || memberRequest.getEmail().isBlank()) {
             throw new BusinessException("Invalid email format");
         }
@@ -504,6 +610,7 @@ public class RegistrationServiceImpl implements RegistrationService {
                 .invitedAt(now)
                 .confirmedAt(null)
                 .declinedAt(null)
+                .resendCount(0)
                 .build();
         member = teamMemberRepository.save(member);
         teamMemberRepository.flush();
@@ -521,7 +628,130 @@ public class RegistrationServiceImpl implements RegistrationService {
         appendLifecycleArtifacts(team, "TEAM_MEMBER_INVITED", "TeamMemberInvited", actorUserId, actorEmail, now,
                 "{\"teamId\": " + team.getId() + ", \"teamMemberId\": " + member.getId() + ", \"email\": \"" + escapeJson(normalizedEmail) + "\", \"teamStatus\": \"" + team.getStatus() + "\"}");
 
+        TeamDetailDto response = loadTeamDetail(team);
+        if (reservation != null) {
+            reservation.setResponseCode(200);
+            reservation.setResponseBody(writeStoredResponse(response));
+            idempotencyKeyRepository.save(reservation);
+        }
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public TeamDetailDto cancelPendingInvitation(
+            Long teamId, Long teamMemberId, Long actorUserId, String actorEmail, boolean organizer) {
+        TeamMember member = teamMemberRepository.findByIdAndTeamId(teamMemberId, teamId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team member not found"));
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
+
+        if (!organizer && !Objects.equals(team.getContactUserId(), actorUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+        if (Boolean.TRUE.equals(member.getContactPerson())) {
+            throw new BusinessException("Cannot cancel contact person");
+        }
+        if (member.getStatus() == TeamMemberStatus.CONFIRMED) {
+            throw new BusinessException("Cannot cancel confirmed member");
+        }
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        teamMemberRepository.delete(member);
+        recalculateTeamStatusAfterMemberChange(team, now);
+
+        appendLifecycleArtifacts(team, "INVITATION_CANCELLED", "InvitationCancelled", actorUserId, actorEmail, now,
+                "{\"teamId\": " + team.getId() + ", \"teamMemberId\": " + teamMemberId + ", \"teamStatus\": \""
+                        + team.getStatus() + "\"}");
+
         return loadTeamDetail(team);
+    }
+
+    @Override
+    @Transactional
+    public BulkTeamInvitationResponse bulkInviteTeamMembers(
+            Long teamId,
+            BulkInviteTeamMembersRequest request,
+            Long actorUserId,
+            String actorEmail,
+            boolean organizer) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
+        if (!organizer && !Objects.equals(team.getContactUserId(), actorUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+
+        List<BulkTeamInvitationFailure> failed = new ArrayList<>();
+        Set<String> seenEmails = new HashSet<>();
+        int succeeded = 0;
+
+        for (MemberRequest memberRequest : request.getMembers()) {
+            String emailKey = memberRequest.getEmail() == null
+                    ? ""
+                    : memberRequest.getEmail().trim().toLowerCase(Locale.ROOT);
+            if (!seenEmails.add(emailKey)) {
+                failed.add(BulkTeamInvitationFailure.builder()
+                        .email(memberRequest.getEmail())
+                        .reason("DUPLICATE_IN_BATCH")
+                        .build());
+                continue;
+            }
+            try {
+                inviteTeamMember(teamId, memberRequest, actorUserId, actorEmail, organizer, null, null);
+                succeeded++;
+            } catch (Exception ex) {
+                String reason = ex instanceof BusinessException businessEx
+                        ? businessEx.getMessage()
+                        : ex instanceof ResponseStatusException statusEx
+                                ? statusEx.getReason()
+                                : ex.getMessage();
+                failed.add(BulkTeamInvitationFailure.builder()
+                        .email(memberRequest.getEmail())
+                        .reason(reason == null ? "INVITE_FAILED" : reason)
+                        .build());
+            }
+        }
+
+        Team refreshed = teamRepository.findById(teamId).orElse(team);
+        return BulkTeamInvitationResponse.builder()
+                .total(request.getMembers().size())
+                .succeededCount(succeeded)
+                .failedCount(failed.size())
+                .team(loadTeamDetail(refreshed))
+                .failed(failed)
+                .build();
+    }
+
+    private void recalculateTeamStatusAfterMemberChange(Team team, OffsetDateTime now) {
+        List<TeamMember> members = teamMemberRepository.findByTeamId(team.getId());
+        if (members.isEmpty()) {
+            team.setStatus(TeamStatus.PENDING);
+            team.setConfirmedAt(null);
+            team.setUpdatedAt(now);
+            teamRepository.save(team);
+            return;
+        }
+
+        boolean allConfirmed = members.stream()
+                .allMatch(existing -> existing.getStatus() == TeamMemberStatus.CONFIRMED);
+        if (allConfirmed) {
+            Event event = eventRepository.findById(team.getEventId())
+                    .orElseThrow(() -> new BusinessException("Event not found"));
+            long confirmedTeams = teamRepository.countByEventIdAndStatus(team.getEventId(), TeamStatus.CONFIRMED);
+            if (confirmedTeams < event.getMaxTeams()) {
+                team.setStatus(TeamStatus.CONFIRMED);
+                team.setConfirmedAt(now);
+                team.setRejectedReason(null);
+            } else {
+                team.setStatus(TeamStatus.WAITLIST);
+                team.setConfirmedAt(null);
+            }
+        } else {
+            team.setStatus(TeamStatus.PENDING);
+            team.setConfirmedAt(null);
+        }
+        team.setUpdatedAt(now);
+        teamRepository.save(team);
     }
 
     @Override
@@ -545,14 +775,98 @@ public class RegistrationServiceImpl implements RegistrationService {
 
     @Override
     public List<TeamDetailDto> getEventTeams(Long eventId, TeamStatus status) {
-        eventRepository.findById(eventId)
-                .orElseThrow(() -> new BusinessException("Event not found"));
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         List<com.seal.hackathon.registration.entity.Team> teams = status == null
                 ? teamRepository.findByEventId(eventId)
                 : teamRepository.findByEventIdAndStatus(eventId, status);
+        if (teams.isEmpty()) {
+            return List.of();
+        }
+        List<Long> teamIds = teams.stream().map(Team::getId).toList();
+        Map<Long, List<TeamMember>> membersByTeamId = teamMemberRepository.findByTeamIdIn(teamIds).stream()
+                .collect(Collectors.groupingBy(TeamMember::getTeamId));
         return teams.stream()
-                .map(this::loadTeamDetail)
+                .map(team -> toDetailDto(team, membersByTeamId.getOrDefault(team.getId(), List.of())))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResult<TeamDetailDto> getEventTeamsPaged(Long eventId, TeamStatus status, int page, int size) {
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        int resolvedPage = Math.max(page, 0);
+        int resolvedSize = Math.min(Math.max(size, 1), 200);
+        org.springframework.data.domain.Pageable pageable =
+                org.springframework.data.domain.PageRequest.of(resolvedPage, resolvedSize);
+        org.springframework.data.domain.Page<Team> teamPage = status == null
+                ? teamRepository.findByEventId(eventId, pageable)
+                : teamRepository.findByEventIdAndStatus(eventId, status, pageable);
+        List<Long> teamIds = teamPage.getContent().stream().map(Team::getId).toList();
+        Map<Long, List<TeamMember>> membersByTeamId = teamIds.isEmpty()
+                ? Map.of()
+                : teamMemberRepository.findByTeamIdIn(teamIds).stream()
+                        .collect(Collectors.groupingBy(TeamMember::getTeamId));
+        List<TeamDetailDto> items = teamPage.getContent().stream()
+                .map(team -> toDetailDto(team, membersByTeamId.getOrDefault(team.getId(), List.of())))
+                .toList();
+        int totalPages = teamPage.getTotalPages();
+        return PagedResult.<TeamDetailDto>builder()
+                .items(items)
+                .page(resolvedPage)
+                .size(resolvedSize)
+                .total(teamPage.getTotalElements())
+                .totalPages(totalPages)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.seal.hackathon.registration.dto.AuditLogResponse> getEventAuditLogs(Long eventId, int limit) {
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        int resolvedLimit = Math.min(Math.max(limit, 1), 200);
+        List<Long> teamIds = teamRepository.findByEventId(eventId).stream().map(Team::getId).toList();
+        List<Long> boardIds = new ArrayList<>();
+        List<Long> slotIds = new ArrayList<>();
+        for (Round round : roundRepository.findByEventId(eventId)) {
+            for (Board board : boardRepository.findByRoundId(round.getId())) {
+                boardIds.add(board.getId());
+                for (BoardSlot slot : boardSlotRepository.findByBoardId(board.getId())) {
+                    slotIds.add(slot.getId());
+                }
+            }
+        }
+
+        List<AuditLog> merged = new ArrayList<>();
+        if (!teamIds.isEmpty()) {
+            merged.addAll(auditLogRepository.findByEntityTypeAndEntityIdInOrderByCreatedAtDesc(
+                    "Team", teamIds, org.springframework.data.domain.PageRequest.of(0, resolvedLimit)));
+        }
+        if (!boardIds.isEmpty()) {
+            merged.addAll(auditLogRepository.findByEntityTypeAndEntityIdInOrderByCreatedAtDesc(
+                    "Board", boardIds, org.springframework.data.domain.PageRequest.of(0, resolvedLimit)));
+        }
+        if (!slotIds.isEmpty()) {
+            merged.addAll(auditLogRepository.findByEntityTypeAndEntityIdInOrderByCreatedAtDesc(
+                    "BoardSlot", slotIds, org.springframework.data.domain.PageRequest.of(0, resolvedLimit)));
+        }
+        merged.addAll(auditLogRepository.findByEntityTypeAndEntityIdInOrderByCreatedAtDesc(
+                "Event", List.of(eventId), org.springframework.data.domain.PageRequest.of(0, resolvedLimit)));
+
+        return merged.stream()
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .limit(resolvedLimit)
+                .map(log -> com.seal.hackathon.registration.dto.AuditLogResponse.builder()
+                        .id(log.getId())
+                        .actorId(log.getActorId())
+                        .actorEmail(log.getActorEmail())
+                        .action(log.getAction())
+                        .entityType(log.getEntityType())
+                        .entityId(log.getEntityId())
+                        .beforeState(log.getBeforeState())
+                        .afterState(log.getAfterState())
+                        .createdAt(log.getCreatedAt())
+                        .build())
+                .toList();
     }
 
     private void validateRegistrationWindow(Event event) {
@@ -584,6 +898,12 @@ public class RegistrationServiceImpl implements RegistrationService {
             if (member == null || member.getEmail() == null || member.getEmail().isBlank()) {
                 throw new BusinessException("Invalid email format");
             }
+            if (member.getStudentId() == null || member.getStudentId().isBlank()) {
+                throw new BusinessException("STUDENT_ID_REQUIRED");
+            }
+            if (member.getUniversity() == null || member.getUniversity().isBlank()) {
+                throw new BusinessException("UNIVERSITY_REQUIRED");
+            }
             String normalizedEmail = normalizeEmail(member.getEmail());
             if (uniqueByEmail.containsKey(normalizedEmail)) {
                 throw new BusinessException("Duplicate member email in request");
@@ -592,9 +912,17 @@ public class RegistrationServiceImpl implements RegistrationService {
         }
 
         String normalizedContactEmail = normalizeEmail(contactEmail);
-        MemberRequest creator = new MemberRequest();
+        MemberRequest creator = uniqueByEmail.getOrDefault(normalizedContactEmail, new MemberRequest());
         creator.setEmail(contactEmail);
-        creator.setFullName(contactFullName == null || contactFullName.isBlank() ? contactEmail : contactFullName);
+        if (creator.getFullName() == null || creator.getFullName().isBlank()) {
+            creator.setFullName(contactFullName == null || contactFullName.isBlank() ? contactEmail : contactFullName);
+        }
+        if (creator.getStudentId() == null || creator.getStudentId().isBlank()) {
+            throw new BusinessException("STUDENT_ID_REQUIRED");
+        }
+        if (creator.getUniversity() == null || creator.getUniversity().isBlank()) {
+            throw new BusinessException("UNIVERSITY_REQUIRED");
+        }
 
         List<MemberRequest> orderedMembers = new ArrayList<>();
         orderedMembers.add(creator);
@@ -656,6 +984,19 @@ public class RegistrationServiceImpl implements RegistrationService {
         }
     }
 
+    private String hashInviteMemberRequest(
+            Long teamId, MemberRequest memberRequest, Long actorUserId, String actorEmail, boolean organizer) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            String serialized = objectMapper.writeValueAsString(memberRequest) + "|" + teamId + "|" + actorUserId
+                    + "|" + normalizeEmail(actorEmail) + "|" + organizer;
+            byte[] hash = digest.digest(serialized.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to calculate idempotency hash", ex);
+        }
+    }
+
     private void verifySameRequest(IdempotencyKey stored, String requestHash) {
         if (stored.getRequestHash() != null && !Objects.equals(stored.getRequestHash(), requestHash)) {
             throw new BusinessException("Idempotency key already used for a different request");
@@ -706,6 +1047,7 @@ public class RegistrationServiceImpl implements RegistrationService {
                 .attempts(0)
                 .lastError(null)
                 .processed(false)
+                .deadLetter(false)
                 .processedAt(null)
                 .createdAt(now)
                 .build();
@@ -768,6 +1110,8 @@ public class RegistrationServiceImpl implements RegistrationService {
         dto.setId(member.getId());
         dto.setEmail(member.getEmail());
         dto.setFullName(member.getFullName());
+        dto.setStudentId(member.getStudentId());
+        dto.setUniversity(member.getUniversity());
         dto.setStatus(member.getStatus() == null ? null : member.getStatus().name());
         dto.setContactPerson(Boolean.TRUE.equals(member.getContactPerson()));
         dto.setInvitedAt(member.getInvitedAt());

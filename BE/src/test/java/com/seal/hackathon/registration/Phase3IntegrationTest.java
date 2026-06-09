@@ -3,10 +3,13 @@ package com.seal.hackathon.registration;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.authprofile.entity.User;
+import com.seal.hackathon.authprofile.entity.UserRole;
 import com.seal.hackathon.authprofile.repository.UserRepository;
+import com.seal.hackathon.authprofile.repository.UserRoleRepository;
 import com.seal.hackathon.authprofile.security.JwtService;
 import com.seal.hackathon.support.IntegrationTestConfig;
 import com.seal.hackathon.common.enums.EventStatus;
+import com.seal.hackathon.common.enums.SystemRole;
 import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.enums.UserStatus;
 import com.seal.hackathon.contest.entity.Event;
@@ -15,6 +18,7 @@ import com.seal.hackathon.registration.entity.OutboxMessage;
 import com.seal.hackathon.registration.repository.OutboxMessageRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.registration.repository.TeamMemberRepository;
+import com.seal.hackathon.support.IntegrationTestDataCleaner;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
@@ -70,6 +74,9 @@ class Phase3IntegrationTest {
     UserRepository userRepository;
 
     @Autowired
+    UserRoleRepository userRoleRepository;
+
+    @Autowired
     EventRepository eventRepository;
 
     @Autowired
@@ -81,6 +88,9 @@ class Phase3IntegrationTest {
     @Autowired
     OutboxMessageRepository outboxMessageRepository;
 
+    @Autowired
+    IntegrationTestDataCleaner dataCleaner;
+
     User creator;
     User invitee;
     User organizer;
@@ -89,9 +99,11 @@ class Phase3IntegrationTest {
     @BeforeEach
     void setUp() {
         outboxMessageRepository.deleteAll();
+        dataCleaner.clearNotifications();
         teamMemberRepository.deleteAll();
         teamRepository.deleteAll();
         eventRepository.deleteAll();
+        userRoleRepository.deleteAll();
         userRepository.deleteAll();
 
         creator = userRepository.save(User.builder()
@@ -117,6 +129,11 @@ class Phase3IntegrationTest {
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build());
+        userRoleRepository.save(UserRole.builder()
+                .userId(organizer.getId())
+                .role(SystemRole.ORGANIZER)
+                .createdAt(OffsetDateTime.now())
+                .build());
 
         event = eventRepository.save(Event.builder()
                 .name("Hackathon 2026")
@@ -129,7 +146,7 @@ class Phase3IntegrationTest {
                 .minTeamSize(1)
                 .maxTeamSize(5)
                 .status(EventStatus.REGISTRATION_OPEN)
-                .createdBy(creator.getId())
+                .createdBy(organizer.getId())
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build());
@@ -145,8 +162,8 @@ class Phase3IntegrationTest {
                 {
                   "name": "Alpha Team",
                   "members": [
-                    {"email": "creator@example.com", "fullName": "Creator User", "studentId": "S001", "university": "SEAL"},
-                    {"email": "invitee@example.com", "fullName": "Invitee User", "studentId": "S002", "university": "SEAL"}
+                    {"email": "creator@example.com", "fullName": "Creator User", "studentId": "S001", "university": "SEAL University"},
+                    {"email": "invitee@example.com", "fullName": "Invitee User", "studentId": "S002", "university": "SEAL University"}
                   ]
                 }
                 """;
@@ -234,8 +251,8 @@ class Phase3IntegrationTest {
         mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/events/{eventId}/teams", event.getId())
                         .header("Authorization", "Bearer " + organizerJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data.length()").value(1))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].status").value(TeamStatus.DISQUALIFIED.name()));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items.length()").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].status").value(TeamStatus.DISQUALIFIED.name()));
 
         assertThat(teamRepository.findById(teamId)).isPresent();
     }
@@ -249,7 +266,7 @@ class Phase3IntegrationTest {
                 {
                   "name": "Solo Then Grow",
                   "members": [
-                    {"email": "creator@example.com", "fullName": "Creator User", "studentId": "S001", "university": "SEAL"}
+                    {"email": "creator@example.com", "fullName": "Creator User", "studentId": "S001", "university": "SEAL University"}
                   ]
                 }
                 """;
@@ -284,6 +301,46 @@ class Phase3IntegrationTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.status").value(TeamStatus.PENDING.name()));
 
         assertThat(extractLatestInvitation(teamId).teamMemberId()).isPositive();
+    }
+
+    @Test
+    void captainCanCancelPendingInvitation() throws Exception {
+        String creatorJwt = jwtService.generateToken(creator, Set.of());
+        String registerPayload = """
+                {
+                  "name": "Cancel Invite Team",
+                  "members": [
+                    {"email": "creator@example.com", "fullName": "Creator User", "studentId": "S001", "university": "SEAL University"}
+                  ]
+                }
+                """;
+
+        MvcResult registerResult = mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/events/{eventId}/teams", event.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + creatorJwt)
+                        .header("Idempotency-Key", "phase3-register-cancel")
+                        .content(registerPayload))
+                .andExpect(MockMvcResultMatchers.status().isCreated())
+                .andReturn();
+
+        Long teamId = objectMapper.readTree(registerResult.getResponse().getContentAsString())
+                .path("data").path("id").asLong();
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/teams/{teamId}/members", teamId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + creatorJwt)
+                        .content("""
+                                {"member":{"email":"invitee@example.com","fullName":"Invitee User"}}
+                                """))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.members.length()").value(2));
+
+        Long memberId = extractLatestInvitation(teamId).teamMemberId();
+
+        mockMvc.perform(MockMvcRequestBuilders.delete("/api/v1/teams/{teamId}/members/{memberId}", teamId, memberId)
+                        .header("Authorization", "Bearer " + creatorJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.members.length()").value(1));
     }
 
         private InvitationSnapshot extractLatestInvitation(Long teamId) throws Exception {

@@ -2,8 +2,16 @@ package com.seal.hackathon.registration.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seal.hackathon.mail.dto.RenderedEmail;
+import com.seal.hackathon.mail.enums.EmailTemplateKey;
+import com.seal.hackathon.mail.service.InvitationMailComposer;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,9 +24,12 @@ import jakarta.mail.internet.MimeMessage;
 public class InvitationEmailSender {
 
     private static final Logger log = LoggerFactory.getLogger(InvitationEmailSender.class);
+    private static final DateTimeFormatter VI_DATE =
+            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", Locale.forLanguageTag("vi-VN"));
 
     private final JavaMailSender mailSender;
     private final ObjectMapper objectMapper;
+    private final InvitationMailComposer invitationMailComposer;
 
     @Value("${app.mail.enabled:false}")
     private boolean mailEnabled;
@@ -29,9 +40,13 @@ public class InvitationEmailSender {
     @Value("${app.mail.invitation-base-url:http://localhost:5173}")
     private String invitationBaseUrl;
 
-    public InvitationEmailSender(JavaMailSender mailSender, ObjectMapper objectMapper) {
+    public InvitationEmailSender(
+            JavaMailSender mailSender,
+            ObjectMapper objectMapper,
+            InvitationMailComposer invitationMailComposer) {
         this.mailSender = mailSender;
         this.objectMapper = objectMapper;
+        this.invitationMailComposer = invitationMailComposer;
     }
 
     public void sendStaffFromOutboxPayload(String payload) {
@@ -45,25 +60,30 @@ public class InvitationEmailSender {
             String recipientEmail = requiredText(root, "email");
             String inviteToken = requiredText(root, "inviteToken");
             String role = requiredText(root, "role");
-            String boardId = requiredText(root, "boardId");
+            Long staffInvitationId = requiredLong(root, "staffInvitationId");
+            Long eventId = optionalLong(root, "eventId");
+            boolean reminder = root.has("reminder") && root.get("reminder").asBoolean();
+            String eventName = optionalText(root, "eventName", "cuộc thi");
+            String boardName = optionalText(root, "boardName", "bảng thi");
+            String expiresAt = formatExpiresAt(optionalText(root, "inviteExpiresAt", null));
+            String roleLabel = "JUDGE".equals(role) ? "Giám khảo" : "Mentor";
 
-            String encodedToken = com.seal.hackathon.registration.service.InvitationTokenCodec.encodeForEmailLink(inviteToken);
+            String encodedToken = InvitationTokenCodec.encodeForEmailLink(inviteToken);
             String tokenQuery = URLEncoder.encode(encodedToken, StandardCharsets.UTF_8);
             String acceptUrl = invitationBaseUrl + "/staff-invitations/accept?token=" + tokenQuery;
             String declineUrl = invitationBaseUrl + "/staff-invitations/decline?token=" + tokenQuery;
 
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
-            helper.setFrom(fromEmail);
-            helper.setTo(recipientEmail);
-            helper.setSubject("[SEAL Hackathon] Loi moi " + ("JUDGE".equals(role) ? "giam khao" : "mentor"));
-            helper.setText(
-                    "<p>Ban duoc moi lam <strong>" + escapeHtml(role) + "</strong> cho bang #" + escapeHtml(boardId)
-                            + ".</p><p><a href=\"" + escapeHtml(acceptUrl) + "\">Dong y</a> | <a href=\""
-                            + escapeHtml(declineUrl) + "\">Tu choi</a></p>",
-                    true);
-            mailSender.send(message);
-            log.info("Staff invitation email sent to {} for boardId={}, role={}", recipientEmail, boardId, role);
+            Map<String, Object> variables = new LinkedHashMap<>();
+            variables.put("eventName", eventName);
+            variables.put("boardName", boardName);
+            variables.put("roleLabel", roleLabel);
+            variables.put("expiresAt", expiresAt);
+
+            EmailTemplateKey templateKey = reminder ? EmailTemplateKey.STAFF_REMINDER : EmailTemplateKey.STAFF_INVITATION;
+            RenderedEmail rendered = invitationMailComposer.composeStaff(
+                    eventId, templateKey, variables, staffInvitationId, acceptUrl, declineUrl, reminder);
+            sendHtml(recipientEmail, rendered.getSubject(), rendered.getHtml());
+            log.info("Staff invitation email sent to {} role={} reminder={}", recipientEmail, role, reminder);
         } catch (Exception ex) {
             log.error("Failed to send staff invitation email. payload={}, rootCause={}", payload, rootCauseMessage(ex), ex);
             throw new IllegalStateException("Failed to send staff invitation email from outbox payload", ex);
@@ -80,29 +100,70 @@ public class InvitationEmailSender {
             JsonNode root = objectMapper.readTree(payload);
             String recipientEmail = requiredText(root, "email");
             String inviteToken = requiredText(root, "inviteToken");
+            Long teamMemberId = requiredLong(root, "teamMemberId");
+            Long eventId = optionalLong(root, "eventId");
+            boolean reminder = root.has("reminder") && root.get("reminder").asBoolean();
             String teamName = optionalText(root, "teamName", "đội thi");
             String eventName = optionalText(root, "eventName", "cuộc thi");
+            String expiresAt = formatExpiresAt(optionalText(root, "inviteExpiresAt", null));
 
             String encodedToken = InvitationTokenCodec.encodeForEmailLink(inviteToken);
             String tokenQuery = URLEncoder.encode(encodedToken, StandardCharsets.UTF_8);
             String acceptUrl = invitationBaseUrl + "/team-invitations/accept?token=" + tokenQuery;
             String declineUrl = invitationBaseUrl + "/team-invitations/decline?token=" + tokenQuery;
 
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
-            helper.setFrom(fromEmail);
-            helper.setTo(recipientEmail);
-            helper.setSubject("[SEAL Hackathon] Lời mời tham gia đội " + teamName);
-            helper.setText(buildEmailHtmlBody(teamName, eventName, acceptUrl, declineUrl), true);
+            Map<String, Object> variables = new LinkedHashMap<>();
+            variables.put("teamName", teamName);
+            variables.put("eventName", eventName);
+            variables.put("expiresAt", expiresAt);
 
-            mailSender.send(message);
+            EmailTemplateKey templateKey = reminder ? EmailTemplateKey.TEAM_REMINDER : EmailTemplateKey.TEAM_INVITATION;
+            RenderedEmail rendered = invitationMailComposer.composeTeam(
+                    eventId, templateKey, variables, teamMemberId, acceptUrl, declineUrl, reminder);
+            sendHtml(recipientEmail, rendered.getSubject(), rendered.getHtml());
             Long teamId = root.hasNonNull("teamId") ? root.get("teamId").asLong() : null;
-            Long teamMemberId = root.hasNonNull("teamMemberId") ? root.get("teamMemberId").asLong() : null;
-            log.info("Invitation email sent to {} for team={}, member={}", recipientEmail, teamId, teamMemberId);
+            log.info("Invitation email sent to {} team={} member={} reminder={}", recipientEmail, teamId, teamMemberId, reminder);
         } catch (Exception ex) {
             log.error("Failed to send invitation email. payload={}, rootCause={}", payload, rootCauseMessage(ex), ex);
             throw new IllegalStateException("Failed to send invitation email from outbox payload", ex);
         }
+    }
+
+    private void sendHtml(String recipientEmail, String subject, String html) throws Exception {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
+        helper.setFrom(fromEmail);
+        helper.setTo(recipientEmail);
+        helper.setSubject(subject);
+        helper.setText(html, true);
+        mailSender.send(message);
+    }
+
+    private String formatExpiresAt(String iso) {
+        if (iso == null || iso.isBlank()) {
+            return null;
+        }
+        try {
+            return VI_DATE.format(OffsetDateTime.parse(iso));
+        } catch (Exception ex) {
+            return iso;
+        }
+    }
+
+    private Long requiredLong(JsonNode root, String fieldName) {
+        JsonNode node = root.get(fieldName);
+        if (node == null || node.isNull()) {
+            throw new IllegalArgumentException("Missing field in invitation payload: " + fieldName);
+        }
+        return node.asLong();
+    }
+
+    private Long optionalLong(JsonNode root, String fieldName) {
+        JsonNode node = root.get(fieldName);
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        return node.asLong();
     }
 
     private String requiredText(JsonNode root, String fieldName) {
@@ -126,94 +187,14 @@ public class InvitationEmailSender {
         return value == null || value.isBlank() ? fallback : value;
     }
 
-        private String buildEmailHtmlBody(String teamName, String eventName, String acceptUrl, String declineUrl) {
-            return """
-                                <!doctype html>
-                                <html lang=\"vi\">
-                                <head>
-                                    <meta charset=\"UTF-8\" />
-                                    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
-                                    <title>Lời mời tham gia đội - SEAL Hackathon</title>
-                                </head>
-                                <body style=\"margin:0;padding:0;background:#f5f7fb;font-family:Arial,Helvetica,sans-serif;color:#1f2937;\">
-                                    <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f5f7fb;padding:24px 12px;\">
-                                        <tr>
-                                            <td align=\"center\">
-                                                <table role=\"presentation\" width=\"620\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:620px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb;\">
-                                                    <tr>
-                                                        <td style=\"background:linear-gradient(135deg,#0f766e,#155e75);padding:24px 28px;color:#ffffff;\">
-                                                              <h1 style=\"margin:0;font-size:24px;line-height:1.3;\">Bạn được mời tham gia đội thi</h1>
-                                                            <p style=\"margin:8px 0 0 0;font-size:14px;opacity:0.95;\">SEAL Hackathon</p>
-                                                        </td>
-                                                    </tr>
-
-                                                    <tr>
-                                                        <td style=\"padding:24px 28px 8px 28px;font-size:15px;line-height:1.7;\">
-                                                              <p style=\"margin:0 0 12px 0;\">Xin chào,</p>
-                                                              <p style=\"margin:0 0 12px 0;\">Bạn được mời tham gia đội <strong>__TEAM_NAME__</strong> tại cuộc thi <strong>__EVENT_NAME__</strong>.</p>
-                                                              <p style=\"margin:0 0 16px 0;\">Chọn một trong các tùy chọn bên dưới để xác nhận hoặc từ chối lời mời.</p>
-                                                        </td>
-                                                    </tr>
-
-                                                    <tr>
-                                                        <td style=\"padding:0 28px 24px 28px;\">
-                                                            <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">
-                                                                <tr>
-                                                                    <td style=\"padding-right:12px;\">
-                                                                            <a href="__ACCEPT_URL__" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:10px;">Đồng ý tham gia</a>
-                                                                    </td>
-                                                                    <td>
-                                                                            <a href="__DECLINE_URL__" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:10px;">Từ chối lời mời</a>
-                                                                    </td>
-                                                                </tr>
-                                                            </table>
-                                                        </td>
-                                                    </tr>
-
-                                                    <tr>
-                                                        <td style=\"padding:0 28px 24px 28px;font-size:13px;line-height:1.7;color:#4b5563;\">
-                                                              <p style=\"margin:0 0 10px 0;\">Nếu các nút trên không hoạt động, bạn có thể sao chép liên kết sau:</p>
-                                                              <p style=\"margin:0 0 6px 0;word-break:break-all;\"><strong>Đồng ý:</strong> <a href=\"__ACCEPT_URL__\">__ACCEPT_URL__</a></p>
-                                                              <p style=\"margin:0;word-break:break-all;\"><strong>Từ chối:</strong> <a href=\"__DECLINE_URL__\">__DECLINE_URL__</a></p>
-                                                        </td>
-                                                    </tr>
-
-                                                    <tr>
-                                                        <td style=\"padding:16px 28px 22px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;color:#6b7280;font-size:12px;line-height:1.6;\">
-                                                              Đây là email tự động. Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.
-                                                        </td>
-                                                    </tr>
-                                                </table>
-                                            </td>
-                                        </tr>
-                                    </table>
-                                </body>
-                                </html>
-                                """
-                .replace("__TEAM_NAME__", escapeHtml(teamName))
-                .replace("__EVENT_NAME__", escapeHtml(eventName))
-                .replace("__ACCEPT_URL__", escapeHtml(acceptUrl))
-                .replace("__DECLINE_URL__", escapeHtml(declineUrl));
-    }
-
-    private String escapeHtml(String value) {
-        if (value == null) {
-            return "";
+    private String rootCauseMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
         }
-        return value
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&#39;");
+        String message = current.getMessage();
+        return message == null || message.isBlank()
+                ? current.getClass().getName()
+                : current.getClass().getName() + ": " + message;
     }
-
-                    private String rootCauseMessage(Throwable throwable) {
-                        Throwable current = throwable;
-                        while (current.getCause() != null && current.getCause() != current) {
-                            current = current.getCause();
-                        }
-                        String message = current.getMessage();
-                        return message == null || message.isBlank() ? current.getClass().getName() : current.getClass().getName() + ": " + message;
-                    }
 }
