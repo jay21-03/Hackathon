@@ -21,4 +21,8 @@ public interface TeamRepositoryEntityRepository extends JpaRepository<TeamReposi
     List<TeamRepository> findByRoundIdAndAccessStatus(Long roundId, RepositoryAccessStatus accessStatus);
 
     List<TeamRepository> findByTeamIdInOrderByTeamIdAscProblemIdAsc(List<Long> teamIds);
+
+    Optional<TeamRepository> findByTeamId(Long teamId);
+
+    List<TeamRepository> findByTeamIdIn(List<Long> teamIds);
 }
