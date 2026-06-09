@@ -16,8 +16,7 @@ import {
   type AnnouncementAudience,
   type AnnouncementItem
 } from "../../services/announcementService";
-import { getApiErrorMessage } from "../../utils/apiError";
-import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
+import { resolveApiError } from "../../utils/apiError";
 
 function formatWhen(iso?: string | null) {
   if (!iso) return "—";
@@ -83,7 +82,7 @@ export function AnnouncementPage() {
         notify("Đã lưu nháp — chưa gửi tới người nhận.", "success");
       }
     } catch (err) {
-      notify(mapOrganizerErrorMessage(getApiErrorMessage(err, "Gửi thông báo thất bại.")), "danger");
+      notify(resolveApiError(err, "Gửi thông báo thất bại."), "danger");
     } finally {
       setSubmitting(false);
     }
