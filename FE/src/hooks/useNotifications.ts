@@ -20,6 +20,6 @@ export function useUnreadNotificationCount() {
     queryKey: queryKeys.notifications.unreadCount(),
     queryFn: fetchUnreadNotificationCount,
     enabled: enableNotifications,
-    refetchInterval: 60_000
+    refetchInterval: 30_000
   });
 }

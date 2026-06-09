@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { setStoredActiveEventId } from "../../hooks/useActiveEvent";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Button } from "../../components/ui/Button";
@@ -22,7 +23,7 @@ const TYPE_FILTER_OPTIONS: { value: "" | NotificationType; label: string }[] = [
   { value: "ANNOUNCEMENT", label: "Thông báo chung" },
   { value: "TEAM_INVITE", label: "Lời mời đội" },
   { value: "TEAM_STATUS", label: "Trạng thái đội" },
-  { value: "SLOT_ASSIGNED", label: "Phân slot" },
+  { value: "SLOT_ASSIGNED", label: "Gán đội vào bảng" },
   { value: "SUBMISSION", label: "Bài nộp" },
   { value: "PROBLEM_RELEASED", label: "Công bố đề" },
   { value: "RANKING_PUBLISHED", label: "Kết quả xếp hạng" },
@@ -55,6 +56,7 @@ export function NotificationsPage({
   title?: string;
   description?: string;
 }) {
+  const navigate = useNavigate();
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
@@ -184,16 +186,18 @@ export function NotificationsPage({
                     <p className="mt-sm font-body-md text-on-surface-variant">{item.content}</p>
                     <p className="mt-sm font-label-sm text-outline">{formatWhen(item.createdAt)}</p>
                     {deepLink ? (
-                      <Link
-                        to={deepLink}
+                      <button
+                        type="button"
                         className="mt-sm inline-flex items-center gap-1 font-label-md text-primary hover:underline"
                         onClick={() => {
+                          if (item.eventId) setStoredActiveEventId(item.eventId);
                           if (!item.read) void handleMarkRead(item);
+                          navigate(deepLink);
                         }}
                       >
                         Xem chi tiết
                         <Icon name="arrow_forward" className="text-[16px]" />
-                      </Link>
+                      </button>
                     ) : null}
                   </div>
                   {!item.read ? (
