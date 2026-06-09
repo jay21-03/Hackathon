@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.authprofile.entity.User;
+import com.seal.hackathon.authprofile.entity.UserRole;
 import com.seal.hackathon.authprofile.repository.UserRepository;
+import com.seal.hackathon.authprofile.repository.UserRoleRepository;
+import com.seal.hackathon.common.enums.SystemRole;
 import com.seal.hackathon.common.enums.BoardStatus;
 import com.seal.hackathon.common.enums.EventStatus;
 import com.seal.hackathon.common.enums.RoundStatus;
@@ -27,6 +30,7 @@ import com.seal.hackathon.registration.entity.TeamMember;
 import com.seal.hackathon.registration.repository.TeamMemberRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.authprofile.security.JwtService;
+import com.seal.hackathon.support.IntegrationTestDataCleaner;
 import com.seal.hackathon.support.IntegrationTestConfig;
 import java.time.OffsetDateTime;
 import java.time.LocalDate;
@@ -80,6 +84,9 @@ class SubmissionIntegrationTest {
     UserRepository userRepository;
 
     @Autowired
+    UserRoleRepository userRoleRepository;
+
+    @Autowired
     EventRepository eventRepository;
 
     @Autowired
@@ -103,6 +110,9 @@ class SubmissionIntegrationTest {
     @Autowired
     TeamRepositoryEntityRepository teamRepositoryEntityRepository;
 
+    @Autowired
+    IntegrationTestDataCleaner dataCleaner;
+
     User participant;
     Event event;
     Team team;
@@ -116,7 +126,9 @@ class SubmissionIntegrationTest {
         teamRepository.deleteAll();
         boardRepository.deleteAll();
         roundRepository.deleteAll();
+        dataCleaner.clearEventMessaging();
         eventRepository.deleteAll();
+        userRoleRepository.deleteAll();
         userRepository.deleteAll();
 
         participant = userRepository.save(User.builder()
@@ -125,6 +137,11 @@ class SubmissionIntegrationTest {
                 .status(UserStatus.ACTIVE)
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
+                .build());
+        userRoleRepository.save(UserRole.builder()
+                .userId(participant.getId())
+                .role(SystemRole.ORGANIZER)
+                .createdAt(OffsetDateTime.now())
                 .build());
 
         event = eventRepository.save(Event.builder()
@@ -248,7 +265,7 @@ class SubmissionIntegrationTest {
                 .andExpect(MockMvcResultMatchers.status().isConflict())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("SUBMISSION_ALREADY_SUBMITTED"));
 
-        String orgJwt = jwtService.generateToken(participant, Set.of("ORGANIZER"));
+        String orgJwt = jwtService.generateToken(participant, Set.of("ORGANIZER", "PARTICIPANT"));
         mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/events/" + event.getId() + "/submissions")
                         .header("Authorization", "Bearer " + orgJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk())

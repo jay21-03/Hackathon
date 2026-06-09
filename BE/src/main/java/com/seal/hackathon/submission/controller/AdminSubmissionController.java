@@ -1,6 +1,7 @@
 package com.seal.hackathon.submission.controller;
 
 import com.seal.hackathon.common.response.ApiResponse;
+import com.seal.hackathon.common.response.PagedResult;
 import com.seal.hackathon.submission.dto.AdminTeamSubmissionResponse;
 import com.seal.hackathon.submission.dto.SubmissionResponse;
 import com.seal.hackathon.submission.service.SubmissionService;
@@ -22,10 +23,12 @@ public class AdminSubmissionController {
     private final SubmissionService submissionService;
 
     @GetMapping("/events/{eventId}/submissions")
-    public ApiResponse<List<AdminTeamSubmissionResponse>> listEventSubmissions(
+    public ApiResponse<PagedResult<AdminTeamSubmissionResponse>> listEventSubmissions(
             @PathVariable Long eventId,
-            @RequestParam(required = false) Long boardId) {
-        return ApiResponse.ok(submissionService.listSubmissionsForOrganizer(eventId, boardId));
+            @RequestParam(required = false) Long boardId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return ApiResponse.ok(submissionService.listSubmissionsPaged(eventId, boardId, page, size));
     }
 
     @GetMapping("/teams/{teamId}/submission")

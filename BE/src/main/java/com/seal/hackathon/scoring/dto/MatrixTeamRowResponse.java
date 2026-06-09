@@ -10,6 +10,7 @@ import lombok.Data;
 public class MatrixTeamRowResponse {
     private Long teamId;
     private String teamName;
+    private String repositoryUrl;
     private Integer slotNumber;
     private Long sheetId;
     private ScoreSheetStatus status;

@@ -1,11 +1,13 @@
 package com.seal.hackathon.scoring.service;
 
+import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.assignment.entity.JudgeAssignment;
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.authprofile.entity.User;
 import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
+import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.enums.ScoreSheetStatus;
 import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.contest.entity.Board;
@@ -17,6 +19,7 @@ import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.registration.entity.Team;
+import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.scoring.dto.BoardBriefDto;
 import com.seal.hackathon.scoring.dto.ComputedScoreDto;
@@ -84,19 +87,22 @@ public class ScoringService {
     private final EventRepository eventRepository;
     private final JudgeAssignmentRepository judgeAssignmentRepository;
     private final TeamRepository teamRepository;
+    private final TeamRepositoryEntityRepository teamRepositoryEntityRepository;
     private final UserRepository userRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final NotificationService notificationService;
+    private final OrganizerAuthorizationService organizerAuthorizationService;
 
     @Transactional(readOnly = true)
     public RubricResponse getRubric(Long roundId) {
-        assertOrganizerOwnsRound(roundId);
+        organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
         List<ScoreCriteria> criteria = scoreCriteriaRepository.findByRoundIdOrderBySortOrderAsc(roundId);
         return buildRubricResponse(roundId, criteria);
     }
 
     @Transactional
     public RubricResponse saveRubric(Long roundId, SaveRubricRequest request) {
-        assertOrganizerOwnsRound(roundId);
+        organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
 
         if (isRubricLocked(roundId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "RUBRIC_LOCKED");
@@ -258,7 +264,7 @@ public class ScoringService {
     @Transactional(readOnly = true)
     public ScoreProgressResponse getScoreProgress(Long boardId) {
         BoardContext ctx = loadBoardContext(boardId);
-        assertOrganizerOwnsEvent(requireOrganizer(), ctx.round.getEventId());
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(ctx.round.getEventId());
         List<BoardSlot> slots = sortedSlotsWithTeams(boardId);
         List<JudgeAssignment> judgeAssignments = judgeAssignmentRepository.findByBoardId(boardId);
         List<ScoreSheet> sheets = scoreSheetRepository.findByBoardId(boardId);
@@ -340,6 +346,20 @@ public class ScoringService {
                 .judges(judgeProgress)
                 .teams(teamProgress)
                 .build();
+    }
+
+    @Transactional
+    public void sendScoringReminder(Long boardId) {
+        ScoreProgressResponse progress = getScoreProgress(boardId);
+        int submitted = progress.getSummary().getSubmittedSheets();
+        int expected = progress.getSummary().getExpectedSheets();
+        if (expected == 0 || submitted >= expected) {
+            return;
+        }
+        BoardContext ctx = loadBoardContext(boardId);
+        Event event = eventRepository.findById(ctx.round.getEventId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        notificationService.notifyOrganizerScoringIncomplete(event, ctx.board, submitted, expected);
     }
 
     private void submitSheetInternal(ScoreSheet sheet, List<ScoreCriteria> criteria) {
@@ -439,6 +459,7 @@ public class ScoringService {
         return MatrixTeamRowResponse.builder()
                 .teamId(sheet.getTeamId())
                 .teamName(teamName)
+                .repositoryUrl(repositoryUrlForTeam(sheet.getTeamId()))
                 .slotNumber(slotNumber)
                 .sheetId(sheet.getId())
                 .status(sheet.getStatus())
@@ -691,28 +712,6 @@ public class ScoringService {
         return new BoardContext(board, round, assignment);
     }
 
-    private void assertOrganizerOwnsRound(Long roundId) {
-        Round round = roundRepository.findById(roundId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ROUND_NOT_FOUND"));
-        assertOrganizerOwnsEvent(requireOrganizer(), round.getEventId());
-    }
-
-    private void assertOrganizerOwnsEvent(CurrentUserPrincipal principal, Long eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND"));
-        if (event.getCreatedBy() == null || !event.getCreatedBy().equals(principal.getUserId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "EVENT_ACCESS_DENIED");
-        }
-    }
-
-    private CurrentUserPrincipal requireOrganizer() {
-        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
-        if (principal.getRoles() == null || !principal.getRoles().contains("ORGANIZER")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ONLY_ORGANIZER");
-        }
-        return principal;
-    }
-
     private CurrentUserPrincipal requireJudge() {
         CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
         if (principal == null) {
@@ -750,6 +749,12 @@ public class ScoringService {
             return ids;
         }
         return List.of();
+    }
+
+    private String repositoryUrlForTeam(Long teamId) {
+        return teamRepositoryEntityRepository.findByTeamId(teamId)
+                .map(entity -> entity.getRepositoryUrl())
+                .orElse(null);
     }
 
     private record BoardContext(Board board, Round round, JudgeAssignment assignment) {}
