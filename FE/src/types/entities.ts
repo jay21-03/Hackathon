@@ -14,6 +14,8 @@ export interface EventListItem {
   endDate: string;
   registrationStartAt: string;
   registrationEndAt: string;
+  minTeamSize?: number;
+  maxTeamSize?: number;
   status: string;
 }
 

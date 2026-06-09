@@ -15,6 +15,7 @@ export type WorkflowStatus =
   | "SUBMITTED"
   | "PUBLISHED"
   | "EXPIRED"
+  | "ACCEPTED"
   | "OPEN"
   | "UPCOMING"
   | "ACTIVE"
@@ -38,6 +39,7 @@ const statusLabels: Record<WorkflowStatus, string> = {
   SUBMITTED: "Đã nộp",
   PUBLISHED: "Đã công bố",
   EXPIRED: "Hết hạn",
+  ACCEPTED: "Đã chấp nhận",
   OPEN: "Đang mở đăng ký",
   UPCOMING: "Sắp diễn ra",
   ACTIVE: "Đang diễn ra",
@@ -62,6 +64,7 @@ const statusTones: Record<WorkflowStatus, BadgeTone> = {
   SUBMITTED: "success",
   PUBLISHED: "active",
   EXPIRED: "neutral",
+  ACCEPTED: "success",
   OPEN: "active",
   UPCOMING: "success",
   ACTIVE: "active",

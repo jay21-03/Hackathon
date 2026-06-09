@@ -6,9 +6,10 @@ interface FeatureUnavailableProps {
   eyebrow: string;
   title: string;
   description: string;
+  homeTo?: string;
 }
 
-export function FeatureUnavailable({ eyebrow, title, description }: FeatureUnavailableProps) {
+export function FeatureUnavailable({ eyebrow, title, description, homeTo = "/organizer/dashboard" }: FeatureUnavailableProps) {
   return (
     <div className="space-y-lg">
       <PageHeader eyebrow={eyebrow} title={title} description={description} />
@@ -17,7 +18,7 @@ export function FeatureUnavailable({ eyebrow, title, description }: FeatureUnava
         title="Chưa khả dụng"
         description="Chức năng này sẽ được bổ sung trong bản cập nhật sau."
         action={
-          <ButtonLink to="/organizer/dashboard" variant="secondary" className="mt-md">
+          <ButtonLink to={homeTo} variant="secondary" className="mt-md">
             Về tổng quan
           </ButtonLink>
         }

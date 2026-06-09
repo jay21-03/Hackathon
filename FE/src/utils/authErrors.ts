@@ -11,7 +11,7 @@ const authErrorMap: Record<string, string> = {
   INVALID_RESET_TOKEN: "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã được sử dụng.",
   RESET_TOKEN_EXPIRED: "Liên kết đặt lại mật khẩu đã hết hạn — yêu cầu liên kết mới.",
   "GOOGLE_CLIENT_ID is not configured":
-    "Backend chưa cấu hình GOOGLE_CLIENT_ID. Khởi động lại BE bằng BE/run-dev.ps1.",
+    "Đăng nhập Google chưa sẵn sàng. Liên hệ quản trị hệ thống.",
   "Invalid Google ID token":
     "Không xác thực được Google. Kiểm tra Authorized JavaScript origins trong Google Cloud Console."
 };

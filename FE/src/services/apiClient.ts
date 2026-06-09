@@ -1,6 +1,9 @@
 import axios from "axios";
+import { setAuthenticated } from "../auth/authSession";
 import { getAccessToken } from "../auth/tokenStorage";
 import { getApiErrorMessage } from "../utils/apiError";
+
+export const AUTH_UNAUTHORIZED_EVENT = "seal-auth-unauthorized";
 
 const baseURL =
   import.meta.env.VITE_API_BASE_URL?.trim() || "/api";
@@ -37,7 +40,11 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && typeof window !== "undefined") {
       const path = window.location.pathname;
       if (shouldRedirectOn401(path)) {
-        window.location.assign("/login");
+        setAuthenticated(false);
+        window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+        if (!path.startsWith("/login")) {
+          window.location.assign(`/login?next=${encodeURIComponent(path)}`);
+        }
       }
     }
     const wrapped = error instanceof Error ? error : new Error(getApiErrorMessage(error));

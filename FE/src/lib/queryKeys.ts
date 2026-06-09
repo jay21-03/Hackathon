@@ -32,7 +32,9 @@ export const queryKeys = {
   },
   boards: {
     all: ["boards"] as const,
-    byEvent: (eventId: number | null) => [...queryKeys.boards.all, "event", eventId] as const
+    byEvent: (eventId: number | null) => [...queryKeys.boards.all, "event", eventId] as const,
+    roundDetail: (eventId: number | null, roundId: number | null) =>
+      [...queryKeys.boards.all, "round-detail", eventId, roundId] as const
   },
   scoring: {
     all: ["scoring"] as const,
@@ -41,6 +43,7 @@ export const queryKeys = {
     matrix: (boardId: number | null) => [...queryKeys.scoring.all, "matrix", boardId] as const
   },
   assignments: {
+    all: ["assignments"] as const,
     judge: () => ["assignments", "judge"] as const
   },
   users: {
@@ -61,5 +64,36 @@ export const queryKeys = {
   announcements: {
     all: ["announcements"] as const,
     byEvent: (eventId: number | null) => [...queryKeys.announcements.all, "event", eventId] as const
+  },
+  invitations: {
+    all: ["invitations"] as const,
+    staff: (
+      eventId: number | null,
+      boardId: number | null,
+      role: string,
+      status: string,
+      email: string,
+      page: number,
+      size: number
+    ) =>
+      [
+        ...queryKeys.invitations.all,
+        "staff",
+        eventId,
+        boardId,
+        role || "all",
+        status || "all",
+        email || "",
+        page,
+        size
+      ] as const,
+    team: (
+      eventId: number | null,
+      status: string,
+      email: string,
+      page: number,
+      size: number
+    ) =>
+      [...queryKeys.invitations.all, "team", eventId, status || "all", email || "", page, size] as const
   }
 };

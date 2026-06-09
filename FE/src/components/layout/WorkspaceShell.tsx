@@ -5,6 +5,7 @@ import { getVisibleNavItems, isNotificationsNavItem, navItemUsesEnd, type NavIte
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useUnreadNotificationCount } from "../../hooks/useNotifications";
 import { RoleSwitcher } from "../auth/RoleSwitcher";
+import { WorkspaceErrorBoundary } from "../feedback/WorkspaceErrorBoundary";
 import { useToast } from "../feedback/ToastProvider";
 import { ButtonLink, buttonClassName } from "../ui/Button";
 import { ThemeToggle } from "../ui/ThemeToggle";
@@ -132,9 +133,20 @@ export function WorkspaceShell({
     </>
   );
 
+  const errorHome =
+    location.pathname.startsWith("/organizer")
+      ? "/organizer/dashboard"
+      : location.pathname.startsWith("/judge")
+        ? "/judge/dashboard"
+        : location.pathname.startsWith("/mentor")
+          ? "/mentor/dashboard"
+          : "/events";
+
   return (
     <ShellLayout sidebar={sidebar} drawerTitle={title}>
-      <Outlet />
+      <WorkspaceErrorBoundary homeTo={errorHome}>
+        <Outlet />
+      </WorkspaceErrorBoundary>
     </ShellLayout>
   );
 }

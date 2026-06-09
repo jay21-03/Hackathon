@@ -14,9 +14,10 @@ export interface NextStepAction {
 interface NextStepPanelProps {
   action: NextStepAction;
   variant?: "primary" | "success";
+  onHrefClick?: (href: string) => void;
 }
 
-export function NextStepPanel({ action, variant = "primary" }: NextStepPanelProps) {
+export function NextStepPanel({ action, variant = "primary", onHrefClick }: NextStepPanelProps) {
   const tone =
     variant === "success"
       ? "border-secondary/40 bg-secondary-container/25"
@@ -45,6 +46,10 @@ export function NextStepPanel({ action, variant = "primary" }: NextStepPanelProp
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-label-md text-on-primary"
             onClick={(event) => {
               event.preventDefault();
+              if (onHrefClick) {
+                onHrefClick(action.href!);
+                return;
+              }
               document
                 .querySelector(action.href!)
                 ?.scrollIntoView({ behavior: "smooth", block: "start" });

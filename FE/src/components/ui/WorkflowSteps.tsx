@@ -36,9 +36,12 @@ interface WorkflowStepsProps {
   title: string;
   description: string;
   steps: WorkflowStep[];
+  /** Khi set — chọn bước thay vì scroll; ô đang chọn được highlight */
+  activeHref?: string;
+  onStepSelect?: (href: string, step: WorkflowStep) => void;
 }
 
-export function WorkflowSteps({ title, description, steps }: WorkflowStepsProps) {
+export function WorkflowSteps({ title, description, steps, activeHref, onStepSelect }: WorkflowStepsProps) {
   return (
     <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
       <div className="flex flex-col gap-xs">
@@ -64,13 +67,29 @@ export function WorkflowSteps({ title, description, steps }: WorkflowStepsProps)
             </>
           );
 
-          const className =
-            "min-h-[124px] rounded-lg border border-outline-variant bg-surface-container-low p-md text-left transition-colors hover:bg-surface-variant";
+          const isSelected = Boolean(activeHref && step.href && activeHref === step.href);
+          const className = [
+            "min-h-[124px] rounded-lg border bg-surface-container-low p-md text-left transition-colors hover:bg-surface-variant",
+            isSelected ? "border-primary ring-2 ring-primary/30" : "border-outline-variant",
+            step.state === "blocked" ? "cursor-not-allowed opacity-60" : ""
+          ]
+            .filter(Boolean)
+            .join(" ");
 
           return step.to ? (
             <Link key={`${step.label}-${index}`} to={step.to} className={className}>
               {content}
             </Link>
+          ) : step.href && onStepSelect ? (
+            <button
+              key={`${step.label}-${index}`}
+              type="button"
+              disabled={step.state === "blocked"}
+              className={className}
+              onClick={() => onStepSelect(step.href!, step)}
+            >
+              {content}
+            </button>
           ) : step.href ? (
             <a key={`${step.label}-${index}`} href={step.href} className={className}>
               {content}

@@ -19,21 +19,17 @@ export const enableNotifications = import.meta.env.VITE_ENABLE_NOTIFICATIONS !==
 /** Thông báo chung BTC → participant/mentor/judge — tắt bằng VITE_ENABLE_ANNOUNCEMENTS=false */
 export const enableAnnouncements = import.meta.env.VITE_ENABLE_ANNOUNCEMENTS !== "false";
 
-export const enableStaffInvitations = import.meta.env.VITE_ENABLE_STAFF_INVITATIONS === "true";
+/** Lời mời mentor/GK — tắt bằng VITE_ENABLE_STAFF_INVITATIONS=false */
+export const enableStaffInvitations = import.meta.env.VITE_ENABLE_STAFF_INVITATIONS !== "false";
 
 /** Route BTC phase 7+ (không có trong sidebar khi enablePhase7 = false) */
 export const organizerRankingPaths = ["ranking", "publish-results", "export-success"] as const;
 
 export const organizerPhase7Paths = [
-  "rubric",
   "check-ins",
-  "scoring",
   "finals",
-  "disqualifications",
   "ai-auditor",
-  "ai-insights",
-  "announcements",
-  "notifications"
+  "ai-insights"
 ] as const;
 
 export const participantPhase7Paths = ["check-in", "submission", "ai-review", "results"] as const;
