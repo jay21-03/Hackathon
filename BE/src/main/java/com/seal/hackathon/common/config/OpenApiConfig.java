@@ -23,6 +23,6 @@ public class OpenApiConfig {
                 .info(new Info()
                 .title("SEAL Hackathon Management API")
                 .version("v0.1.0")
-                .description("Skeleton API for MVP setup"));
+                .description("SEAL Hackathon Management API — auth, registration, scoring, ranking, academic terms, phase 7."));
     }
 }
