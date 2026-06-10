@@ -76,13 +76,16 @@ public class StaffInvitationService {
     private String tokenSecret;
 
     @Transactional
-    public List<StaffInvitationResponse> listPending(Long eventId, Long boardId, SystemRole role) {
-        return listFiltered(eventId, boardId, role, StaffInvitationStatus.INVITED, null, 0, 200).getItems();
+    public List<StaffInvitationResponse> listPending(
+            Long eventId, Long roundId, Long boardId, SystemRole role) {
+        return listFiltered(eventId, roundId, boardId, role, StaffInvitationStatus.INVITED, null, 0, 200)
+                .getItems();
     }
 
     @Transactional
     public PagedResult<StaffInvitationResponse> listFiltered(
             Long eventId,
+            Long roundId,
             Long boardId,
             SystemRole role,
             StaffInvitationStatus status,
@@ -90,7 +93,7 @@ public class StaffInvitationService {
             int page,
             int size) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
-        List<Long> boardIds = resolveBoardIds(eventId, boardId);
+        List<Long> boardIds = resolveBoardIds(eventId, roundId, boardId);
         int resolvedSize = Math.min(Math.max(size, 1), 200);
         int resolvedPage = Math.max(page, 0);
         if (boardIds.isEmpty()) {
@@ -100,8 +103,10 @@ public class StaffInvitationService {
         String emailFilter = StringUtils.hasText(email) ? email.trim() : null;
         PageRequest pageable = PageRequest.of(
                 resolvedPage, resolvedSize, Sort.by(Sort.Direction.DESC, "invitedAt"));
-        Page<StaffInvitation> invitationPage = staffInvitationRepository.findFiltered(
-                boardIds, status, role, emailFilter, pageable);
+        Page<StaffInvitation> invitationPage = emailFilter == null
+                ? staffInvitationRepository.findFiltered(boardIds, status, role, pageable)
+                : staffInvitationRepository.findFilteredByEmail(
+                        boardIds, status, role, emailFilter, pageable);
         Map<Long, Board> boardsById = boardRepository.findAllById(boardIds).stream()
                 .collect(Collectors.toMap(Board::getId, b -> b));
         List<Long> invitationIds = invitationPage.getContent().stream().map(StaffInvitation::getId).toList();
@@ -121,8 +126,8 @@ public class StaffInvitationService {
 
     @Transactional
     public PagedResult<StaffInvitationResponse> listPendingPaged(
-            Long eventId, Long boardId, SystemRole role, int page, int size) {
-        return listFiltered(eventId, boardId, role, StaffInvitationStatus.INVITED, null, page, size);
+            Long eventId, Long roundId, Long boardId, SystemRole role, int page, int size) {
+        return listFiltered(eventId, roundId, boardId, role, StaffInvitationStatus.INVITED, null, page, size);
     }
 
     @Transactional
@@ -364,17 +369,30 @@ public class StaffInvitationService {
         }
     }
 
-    private List<Long> resolveBoardIds(Long eventId, Long boardId) {
+    private List<Long> resolveBoardIds(Long eventId, Long roundId, Long boardId) {
         if (boardId != null) {
             Board board = boardRepository.findById(boardId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
             if (!resolveEventId(board).equals(eventId)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Board does not belong to event");
             }
+            if (roundId != null && !roundId.equals(board.getRoundId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Board does not belong to round");
+            }
             return List.of(boardId);
         }
+        List<Round> rounds;
+        if (roundId != null) {
+            Round round = organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
+            if (!round.getEventId().equals(eventId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Round does not belong to event");
+            }
+            rounds = List.of(round);
+        } else {
+            rounds = roundRepository.findByEventId(eventId);
+        }
         List<Long> boardIds = new ArrayList<>();
-        for (Round round : roundRepository.findByEventId(eventId)) {
+        for (Round round : rounds) {
             for (Board board : boardRepository.findByRoundId(round.getId())) {
                 boardIds.add(board.getId());
             }

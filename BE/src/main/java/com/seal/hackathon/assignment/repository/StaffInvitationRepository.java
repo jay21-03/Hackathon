@@ -69,29 +69,29 @@ public interface StaffInvitationRepository extends JpaRepository<StaffInvitation
 
 
     @Query("""
-
             SELECT si FROM StaffInvitation si
-
             WHERE si.boardId IN :boardIds
-
               AND (:status IS NULL OR si.status = :status)
-
               AND (:role IS NULL OR si.role = :role)
-
-              AND (:email IS NULL OR LOWER(si.email) LIKE LOWER(CONCAT('%', :email, '%')))
-
             """)
-
     Page<StaffInvitation> findFiltered(
-
             @Param("boardIds") List<Long> boardIds,
-
             @Param("status") StaffInvitationStatus status,
-
             @Param("role") SystemRole role,
+            Pageable pageable);
 
+    @Query("""
+            SELECT si FROM StaffInvitation si
+            WHERE si.boardId IN :boardIds
+              AND (:status IS NULL OR si.status = :status)
+              AND (:role IS NULL OR si.role = :role)
+              AND LOWER(si.email) LIKE LOWER(CONCAT('%', :email, '%'))
+            """)
+    Page<StaffInvitation> findFilteredByEmail(
+            @Param("boardIds") List<Long> boardIds,
+            @Param("status") StaffInvitationStatus status,
+            @Param("role") SystemRole role,
             @Param("email") String email,
-
             Pageable pageable);
 
 

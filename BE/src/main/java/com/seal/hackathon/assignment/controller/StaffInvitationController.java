@@ -38,6 +38,7 @@ public class StaffInvitationController {
     @SecurityRequirement(name = "bearerAuth")
     public ApiResponse<?> listPending(
             @PathVariable Long eventId,
+            @RequestParam(required = false) Long roundId,
             @RequestParam(required = false) Long boardId,
             @RequestParam(required = false) SystemRole role,
             @RequestParam(required = false) StaffInvitationStatus status,
@@ -48,9 +49,9 @@ public class StaffInvitationController {
             int resolvedPage = page != null ? page : 0;
             int resolvedSize = size != null ? size : 25;
             return ApiResponse.ok(staffInvitationService.listFiltered(
-                    eventId, boardId, role, status, email, resolvedPage, resolvedSize));
+                    eventId, roundId, boardId, role, status, email, resolvedPage, resolvedSize));
         }
-        return ApiResponse.ok(staffInvitationService.listPending(eventId, boardId, role));
+        return ApiResponse.ok(staffInvitationService.listPending(eventId, roundId, boardId, role));
     }
 
     @PostMapping("/boards/{boardId}/staff-invitations")

@@ -48,6 +48,8 @@ public class BoardAssignmentService {
     private final CurrentUserProvider currentUserProvider;
     private final OrganizerAuthorizationService organizerAuthorizationService;
     private final ScoreSheetRepository scoreSheetRepository;
+    private final JudgeBoardReadinessService judgeBoardReadinessService;
+    private final BoardScoringReadinessService boardScoringReadinessService;
 
     @Transactional
     public AssignmentResponse assignMentor(Long boardId, CreateAssignmentRequest request) {
@@ -94,7 +96,7 @@ public class BoardAssignmentService {
 
         if (judgeAssignmentRepository.existsByBoardIdAndJudgeId(boardId, judgeId)) {
             JudgeAssignment existing = judgeAssignmentRepository.findByBoardIdAndJudgeId(boardId, judgeId).get();
-            return toResponse(existing);
+            return toJudgeResponse(existing);
         }
 
         OffsetDateTime now = OffsetDateTime.now();
@@ -105,7 +107,8 @@ public class BoardAssignmentService {
                 .createdBy(principal.getUserId())
                 .build();
         JudgeAssignment saved = judgeAssignmentRepository.save(ja);
-        return toResponse(saved);
+        boardScoringReadinessService.notifyReadyJudgesForBoard(boardId);
+        return toJudgeResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -129,7 +132,9 @@ public class BoardAssignmentService {
     @Transactional(readOnly = true)
     public List<AssignmentResponse> listJudgeAssignmentsForCurrentUser() {
         CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
-        return judgeAssignmentRepository.findByJudgeId(principal.getUserId()).stream().map(this::toResponse).collect(Collectors.toList());
+        return judgeAssignmentRepository.findByJudgeId(principal.getUserId()).stream()
+                .map(this::toJudgeResponse)
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
@@ -185,6 +190,7 @@ public class BoardAssignmentService {
                         .createdAt(now)
                         .createdBy(createdBy)
                         .build());
+                boardScoringReadinessService.notifyReadyJudgesForBoard(boardId);
             }
             return;
         }
@@ -213,13 +219,18 @@ public class BoardAssignmentService {
     }
 
     private AssignmentResponse toResponse(JudgeAssignment j) {
-        return enrichBoardContext(AssignmentResponse.builder()
+        return toJudgeResponse(j);
+    }
+
+    private AssignmentResponse toJudgeResponse(JudgeAssignment j) {
+        AssignmentResponse response = enrichBoardContext(AssignmentResponse.builder()
                 .id(j.getId())
                 .boardId(j.getBoardId())
                 .assigneeId(j.getJudgeId())
                 .createdAt(j.getCreatedAt())
                 .createdBy(j.getCreatedBy())
                 .build());
+        return judgeBoardReadinessService.enrichJudgeAssignment(j, response);
     }
 
     private AssignmentResponse enrichBoardContext(AssignmentResponse response) {

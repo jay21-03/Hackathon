@@ -7,7 +7,9 @@ import com.seal.hackathon.authprofile.entity.UserRole;
 import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.authprofile.repository.UserRoleRepository;
 import com.seal.hackathon.authprofile.security.JwtService;
+import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.support.IntegrationTestConfig;
+import com.seal.hackathon.support.IntegrationTestFixtures;
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.assignment.repository.MentorAssignmentRepository;
 import com.seal.hackathon.contest.entity.Board;
@@ -78,6 +80,9 @@ public class AssignmentIntegrationTest {
     EventRepository eventRepository;
 
     @Autowired
+    AcademicTermRepository academicTermRepository;
+
+    @Autowired
     RoundRepository roundRepository;
 
     @Autowired
@@ -146,6 +151,7 @@ public class AssignmentIntegrationTest {
                 .minTeamSize(1)
                 .maxTeamSize(5)
                 .status(com.seal.hackathon.common.enums.EventStatus.DRAFT)
+                .academicTermId(IntegrationTestFixtures.defaultAcademicTermId(academicTermRepository))
                 .createdBy(organizer.getId())
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
