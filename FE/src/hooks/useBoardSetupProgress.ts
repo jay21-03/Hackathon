@@ -57,7 +57,7 @@ export function useBoardSetupProgress(
         label: "Tiếp theo",
         detail: "Đề thi & phân công",
         state: hasAssignments ? "next" : "blocked",
-        to: hasAssignments ? "/organizer/problems" : undefined
+        to: hasAssignments ? "/organizer/board-ops" : undefined
       }
     ];
 
@@ -93,8 +93,8 @@ export function useBoardSetupProgress(
       nextAction = {
         title: "Hoàn tất bảng thi — sang bước tiếp",
         description: "Cấu hình đề thi theo bảng, sau đó gán mentor và giám khảo.",
-        to: "/organizer/problems",
-        cta: "Cấu hình đề thi"
+        to: "/organizer/board-ops",
+        cta: "Vận hành bảng"
       };
       completedMacroIndex = 4;
     }

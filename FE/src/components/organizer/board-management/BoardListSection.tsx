@@ -16,6 +16,8 @@ export interface BoardListSectionProps {
   boardEdits: Record<number, BoardEditState>;
   boardName: string;
   boardOrder: number;
+  createBoardFieldErrors: Record<string, string>;
+  boardFieldErrors: Record<number, Record<string, string>>;
   busy: boolean;
   selectedRoundId: number | null;
   onBoardNameChange: (value: string) => void;
@@ -25,6 +27,8 @@ export interface BoardListSectionProps {
   ) => void;
   onCreateBoard: () => void;
   onSaveBoard: (boardId: number) => void;
+  onDeleteBoard: (boardId: number) => void;
+  onClearBoardFieldError: (boardId: number, field: string) => void;
 }
 
 export function BoardListSection({
@@ -33,13 +37,17 @@ export function BoardListSection({
   boardEdits,
   boardName,
   boardOrder,
+  createBoardFieldErrors,
+  boardFieldErrors,
   busy,
   selectedRoundId,
   onBoardNameChange,
   onBoardOrderChange,
   onBoardEditsChange,
   onCreateBoard,
-  onSaveBoard
+  onSaveBoard,
+  onDeleteBoard,
+  onClearBoardFieldError
 }: BoardListSectionProps) {
   return (
     <section
@@ -54,21 +62,27 @@ export function BoardListSection({
         <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
           Tên bảng mới
           <input
-            className="form-input min-w-[200px]"
+            className={`form-input min-w-[200px]${createBoardFieldErrors.name ? " border-error" : ""}`}
             value={boardName}
             onChange={(e) => onBoardNameChange(e.target.value)}
             placeholder="Bảng A"
           />
+          {createBoardFieldErrors.name ? (
+            <span className="font-body-sm text-error">{createBoardFieldErrors.name}</span>
+          ) : null}
         </label>
         <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
           Thứ tự bảng
           <input
             type="number"
             min={1}
-            className="form-input w-24"
+            className={`form-input w-24${createBoardFieldErrors.boardOrder ? " border-error" : ""}`}
             value={boardOrder}
             onChange={(e) => onBoardOrderChange(Number(e.target.value))}
           />
+          {createBoardFieldErrors.boardOrder ? (
+            <span className="font-body-sm text-error">{createBoardFieldErrors.boardOrder}</span>
+          ) : null}
         </label>
         <Button type="button" variant="secondary" disabled={busy || !selectedRoundId} onClick={onCreateBoard}>
           Thêm bảng
@@ -84,6 +98,7 @@ export function BoardListSection({
               boardOrder: board.boardOrder,
               description: board.description ?? ""
             };
+            const fieldErrors = boardFieldErrors[board.id] ?? {};
             return (
               <article
                 key={board.id}
@@ -97,32 +112,40 @@ export function BoardListSection({
                   <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant sm:col-span-2">
                     Tên bảng
                     <input
-                      className="form-input"
+                      className={`form-input${fieldErrors.name ? " border-error" : ""}`}
                       value={edit.name}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        onClearBoardFieldError(board.id, "name");
                         onBoardEditsChange((current) => ({
                           ...current,
                           [board.id]: { ...edit, name: e.target.value }
-                        }))
-                      }
+                        }));
+                      }}
                     />
+                    {fieldErrors.name ? (
+                      <span className="font-body-sm text-error">{fieldErrors.name}</span>
+                    ) : null}
                   </label>
                   <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
                     Thứ tự
                     <input
                       type="number"
                       min={1}
-                      className="form-input"
+                      className={`form-input${fieldErrors.boardOrder ? " border-error" : ""}`}
                       value={edit.boardOrder}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        onClearBoardFieldError(board.id, "boardOrder");
                         onBoardEditsChange((current) => ({
                           ...current,
                           [board.id]: { ...edit, boardOrder: Number(e.target.value) }
-                        }))
-                      }
+                        }));
+                      }}
                     />
+                    {fieldErrors.boardOrder ? (
+                      <span className="font-body-sm text-error">{fieldErrors.boardOrder}</span>
+                    ) : null}
                   </label>
-                  <div className="flex items-end">
+                  <div className="flex flex-wrap items-end gap-sm">
                     <Button
                       type="button"
                       size="sm"
@@ -132,19 +155,32 @@ export function BoardListSection({
                     >
                       Lưu bảng
                     </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => onDeleteBoard(board.id)}
+                    >
+                      Xóa bảng
+                    </Button>
                   </div>
                   <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant sm:col-span-2">
                     Mô tả
                     <input
-                      className="form-input"
+                      className={`form-input${fieldErrors.description ? " border-error" : ""}`}
                       value={edit.description}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        onClearBoardFieldError(board.id, "description");
                         onBoardEditsChange((current) => ({
                           ...current,
                           [board.id]: { ...edit, description: e.target.value }
-                        }))
-                      }
+                        }));
+                      }}
                     />
+                    {fieldErrors.description ? (
+                      <span className="font-body-sm text-error">{fieldErrors.description}</span>
+                    ) : null}
                   </label>
                 </div>
               </article>

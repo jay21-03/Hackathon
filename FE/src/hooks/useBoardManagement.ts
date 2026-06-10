@@ -11,6 +11,7 @@ import {
 import { fetchEventDetail } from "../services/eventsApi";
 import { fetchEventTeams, type TeamDetailResponse } from "../services/registrationService";
 import { resolveApiError } from "../utils/apiError";
+import { resolveDefaultRoundId } from "../utils/pickActiveRound";
 
 /** State + React Query loaders cho trang Bảng thi — handlers UI vẫn ở page. */
 export function useBoardManagement(eventId: number | null) {
@@ -69,9 +70,7 @@ export function useBoardManagement(eventId: number | null) {
       setSelectedRoundId(null);
       return;
     }
-    setSelectedRoundId((prev) =>
-      prev && rounds.some((round) => round.id === prev) ? prev : rounds[0].id
-    );
+    setSelectedRoundId((prev) => resolveDefaultRoundId(rounds, prev));
   }, [eventId, rounds]);
 
   useEffect(() => {

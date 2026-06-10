@@ -10,6 +10,7 @@ import {
   type RoundResponse
 } from "../services/contestApi";
 import { resolveApiError } from "../utils/apiError";
+import { resolveDefaultBoardId, resolveDefaultRoundId } from "../utils/pickActiveRound";
 
 export function useProblemManagement(eventId: number | null) {
   const queryClient = useQueryClient();
@@ -32,9 +33,7 @@ export function useProblemManagement(eventId: number | null) {
       setSelectedRoundId(null);
       return;
     }
-    setSelectedRoundId((prev) =>
-      prev && rounds.some((r) => r.id === prev) ? prev : rounds[0].id
-    );
+    setSelectedRoundId((prev) => resolveDefaultRoundId(rounds, prev));
   }, [rounds]);
 
   const boardsQuery = useQuery({
@@ -46,10 +45,8 @@ export function useProblemManagement(eventId: number | null) {
   const boards = useMemo(() => boardsQuery.data ?? [], [boardsQuery.data]);
 
   useEffect(() => {
-    setBoardId((prev) =>
-      prev && boards.some((b: BoardResponse) => b.id === prev) ? prev : boards[0]?.id ?? null
-    );
-  }, [boards]);
+    setBoardId((prev) => resolveDefaultBoardId(boards, rounds, prev));
+  }, [boards, rounds]);
 
   const problemQuery = useQuery({
     queryKey: [...queryKeys.boards.all, "problem", boardId],

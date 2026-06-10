@@ -1,0 +1,571 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
+import { useToast } from "../../components/feedback/ToastProvider";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
+import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
+import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { queryKeys } from "../../lib/queryKeys";
+import {
+  fetchBoardProblems,
+  fetchEventRounds,
+  fetchRoundBoards,
+  type BoardResponse,
+  type ProblemResponse,
+  type RoundResponse
+} from "../../services/contestApi";
+import {
+  ACCESS_STATUS_LABELS,
+  PROVISION_STATUS_LABELS,
+  accessStatusTone,
+  fetchEventRepositories,
+  fetchProblemRepoTemplate,
+  lockProblemRepositories,
+  provisionProblemRepositories,
+  provisionStatusTone,
+  formatRepositoryTimestamp,
+  retryTeamRepository,
+  saveProblemRepoTemplate,
+  type TeamRepositoryResponse
+} from "../../services/repositoryProvisioningService";
+import { grantRoundJudgeAccess } from "../../services/judgeRepositoryService";
+import { GITHUB_REPO_TEMPLATE_DEFAULTS } from "../../config/githubRepoDefaults";
+import { repoTemplateSchema } from "../../domain/schemas";
+import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
+import { zodFieldErrors } from "../../utils/zodFieldErrors";
+import { resolveDefaultBoardId, resolveDefaultRoundId } from "../../utils/pickActiveRound";
+
+function isNotFoundError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("404") || message.toLowerCase().includes("not found") || message.includes("Chưa có mẫu");
+}
+
+export function RepositoryManagementPage({ embedded = false }: { embedded?: boolean }) {
+  const { notify } = useToast();
+  const queryClient = useQueryClient();
+  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const [selectedRoundId, setSelectedRoundId] = useState<number | null>(null);
+  const [boardId, setBoardId] = useState<number | null>(null);
+  const [problemId, setProblemId] = useState<number | null>(null);
+  const [templateOwner, setTemplateOwner] = useState(GITHUB_REPO_TEMPLATE_DEFAULTS.templateOwner);
+  const [templateRepo, setTemplateRepo] = useState(GITHUB_REPO_TEMPLATE_DEFAULTS.templateRepo);
+  const [defaultBranch, setDefaultBranch] = useState(GITHUB_REPO_TEMPLATE_DEFAULTS.defaultBranch);
+  const [templateEnabled, setTemplateEnabled] = useState<boolean>(GITHUB_REPO_TEMPLATE_DEFAULTS.enabled);
+  const [templateErrors, setTemplateErrors] = useState<Record<string, string>>({});
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
+  const [locking, setLocking] = useState(false);
+  const [grantingJudgeAccess, setGrantingJudgeAccess] = useState(false);
+  const [retryingId, setRetryingId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "CLOSED" | "FAILED" | "PENDING">("ALL");
+
+  const roundsQuery = useQuery({
+    queryKey: queryKeys.rounds.byEvent(eventId),
+    queryFn: () => fetchEventRounds(eventId!),
+    enabled: Boolean(eventId)
+  });
+
+  const rounds = useMemo(() => (roundsQuery.data ?? []) as RoundResponse[], [roundsQuery.data]);
+
+  useEffect(() => {
+    if (rounds.length === 0) {
+      setSelectedRoundId(null);
+      return;
+    }
+    setSelectedRoundId((prev) => resolveDefaultRoundId(rounds, prev));
+  }, [rounds]);
+
+  const boardsQuery = useQuery({
+    queryKey: [...queryKeys.boards.all, "repos", eventId, selectedRoundId],
+    queryFn: () => fetchRoundBoards(selectedRoundId!),
+    enabled: Boolean(selectedRoundId)
+  });
+
+  const boards = useMemo(() => boardsQuery.data ?? [], [boardsQuery.data]);
+
+  useEffect(() => {
+    setBoardId((prev) => resolveDefaultBoardId(boards, rounds, prev));
+  }, [boards, rounds]);
+
+  const problemQuery = useQuery({
+    queryKey: [...queryKeys.boards.all, "repo-problem", boardId],
+    queryFn: async () => {
+      const list = await fetchBoardProblems(boardId!);
+      return (list[0] ?? null) as ProblemResponse | null;
+    },
+    enabled: Boolean(boardId)
+  });
+
+  const problem = problemQuery.data ?? null;
+
+  useEffect(() => {
+    setProblemId(problem?.id ?? null);
+  }, [problem]);
+
+  const templateQuery = useQuery({
+    queryKey: queryKeys.repositories.template(problemId),
+    queryFn: () => fetchProblemRepoTemplate(problemId!),
+    enabled: Boolean(problemId),
+    retry: false
+  });
+
+  useEffect(() => {
+    if (templateQuery.data) {
+      setTemplateOwner(templateQuery.data.templateOwner ?? GITHUB_REPO_TEMPLATE_DEFAULTS.templateOwner);
+      setTemplateRepo(templateQuery.data.templateRepo ?? GITHUB_REPO_TEMPLATE_DEFAULTS.templateRepo);
+      setDefaultBranch(templateQuery.data.defaultBranch ?? GITHUB_REPO_TEMPLATE_DEFAULTS.defaultBranch);
+      setTemplateEnabled(templateQuery.data.enabled !== false);
+      return;
+    }
+    if (templateQuery.isError && isNotFoundError(templateQuery.error)) {
+      setTemplateOwner(GITHUB_REPO_TEMPLATE_DEFAULTS.templateOwner);
+      setTemplateRepo(GITHUB_REPO_TEMPLATE_DEFAULTS.templateRepo);
+      setDefaultBranch(GITHUB_REPO_TEMPLATE_DEFAULTS.defaultBranch);
+      setTemplateEnabled(GITHUB_REPO_TEMPLATE_DEFAULTS.enabled);
+    }
+  }, [templateQuery.data, templateQuery.isError, templateQuery.error]);
+
+  const reposQuery = useQuery({
+    queryKey: queryKeys.repositories.byEvent(eventId),
+    queryFn: () => fetchEventRepositories(eventId!),
+    enabled: Boolean(eventId)
+  });
+
+  const filteredRepos = useMemo(() => {
+    const rows = (reposQuery.data ?? []) as TeamRepositoryResponse[];
+    return rows.filter((row) => {
+      if (boardId && row.boardId && row.boardId !== boardId) return false;
+      if (statusFilter === "ALL") return true;
+      return row.accessStatus === statusFilter;
+    });
+  }, [reposQuery.data, boardId, statusFilter]);
+
+  const stats = useMemo(() => {
+    const rows = filteredRepos;
+    return {
+      total: rows.length,
+      open: rows.filter((r) => r.accessStatus === "OPEN").length,
+      failed: rows.filter((r) => r.provisionStatus === "FAILED" || r.accessStatus === "FAILED").length,
+      closed: rows.filter((r) => r.accessStatus === "CLOSED").length
+    };
+  }, [filteredRepos]);
+
+  async function invalidateRepos() {
+    if (!eventId) return;
+    await queryClient.invalidateQueries({ queryKey: queryKeys.repositories.byEvent(eventId) });
+    if (problemId) {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.repositories.template(problemId) });
+    }
+  }
+
+  async function handleSaveTemplate() {
+    if (!problemId) return;
+    const parsed = repoTemplateSchema.safeParse({
+      templateOwner,
+      templateRepo,
+      defaultBranch: defaultBranch.trim() || "main",
+      enabled: templateEnabled
+    });
+    if (!parsed.success) {
+      setTemplateErrors(zodFieldErrors(parsed.error));
+      notify(parsed.error.issues[0]?.message ?? "Mẫu repository không hợp lệ.", "warning");
+      return;
+    }
+    setTemplateErrors({});
+    setSavingTemplate(true);
+    try {
+      await saveProblemRepoTemplate(problemId, parsed.data);
+      await invalidateRepos();
+      notify("Đã lưu mẫu repository.", "success");
+    } catch (err) {
+      applyApiFormErrors(err, setTemplateErrors);
+      notify(resolveApiError(err, "Không lưu được mẫu repository."), "danger");
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
+  async function handleProvision(force = false) {
+    if (!problemId) return;
+    setProvisioning(true);
+    try {
+      const result = await provisionProblemRepositories(problemId, force);
+      await invalidateRepos();
+      notify(
+        `Provision xong: ${result.createdCount} tạo mới, ${result.skippedCount} bỏ qua, ${result.failedCount} lỗi.`,
+        result.failedCount > 0 ? "warning" : "success"
+      );
+    } catch (err) {
+      notify(resolveApiError(err, "Provision thất bại."), "danger");
+    } finally {
+      setProvisioning(false);
+    }
+  }
+
+  async function handleLockProblem() {
+    if (!problemId) return;
+    setLocking(true);
+    try {
+      const result = await lockProblemRepositories(problemId);
+      await invalidateRepos();
+      notify(
+        `Đã khóa push ${result.lockedCount}/${result.totalRepositories} repository sau khi đề đóng.`,
+        result.failedCount > 0 ? "warning" : "success"
+      );
+    } catch (err) {
+      notify(resolveApiError(err, "Khóa repository thất bại — đề phải qua giờ đóng (closeAt)."), "danger");
+    } finally {
+      setLocking(false);
+    }
+  }
+
+  async function handleGrantJudgeAccess() {
+    if (!selectedRoundId) return;
+    setGrantingJudgeAccess(true);
+    try {
+      const result = await grantRoundJudgeAccess(selectedRoundId);
+      notify(
+        `Cấp quyền giám khảo: ${result.grantedCount} thành công, ${result.skippedCount} bỏ qua, ${result.failedCount} lỗi.`,
+        result.failedCount > 0 ? "warning" : "success"
+      );
+    } catch (err) {
+      notify(resolveApiError(err, "Cấp quyền giám khảo thất bại."), "danger");
+    } finally {
+      setGrantingJudgeAccess(false);
+    }
+  }
+
+  async function handleRetry(repositoryId: number) {
+    setRetryingId(repositoryId);
+    try {
+      await retryTeamRepository(repositoryId);
+      await invalidateRepos();
+      notify("Đã thử lại provision.", "success");
+    } catch (err) {
+      notify(resolveApiError(err, "Thử lại thất bại."), "danger");
+    } finally {
+      setRetryingId(null);
+    }
+  }
+
+  const loading =
+    eventLoading ||
+    roundsQuery.isLoading ||
+    boardsQuery.isLoading ||
+    (Boolean(boardId) && problemQuery.isLoading);
+
+  if (loading) {
+    return <ModuleSkeleton rows={6} />;
+  }
+
+  if (!eventId) {
+    return (
+      <EmptyState
+        icon="source"
+        title="Chưa có cuộc thi"
+        description="Chọn cuộc thi để quản lý repository GitHub."
+      />
+    );
+  }
+
+  const templateMissing = templateQuery.isError && isNotFoundError(templateQuery.error);
+  const templateLoadError =
+    templateQuery.isError && !templateMissing ? resolveApiError(templateQuery.error, "Không tải mẫu.") : null;
+
+  return (
+    <div className="space-y-lg">
+      {!embedded ? (
+        <PageHeader
+          eyebrow="GitHub"
+          title="Repository đội thi"
+          description="Cấu hình mẫu repo theo đề, provision khi mở đề, khóa push khi hết giờ đề (closeAt)."
+          actions={<OrganizerContextBar />}
+        />
+      ) : null}
+
+      {boards.length === 0 ? (
+        <EmptyState
+          icon="grid_view"
+          title="Chưa có bảng thi"
+          description="Tạo vòng và bảng trước khi cấu hình repository."
+        />
+      ) : (
+        <section className="grid gap-lg lg:grid-cols-[1fr_320px]">
+          <div className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
+            {rounds.length > 1 ? (
+              <label className="flex flex-col gap-xs">
+                <span className="font-label-sm normal-case text-on-surface-variant">Vòng thi</span>
+                <select
+                  className="form-input"
+                  value={selectedRoundId ?? ""}
+                  onChange={(e) => setSelectedRoundId(Number(e.target.value))}
+                >
+                  {rounds.map((round) => (
+                    <option key={round.id} value={round.id}>
+                      {round.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            <label className="flex flex-col gap-xs">
+              <span className="font-label-sm normal-case text-on-surface-variant">Bảng thi</span>
+              <select
+                className="form-input"
+                value={boardId ?? ""}
+                onChange={(e) => setBoardId(Number(e.target.value))}
+              >
+                {boards.map((board) => (
+                  <option key={board.id} value={board.id}>
+                    {board.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {!problem ? (
+              <p className="font-body-sm text-on-surface-variant">
+                Bảng này chưa có đề — tạo đề trong mục Đề thi trước.
+              </p>
+            ) : (
+              <>
+                <p className="font-body-sm text-on-surface-variant">
+                  Đề: <strong className="text-on-surface">{problem.title}</strong>
+                  {problem.releaseAt
+                    ? ` — mở lúc ${new Date(problem.releaseAt).toLocaleString("vi-VN")}`
+                    : ""}
+                </p>
+
+                {templateLoadError ? <RetryPanel message={templateLoadError} onRetry={() => void templateQuery.refetch()} /> : null}
+
+                <div className="grid gap-md md:grid-cols-2">
+                  <label className="flex flex-col gap-xs">
+                    <span className="font-label-sm normal-case text-on-surface-variant">Template owner</span>
+                    <input
+                      className="form-input"
+                      placeholder="my-org"
+                      value={templateOwner}
+                      onChange={(e) => setTemplateOwner(e.target.value)}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-xs">
+                    <span className="font-label-sm normal-case text-on-surface-variant">Template repo</span>
+                    <input
+                      className="form-input"
+                      placeholder="hackathon-starter"
+                      value={templateRepo}
+                      onChange={(e) => setTemplateRepo(e.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <div className="grid gap-md md:grid-cols-2">
+                  <label className="flex flex-col gap-xs">
+                    <span className="font-label-sm normal-case text-on-surface-variant">Nhánh mặc định</span>
+                    <input
+                      className="form-input"
+                      value={defaultBranch}
+                      onChange={(e) => setDefaultBranch(e.target.value)}
+                    />
+                  </label>
+                  <label className="flex items-center gap-sm pt-6 font-body-sm text-on-surface">
+                    <input
+                      type="checkbox"
+                      checked={templateEnabled}
+                      onChange={(e) => setTemplateEnabled(e.target.checked)}
+                    />
+                    Bật provision tự động cho đề này
+                  </label>
+                </div>
+
+                {templateMissing ? (
+                  <p className="font-body-sm text-on-surface-variant">
+                    Chưa có mẫu — lưu form để tạo cấu hình template.
+                  </p>
+                ) : null}
+
+                <div className="flex flex-wrap gap-sm">
+                  <Button type="button" disabled={savingTemplate} onClick={() => void handleSaveTemplate()}>
+                    {savingTemplate ? "Đang lưu" : templateMissing ? "Tạo mẫu" : "Cập nhật mẫu"}
+                  </Button>
+                  <ConfirmAction
+                    title="Provision repository?"
+                    message="Tạo repo riêng cho mỗi đội đã xác nhận trên bảng này. Thành viên cần có GitHub username trong hồ sơ."
+                    confirmLabel="Provision"
+                    onConfirm={() => void handleProvision(false)}
+                  >
+                    <Button type="button" variant="secondary" disabled={provisioning || !templateEnabled}>
+                      {provisioning ? "Đang provision" : "Provision ngay"}
+                    </Button>
+                  </ConfirmAction>
+                  <ConfirmAction
+                    title="Provision bắt buộc?"
+                    message="Bỏ qua kiểm tra thời gian mở đề — chỉ dùng khi test hoặc provision thủ công."
+                    confirmLabel="Force provision"
+                    onConfirm={() => void handleProvision(true)}
+                  >
+                    <Button type="button" variant="secondary" disabled={provisioning}>
+                      Force
+                    </Button>
+                  </ConfirmAction>
+                  <ConfirmAction
+                    title="Cấp quyền read cho giám khảo?"
+                    message="Add GitHub username của giám khảo được phân công vào từng repo trong vòng với quyền pull/read. Giám khảo cần có GitHub username trong hồ sơ."
+                    confirmLabel="Grant judge access"
+                    onConfirm={() => void handleGrantJudgeAccess()}
+                  >
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={grantingJudgeAccess || !selectedRoundId}
+                    >
+                      {grantingJudgeAccess ? "Đang cấp quyền" : "Cấp quyền GK"}
+                    </Button>
+                  </ConfirmAction>
+                  <ConfirmAction
+                    title="Khóa push sau khi đề đóng?"
+                    message="Hạ quyền collaborator xuống pull và đánh dấu CLOSED. Chỉ thực hiện khi đã qua giờ đóng đề (closeAt)."
+                    confirmLabel="Khóa push"
+                    onConfirm={() => void handleLockProblem()}
+                  >
+                    <Button type="button" variant="danger" disabled={locking || !problemId}>
+                      {locking ? "Đang khóa" : "Khóa push"}
+                    </Button>
+                  </ConfirmAction>
+                </div>
+              </>
+            )}
+          </div>
+
+          <aside className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+            <h2 className="font-headline-sm text-on-surface">Thống kê (bảng đang chọn)</h2>
+            <dl className="mt-md space-y-sm font-body-sm text-on-surface-variant">
+              <div className="flex justify-between">
+                <dt>Tổng repo</dt>
+                <dd className="font-label-md text-on-surface">{stats.total}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Đang mở</dt>
+                <dd className="font-label-md text-on-surface">{stats.open}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Đã khóa</dt>
+                <dd className="font-label-md text-on-surface">{stats.closed}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Lỗi</dt>
+                <dd className="font-label-md text-on-surface">{stats.failed}</dd>
+              </div>
+            </dl>
+            <p className="mt-md font-body-sm text-on-surface-variant">
+              Scheduler backend tự provision khi đến releaseAt và khóa khi round.endAt qua.
+            </p>
+          </aside>
+        </section>
+      )}
+
+      <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+        <div className="flex flex-wrap items-center justify-between gap-md">
+          <h2 className="font-title-md text-on-surface">Danh sách repository</h2>
+          <select
+            className="form-input w-auto"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          >
+            <option value="ALL">Tất cả trạng thái</option>
+            <option value="OPEN">Đang mở</option>
+            <option value="PENDING">Chờ</option>
+            <option value="CLOSED">Đã khóa</option>
+            <option value="FAILED">Lỗi</option>
+          </select>
+        </div>
+
+        {reposQuery.isError ? (
+          <div className="mt-md">
+            <RetryPanel
+              message={resolveApiError(reposQuery.error, "Không tải danh sách repository.")}
+              onRetry={() => void reposQuery.refetch()}
+            />
+          </div>
+        ) : reposQuery.isLoading ? (
+          <ModuleSkeleton rows={3} />
+        ) : filteredRepos.length === 0 ? (
+          <p className="mt-md font-body-sm text-on-surface-variant">Chưa có repository nào.</p>
+        ) : (
+          <div className="mt-md overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left font-body-sm">
+              <thead>
+                <tr className="border-b border-outline-variant text-on-surface-variant">
+                  <th className="py-2 pr-3">Đội</th>
+                  <th className="py-2 pr-3">Repo</th>
+                  <th className="py-2 pr-3">Provision</th>
+                  <th className="py-2 pr-3">Truy cập</th>
+                  <th className="py-2 pr-3">Lần push cuối</th>
+                  <th className="py-2 pr-3">Lỗi</th>
+                  <th className="py-2">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRepos.map((row) => (
+                  <tr key={row.id} className="border-b border-outline-variant/60">
+                    <td className="py-3 pr-3 text-on-surface">{row.teamName ?? `Đội #${row.teamId}`}</td>
+                    <td className="py-3 pr-3">
+                      {row.repositoryUrl ? (
+                        <a
+                          href={row.repositoryUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary underline-offset-2 hover:underline"
+                        >
+                          {row.githubRepoName ?? row.repositoryName ?? "Xem repo"}
+                        </a>
+                      ) : (
+                        <span className="text-on-surface-variant">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 pr-3">
+                      <Badge tone={provisionStatusTone(row.provisionStatus)}>
+                        {PROVISION_STATUS_LABELS[row.provisionStatus]}
+                      </Badge>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <Badge tone={accessStatusTone(row.accessStatus)}>
+                        {ACCESS_STATUS_LABELS[row.accessStatus]}
+                      </Badge>
+                    </td>
+                    <td className="py-3 pr-3 text-on-surface-variant">
+                      {formatRepositoryTimestamp(row.lastPushAt) ?? "—"}
+                    </td>
+                    <td className="max-w-[200px] truncate py-3 pr-3 text-error" title={row.lastError ?? ""}>
+                      {row.lastError ?? "—"}
+                    </td>
+                    <td className="py-3">
+                      {row.provisionStatus === "FAILED" || row.accessStatus === "FAILED" ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={retryingId === row.id}
+                          onClick={() => void handleRetry(row.id)}
+                        >
+                          {retryingId === row.id ? "Đang thử" : "Thử lại"}
+                        </Button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

@@ -6,12 +6,13 @@ import { resolveApiError } from "../utils/apiError";
 export function useEventSubmissions(
   eventId: number | null,
   boardId?: number | null,
+  roundId?: number | null,
   page = 0,
   size = 50
 ) {
   const query = useQuery({
-    queryKey: [...queryKeys.submission.byEvent(eventId, boardId), page, size],
-    queryFn: () => fetchEventSubmissions(eventId!, { boardId, page, size }),
+    queryKey: [...queryKeys.submission.byEvent(eventId, boardId), roundId, page, size],
+    queryFn: () => fetchEventSubmissions(eventId!, { boardId, roundId, page, size }),
     enabled: Boolean(eventId)
   });
 

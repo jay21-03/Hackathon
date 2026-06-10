@@ -111,7 +111,7 @@ export function BoardSlotsSection({
           <strong className="text-on-surface">{stats.assignedCount}</strong>/{stats.slotsCount} vị trí đã gán
         </span>
         <span>·</span>
-        <a href="/organizer/registrations" className="text-primary hover:underline">
+        <a href="/organizer/teams-hub" className="text-primary hover:underline">
           Duyệt thêm đội
         </a>
       </div>

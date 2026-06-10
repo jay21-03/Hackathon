@@ -8,15 +8,11 @@ import type { TeamDetailResponse } from "../../services/registrationService";
 
 export type BoardSetupStep = "#board-step-round" | "#board-step-board" | "#board-step-slots";
 
-export function toIsoFromLocal(value: string) {
-  return new Date(value).toISOString();
-}
+import { toIsoFromLocal, toLocalDateTimeInput } from "../../utils/dateTimeInput";
 
-export function toLocalInput(iso: string) {
-  const date = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
+export { toIsoFromLocal, toLocalDateTimeInput as toLocalInput } from "../../utils/dateTimeInput";
+
+const toLocalInput = toLocalDateTimeInput;
 
 export function normalizeBoardStep(anchor: string): BoardSetupStep {
   if (anchor === "#board-step-slot" || anchor === "#board-step-assign") return "#board-step-slots";
@@ -58,6 +54,10 @@ export function defaultRoundTimes(startDate: string, endDate: string) {
   return { start, end };
 }
 
+export function roundNameForKind(kind: "GROUP_STAGE" | "FINAL", order: number) {
+  return kind === "FINAL" ? "Chung kết" : `Vòng ${order}`;
+}
+
 export function suggestNextRound(rounds: RoundResponse[]) {
   const maxOrder = rounds.reduce((max, round) => Math.max(max, round.roundOrder), 0);
   const nextOrder = maxOrder + 1;
@@ -74,9 +74,10 @@ export function suggestNextRound(rounds: RoundResponse[]) {
     endAt = toLocalInput(nextEnd.toISOString());
   }
 
+  const roundType = (!hasFinal && nextOrder >= 2 ? "FINAL" : "GROUP_STAGE") as "GROUP_STAGE" | "FINAL";
   return {
-    name: !hasFinal && nextOrder >= 2 ? "Chung kết" : `Vòng ${nextOrder}`,
-    roundType: (!hasFinal && nextOrder >= 2 ? "FINAL" : "GROUP_STAGE") as "GROUP_STAGE" | "FINAL",
+    name: roundNameForKind(roundType, nextOrder),
+    roundType,
     roundOrder: nextOrder,
     startAt,
     endAt

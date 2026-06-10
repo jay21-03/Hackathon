@@ -140,7 +140,7 @@ export async function fetchRoundCountdown(roundId: number) {
 
 export async function randomAssignTeams(
   roundId: number,
-  payload?: { boardIds?: number[]; slotIds?: number[]; seed?: number }
+  payload?: { boardIds?: number[]; slotIds?: number[]; chunkSize?: number; seed?: number | string }
 ) {
   const { data } = await apiClient.post<ApiResponse<{ assignedCount: number }>>(
     `/v1/admin/rounds/${roundId}/boards/assign/random`,
@@ -179,7 +179,7 @@ export async function deleteBoardSlot(slotId: number) {
 export interface CreateProblemPayload {
   title: string;
   description?: string;
-  attachmentUrl?: string;
+  attachmentUrl?: string | null;
   externalLink?: string;
   releaseAt: string;
   closeAt: string;
@@ -253,6 +253,10 @@ export async function updateRound(roundId: number, payload: UpdateRoundPayload) 
   return data.data;
 }
 
+export async function deleteRound(roundId: number) {
+  await apiClient.delete(`/v1/admin/rounds/${roundId}`);
+}
+
 export interface CreateBoardPayload {
   name: string;
   boardOrder: number;
@@ -281,6 +285,10 @@ export async function updateBoard(boardId: number, payload: UpdateBoardPayload) 
     throw new Error(data.message || "Cập nhật bảng thi thất bại");
   }
   return data.data;
+}
+
+export async function deleteBoard(boardId: number) {
+  await apiClient.delete(`/v1/admin/boards/${boardId}`);
 }
 
 export async function createBoardSlot(boardId: number, teamNumber: number) {

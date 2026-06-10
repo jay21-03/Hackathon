@@ -8,12 +8,16 @@ import { TeamDetailModal } from "../../components/organizer/TeamDetailModal";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
-import { EventSelector } from "../../components/ui/EventSelector";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
-import { NextStepPanel } from "../../components/ui/NextStepPanel";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
-import { boardFormSchema, roundFormSchema, slotNumberSchema } from "../../domain/schemas";
+import {
+  boardFormSchema,
+  randomAssignSchema,
+  roundFormSchemaForEvent,
+  slotNumberSchema
+} from "../../domain/schemas";
 import { useBoardSetupProgress } from "../../hooks/useBoardSetupProgress";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { invalidateAfterBoardMutation } from "../../lib/invalidateBoardQueries";
@@ -25,7 +29,9 @@ import {
   createBoard,
   createBoardSlot,
   createRound,
+  deleteBoard,
   deleteBoardSlot,
+  deleteRound,
   moveTeamBetweenSlots,
   randomAssignTeams,
   swapBoardSlots,
@@ -35,23 +41,26 @@ import {
   type BoardSlotResponse
 } from "../../services/contestApi";
 import { fetchTeam, type TeamDetailResponse } from "../../services/registrationService";
-import { resolveApiError } from "../../utils/apiError";
+import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { zodFirstError } from "../../utils/formValidation";
+import { zodFieldErrors } from "../../utils/zodFieldErrors";
 import { isRoundRunning, pickActiveRound } from "../../utils/pickActiveRound";
+import { type HubEmbedProps } from "../../utils/hubEmbedUtils";
 import {
   defaultRoundTimes,
   normalizeBoardStep,
   resolveBoardSetupStep,
+  roundNameForKind,
   suggestNextRound,
   toIsoFromLocal,
   toLocalInput,
   type BoardSetupStep
 } from "./boardManagementUtils";
 
-export function BoardManagementPage() {
+export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbedProps = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const {
     rounds,
     selectedRoundId,
@@ -71,8 +80,10 @@ export function BoardManagementPage() {
     assignedTeamIds
   } = useBoardManagement(eventId);
   const [busy, setBusy] = useState(false);
+  const [roundFieldErrors, setRoundFieldErrors] = useState<Record<string, string>>({});
+  const [createBoardFieldErrors, setCreateBoardFieldErrors] = useState<Record<string, string>>({});
+  const [boardFieldErrors, setBoardFieldErrors] = useState<Record<number, Record<string, string>>>({});
 
-  const [roundName, setRoundName] = useState("Vòng 1");
   const [roundType, setRoundType] = useState<"GROUP_STAGE" | "FINAL">("GROUP_STAGE");
   const [roundOrder, setRoundOrder] = useState(1);
   const [roundStartAt, setRoundStartAt] = useState("");
@@ -90,7 +101,6 @@ export function BoardManagementPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailContext, setDetailContext] = useState<string | undefined>();
 
-  const [editRoundName, setEditRoundName] = useState("");
   const [editRoundType, setEditRoundType] = useState<"GROUP_STAGE" | "FINAL">("GROUP_STAGE");
   const [editRoundOrder, setEditRoundOrder] = useState(1);
   const [editRoundStartAt, setEditRoundStartAt] = useState("");
@@ -125,10 +135,9 @@ export function BoardManagementPage() {
     [boards]
   );
 
-  const { microSteps, nextAction, stats } = useBoardSetupProgress(rounds.length, boards);
+  const { microSteps, stats } = useBoardSetupProgress(rounds.length, boards);
   const [activeStep, setActiveStep] = useState<BoardSetupStep | null>(null);
   const currentStep = activeStep ?? resolveBoardSetupStep(microSteps);
-  const setupComplete = stats.assignedCount > 0;
 
   function goToStep(anchor: string) {
     setActiveStep(normalizeBoardStep(anchor));
@@ -143,7 +152,6 @@ export function BoardManagementPage() {
 
   useEffect(() => {
     if (!selectedRound) return;
-    setEditRoundName(selectedRound.name);
     setEditRoundType(selectedRound.roundType as "GROUP_STAGE" | "FINAL");
     setEditRoundOrder(selectedRound.roundOrder);
     setEditRoundStartAt(toLocalInput(selectedRound.startAt));
@@ -161,26 +169,50 @@ export function BoardManagementPage() {
     setBoardOrder(boards.length + 1);
   }, [boards.length, selectedRoundId]);
 
+  const roundTimelineBounds = useMemo(
+    () =>
+      rounds.map((round) => ({
+        id: round.id,
+        startAt: toLocalInput(round.startAt),
+        endAt: toLocalInput(round.endAt)
+      })),
+    [rounds]
+  );
+
+  const roundSchema = useMemo(
+    () =>
+      roundFormSchemaForEvent(
+        eventDetail?.startDate,
+        eventDetail?.endDate,
+        roundTimelineBounds,
+        selectedRoundId ?? undefined
+      ),
+    [eventDetail?.startDate, eventDetail?.endDate, roundTimelineBounds, selectedRoundId]
+  );
+
   async function handleCreateRound() {
     if (!eventId) return;
-    const parsed = roundFormSchema.safeParse({
-      name: roundName,
+    const name = roundNameForKind(roundType, roundOrder);
+    const parsed = roundSchema.safeParse({
+      name,
       roundOrder,
       startAt: roundStartAt,
       endAt: roundEndAt
     });
     if (!parsed.success) {
+      setRoundFieldErrors(zodFieldErrors(parsed.error));
       notify(zodFirstError(parsed.error), "warning");
       return;
     }
+    setRoundFieldErrors({});
     setBusy(true);
     try {
       const created = await createRound(eventId, {
-        name: roundName.trim(),
+        name: name.trim(),
         roundType,
         roundOrder,
-        startAt: toIsoFromLocal(roundStartAt),
-        endAt: toIsoFromLocal(roundEndAt)
+        startAt: toIsoFromLocal(parsed.data.startAt),
+        endAt: toIsoFromLocal(parsed.data.endAt)
       });
       setSelectedRoundId(created.id);
       setShowAddRound(false);
@@ -188,6 +220,7 @@ export function BoardManagementPage() {
       notify("Đã tạo vòng thi. Tiếp theo: thêm bảng bên dưới.", "success");
       goToStep("#board-step-board");
     } catch (err) {
+      applyApiFormErrors(err, setRoundFieldErrors);
       notify(resolveApiError(err, "Tạo vòng thi thất bại."), "danger");
     } finally {
       setBusy(false);
@@ -196,7 +229,6 @@ export function BoardManagementPage() {
 
   function openAddRoundForm() {
     const next = suggestNextRound(rounds);
-    setRoundName(next.name);
     setRoundType(next.roundType);
     setRoundOrder(next.roundOrder);
     setRoundStartAt(next.startAt);
@@ -212,9 +244,11 @@ export function BoardManagementPage() {
     }
     const parsed = boardFormSchema.safeParse({ name: boardName, boardOrder });
     if (!parsed.success) {
+      setCreateBoardFieldErrors(zodFieldErrors(parsed.error));
       notify(zodFirstError(parsed.error), "warning");
       return;
     }
+    setCreateBoardFieldErrors({});
     setBusy(true);
     try {
       await createBoard(selectedRoundId, {
@@ -226,6 +260,7 @@ export function BoardManagementPage() {
       notify("Đã tạo bảng thi. Tiếp theo: thêm vị trí trên bảng vừa tạo.", "success");
       goToStep("#board-step-slots");
     } catch (err) {
+      applyApiFormErrors(err, setCreateBoardFieldErrors);
       notify(resolveApiError(err, "Tạo bảng thi thất bại."), "danger");
     } finally {
       setBusy(false);
@@ -278,6 +313,43 @@ export function BoardManagementPage() {
       notify("Đã xóa vị trí trống.", "success");
     } catch (err) {
       notify(resolveApiError(err, "Không xóa được vị trí."), "danger");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteBoard(boardId: number) {
+    if (!window.confirm("Xóa bảng này? Cần gỡ hết đội và chưa công bố kết quả bảng.")) return;
+    setBusy(true);
+    try {
+      await deleteBoard(boardId);
+      await invalidate();
+      await invalidateAfterBoardMutation(queryClient);
+      notify("Đã xóa bảng.", "success");
+    } catch (err) {
+      notify(resolveApiError(err, "Không xóa được bảng."), "danger");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteRound() {
+    if (!selectedRoundId) return;
+    if (!window.confirm("Xóa vòng đang chọn? Cần gỡ hết đội và chưa công bố kết quả vòng.")) return;
+    const deletedRoundId = selectedRoundId;
+    setBusy(true);
+    try {
+      await deleteRound(deletedRoundId);
+      const remaining = rounds.filter((round) => round.id !== deletedRoundId);
+      setSelectedRoundId(remaining[0]?.id ?? null);
+      await invalidate();
+      await invalidateAfterBoardMutation(queryClient);
+      notify("Đã xóa vòng.", "success");
+      if (remaining.length === 0) {
+        goToStep("#board-step-round");
+      }
+    } catch (err) {
+      notify(resolveApiError(err, "Không xóa được vòng."), "danger");
     } finally {
       setBusy(false);
     }
@@ -354,20 +426,23 @@ export function BoardManagementPage() {
 
   async function handleSaveRound() {
     if (!selectedRoundId) return;
-    const parsed = roundFormSchema.safeParse({
+    const editRoundName = roundNameForKind(editRoundType, editRoundOrder);
+    const parsed = roundSchema.safeParse({
       name: editRoundName,
       roundOrder: editRoundOrder,
       startAt: editRoundStartAt,
       endAt: editRoundEndAt
     });
     if (!parsed.success) {
+      setRoundFieldErrors(zodFieldErrors(parsed.error));
       notify(zodFirstError(parsed.error), "warning");
       return;
     }
+    setRoundFieldErrors({});
     setBusy(true);
     try {
       await updateRound(selectedRoundId, {
-        name: parsed.data.name,
+        name: editRoundName,
         roundType: editRoundType,
         roundOrder: parsed.data.roundOrder,
         startAt: toIsoFromLocal(parsed.data.startAt),
@@ -377,6 +452,7 @@ export function BoardManagementPage() {
       notify("Đã lưu vòng thi.", "success");
       if (boards.length === 0) goToStep("#board-step-board");
     } catch (err) {
+      applyApiFormErrors(err, setRoundFieldErrors);
       notify(resolveApiError(err, "Cập nhật vòng thi thất bại."), "danger");
     } finally {
       setBusy(false);
@@ -386,11 +462,24 @@ export function BoardManagementPage() {
   async function handleSaveBoard(boardId: number) {
     const edit = boardEdits[boardId];
     if (!selectedRoundId || !edit) return;
-    const parsed = boardFormSchema.safeParse({ name: edit.name, boardOrder: edit.boardOrder });
+    const parsed = boardFormSchema.safeParse({
+      name: edit.name,
+      boardOrder: edit.boardOrder,
+      description: edit.description
+    });
     if (!parsed.success) {
+      setBoardFieldErrors((prev) => ({
+        ...prev,
+        [boardId]: zodFieldErrors(parsed.error)
+      }));
       notify(zodFirstError(parsed.error), "warning");
       return;
     }
+    setBoardFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next[boardId];
+      return next;
+    });
     setBusy(true);
     try {
       await updateBoard(boardId, {
@@ -401,6 +490,9 @@ export function BoardManagementPage() {
       await invalidate();
       notify("Đã lưu bảng thi.", "success");
     } catch (err) {
+      applyApiFormErrors(err, (errors) => {
+        setBoardFieldErrors((prev) => ({ ...prev, [boardId]: errors }));
+      });
       notify(resolveApiError(err, "Cập nhật bảng thi thất bại."), "danger");
     } finally {
       setBusy(false);
@@ -409,9 +501,24 @@ export function BoardManagementPage() {
 
   async function handleRandomAssign() {
     if (!selectedRoundId) return;
+    const emptySlots = boards.flatMap(({ slots }) => slots).filter((slot) => !slot.teamId).length;
+    const unassignedCount = confirmedTeams.filter((team) => !assignedTeamIds.has(team.id)).length;
+    if (emptySlots === 0) {
+      notify("Không còn vị trí trống trong vòng này.", "warning");
+      return;
+    }
+    if (unassignedCount === 0) {
+      notify("Không còn đội đã xác nhận chưa được gán vị trí.", "warning");
+      return;
+    }
+    const parsed = randomAssignSchema.safeParse({});
+    if (!parsed.success) {
+      notify(zodFirstError(parsed.error), "warning");
+      return;
+    }
     setBusy(true);
     try {
-      const result = await randomAssignTeams(selectedRoundId);
+      const result = await randomAssignTeams(selectedRoundId, parsed.data);
       await invalidate();
       await invalidateAfterBoardMutation(queryClient);
       const count = result?.assignedCount ?? 0;
@@ -489,21 +596,44 @@ export function BoardManagementPage() {
 
   return (
     <div className="space-y-lg">
-      <PageHeader
-        eyebrow="Bảng thi và phân công"
-        title="Quản lý bảng thi"
-        description="Vòng → bảng → vị trí & gán đội trên cùng một màn."
-        actions={
-          <>
-            <ButtonLink to="/organizer/events/basic-info" variant="ghost" icon={<Icon name="settings" />}>
-              Thiết lập cuộc thi
-            </ButtonLink>
-            <EventSelector events={events} eventId={eventId} onChange={setEventId} />
-            {rounds.length > 0 ? (
+      {!embedded ? (
+        <PageHeader
+          eyebrow="Bảng thi và phân công"
+          title="Quản lý bảng thi"
+          description="Vòng → bảng → vị trí & gán đội trên cùng một màn."
+          actions={
+            <>
+              <ButtonLink to="/organizer/events/basic-info" variant="ghost" icon={<Icon name="settings" />}>
+                Thiết lập cuộc thi
+              </ButtonLink>
+              <OrganizerContextBar />
+              {rounds.length > 0 ? (
+                <select
+                  value={selectedRoundId ?? ""}
+                  onChange={(event) => setSelectedRoundId(Number(event.target.value))}
+                  className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-label-md"
+                >
+                  {rounds.map((round) => (
+                    <option key={round.id} value={round.id}>
+                      {round.name}
+                      {activeRound?.id === round.id && isRoundRunning(round) ? " · đang diễn ra" : ""}
+                      {activeRound?.id === round.id && !isRoundRunning(round) ? " · vòng hiện tại" : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+            </>
+          }
+        />
+      ) : (
+        <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
+          {rounds.length > 0 ? (
+            <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+              Vòng thi
               <select
                 value={selectedRoundId ?? ""}
                 onChange={(event) => setSelectedRoundId(Number(event.target.value))}
-                className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-label-md"
+                className="min-w-[12rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
               >
                 {rounds.map((round) => (
                   <option key={round.id} value={round.id}>
@@ -513,22 +643,16 @@ export function BoardManagementPage() {
                   </option>
                 ))}
               </select>
-            ) : null}
-          </>
-        }
-      />
+            </label>
+          ) : null}
+        </section>
+      )}
 
       {error ? (
         <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
           <p className="font-body-sm text-on-surface">{error}</p>
         </div>
       ) : null}
-
-      <NextStepPanel
-        action={nextAction}
-        variant={setupComplete ? "success" : "primary"}
-        onHrefClick={goToStep}
-      />
 
       <WorkflowSteps
         title="Các bước trên trang này"
@@ -551,30 +675,28 @@ export function BoardManagementPage() {
           selectedRoundId={selectedRoundId}
           busy={busy}
           showAddRound={showAddRound}
-          roundName={roundName}
           roundType={roundType}
           roundOrder={roundOrder}
           roundStartAt={roundStartAt}
           roundEndAt={roundEndAt}
-          editRoundName={editRoundName}
           editRoundType={editRoundType}
           editRoundOrder={editRoundOrder}
           editRoundStartAt={editRoundStartAt}
           editRoundEndAt={editRoundEndAt}
-          onRoundNameChange={setRoundName}
           onRoundTypeChange={setRoundType}
           onRoundOrderChange={setRoundOrder}
           onRoundStartAtChange={setRoundStartAt}
           onRoundEndAtChange={setRoundEndAt}
-          onEditRoundNameChange={setEditRoundName}
           onEditRoundTypeChange={setEditRoundType}
           onEditRoundOrderChange={setEditRoundOrder}
           onEditRoundStartAtChange={setEditRoundStartAt}
           onEditRoundEndAtChange={setEditRoundEndAt}
+          fieldErrors={roundFieldErrors}
           onOpenAddRoundForm={openAddRoundForm}
           onCreateRound={() => void handleCreateRound()}
           onCancelAddRound={() => setShowAddRound(false)}
           onSaveRound={() => void handleSaveRound()}
+          onDeleteRound={() => void handleDeleteRound()}
         />
       ) : null}
 
@@ -590,13 +712,30 @@ export function BoardManagementPage() {
             boardEdits={boardEdits}
             boardName={boardName}
             boardOrder={boardOrder}
+            createBoardFieldErrors={createBoardFieldErrors}
+            boardFieldErrors={boardFieldErrors}
             busy={busy}
             selectedRoundId={selectedRoundId}
-            onBoardNameChange={setBoardName}
-            onBoardOrderChange={setBoardOrder}
+            onBoardNameChange={(value) => {
+              setBoardName(value);
+              setCreateBoardFieldErrors((prev) => ({ ...prev, name: "" }));
+            }}
+            onBoardOrderChange={(value) => {
+              setBoardOrder(value);
+              setCreateBoardFieldErrors((prev) => ({ ...prev, boardOrder: "" }));
+            }}
             onBoardEditsChange={setBoardEdits}
             onCreateBoard={() => void handleCreateBoard()}
             onSaveBoard={(boardId) => void handleSaveBoard(boardId)}
+            onDeleteBoard={(boardId) => void handleDeleteBoard(boardId)}
+            onClearBoardFieldError={(boardId, field) => {
+              setBoardFieldErrors((prev) => {
+                const current = prev[boardId];
+                if (!current?.[field]) return prev;
+                const nextBoard = { ...current, [field]: "" };
+                return { ...prev, [boardId]: nextBoard };
+              });
+            }}
           />
         )
       ) : null}
@@ -658,17 +797,6 @@ export function BoardManagementPage() {
         onClose={closeTeamDetail}
       />
 
-      {setupComplete ? (
-        <NextStepPanel
-          action={{
-            title: "Bước tiếp: Đề thi & phân công mentor/GK",
-            description: "Sau khi gán đội xong, cấu hình đề và gán mentor/giám khảo theo bảng.",
-            to: "/organizer/problems",
-            cta: "Đi tới Cấu hình đề thi"
-          }}
-          variant="success"
-        />
-      ) : null}
     </div>
   );
 }

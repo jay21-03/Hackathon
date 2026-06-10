@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { SubmissionDetailModal } from "../../components/organizer/SubmissionDetailModal";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
-import { EventSelector } from "../../components/ui/EventSelector";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
@@ -15,7 +16,9 @@ import {
   fetchTeamSubmission,
   type AdminTeamSubmissionResponse
 } from "../../services/submissionApi";
+import { formatRepositoryTimestamp } from "../../services/repositoryProvisioningService";
 import { resolveApiError } from "../../utils/apiError";
+import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
 
 type StatusFilter = "ALL" | "SUBMITTED" | "DRAFT" | "NONE";
 type SortKey = "team" | "status" | "submittedAt";
@@ -37,30 +40,44 @@ function normalizeStatus(status: string | null | undefined): StatusFilter {
   return "NONE";
 }
 
-export function SubmissionManagementPage() {
+export function SubmissionManagementPage({ embedded = false }: { embedded?: boolean }) {
   const { notify } = useToast();
-  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const { boards, loading: boardsLoading, error: boardsError } = useEventBoards(eventId);
+  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { rounds, boards, loading: boardsLoading, error: boardsError } = useEventBoards(eventId);
+  const [roundId, setRoundId] = useState<number | null>(null);
   const [boardId, setBoardId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("team");
   const [listPage, setListPage] = useState(0);
+  const [detailTeamId, setDetailTeamId] = useState<number | null>(null);
   const [detail, setDetail] = useState<AdminTeamSubmissionResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const activeRoundId = resolveDefaultRoundId(rounds, roundId);
+
+  const boardsInRound = useMemo(
+    () => (activeRoundId != null ? boards.filter((b) => b.roundId === activeRoundId) : []),
+    [boards, activeRoundId]
+  );
+
   const { submissions, total, totalPages, loading, error } = useEventSubmissions(
     eventId,
     boardId,
+    activeRoundId,
     listPage,
     25
   );
 
   useEffect(() => {
-    setBoardId((prev) => (prev && boards.some((b) => b.id === prev) ? prev : null));
-  }, [boards, eventId]);
+    setRoundId((prev) => resolveDefaultRoundId(rounds, prev));
+  }, [rounds]);
+
+  useEffect(() => {
+    setBoardId((prev) => (prev && boardsInRound.some((b) => b.id === prev) ? prev : null));
+  }, [boardsInRound, activeRoundId]);
 
   useEffect(() => {
     setListPage(0);
-  }, [eventId, boardId]);
+  }, [eventId, boardId, activeRoundId]);
 
   const filtered = useMemo(() => {
     const rows = submissions.filter((row) => {
@@ -85,17 +102,34 @@ export function SubmissionManagementPage() {
     [submissions]
   );
 
-  async function openDetail(teamId: number) {
+  async function openDetail(row: AdminTeamSubmissionResponse) {
+    setDetailTeamId(row.teamId);
+    setDetail(row);
     setDetailLoading(true);
-    setDetail(null);
     try {
-      const row = await fetchTeamSubmission(teamId);
-      setDetail(row);
+      const fetched = await fetchTeamSubmission(row.teamId, {
+        boardId: row.boardId,
+        roundId: activeRoundId
+      });
+      setDetail({
+        ...row,
+        ...fetched,
+        boardId: fetched.boardId ?? row.boardId,
+        boardName: fetched.boardName ?? row.boardName,
+        slotNumber: fetched.slotNumber ?? row.slotNumber
+      });
     } catch (err) {
       notify(resolveApiError(err, "Không tải được chi tiết bài nộp."), "danger");
+      setDetailTeamId(null);
+      setDetail(null);
     } finally {
       setDetailLoading(false);
     }
+  }
+
+  function closeDetail() {
+    setDetailTeamId(null);
+    setDetail(null);
   }
 
   const pageError = boardsError ?? error;
@@ -105,35 +139,60 @@ export function SubmissionManagementPage() {
 
   return (
     <div className="space-y-lg">
-      <PageHeader
-        eyebrow="Bài nộp"
-        title="Theo dõi bài nộp đội"
-        description="Xem link GitHub/GitLab mà các đội đã lưu nháp hoặc nộp chính thức."
-        actions={
-          <Badge tone={pageError ? "danger" : "success"}>
-            {pageError ? "Lỗi tải dữ liệu" : `${total} đội trên bảng`}
-          </Badge>
-        }
-      />
+      {!embedded ? (
+        <PageHeader
+          eyebrow="Bài nộp"
+          title="Theo dõi bài nộp đội"
+          description="Xem link GitHub/GitLab mà các đội đã lưu nháp hoặc nộp chính thức."
+          actions={
+            <Badge tone={pageError ? "danger" : "success"}>
+              {pageError ? "Lỗi tải dữ liệu" : `${total} đội trong vòng`}
+            </Badge>
+          }
+        />
+      ) : null}
 
-      <WorkflowSteps
-        title="Quy trình chấm & kết quả"
-        description="Theo dõi bài nộp trước khi chấm và xếp hạng."
-        steps={buildRankingWorkflowSteps("scoring")}
-      />
+      {!embedded ? (
+        <WorkflowSteps
+          title="Quy trình chấm & kết quả"
+          description="Theo dõi bài nộp trước khi chấm và xếp hạng."
+          steps={buildRankingWorkflowSteps("scoring")}
+        />
+      ) : null}
 
       <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
-        <EventSelector events={events} eventId={eventId} onChange={setEventId} />
+        {!embedded ? <OrganizerContextBar /> : null}
+        {embedded ? (
+          <Badge tone={pageError ? "danger" : "success"}>
+            {pageError ? "Lỗi tải dữ liệu" : `${total} đội trong vòng`}
+          </Badge>
+        ) : null}
         <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
-          Lọc theo bảng
+          Vòng
+          <select
+            className="min-w-[12rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+            value={activeRoundId ?? ""}
+            onChange={(e) => setRoundId(e.target.value ? Number(e.target.value) : null)}
+            disabled={!rounds.length}
+          >
+            {rounds.length === 0 ? <option value="">Chưa có vòng</option> : null}
+            {rounds.map((round) => (
+              <option key={round.id} value={round.id}>
+                {round.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+          Bảng
           <select
             className="min-w-[12rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
             value={boardId ?? ""}
             onChange={(e) => setBoardId(e.target.value ? Number(e.target.value) : null)}
-            disabled={!boards.length}
+            disabled={!boardsInRound.length}
           >
-            <option value="">Tất cả bảng</option>
-            {boards.map((board) => (
+            <option value="">Tất cả bảng vòng này</option>
+            {boardsInRound.map((board) => (
               <option key={board.id} value={board.id}>
                 {board.name}
               </option>
@@ -201,6 +260,7 @@ export function SubmissionManagementPage() {
                   <th className="px-md py-sm">Trạng thái</th>
                   <th className="px-md py-sm">Repository</th>
                   <th className="px-md py-sm">Nộp lúc</th>
+                  <th className="px-md py-sm">Lần push cuối</th>
                   <th className="px-md py-sm">Chi tiết</th>
                 </tr>
               </thead>
@@ -234,8 +294,11 @@ export function SubmissionManagementPage() {
                     <td className="px-md py-md text-on-surface-variant">
                       {row.submittedAt ? new Date(row.submittedAt).toLocaleString("vi-VN") : "—"}
                     </td>
+                    <td className="px-md py-md text-on-surface-variant">
+                      {formatRepositoryTimestamp(row.lastPushAt) ?? "—"}
+                    </td>
                     <td className="px-md py-md">
-                      <Button type="button" variant="ghost" onClick={() => void openDetail(row.teamId)}>
+                      <Button type="button" variant="ghost" onClick={() => void openDetail(row)}>
                         Xem
                       </Button>
                     </td>
@@ -273,30 +336,12 @@ export function SubmissionManagementPage() {
         </div>
       ) : null}
 
-      {detailLoading ? <ModuleSkeleton rows={2} /> : null}
-      {detail ? (
-        <section className="rounded-xl border border-outline-variant bg-surface-container p-md space-y-sm">
-          <h2 className="font-headline-sm text-on-surface">Chi tiết — {detail.teamName}</h2>
-          <p className="font-body-sm text-on-surface-variant">
-            Bảng: {detail.boardName ?? "—"}
-            {detail.slotNumber != null ? ` · Vị trí #${detail.slotNumber}` : ""}
-          </p>
-          <p className="font-body-sm">
-            Trạng thái: <Badge tone={statusTone(detail.status)}>{statusLabel(detail.status)}</Badge>
-          </p>
-          {detail.repositoryUrl ? (
-            <p className="font-body-sm">
-              Repository:{" "}
-              <a href={detail.repositoryUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                {detail.repositoryName ?? detail.repositoryUrl}
-              </a>
-            </p>
-          ) : null}
-          <Button type="button" variant="ghost" onClick={() => setDetail(null)}>
-            Đóng
-          </Button>
-        </section>
-      ) : null}
+      <SubmissionDetailModal
+        open={detailTeamId != null}
+        loading={detailLoading}
+        detail={detail}
+        onClose={closeDetail}
+      />
     </div>
   );
 }

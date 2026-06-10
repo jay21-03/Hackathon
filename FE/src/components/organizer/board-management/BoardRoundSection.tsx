@@ -10,22 +10,18 @@ export interface BoardRoundSectionProps {
   selectedRoundId: number | null;
   busy: boolean;
   showAddRound: boolean;
-  roundName: string;
   roundType: "GROUP_STAGE" | "FINAL";
   roundOrder: number;
   roundStartAt: string;
   roundEndAt: string;
-  editRoundName: string;
   editRoundType: "GROUP_STAGE" | "FINAL";
   editRoundOrder: number;
   editRoundStartAt: string;
   editRoundEndAt: string;
-  onRoundNameChange: (value: string) => void;
   onRoundTypeChange: (value: "GROUP_STAGE" | "FINAL") => void;
   onRoundOrderChange: (value: number) => void;
   onRoundStartAtChange: (value: string) => void;
   onRoundEndAtChange: (value: string) => void;
-  onEditRoundNameChange: (value: string) => void;
   onEditRoundTypeChange: (value: "GROUP_STAGE" | "FINAL") => void;
   onEditRoundOrderChange: (value: number) => void;
   onEditRoundStartAtChange: (value: string) => void;
@@ -34,6 +30,12 @@ export interface BoardRoundSectionProps {
   onCreateRound: () => void;
   onCancelAddRound: () => void;
   onSaveRound: () => void;
+  onDeleteRound: () => void;
+  fieldErrors?: Record<string, string>;
+}
+
+function fieldErrorClass(hasError: boolean) {
+  return hasError ? "border-error" : "";
 }
 
 export function BoardRoundSection({
@@ -42,22 +44,18 @@ export function BoardRoundSection({
   selectedRoundId,
   busy,
   showAddRound,
-  roundName,
   roundType,
   roundOrder,
   roundStartAt,
   roundEndAt,
-  editRoundName,
   editRoundType,
   editRoundOrder,
   editRoundStartAt,
   editRoundEndAt,
-  onRoundNameChange,
   onRoundTypeChange,
   onRoundOrderChange,
   onRoundStartAtChange,
   onRoundEndAtChange,
-  onEditRoundNameChange,
   onEditRoundTypeChange,
   onEditRoundOrderChange,
   onEditRoundStartAtChange,
@@ -65,7 +63,9 @@ export function BoardRoundSection({
   onOpenAddRoundForm,
   onCreateRound,
   onCancelAddRound,
-  onSaveRound
+  onSaveRound,
+  onDeleteRound,
+  fieldErrors = {}
 }: BoardRoundSectionProps) {
   return (
     <section
@@ -100,11 +100,7 @@ export function BoardRoundSection({
           {showAddRound ? <p className="font-label-md text-on-surface">Tạo vòng mới</p> : null}
           <div className="grid gap-md md:grid-cols-2 lg:grid-cols-3">
             <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Tên vòng
-              <input className="form-input" value={roundName} onChange={(e) => onRoundNameChange(e.target.value)} />
-            </label>
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Loại vòng
+              Vòng thi
               <select
                 className="form-input"
                 value={roundType}
@@ -128,19 +124,25 @@ export function BoardRoundSection({
               Bắt đầu
               <input
                 type="datetime-local"
-                className="form-input"
+                className={`form-input ${fieldErrorClass(Boolean(fieldErrors.startAt))}`}
                 value={roundStartAt}
                 onChange={(e) => onRoundStartAtChange(e.target.value)}
               />
+              {fieldErrors.startAt ? (
+                <span className="font-body-sm text-error">{fieldErrors.startAt}</span>
+              ) : null}
             </label>
             <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
               Kết thúc
               <input
                 type="datetime-local"
-                className="form-input"
+                className={`form-input ${fieldErrorClass(Boolean(fieldErrors.endAt))}`}
                 value={roundEndAt}
                 onChange={(e) => onRoundEndAtChange(e.target.value)}
               />
+              {fieldErrors.endAt ? (
+                <span className="font-body-sm text-error">{fieldErrors.endAt}</span>
+              ) : null}
             </label>
             <div className="flex flex-wrap items-end gap-sm">
               <Button type="button" disabled={busy} onClick={onCreateRound}>
@@ -162,15 +164,7 @@ export function BoardRoundSection({
               <p className="font-label-md text-on-surface">Sửa vòng đang chọn</p>
               <div className="grid gap-md md:grid-cols-2 lg:grid-cols-3">
                 <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                  Tên vòng
-                  <input
-                    className="form-input"
-                    value={editRoundName}
-                    onChange={(e) => onEditRoundNameChange(e.target.value)}
-                  />
-                </label>
-                <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                  Loại vòng
+                  Vòng thi
                   <select
                     className="form-input"
                     value={editRoundType}
@@ -194,23 +188,32 @@ export function BoardRoundSection({
                   Bắt đầu
                   <input
                     type="datetime-local"
-                    className="form-input"
+                    className={`form-input ${fieldErrorClass(Boolean(fieldErrors.startAt))}`}
                     value={editRoundStartAt}
                     onChange={(e) => onEditRoundStartAtChange(e.target.value)}
                   />
+                  {fieldErrors.startAt ? (
+                    <span className="font-body-sm text-error">{fieldErrors.startAt}</span>
+                  ) : null}
                 </label>
                 <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
                   Kết thúc
                   <input
                     type="datetime-local"
-                    className="form-input"
+                    className={`form-input ${fieldErrorClass(Boolean(fieldErrors.endAt))}`}
                     value={editRoundEndAt}
                     onChange={(e) => onEditRoundEndAtChange(e.target.value)}
                   />
+                  {fieldErrors.endAt ? (
+                    <span className="font-body-sm text-error">{fieldErrors.endAt}</span>
+                  ) : null}
                 </label>
-                <div className="flex items-end">
+                <div className="flex flex-wrap items-end gap-sm">
                   <Button type="button" disabled={busy} onClick={onSaveRound}>
                     Lưu vòng
+                  </Button>
+                  <Button type="button" variant="ghost" disabled={busy} onClick={onDeleteRound}>
+                    Xóa vòng
                   </Button>
                 </div>
               </div>
