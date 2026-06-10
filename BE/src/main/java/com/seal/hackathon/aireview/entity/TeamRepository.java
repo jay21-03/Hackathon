@@ -45,22 +45,26 @@ public class TeamRepository {
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private SubmissionStatus status;
+    private SubmissionStatus status = SubmissionStatus.DRAFT;
 
     private OffsetDateTime submittedAt;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private RepositoryAccessStatus accessStatus;
+    private RepositoryAccessStatus accessStatus = RepositoryAccessStatus.PENDING;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private RepositoryProvisionStatus provisionStatus;
+    private RepositoryProvisionStatus provisionStatus = RepositoryProvisionStatus.PENDING;
 
     private OffsetDateTime openedAt;
     private OffsetDateTime closedAt;
     private OffsetDateTime provisionedAt;
+    private OffsetDateTime lastPushAt;
     private String lastError;
 }

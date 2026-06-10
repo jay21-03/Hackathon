@@ -20,9 +20,16 @@ public interface TeamRepositoryEntityRepository extends JpaRepository<TeamReposi
 
     List<TeamRepository> findByRoundIdAndAccessStatus(Long roundId, RepositoryAccessStatus accessStatus);
 
+    List<TeamRepository> findByRoundIdOrderByTeamIdAscProblemIdAsc(Long roundId);
+
     List<TeamRepository> findByTeamIdInOrderByTeamIdAscProblemIdAsc(List<Long> teamIds);
 
     Optional<TeamRepository> findByTeamId(Long teamId);
 
     List<TeamRepository> findByTeamIdIn(List<Long> teamIds);
+
+    List<TeamRepository> findByGithubRepoId(Long githubRepoId);
+
+    List<TeamRepository> findByGithubOwnerIgnoreCaseAndGithubRepoNameIgnoreCase(
+            String githubOwner, String githubRepoName);
 }
