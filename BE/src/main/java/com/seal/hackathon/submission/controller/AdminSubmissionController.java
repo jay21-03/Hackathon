@@ -3,7 +3,6 @@ package com.seal.hackathon.submission.controller;
 import com.seal.hackathon.common.response.ApiResponse;
 import com.seal.hackathon.common.response.PagedResult;
 import com.seal.hackathon.submission.dto.AdminTeamSubmissionResponse;
-import com.seal.hackathon.submission.dto.SubmissionResponse;
 import com.seal.hackathon.submission.service.SubmissionService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.util.List;
@@ -26,13 +25,17 @@ public class AdminSubmissionController {
     public ApiResponse<PagedResult<AdminTeamSubmissionResponse>> listEventSubmissions(
             @PathVariable Long eventId,
             @RequestParam(required = false) Long boardId,
+            @RequestParam(required = false) Long roundId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
-        return ApiResponse.ok(submissionService.listSubmissionsPaged(eventId, boardId, page, size));
+        return ApiResponse.ok(submissionService.listSubmissionsPaged(eventId, boardId, roundId, page, size));
     }
 
     @GetMapping("/teams/{teamId}/submission")
-    public ApiResponse<SubmissionResponse> getTeamSubmission(@PathVariable Long teamId) {
-        return ApiResponse.ok(submissionService.getSubmissionForOrganizer(teamId));
+    public ApiResponse<AdminTeamSubmissionResponse> getTeamSubmission(
+            @PathVariable Long teamId,
+            @RequestParam(required = false) Long boardId,
+            @RequestParam(required = false) Long roundId) {
+        return ApiResponse.ok(submissionService.getAdminTeamSubmission(teamId, boardId, roundId));
     }
 }

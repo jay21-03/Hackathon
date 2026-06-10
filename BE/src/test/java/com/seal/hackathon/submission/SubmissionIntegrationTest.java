@@ -3,6 +3,8 @@ package com.seal.hackathon.submission;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
+import com.seal.hackathon.common.enums.RepositoryProvisionStatus;
+import com.seal.hackathon.common.enums.SubmissionStatus;
 import com.seal.hackathon.authprofile.entity.User;
 import com.seal.hackathon.authprofile.entity.UserRole;
 import com.seal.hackathon.authprofile.repository.UserRepository;
@@ -31,7 +33,9 @@ import com.seal.hackathon.registration.repository.TeamMemberRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.authprofile.security.JwtService;
 import com.seal.hackathon.support.IntegrationTestDataCleaner;
+import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.support.IntegrationTestConfig;
+import com.seal.hackathon.support.IntegrationTestFixtures;
 import java.time.OffsetDateTime;
 import java.time.LocalDate;
 import java.util.Map;
@@ -88,6 +92,9 @@ class SubmissionIntegrationTest {
 
     @Autowired
     EventRepository eventRepository;
+
+    @Autowired
+    AcademicTermRepository academicTermRepository;
 
     @Autowired
     RoundRepository roundRepository;
@@ -155,6 +162,7 @@ class SubmissionIntegrationTest {
                 .minTeamSize(1)
                 .maxTeamSize(5)
                 .status(EventStatus.DRAFT)
+                .academicTermId(IntegrationTestFixtures.defaultAcademicTermId(academicTermRepository))
                 .createdBy(participant.getId())
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
@@ -269,8 +277,125 @@ class SubmissionIntegrationTest {
         mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/events/" + event.getId() + "/submissions")
                         .header("Authorization", "Bearer " + orgJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].teamId").value(team.getId()))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].status").value("SUBMITTED"));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].status").value("SUBMITTED"));
+    }
+
+    @Test
+    void listSubmissionsByRoundDoesNotLeakPreviousRoundRepository() throws Exception {
+        Board roundOneBoard = boardRepository.findAll().get(0);
+        Problem roundOneProblem = problemRepository.findByBoardId(roundOneBoard.getId()).get(0);
+        teamRepositoryEntityRepository.save(com.seal.hackathon.aireview.entity.TeamRepository.builder()
+                .teamId(team.getId())
+                .problemId(roundOneProblem.getId())
+                .roundId(roundOneBoard.getRoundId())
+                .boardId(roundOneBoard.getId())
+                .repositoryUrl("https://github.com/org/round-one-repo")
+                .repositoryName("round-one-repo")
+                .status(SubmissionStatus.SUBMITTED)
+                .submittedAt(OffsetDateTime.now())
+                .provisionStatus(RepositoryProvisionStatus.CREATED)
+                .reviewIntervalMinutes(30)
+                .createdBy(participant.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        Round finalsRound = roundRepository.save(Round.builder()
+                .eventId(event.getId())
+                .name("Chung kết")
+                .roundType(RoundType.FINAL)
+                .roundOrder(2)
+                .startAt(OffsetDateTime.now().plusHours(3))
+                .endAt(OffsetDateTime.now().plusHours(4))
+                .status(RoundStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        Board finalsBoard = boardRepository.save(Board.builder()
+                .roundId(finalsRound.getId())
+                .name("Bảng A")
+                .boardOrder(1)
+                .description("")
+                .status(BoardStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        boardSlotRepository.save(BoardSlot.builder()
+                .roundId(finalsRound.getId())
+                .boardId(finalsBoard.getId())
+                .teamNumber(1)
+                .teamId(team.getId())
+                .assignedAt(OffsetDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .build());
+
+        problemRepository.save(Problem.builder()
+                .boardId(finalsBoard.getId())
+                .title("Đề chung kết")
+                .description("Mô tả")
+                .releaseAt(OffsetDateTime.now().minusHours(1))
+                .closeAt(OffsetDateTime.now().plusDays(1))
+                .createdBy(participant.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        String orgJwt = jwtService.generateToken(participant, Set.of("ORGANIZER", "PARTICIPANT"));
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/events/" + event.getId() + "/submissions")
+                        .param("roundId", String.valueOf(finalsRound.getId()))
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.total").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].status").isEmpty())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].repositoryUrl").isEmpty());
+    }
+
+    @Test
+    void listSubmissionsDedupesTeamAcrossRounds() throws Exception {
+        Round finalsRound = roundRepository.save(Round.builder()
+                .eventId(event.getId())
+                .name("Chung kết")
+                .roundType(RoundType.FINAL)
+                .roundOrder(2)
+                .startAt(OffsetDateTime.now().plusHours(3))
+                .endAt(OffsetDateTime.now().plusHours(4))
+                .status(RoundStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        Board finalsBoard = boardRepository.save(Board.builder()
+                .roundId(finalsRound.getId())
+                .name("Bảng A")
+                .boardOrder(1)
+                .description("")
+                .status(BoardStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        boardSlotRepository.save(BoardSlot.builder()
+                .roundId(finalsRound.getId())
+                .boardId(finalsBoard.getId())
+                .teamNumber(1)
+                .teamId(team.getId())
+                .assignedAt(OffsetDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .build());
+
+        String orgJwt = jwtService.generateToken(participant, Set.of("ORGANIZER", "PARTICIPANT"));
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/events/" + event.getId() + "/submissions")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.total").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items.length()").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].boardName").value("Bảng A"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].slotNumber").value(1));
     }
 
     @Test

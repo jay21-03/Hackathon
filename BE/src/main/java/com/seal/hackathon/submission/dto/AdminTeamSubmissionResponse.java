@@ -17,4 +17,5 @@ public class AdminTeamSubmissionResponse {
     private String repositoryUrl;
     private String repositoryName;
     private OffsetDateTime submittedAt;
+    private OffsetDateTime lastPushAt;
 }

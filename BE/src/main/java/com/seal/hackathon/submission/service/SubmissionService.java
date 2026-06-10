@@ -4,6 +4,8 @@ import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
+import com.seal.hackathon.common.enums.RepositoryAccessStatus;
+import com.seal.hackathon.common.enums.RepositoryProvisionStatus;
 import com.seal.hackathon.common.enums.SubmissionStatus;
 import com.seal.hackathon.contest.dto.MyBoardResponse;
 import com.seal.hackathon.contest.dto.MyProblemResponse;
@@ -26,15 +28,16 @@ import com.seal.hackathon.submission.dto.SaveSubmissionDraftRequest;
 import com.seal.hackathon.submission.dto.SubmissionResponse;
 import com.seal.hackathon.submission.dto.SubmitSubmissionRequest;
 import com.seal.hackathon.common.response.PagedResult;
-import java.net.URI;
+import com.seal.hackathon.common.util.RepositoryUrlValidation;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -65,7 +68,7 @@ public class SubmissionService {
 
     @Transactional(readOnly = true)
     public PagedResult<AdminTeamSubmissionResponse> listSubmissionsPaged(
-            Long eventId, Long boardId, int page, int size) {
+            Long eventId, Long boardId, Long roundId, int page, int size) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         int resolvedSize = Math.min(Math.max(size, 1), 200);
         int resolvedPage = Math.max(page, 0);
@@ -82,20 +85,15 @@ public class SubmissionService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BOARD_EVENT_MISMATCH");
             }
             slotPage = boardSlotRepository.findByBoardIdAndTeamIdIsNotNullOrderByTeamNumberAsc(boardId, pageable);
-        } else {
-            List<Long> roundIds = roundRepository.findByEventId(eventId).stream()
-                    .map(Round::getId)
-                    .toList();
-            if (roundIds.isEmpty()) {
-                return PagedResult.<AdminTeamSubmissionResponse>builder()
-                        .items(List.of())
-                        .page(resolvedPage)
-                        .size(resolvedSize)
-                        .total(0)
-                        .totalPages(0)
-                        .build();
+        } else if (roundId != null) {
+            Round round = roundRepository.findById(roundId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ROUND_NOT_FOUND"));
+            if (!eventId.equals(round.getEventId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ROUND_EVENT_MISMATCH");
             }
-            slotPage = boardSlotRepository.findByRoundIdInAndTeamIdIsNotNullOrderByTeamNumberAsc(roundIds, pageable);
+            slotPage = boardSlotRepository.findByRoundIdAndTeamIdIsNotNullOrderByTeamNumberAsc(roundId, pageable);
+        } else {
+            return listDedupedSubmissionsPaged(eventId, resolvedPage, resolvedSize);
         }
 
         Map<Long, Board> boardById = new HashMap<>();
@@ -116,6 +114,46 @@ public class SubmissionService {
                 .build();
     }
 
+    private PagedResult<AdminTeamSubmissionResponse> listDedupedSubmissionsPaged(
+            Long eventId, int page, int size) {
+        Map<Long, BoardSlot> slotByTeamId = new LinkedHashMap<>();
+        Map<Long, Board> boardById = new HashMap<>();
+        for (Round round : roundRepository.findByEventId(eventId)) {
+            for (BoardSlot slot : boardSlotRepository.findByRoundId(round.getId())) {
+                if (slot.getTeamId() == null) {
+                    continue;
+                }
+                slotByTeamId.putIfAbsent(slot.getTeamId(), slot);
+                if (slot.getBoardId() != null && !boardById.containsKey(slot.getBoardId())) {
+                    boardRepository.findById(slot.getBoardId()).ifPresent(b -> boardById.put(b.getId(), b));
+                }
+            }
+        }
+
+        List<BoardSlot> allSlots = slotByTeamId.values().stream()
+                .sorted(Comparator.comparing(
+                        BoardSlot::getTeamNumber, Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+        int total = allSlots.size();
+        int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / size);
+        int fromIndex = Math.min(page * size, total);
+        int toIndex = Math.min(fromIndex + size, total);
+        List<BoardSlot> pageSlots = allSlots.subList(fromIndex, toIndex);
+
+        List<AdminTeamSubmissionResponse> items = new ArrayList<>();
+        for (BoardSlot slot : pageSlots) {
+            items.add(toAdminSubmissionRow(slot, boardById.get(slot.getBoardId())));
+        }
+
+        return PagedResult.<AdminTeamSubmissionResponse>builder()
+                .items(items)
+                .page(page)
+                .size(size)
+                .total(total)
+                .totalPages(totalPages)
+                .build();
+    }
+
     private AdminTeamSubmissionResponse toAdminSubmissionRow(BoardSlot slot, Board board) {
         Long teamId = slot.getTeamId();
         Team team = teamId == null ? null : teamRepository.findById(teamId).orElse(null);
@@ -127,18 +165,18 @@ public class SubmissionService {
                     .slotNumber(slot.getTeamNumber())
                     .build();
         }
-        com.seal.hackathon.aireview.entity.TeamRepository repo =
-                teamRepositoryEntityRepository.findByTeamId(teamId).orElse(null);
+        com.seal.hackathon.aireview.entity.TeamRepository repo = resolveRepositoryForSlot(slot, board);
         return AdminTeamSubmissionResponse.builder()
                 .teamId(teamId)
                 .teamName(team.getName())
                 .boardId(slot.getBoardId())
                 .boardName(board != null ? board.getName() : null)
                 .slotNumber(slot.getTeamNumber())
-                .status(repo != null ? repo.getStatus() : null)
+                .status(repo != null ? effectiveStatus(repo) : null)
                 .repositoryUrl(repo != null ? repo.getRepositoryUrl() : null)
                 .repositoryName(repo != null ? repo.getRepositoryName() : null)
-                .submittedAt(repo != null ? repo.getSubmittedAt() : null)
+                .submittedAt(repo != null ? effectiveSubmittedAt(repo) : null)
+                .lastPushAt(repo != null ? repo.getLastPushAt() : null)
                 .build();
     }
 
@@ -184,18 +222,19 @@ public class SubmissionService {
             if (team == null) {
                 continue;
             }
-            com.seal.hackathon.aireview.entity.TeamRepository repo = findTeamLevelRepository(teamId);
             Board board = slot.getBoardId() != null ? boardById.get(slot.getBoardId()) : null;
+            com.seal.hackathon.aireview.entity.TeamRepository repo = resolveRepositoryForSlot(slot, board);
             results.add(AdminTeamSubmissionResponse.builder()
                     .teamId(teamId)
                     .teamName(team.getName())
                     .boardId(slot.getBoardId())
                     .boardName(board != null ? board.getName() : null)
                     .slotNumber(slot.getTeamNumber())
-                    .status(repo != null ? repo.getStatus() : null)
+                    .status(repo != null ? effectiveStatus(repo) : null)
                     .repositoryUrl(repo != null ? repo.getRepositoryUrl() : null)
                     .repositoryName(repo != null ? repo.getRepositoryName() : null)
-                    .submittedAt(repo != null ? repo.getSubmittedAt() : null)
+                    .submittedAt(repo != null ? effectiveSubmittedAt(repo) : null)
+                    .lastPushAt(repo != null ? repo.getLastPushAt() : null)
                     .build());
         }
 
@@ -207,14 +246,23 @@ public class SubmissionService {
     }
 
     @Transactional(readOnly = true)
-    public SubmissionResponse getSubmissionForOrganizer(Long teamId) {
+    public AdminTeamSubmissionResponse getAdminTeamSubmission(Long teamId, Long boardId, Long roundId) {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TEAM_NOT_FOUND"));
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(team.getEventId());
 
-        com.seal.hackathon.aireview.entity.TeamRepository entity = findTeamLevelRepository(teamId);
-        OffsetDateTime deadline = resolveDeadlineForTeam(teamId, team.getEventId());
-        return buildAdminResponse(team, entity, deadline);
+        BoardSlot slot = resolveAdminSubmissionSlot(teamId, boardId, roundId, team.getEventId());
+        if (slot != null) {
+            Board board = slot.getBoardId() == null
+                    ? null
+                    : boardRepository.findById(slot.getBoardId()).orElse(null);
+            return toAdminSubmissionRow(slot, board);
+        }
+
+        return AdminTeamSubmissionResponse.builder()
+                .teamId(teamId)
+                .teamName(team.getName())
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -222,7 +270,7 @@ public class SubmissionService {
         SubmissionContext ctx = resolveContext(eventId, userId);
         com.seal.hackathon.aireview.entity.TeamRepository entity = ctx.teamId() == null
                 ? null
-                : findTeamLevelRepository(ctx.teamId());
+                : resolveRepositoryForParticipant(eventId, userId, ctx.teamId());
         return buildResponse(ctx, entity);
     }
 
@@ -253,7 +301,7 @@ public class SubmissionService {
 
         String url = StringUtils.hasText(request.getRepositoryUrl())
                 ? normalizeUrl(request.getRepositoryUrl())
-                : repositoryUrl(findTeamLevelRepository(ctx.teamId()));
+                : repositoryUrl(findBestTeamRepository(ctx.teamId()));
 
         if (!StringUtils.hasText(url)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "REPOSITORY_URL_REQUIRED");
@@ -262,7 +310,7 @@ public class SubmissionService {
 
         String name = StringUtils.hasText(request.getRepositoryName())
                 ? request.getRepositoryName().trim()
-                : repositoryName(findTeamLevelRepository(ctx.teamId()));
+                : repositoryName(findBestTeamRepository(ctx.teamId()));
 
         OffsetDateTime now = OffsetDateTime.now();
         com.seal.hackathon.aireview.entity.TeamRepository entity = upsertRepository(ctx.teamId(), userId, url, name, SubmissionStatus.SUBMITTED, now);
@@ -292,6 +340,8 @@ public class SubmissionService {
                     .reviewIntervalMinutes(DEFAULT_REVIEW_INTERVAL_MINUTES)
                     .status(status)
                     .submittedAt(submittedAt)
+                    .accessStatus(RepositoryAccessStatus.OPEN)
+                    .provisionStatus(RepositoryProvisionStatus.PENDING)
                     .createdBy(userId)
                     .createdAt(now)
                     .updatedAt(now)
@@ -315,16 +365,17 @@ public class SubmissionService {
     private SubmissionResponse buildResponse(
             SubmissionContext ctx, com.seal.hackathon.aireview.entity.TeamRepository entity) {
         boolean beforeDeadline = ctx.deadlineAt() == null || OffsetDateTime.now().isBefore(ctx.deadlineAt());
-        boolean alreadySubmitted = entity != null && entity.getStatus() == SubmissionStatus.SUBMITTED;
+        SubmissionStatus status = effectiveStatus(entity);
+        boolean alreadySubmitted = status == SubmissionStatus.SUBMITTED;
         boolean editable = beforeDeadline && ctx.blockReason() == null && !alreadySubmitted;
 
         return SubmissionResponse.builder()
                 .teamId(ctx.teamId())
                 .teamName(ctx.teamName())
-                .status(entity != null ? entity.getStatus() : null)
+                .status(status)
                 .repositoryUrl(entity != null ? entity.getRepositoryUrl() : null)
                 .repositoryName(entity != null ? entity.getRepositoryName() : null)
-                .submittedAt(entity != null ? entity.getSubmittedAt() : null)
+                .submittedAt(entity != null ? effectiveSubmittedAt(entity) : null)
                 .deadlineAt(ctx.deadlineAt())
                 .canSubmit(editable)
                 .editable(editable)
@@ -340,11 +391,9 @@ public class SubmissionService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "SUBMISSION_DEADLINE_PASSED");
         }
         if (ctx.teamId() != null) {
-            com.seal.hackathon.aireview.entity.TeamRepository entity = findTeamLevelRepository(ctx.teamId());
-            if (entity != null) {
-                if (entity.getStatus() == SubmissionStatus.SUBMITTED) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "SUBMISSION_ALREADY_SUBMITTED");
-                }
+            com.seal.hackathon.aireview.entity.TeamRepository entity = findBestTeamRepository(ctx.teamId());
+            if (entity != null && effectiveStatus(entity) == SubmissionStatus.SUBMITTED) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "SUBMISSION_ALREADY_SUBMITTED");
             }
         }
     }
@@ -359,6 +408,163 @@ public class SubmissionService {
         return teamRepositoryEntityRepository
                 .findFirstByTeamIdAndProblemIdIsNullOrderByUpdatedAtDesc(teamId)
                 .orElse(null);
+    }
+
+    private com.seal.hackathon.aireview.entity.TeamRepository resolveRepositoryForParticipant(
+            Long eventId, Long userId, Long teamId) {
+        MyBoardResponse board = contestManagementService.getMyBoard(eventId, userId);
+        if (board.isAssigned() && board.getBoardId() != null) {
+            BoardSlot slot = boardSlotRepository.findByBoardId(board.getBoardId()).stream()
+                    .filter(s -> teamId.equals(s.getTeamId()))
+                    .findFirst()
+                    .orElse(null);
+            Board boardEntity = boardRepository.findById(board.getBoardId()).orElse(null);
+            if (slot != null && boardEntity != null) {
+                com.seal.hackathon.aireview.entity.TeamRepository scoped =
+                        resolveRepositoryForSlot(slot, boardEntity);
+                if (scoped != null) {
+                    return scoped;
+                }
+            }
+        }
+        return findBestTeamRepository(teamId);
+    }
+
+    private BoardSlot resolveAdminSubmissionSlot(
+            Long teamId, Long boardId, Long roundId, Long eventId) {
+        if (boardId != null) {
+            Board board = boardRepository.findById(boardId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "BOARD_NOT_FOUND"));
+            Round round = roundRepository.findById(board.getRoundId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ROUND_NOT_FOUND"));
+            if (!eventId.equals(round.getEventId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BOARD_EVENT_MISMATCH");
+            }
+            return boardSlotRepository.findByBoardId(boardId).stream()
+                    .filter(slot -> teamId.equals(slot.getTeamId()))
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (roundId != null) {
+            Round round = roundRepository.findById(roundId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ROUND_NOT_FOUND"));
+            if (!eventId.equals(round.getEventId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ROUND_EVENT_MISMATCH");
+            }
+            return boardSlotRepository.findByRoundId(roundId).stream()
+                    .filter(slot -> teamId.equals(slot.getTeamId()))
+                    .findFirst()
+                    .orElse(null);
+        }
+        return boardSlotRepository.findByTeamId(teamId).stream()
+                .filter(slot -> belongsToEvent(slot, eventId))
+                .max(Comparator.comparing(
+                        this::roundOrderForSlot,
+                        Comparator.nullsLast(Integer::compareTo)))
+                .orElse(null);
+    }
+
+    private boolean belongsToEvent(BoardSlot slot, Long eventId) {
+        if (slot.getRoundId() != null) {
+            return roundRepository.findById(slot.getRoundId())
+                    .map(round -> eventId.equals(round.getEventId()))
+                    .orElse(false);
+        }
+        if (slot.getBoardId() == null) {
+            return false;
+        }
+        return boardRepository.findById(slot.getBoardId())
+                .flatMap(board -> roundRepository.findById(board.getRoundId()))
+                .map(round -> eventId.equals(round.getEventId()))
+                .orElse(false);
+    }
+
+    private Integer roundOrderForSlot(BoardSlot slot) {
+        Long roundId = slot.getRoundId();
+        if (roundId == null && slot.getBoardId() != null) {
+            roundId = boardRepository.findById(slot.getBoardId())
+                    .map(Board::getRoundId)
+                    .orElse(null);
+        }
+        if (roundId == null) {
+            return null;
+        }
+        return roundRepository.findById(roundId).map(Round::getRoundOrder).orElse(null);
+    }
+
+    private Optional<Problem> findPrimaryProblemForBoard(Long boardId) {
+        if (boardId == null) {
+            return Optional.empty();
+        }
+        return problemRepository.findByBoardId(boardId).stream()
+                .min(Comparator.comparing(Problem::getReleaseAt, Comparator.nullsLast(OffsetDateTime::compareTo))
+                        .thenComparing(Problem::getId, Comparator.nullsLast(Long::compareTo)));
+    }
+
+    private com.seal.hackathon.aireview.entity.TeamRepository resolveRepositoryForSlot(
+            BoardSlot slot, Board board) {
+        if (slot == null || slot.getTeamId() == null) {
+            return null;
+        }
+        Long teamId = slot.getTeamId();
+        Long boardId = board != null ? board.getId() : slot.getBoardId();
+        Optional<Problem> problem = findPrimaryProblemForBoard(boardId);
+        if (problem.isPresent()) {
+            return teamRepositoryEntityRepository
+                    .findByTeamIdAndProblemId(teamId, problem.get().getId())
+                    .orElse(null);
+        }
+        Long roundId = board != null ? board.getRoundId() : slot.getRoundId();
+        if (roundId == null) {
+            return null;
+        }
+        Long resolvedRoundId = roundId;
+        return teamRepositoryEntityRepository.findAllByTeamId(teamId).stream()
+                .filter(repo -> repo.getProblemId() == null)
+                .filter(repo -> resolvedRoundId.equals(repo.getRoundId()))
+                .max(Comparator.comparing(
+                        com.seal.hackathon.aireview.entity.TeamRepository::getUpdatedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .orElse(null);
+    }
+
+    private com.seal.hackathon.aireview.entity.TeamRepository findBestTeamRepository(Long teamId) {
+        List<com.seal.hackathon.aireview.entity.TeamRepository> repositories =
+                teamRepositoryEntityRepository.findAllByTeamId(teamId);
+        if (repositories.isEmpty()) {
+            return null;
+        }
+        return repositories.stream()
+                .filter(repo -> repo.getProvisionStatus() == RepositoryProvisionStatus.CREATED)
+                .filter(repo -> StringUtils.hasText(repo.getRepositoryUrl()))
+                .max(Comparator.comparing(
+                        com.seal.hackathon.aireview.entity.TeamRepository::getUpdatedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .orElseGet(() -> findTeamLevelRepository(teamId));
+    }
+
+    private SubmissionStatus effectiveStatus(com.seal.hackathon.aireview.entity.TeamRepository entity) {
+        if (entity == null) {
+            return null;
+        }
+        if (entity.getProvisionStatus() == RepositoryProvisionStatus.CREATED
+                && (entity.getStatus() == null || entity.getStatus() == SubmissionStatus.DRAFT)) {
+            return SubmissionStatus.SUBMITTED;
+        }
+        return entity.getStatus();
+    }
+
+    private OffsetDateTime effectiveSubmittedAt(com.seal.hackathon.aireview.entity.TeamRepository entity) {
+        if (entity == null) {
+            return null;
+        }
+        if (entity.getSubmittedAt() != null) {
+            return entity.getSubmittedAt();
+        }
+        if (entity.getProvisionStatus() == RepositoryProvisionStatus.CREATED) {
+            return entity.getProvisionedAt();
+        }
+        return null;
     }
 
     private String repositoryUrl(com.seal.hackathon.aireview.entity.TeamRepository repository) {
@@ -382,14 +588,10 @@ public class SubmissionService {
         MyProblemResponse problem = contestManagementService.getMyProblem(eventId, userId);
         if (!problem.isAvailable()) {
             String reason = problem.getReason() != null ? problem.getReason() : "PROBLEM_UNAVAILABLE";
-            if ("NO_PROBLEM".equals(reason) || "NOT_RELEASED".equals(reason) || "PROBLEM_CLOSED".equals(reason)) {
-                return blockedContext(reason);
-            }
-            return blockedContext(reason);
+            return new SubmissionContext(team.getId(), team.getName(), problem.getCloseAt(), reason);
         }
 
-        OffsetDateTime deadline = problem.getCloseAt();
-        return new SubmissionContext(team.getId(), team.getName(), deadline, null);
+        return new SubmissionContext(team.getId(), team.getName(), problem.getCloseAt(), null);
     }
 
     private SubmissionContext blockedContext(String reason) {
@@ -401,26 +603,7 @@ public class SubmissionService {
     }
 
     private void validateRepositoryUrl(String url) {
-        try {
-            URI uri = URI.create(url);
-            String host = uri.getHost();
-            if (host == null) {
-                throw new IllegalArgumentException("invalid host");
-            }
-            String lower = host.toLowerCase(Locale.ROOT);
-            boolean allowed = lower.equals("github.com")
-                    || lower.endsWith(".github.com")
-                    || lower.equals("gitlab.com")
-                    || lower.endsWith(".gitlab.com");
-            if (!allowed) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_REPOSITORY_URL");
-            }
-            if (!StringUtils.hasText(uri.getPath()) || "/".equals(uri.getPath())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_REPOSITORY_URL");
-            }
-        } catch (ResponseStatusException ex) {
-            throw ex;
-        } catch (Exception ex) {
+        if (!RepositoryUrlValidation.isValid(url)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_REPOSITORY_URL");
         }
     }
@@ -432,10 +615,10 @@ public class SubmissionService {
         return SubmissionResponse.builder()
                 .teamId(team.getId())
                 .teamName(team.getName())
-                .status(entity != null ? entity.getStatus() : null)
+                .status(entity != null ? effectiveStatus(entity) : null)
                 .repositoryUrl(entity != null ? entity.getRepositoryUrl() : null)
                 .repositoryName(entity != null ? entity.getRepositoryName() : null)
-                .submittedAt(entity != null ? entity.getSubmittedAt() : null)
+                .submittedAt(entity != null ? effectiveSubmittedAt(entity) : null)
                 .deadlineAt(deadlineAt)
                 .canSubmit(false)
                 .editable(false)
