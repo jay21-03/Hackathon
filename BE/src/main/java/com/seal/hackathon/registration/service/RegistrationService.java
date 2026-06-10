@@ -3,7 +3,7 @@ package com.seal.hackathon.registration.service;
 import com.seal.hackathon.registration.dto.AuditLogResponse;
 import com.seal.hackathon.registration.dto.BulkInviteTeamMembersRequest;
 import com.seal.hackathon.registration.dto.BulkTeamInvitationResponse;
-import com.seal.hackathon.registration.dto.MemberRequest;
+import com.seal.hackathon.registration.dto.InviteMemberRequest;
 import com.seal.hackathon.registration.dto.RegisterTeamRequest;
 import com.seal.hackathon.common.response.PagedResult;
 import com.seal.hackathon.registration.dto.TeamDetailDto;
@@ -24,7 +24,7 @@ public interface RegistrationService {
 
     TeamDetailDto inviteTeamMember(
             Long teamId,
-            MemberRequest member,
+            InviteMemberRequest member,
             Long actorUserId,
             String actorEmail,
             boolean organizer,

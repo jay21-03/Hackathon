@@ -38,7 +38,7 @@ public class TeamInvitationService {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         int resolvedSize = Math.min(Math.max(size, 1), 200);
         int resolvedPage = Math.max(page, 0);
-        String emailFilter = StringUtils.hasText(email) ? email.trim() : null;
+        String emailFilter = StringUtils.hasText(email) ? email.trim() : "";
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         PageRequest pageable = PageRequest.of(
                 resolvedPage, resolvedSize, Sort.by(Sort.Direction.DESC, "invitedAt"));

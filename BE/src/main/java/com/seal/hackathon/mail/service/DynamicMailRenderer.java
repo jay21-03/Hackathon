@@ -15,7 +15,7 @@ public class DynamicMailRenderer {
 
     public DynamicMailRenderer(
             @Qualifier("inlineMailTemplateEngine") TemplateEngine inlineMailTemplateEngine,
-            TemplateEngine classpathTemplateEngine) {
+            @Qualifier("templateEngine") TemplateEngine classpathTemplateEngine) {
         this.inlineMailTemplateEngine = inlineMailTemplateEngine;
         this.classpathTemplateEngine = classpathTemplateEngine;
     }

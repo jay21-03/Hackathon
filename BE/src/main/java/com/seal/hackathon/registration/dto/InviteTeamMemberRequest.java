@@ -7,16 +7,16 @@ public class InviteTeamMemberRequest {
 
     @NotNull
     @Valid
-    private MemberRequest member;
+    private InviteMemberRequest member;
 
     public InviteTeamMemberRequest() {
     }
 
-    public MemberRequest getMember() {
+    public InviteMemberRequest getMember() {
         return member;
     }
 
-    public void setMember(MemberRequest member) {
+    public void setMember(InviteMemberRequest member) {
         this.member = member;
     }
 }

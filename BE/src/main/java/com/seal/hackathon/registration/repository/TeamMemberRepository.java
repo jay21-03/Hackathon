@@ -50,7 +50,7 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
 			  AND tm.contactPerson = false
 			  AND tm.status = :invitedStatus
 			  AND (tm.inviteExpiresAt IS NULL OR tm.inviteExpiresAt >= :now)
-			  AND (:email IS NULL OR LOWER(tm.email) LIKE LOWER(CONCAT('%', :email, '%')))
+			  AND (:email = '' OR LOWER(tm.email) LIKE LOWER(CONCAT('%', :email, '%')))
 			""")
 	Page<TeamMember> findActiveInvitations(
 			@Param("eventId") Long eventId,
@@ -66,7 +66,7 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
 			  AND tm.status = :invitedStatus
 			  AND tm.inviteExpiresAt IS NOT NULL
 			  AND tm.inviteExpiresAt < :now
-			  AND (:email IS NULL OR LOWER(tm.email) LIKE LOWER(CONCAT('%', :email, '%')))
+			  AND (:email = '' OR LOWER(tm.email) LIKE LOWER(CONCAT('%', :email, '%')))
 			""")
 	Page<TeamMember> findExpiredInvitations(
 			@Param("eventId") Long eventId,
@@ -80,7 +80,7 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
 			WHERE tm.eventId = :eventId
 			  AND tm.contactPerson = false
 			  AND tm.status = :status
-			  AND (:email IS NULL OR LOWER(tm.email) LIKE LOWER(CONCAT('%', :email, '%')))
+			  AND (:email = '' OR LOWER(tm.email) LIKE LOWER(CONCAT('%', :email, '%')))
 			""")
 	Page<TeamMember> findByEventIdAndStatusFiltered(
 			@Param("eventId") Long eventId,

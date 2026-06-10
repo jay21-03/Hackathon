@@ -20,6 +20,7 @@ import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.registration.dto.BulkInviteTeamMembersRequest;
 import com.seal.hackathon.registration.dto.BulkTeamInvitationFailure;
 import com.seal.hackathon.registration.dto.BulkTeamInvitationResponse;
+import com.seal.hackathon.registration.dto.InviteMemberRequest;
 import com.seal.hackathon.registration.dto.MemberRequest;
 import com.seal.hackathon.registration.dto.RegisterTeamRequest;
 import com.seal.hackathon.registration.dto.TeamDetailDto;
@@ -502,7 +503,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     @Transactional
     public TeamDetailDto inviteTeamMember(
             Long teamId,
-            MemberRequest memberRequest,
+            InviteMemberRequest memberRequest,
             Long actorUserId,
             String actorEmail,
             boolean organizer,
@@ -685,7 +686,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         Set<String> seenEmails = new HashSet<>();
         int succeeded = 0;
 
-        for (MemberRequest memberRequest : request.getMembers()) {
+        for (InviteMemberRequest memberRequest : request.getMembers()) {
             String emailKey = memberRequest.getEmail() == null
                     ? ""
                     : memberRequest.getEmail().trim().toLowerCase(Locale.ROOT);
@@ -985,7 +986,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     }
 
     private String hashInviteMemberRequest(
-            Long teamId, MemberRequest memberRequest, Long actorUserId, String actorEmail, boolean organizer) {
+            Long teamId, InviteMemberRequest memberRequest, Long actorUserId, String actorEmail, boolean organizer) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             String serialized = objectMapper.writeValueAsString(memberRequest) + "|" + teamId + "|" + actorUserId

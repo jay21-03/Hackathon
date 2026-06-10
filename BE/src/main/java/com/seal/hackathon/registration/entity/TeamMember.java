@@ -60,8 +60,9 @@ public class TeamMember {
     private OffsetDateTime confirmedAt;
     @Column(name = "declined_at")
     private OffsetDateTime declinedAt;
+    @Builder.Default
     @Column(name = "resend_count", nullable = false)
-    private Integer resendCount;
+    private Integer resendCount = 0;
     @Column(name = "last_resent_at")
     private OffsetDateTime lastResentAt;
     @Column(name = "reminder_sent_at")

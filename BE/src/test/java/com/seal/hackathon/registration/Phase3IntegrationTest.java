@@ -7,7 +7,9 @@ import com.seal.hackathon.authprofile.entity.UserRole;
 import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.authprofile.repository.UserRoleRepository;
 import com.seal.hackathon.authprofile.security.JwtService;
+import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.support.IntegrationTestConfig;
+import com.seal.hackathon.support.IntegrationTestFixtures;
 import com.seal.hackathon.common.enums.EventStatus;
 import com.seal.hackathon.common.enums.SystemRole;
 import com.seal.hackathon.common.enums.TeamStatus;
@@ -80,6 +82,9 @@ class Phase3IntegrationTest {
     EventRepository eventRepository;
 
     @Autowired
+    AcademicTermRepository academicTermRepository;
+
+    @Autowired
     TeamRepository teamRepository;
 
     @Autowired
@@ -146,6 +151,7 @@ class Phase3IntegrationTest {
                 .minTeamSize(1)
                 .maxTeamSize(5)
                 .status(EventStatus.REGISTRATION_OPEN)
+                .academicTermId(IntegrationTestFixtures.defaultAcademicTermId(academicTermRepository))
                 .createdBy(organizer.getId())
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
@@ -341,6 +347,37 @@ class Phase3IntegrationTest {
                         .header("Authorization", "Bearer " + creatorJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.members.length()").value(1));
+    }
+
+    @Test
+    void organizerCanListPendingTeamInvitationsWithoutEmailFilter() throws Exception {
+        String creatorJwt = jwtService.generateToken(creator, Set.of("PARTICIPANT"));
+        String organizerJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/events/{eventId}/teams", event.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + creatorJwt)
+                        .header("Idempotency-Key", "phase3-register-invite-list")
+                        .content("""
+                                {
+                                  "name": "Invite List Team",
+                                  "members": [
+                                    {"email": "creator@example.com", "fullName": "Creator User", "studentId": "S001", "university": "SEAL University"},
+                                    {"email": "invitee@example.com", "fullName": "Invitee User", "studentId": "S002", "university": "SEAL University"}
+                                  ]
+                                }
+                                """))
+                .andExpect(MockMvcResultMatchers.status().isCreated());
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/events/{eventId}/team-invitations", event.getId())
+                        .param("status", "INVITED")
+                        .param("page", "0")
+                        .param("size", "25")
+                        .header("Authorization", "Bearer " + organizerJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.success").value(true))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items.length()").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].email").value("invitee@example.com"));
     }
 
         private InvitationSnapshot extractLatestInvitation(Long teamId) throws Exception {

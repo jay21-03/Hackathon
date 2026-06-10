@@ -10,7 +10,9 @@ import com.seal.hackathon.common.enums.SystemRole;
 import com.seal.hackathon.common.enums.UserStatus;
 import com.seal.hackathon.contest.entity.Event;
 import com.seal.hackathon.contest.repository.EventRepository;
+import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.support.IntegrationTestConfig;
+import com.seal.hackathon.support.IntegrationTestFixtures;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Set;
@@ -59,6 +61,9 @@ class RegistrationOwnershipIntegrationTest {
 
     @Autowired
     EventRepository eventRepository;
+
+    @Autowired
+    AcademicTermRepository academicTermRepository;
 
     User owner;
     User foreignOrganizer;
@@ -109,6 +114,7 @@ class RegistrationOwnershipIntegrationTest {
                 .minTeamSize(1)
                 .maxTeamSize(5)
                 .status(EventStatus.DRAFT)
+                .academicTermId(IntegrationTestFixtures.defaultAcademicTermId(academicTermRepository))
                 .createdBy(owner.getId())
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())

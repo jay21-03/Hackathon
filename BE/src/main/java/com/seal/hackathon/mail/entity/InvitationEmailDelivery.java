@@ -1,6 +1,7 @@
 package com.seal.hackathon.mail.entity;
 
 import com.seal.hackathon.mail.enums.InvitationEmailType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -39,5 +40,6 @@ public class InvitationEmailDelivery {
     private Integer openCount;
     private OffsetDateTime acceptClickedAt;
     private OffsetDateTime declineClickedAt;
+    @Column(name = "is_reminder")
     private Boolean reminder;
 }

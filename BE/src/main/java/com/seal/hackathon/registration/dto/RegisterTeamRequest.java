@@ -12,6 +12,7 @@ public class RegisterTeamRequest {
     private String name;
 
     @NotEmpty
+    @Size(min = 1, max = 20, message = "members must contain between 1 and 20 entries")
     @Valid
     private List<MemberRequest> members;
 
