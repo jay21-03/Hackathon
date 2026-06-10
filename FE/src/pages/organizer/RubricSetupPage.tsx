@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
-import { EventSelector } from "../../components/ui/EventSelector";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -23,7 +23,9 @@ import {
   type CriteriaRequestItem,
   type LevelDescriptor
 } from "../../services/scoringApi";
-import { resolveApiError } from "../../utils/apiError";
+import { validateRubricCriteria } from "../../domain/schemas";
+import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
+import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
 
 function toFormCriteria(items: CriteriaRequestItem[]): CriteriaRequestItem[] {
   return items.map((c, i) => ({
@@ -42,18 +44,17 @@ function rubricToForm(criteria: CriteriaRequestItem[] | undefined): CriteriaRequ
   return toFormCriteria(criteria);
 }
 
-export function RubricSetupPage() {
+export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { steps: setupSteps, context: setupContext, loading: setupLoading } = useEventSetupProgress(
     eventId,
     "/organizer/rubric"
   );
   const { rounds, loading: roundsLoading, error: roundsError } = useEventRounds(eventId);
   const [roundId, setRoundId] = useState<number | null>(null);
-  const activeRoundId =
-    roundId != null && rounds.some((r) => r.id === roundId) ? roundId : null;
+  const activeRoundId = resolveDefaultRoundId(rounds, roundId);
   const { rubric, loading: rubricLoading, error: rubricError } = useRubric(activeRoundId);
   const [criteria, setCriteria] = useState<CriteriaRequestItem[]>([]);
   const [saving, setSaving] = useState(false);
@@ -64,7 +65,7 @@ export function RubricSetupPage() {
   }, [eventId]);
 
   useEffect(() => {
-    setRoundId((prev) => (prev && rounds.some((r) => r.id === prev) ? prev : rounds[0]?.id ?? null));
+    setRoundId((prev) => resolveDefaultRoundId(rounds, prev));
   }, [rounds]);
 
   useEffect(() => {
@@ -117,10 +118,26 @@ export function RubricSetupPage() {
       notify("Tiêu chí chấm đã khóa vì đã có phiếu chấm được nộp.", "warning");
       return;
     }
-    if (weightSum !== 100) {
-      const msg = "Tổng trọng số phải bằng 100% trước khi lưu.";
-      setSaveError(msg);
-      notify(msg, "warning");
+    const rubricError = validateRubricCriteria(
+      criteria.map((c) => {
+        const range = deriveCriteriaScoreRange(c.levelDescriptors);
+        return {
+          code: c.code,
+          name: c.name,
+          weight: Number(c.weight),
+          minScore: range.minScore,
+          maxScore: range.maxScore,
+          levelDescriptors: c.levelDescriptors.map((level) => ({
+            label: level.label,
+            minScore: Number(level.minScore),
+            maxScore: Number(level.maxScore)
+          }))
+        };
+      })
+    );
+    if (rubricError) {
+      setSaveError(rubricError);
+      notify(rubricError, "warning");
       return;
     }
     setSaving(true);
@@ -147,7 +164,11 @@ export function RubricSetupPage() {
       await invalidateAfterRubricMutation(queryClient, roundId);
       notify("Đã lưu tiêu chí chấm.", "success");
     } catch (err) {
-      const msg = resolveApiError(err, "Không lưu được tiêu chí chấm.");
+      let msg = resolveApiError(err, "Không lưu được tiêu chí chấm.");
+      applyApiFormErrors(err, (errors) => {
+        const first = Object.values(errors)[0];
+        if (first) msg = first;
+      });
       setSaveError(msg);
       notify(msg, "danger");
     } finally {
@@ -160,12 +181,14 @@ export function RubricSetupPage() {
   if (!setupContext.hasBoards) {
     return (
       <div className="space-y-lg">
-        <PageHeader
-          eyebrow="Chấm điểm"
-          title="Tiêu chí chấm"
-          description="Cấu hình rubric sau khi đã tạo bảng thi và gán đội."
-          actions={<EventSelector events={events} eventId={eventId} onChange={setEventId} />}
-        />
+        {!embedded ? (
+          <PageHeader
+            eyebrow="Chấm điểm"
+            title="Tiêu chí chấm"
+            description="Cấu hình rubric sau khi đã tạo bảng thi và gán đội."
+            actions={<OrganizerContextBar />}
+          />
+        ) : null}
         <EmptyState
           icon="grid_view"
           title="Chưa có bảng thi"
@@ -182,31 +205,33 @@ export function RubricSetupPage() {
 
   return (
     <div className="space-y-lg">
-      <PageHeader
-        eyebrow="Chấm điểm"
-        title="Tiêu chí chấm"
-        description="Cấu hình tiêu chí và trọng số % cho từng vòng. Tổng trọng số phải bằng 100."
-        actions={
-          <Badge tone={locked ? "warning" : weightSum === 100 ? "success" : "danger"}>
-            {locked ? "Đã khóa" : `Tổng trọng số: ${weightSum}%`}
-          </Badge>
-        }
-      />
-
-      <WorkflowSteps
-        title="Quy trình thiết lập"
-        description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
-        steps={setupSteps}
-      />
-
-      <WorkflowSteps
-        title="Quy trình chấm & kết quả"
-        description="Tiêu chí chấm là bước đầu trước tiến độ chấm và xếp hạng."
-        steps={buildRankingWorkflowSteps("rubric")}
-      />
+      {!embedded ? (
+        <>
+          <PageHeader
+            eyebrow="Chấm điểm"
+            title="Tiêu chí chấm"
+            description="Cấu hình tiêu chí và trọng số % cho từng vòng. Tổng trọng số phải bằng 100."
+            actions={
+              <Badge tone={locked ? "warning" : weightSum === 100 ? "success" : "danger"}>
+                {locked ? "Đã khóa" : `Tổng trọng số: ${weightSum}%`}
+              </Badge>
+            }
+          />
+          <WorkflowSteps
+            title="Quy trình thiết lập"
+            description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
+            steps={setupSteps}
+          />
+          <WorkflowSteps
+            title="Quy trình chấm & kết quả"
+            description="Tiêu chí chấm là bước đầu trước tiến độ chấm và xếp hạng."
+            steps={buildRankingWorkflowSteps("rubric")}
+          />
+        </>
+      ) : null}
 
       <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
-        <EventSelector events={events} eventId={eventId} onChange={setEventId} />
+        {!embedded ? <OrganizerContextBar /> : null}
         <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
           Vòng thi
           <select

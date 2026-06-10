@@ -7,9 +7,8 @@ import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { EventSelector } from "../../components/ui/EventSelector";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
-import { NextStepPanel } from "../../components/ui/NextStepPanel";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
@@ -27,10 +26,10 @@ import { invalidateAfterPublish } from "../../lib/invalidateRankingQueries";
 import { resolveApiError } from "../../utils/apiError";
 import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 
-export function PublishResultsPage() {
+export function PublishResultsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { context: setupContext, loading: setupLoading } = useEventSetupProgress(
     eventId,
     "/organizer/publish-results"
@@ -64,8 +63,27 @@ export function PublishResultsPage() {
     return board?.ready ?? publishReady;
   }
 
+  function notifyPublishBlocked() {
+    const readiness = readinessQuery.data;
+    if (!readiness) {
+      notify("Chưa đủ điều kiện công bố.", "warning");
+      return;
+    }
+    const messages = [
+      ...readiness.blockers,
+      ...readiness.boards.flatMap((board) =>
+        board.blockers.map((blocker) => `${board.boardName}: ${blocker}`)
+      )
+    ];
+    notify(messages.length ? messages.join(" · ") : "Chưa đủ điều kiện công bố.", "warning");
+  }
+
   async function handlePublishAll() {
     if (!eventId) return;
+    if (!publishReady) {
+      notifyPublishBlocked();
+      return;
+    }
     setPublishing(true);
     try {
       const result = await publishEventRankings(eventId, createIdempotencyKey("publish-all"));
@@ -84,6 +102,15 @@ export function PublishResultsPage() {
   }
 
   async function handlePublishBoard(boardId: number) {
+    if (!isBoardPublishReady(boardId)) {
+      const board = readinessQuery.data?.boards.find((row) => row.boardId === boardId);
+      const messages = board?.blockers ?? readinessQuery.data?.blockers ?? [];
+      notify(
+        messages.length ? messages.join(" · ") : "Bảng này chưa đủ điều kiện công bố.",
+        "warning"
+      );
+      return;
+    }
     setPublishingBoardId(boardId);
     try {
       await publishBoardRanking(boardId, createIdempotencyKey(`publish-board-${boardId}`));
@@ -103,12 +130,14 @@ export function PublishResultsPage() {
   if (!setupContext.hasBoards || (enableScoring && !setupContext.hasRubric)) {
     return (
       <div className="space-y-lg">
-        <PageHeader
-          eyebrow="Công bố"
-          title="Công bố kết quả"
-          description="Hoàn tất chấm điểm và tính xếp hạng trước khi công bố."
-          actions={<EventSelector events={events} eventId={eventId} onChange={setEventId} />}
-        />
+        {!embedded ? (
+          <PageHeader
+            eyebrow="Công bố"
+            title="Công bố kết quả"
+            description="Hoàn tất chấm điểm và tính xếp hạng trước khi công bố."
+            actions={<OrganizerContextBar />}
+          />
+        ) : null}
         <EmptyState
           icon="campaign"
           title="Chưa sẵn sàng công bố"
@@ -136,18 +165,21 @@ export function PublishResultsPage() {
 
   return (
     <div className="space-y-lg">
-      <PageHeader
-        eyebrow="Công bố"
-        title="Công bố kết quả"
-        description="Sau khi công bố, thí sinh và khách xem được tại trang kết quả công khai — không cần đăng nhập."
-        actions={<EventSelector events={events} eventId={eventId} onChange={setEventId} />}
-      />
-
-      <WorkflowSteps
-        title="Quy trình kết quả"
-        description="Hoàn tất chấm điểm → tính xếp hạng → công bố → xuất báo cáo."
-        steps={buildRankingWorkflowSteps("publish")}
-      />
+      {!embedded ? (
+        <>
+          <PageHeader
+            eyebrow="Công bố"
+            title="Công bố kết quả"
+            description="Sau khi công bố, thí sinh và khách xem được tại trang kết quả công khai — không cần đăng nhập."
+            actions={<OrganizerContextBar />}
+          />
+          <WorkflowSteps
+            title="Quy trình kết quả"
+            description="Hoàn tất chấm điểm → tính xếp hạng → công bố → xuất báo cáo."
+            steps={buildRankingWorkflowSteps("publish")}
+          />
+        </>
+      ) : null}
 
       {rankingsQuery.error ? (
         <RetryPanel
@@ -180,7 +212,7 @@ export function PublishResultsPage() {
           title="Chưa có xếp hạng để công bố"
           description="Tính xếp hạng cho từng bảng trước khi công bố kết quả."
           action={
-            <Link to="/organizer/ranking">
+            <Link to={embedded ? "/organizer/results-hub#results-step-ranking" : "/organizer/ranking"}>
               <Button type="button" variant="ghost">
                 Đến bảng xếp hạng
               </Button>
@@ -274,17 +306,7 @@ export function PublishResultsPage() {
                 Công bố tất cả bảng đã tính ({draftBoards.length})
               </Button>
             </ConfirmAction>
-          ) : (
-            <NextStepPanel
-              variant="success"
-              action={{
-                title: "Đã công bố toàn bộ",
-                description: "Xem trang công khai hoặc xuất CSV báo cáo.",
-                to: eventId ? `/events/${eventId}/results` : "/events",
-                cta: "Xem kết quả công khai"
-              }}
-            />
-          )}
+          ) : null}
         </>
       )}
     </div>

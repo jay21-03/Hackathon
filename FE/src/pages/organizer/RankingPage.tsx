@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
@@ -7,9 +7,8 @@ import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button, ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { EventSelector } from "../../components/ui/EventSelector";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
-import { NextStepPanel } from "../../components/ui/NextStepPanel";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
@@ -25,19 +24,28 @@ import {
 } from "../../services/rankingApi";
 import { resolveApiError } from "../../utils/apiError";
 import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
+import { resolveDefaultBoardId, resolveDefaultRoundId } from "../../utils/pickActiveRound";
 
-export function RankingPage() {
+export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, loading: roundsLoading } = useEventRounds(eventId);
   const { boards, loading: boardsLoading } = useEventBoards(eventId);
   const [boardId, setBoardId] = useState<number | null>(null);
   const [roundId, setRoundId] = useState<number | null>(null);
   const [calculating, setCalculating] = useState(false);
+  const autoCalculatedBoards = useRef(new Set<number>());
 
-  const activeBoardId =
-    boardId != null && boards.some((b) => b.id === boardId) ? boardId : boards[0]?.id ?? null;
+  const activeBoardId = resolveDefaultBoardId(boards, rounds, boardId);
+
+  useEffect(() => {
+    setRoundId((prev) => resolveDefaultRoundId(rounds, prev));
+  }, [rounds]);
+
+  useEffect(() => {
+    setBoardId((prev) => resolveDefaultBoardId(boards, rounds, prev));
+  }, [boards, rounds]);
 
   const rankingQuery = useQuery({
     queryKey: queryKeys.rankings.board(activeBoardId),
@@ -51,27 +59,71 @@ export function RankingPage() {
     (progress?.teams ?? []).map((t) => [t.teamId, t.requiredJudgeCount])
   );
 
+  const scoringComplete = (progress?.summary.completionPercent ?? 0) >= 100;
+
   async function invalidateRankingQueries() {
     await queryClient.invalidateQueries({ queryKey: queryKeys.rankings.all });
   }
 
-  async function handleCalculateBoard(force = false) {
-    if (!activeBoardId) return;
-    setCalculating(true);
-    try {
-      await calculateBoardRanking(activeBoardId, force);
-      await invalidateRankingQueries();
-      notify("Đã tính xếp hạng cho bảng.", "success");
-    } catch (err) {
-      notify(resolveApiError(err, "Tính xếp hạng thất bại."), "danger");
-    } finally {
-      setCalculating(false);
+  const handleCalculateBoard = useCallback(
+    async (force = false, options?: { silent?: boolean }) => {
+      if (!activeBoardId) return null;
+      setCalculating(true);
+      try {
+        const result = await calculateBoardRanking(activeBoardId, force);
+        await invalidateRankingQueries();
+        const teamCount = result.entries?.length ?? 0;
+        if (!options?.silent) {
+          if (teamCount === 0) {
+            notify(
+              "Chưa có đội nào đủ điều kiện — cần ít nhất một phiếu chấm đã nộp trên bảng này.",
+              "warning"
+            );
+          } else {
+            notify(`Đã tính xếp hạng cho ${teamCount} đội.`, "success");
+          }
+        } else if (teamCount > 0) {
+          notify(`Đã tự động tính xếp hạng cho ${teamCount} đội.`, "success");
+        }
+        return result;
+      } catch (err) {
+        if (!options?.silent) {
+          notify(resolveApiError(err, "Tính xếp hạng thất bại."), "danger");
+        }
+        return null;
+      } finally {
+        setCalculating(false);
+      }
+    },
+    [activeBoardId, notify, queryClient]
+  );
+
+  const hasRankingData = (rankingQuery.data?.entries.length ?? 0) > 0;
+
+  useEffect(() => {
+    if (
+      !activeBoardId ||
+      rankingQuery.isLoading ||
+      calculating ||
+      hasRankingData ||
+      !scoringComplete
+    ) {
+      return;
     }
-  }
+    if (autoCalculatedBoards.current.has(activeBoardId)) return;
+    autoCalculatedBoards.current.add(activeBoardId);
+    void handleCalculateBoard(false, { silent: true });
+  }, [
+    activeBoardId,
+    calculating,
+    handleCalculateBoard,
+    hasRankingData,
+    rankingQuery.isLoading,
+    scoringComplete
+  ]);
 
   async function handleCalculateRound(force = false) {
-    const targetRound =
-      roundId != null && rounds.some((r) => r.id === roundId) ? roundId : rounds[0]?.id ?? null;
+    const targetRound = resolveDefaultRoundId(rounds, roundId);
     if (!targetRound) return;
     setCalculating(true);
     try {
@@ -99,11 +151,13 @@ export function RankingPage() {
   if (boards.length === 0) {
     return (
       <div className="space-y-lg">
-        <PageHeader
-          eyebrow="Kết quả"
-          title="Bảng xếp hạng"
-          description="Cần có bảng thi và phiếu chấm đã nộp trước khi tính xếp hạng."
-        />
+        {!embedded ? (
+          <PageHeader
+            eyebrow="Kết quả"
+            title="Bảng xếp hạng"
+            description="Cần có bảng thi và phiếu chấm đã nộp trước khi tính xếp hạng."
+          />
+        ) : null}
         <EmptyState
           icon="leaderboard"
           title="Chưa có bảng thi"
@@ -127,30 +181,43 @@ export function RankingPage() {
     }) ?? [];
 
   return (
-    <div className="space-y-lg">
-      <PageHeader
-        eyebrow="Kết quả"
-        title="Bảng xếp hạng"
-        description="Tính điểm trung bình từ phiếu chấm đã nộp. Đội bị loại không được xếp hạng."
-        actions={
-          <Badge tone={ranking?.published ? "success" : hasRanking ? "warning" : "neutral"}>
-            {ranking?.published ? "Đã công bố" : hasRanking ? "Bản nháp" : "Chưa tính"}
-          </Badge>
-        }
-      />
+    <div className={embedded ? "space-y-md" : "space-y-lg"}>
+      {!embedded ? (
+        <>
+          <PageHeader
+            eyebrow="Kết quả"
+            title="Bảng xếp hạng"
+            description="Tính điểm trung bình từ phiếu chấm đã nộp. Đội bị loại không được xếp hạng."
+            actions={
+              <Badge tone={ranking?.published ? "success" : hasRanking ? "warning" : "neutral"}>
+                {ranking?.published ? "Đã công bố" : hasRanking ? "Bản nháp" : "Chưa tính"}
+              </Badge>
+            }
+          />
+          <WorkflowSteps
+            title="Quy trình kết quả"
+            description="Hoàn tất chấm điểm trước khi tính và công bố."
+            steps={buildRankingWorkflowSteps("ranking")}
+          />
+        </>
+      ) : null}
 
-      <WorkflowSteps
-        title="Quy trình kết quả"
-        description="Hoàn tất chấm điểm trước khi tính và công bố."
-        steps={buildRankingWorkflowSteps("ranking")}
-      />
-
-      <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
-        <EventSelector events={events} eventId={eventId} onChange={setEventId} />
-        <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+      <section
+        className={`grid gap-md rounded-xl border border-outline-variant bg-surface-container p-md ${
+          embedded
+            ? "sm:grid-cols-2 xl:grid-cols-[minmax(10rem,1fr)_minmax(10rem,1fr)_auto_auto_auto]"
+            : "lg:grid-cols-[auto_minmax(10rem,1fr)_minmax(10rem,1fr)_auto_auto_auto]"
+        } items-end`}
+      >
+        {!embedded ? (
+          <div className="sm:col-span-2 lg:col-span-1">
+            <OrganizerContextBar />
+          </div>
+        ) : null}
+        <label className="flex min-w-0 flex-col gap-1 font-label-sm text-on-surface-variant">
           Bảng
           <select
-            className="min-w-[10rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+            className="w-full min-w-0 rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
             value={activeBoardId ?? ""}
             onChange={(e) => setBoardId(e.target.value ? Number(e.target.value) : null)}
           >
@@ -161,11 +228,11 @@ export function RankingPage() {
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+        <label className="flex min-w-0 flex-col gap-1 font-label-sm text-on-surface-variant">
           Vòng (tính hàng loạt)
           <select
-            className="min-w-[10rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
-            value={roundId ?? rounds[0]?.id ?? ""}
+            className="w-full min-w-0 rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+            value={resolveDefaultRoundId(rounds, roundId) ?? ""}
             onChange={(e) => setRoundId(e.target.value ? Number(e.target.value) : null)}
           >
             {rounds.map((r) => (
@@ -226,7 +293,10 @@ export function RankingPage() {
           <p className="font-body-sm text-on-surface">
             {incompleteEntries.length} đội chưa đủ phiếu chấm từ mọi giám khảo — vẫn được xếp hạng
             theo điểm đã có.{" "}
-            <Link to="/organizer/scoring" className="text-primary hover:underline">
+            <Link
+              to={embedded ? "/organizer/results-hub#results-step-scoring" : "/organizer/scoring"}
+              className="text-primary hover:underline"
+            >
               Xem tiến độ chấm
             </Link>
           </p>
@@ -237,11 +307,28 @@ export function RankingPage() {
         <EmptyState
           icon="leaderboard"
           title="Chưa có xếp hạng"
-          description="Cần phiếu chấm đã nộp và đội trên bảng. Bấm «Tính bảng này» sau khi giám khảo nộp điểm."
+          description={
+            scoringComplete
+              ? "Phiếu chấm đã đủ — bấm «Tính bảng này» để tạo bảng xếp hạng. Hệ thống cũng tự tính khi bạn mở bước này."
+              : "Cần giám khảo nộp phiếu chấm trước. Sau đó bấm «Tính bảng này» để tạo BXH."
+          }
           action={
-            <Link to="/organizer/scoring" className="font-label-md text-primary hover:underline">
-              Kiểm tra tiến độ chấm →
-            </Link>
+            <div className="flex flex-wrap items-center justify-center gap-sm">
+              <Button
+                type="button"
+                loading={calculating}
+                disabled={!activeBoardId || !scoringComplete}
+                onClick={() => void handleCalculateBoard()}
+              >
+                Tính xếp hạng ngay
+              </Button>
+              <Link
+                to={embedded ? "/organizer/results-hub#results-step-scoring" : "/organizer/scoring"}
+                className="font-label-md text-primary hover:underline"
+              >
+                Kiểm tra tiến độ chấm →
+              </Link>
+            </div>
           }
         />
       ) : null}
@@ -300,17 +387,6 @@ export function RankingPage() {
             </div>
           </section>
 
-          <NextStepPanel
-            action={{
-              title: hasRanking ? "Tiếp theo: công bố kết quả" : "Chưa sẵn sàng công bố",
-              description: ranking.published
-                ? "Bảng đã công bố — thí sinh có thể xem tại trang kết quả."
-                : "Xem lại bảng xếp hạng rồi công bố cho thí sinh và khách.",
-              to: "/organizer/publish-results",
-              cta: "Đến công bố kết quả"
-            }}
-            variant={ranking.published ? "success" : "primary"}
-          />
         </>
       ) : null}
     </div>

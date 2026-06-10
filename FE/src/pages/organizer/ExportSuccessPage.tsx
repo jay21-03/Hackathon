@@ -5,7 +5,7 @@ import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { EventSelector } from "../../components/ui/EventSelector";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
@@ -17,9 +17,9 @@ import { downloadRankingsCsv } from "../../utils/exportRankingsCsv";
 import { downloadRankingsPdf } from "../../utils/exportRankingsPdf";
 import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 
-export function ExportSuccessPage() {
+export function ExportSuccessPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
-  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const [exporting, setExporting] = useState(false);
 
   const rankingsQuery = useQuery({
@@ -74,18 +74,21 @@ export function ExportSuccessPage() {
 
   return (
     <div className="space-y-lg">
-      <PageHeader
-        eyebrow="Xuất dữ liệu"
-        title="Xuất bảng xếp hạng"
-        description="Tải CSV UTF-8 từ xếp hạng đã tính (nháp hoặc đã công bố)."
-        actions={<EventSelector events={events} eventId={eventId} onChange={setEventId} />}
-      />
-
-      <WorkflowSteps
-        title="Quy trình kết quả"
-        description="Xuất báo cáo sau khi tính và (tuỳ chọn) công bố kết quả."
-        steps={buildRankingWorkflowSteps("export")}
-      />
+      {!embedded ? (
+        <>
+          <PageHeader
+            eyebrow="Xuất dữ liệu"
+            title="Xuất bảng xếp hạng"
+            description="Tải CSV UTF-8 từ xếp hạng đã tính (nháp hoặc đã công bố)."
+            actions={<OrganizerContextBar />}
+          />
+          <WorkflowSteps
+            title="Quy trình kết quả"
+            description="Xuất báo cáo sau khi tính và (tuỳ chọn) công bố kết quả."
+            steps={buildRankingWorkflowSteps("export")}
+          />
+        </>
+      ) : null}
 
       {rankingsQuery.error ? (
         <RetryPanel
@@ -100,7 +103,7 @@ export function ExportSuccessPage() {
           title="Chưa có xếp hạng"
           description="Tính xếp hạng tại trang Bảng xếp hạng trước khi xuất."
           action={
-            <Link to="/organizer/ranking">
+            <Link to={embedded ? "/organizer/results-hub#results-step-ranking" : "/organizer/ranking"}>
               <Button type="button" variant="ghost">
                 Đến bảng xếp hạng
               </Button>

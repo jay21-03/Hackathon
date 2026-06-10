@@ -17,31 +17,31 @@ export function buildRankingWorkflowSteps(active: RankingWorkflowPhase): Workflo
     {
       label: "Tiêu chí chấm",
       detail: "Cấu hình rubric cho vòng thi.",
-      to: "/organizer/rubric",
+      to: "/organizer/results-hub#results-step-rubric",
       state: stateFor("rubric")
     },
     {
       label: "Tiến độ chấm",
       detail: "Giám khảo nộp phiếu SUBMITTED.",
-      to: "/organizer/scoring",
+      to: "/organizer/results-hub#results-step-scoring",
       state: stateFor("scoring")
     },
     {
       label: "Xếp hạng",
       detail: "Tính điểm TB theo bảng.",
-      to: "/organizer/ranking",
+      to: "/organizer/results-hub#results-step-ranking",
       state: stateFor("ranking")
     },
     {
       label: "Công bố",
       detail: "Hiển thị kết quả cho thí sinh & khách.",
-      to: "/organizer/publish-results",
+      to: "/organizer/results-hub#results-step-publish",
       state: stateFor("publish")
     },
     {
       label: "Xuất CSV",
       detail: "Tải bảng xếp hạng.",
-      to: "/organizer/export-success",
+      to: "/organizer/results-hub#results-step-export",
       state: stateFor("export")
     }
   ];
