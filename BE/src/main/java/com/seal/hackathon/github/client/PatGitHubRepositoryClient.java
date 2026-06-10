@@ -18,20 +18,17 @@ import org.springframework.web.client.RestClientResponseException;
 @Service
 public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
 
-    private final String mode;
-    private final String pat;
+    private final GitHubAuthService githubAuthService;
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
 
     public PatGitHubRepositoryClient(
-            @Value("${app.github.mode:pat}") String mode,
-            @Value("${app.github.pat:}") String pat,
+            GitHubAuthService githubAuthService,
             @Value("${app.github.api-base-url:https://api.github.com}") String apiBaseUrl,
             @Value("${app.github.api-version:2026-03-10}") String apiVersion,
             RestClient.Builder restClientBuilder,
             ObjectMapper objectMapper) {
-        this.mode = mode == null ? "pat" : mode.trim().toLowerCase();
-        this.pat = pat;
+        this.githubAuthService = githubAuthService;
         this.objectMapper = objectMapper;
         this.restClient = restClientBuilder
                 .baseUrl(stripTrailingSlash(apiBaseUrl))
@@ -47,7 +44,6 @@ public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
             String org,
             String newRepoName,
             boolean privateRepo) {
-        ensurePatModeConfigured();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("owner", org);
         body.put("name", newRepoName);
@@ -83,7 +79,6 @@ public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
 
     @Override
     public void updateCollaboratorPermission(String owner, String repo, String username, String permission) {
-        ensurePatModeConfigured();
         Map<String, Object> body = Map.of("permission", permission);
         execute(() -> restClient.put()
                 .uri("/repos/{owner}/{repo}/collaborators/{username}", owner, repo, username)
@@ -95,8 +90,29 @@ public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
     }
 
     @Override
+    public Optional<String> getCollaboratorPermission(String owner, String repo, String username) {
+        try {
+            Map<String, Object> response = execute(() -> restClient.get()
+                    .uri("/repos/{owner}/{repo}/collaborators/{username}/permission", owner, repo, username)
+                    .headers(this::authorize)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {
+                    }));
+            if (response == null) {
+                return Optional.empty();
+            }
+            String permission = asString(response.get("permission"));
+            return StringUtils.hasText(permission) ? Optional.of(permission) : Optional.empty();
+        } catch (GitHubClientException ex) {
+            if (ex.getStatusCode() == 404) {
+                return Optional.empty();
+            }
+            throw ex;
+        }
+    }
+
+    @Override
     public Optional<GitHubRepositoryInfo> getRepository(String owner, String repo) {
-        ensurePatModeConfigured();
         try {
             Map<String, Object> response = execute(() -> restClient.get()
                     .uri("/repos/{owner}/{repo}", owner, repo)
@@ -113,17 +129,8 @@ public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
         }
     }
 
-    private void ensurePatModeConfigured() {
-        if (!"pat".equals(mode)) {
-            throw new GitHubClientException(503, "GitHub App mode is configured but not implemented in this MVP");
-        }
-        if (!StringUtils.hasText(pat)) {
-            throw new GitHubClientException(503, "GitHub PAT is not configured");
-        }
-    }
-
     private void authorize(HttpHeaders headers) {
-        headers.setBearerAuth(pat);
+        headers.setBearerAuth(githubAuthService.getBearerToken());
     }
 
     private <T> T execute(GitHubCall<T> call) {

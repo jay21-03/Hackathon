@@ -34,16 +34,19 @@ public class SecurityConfig {
     private final RateLimitFilter rateLimitFilter;
     private final ObjectMapper objectMapper;
     private final String corsAllowedOrigins;
+    private final boolean apiDocsEnabled;
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
             RateLimitFilter rateLimitFilter,
             ObjectMapper objectMapper,
-            @Value("${app.cors.allowed-origins:http://localhost:5173}") String corsAllowedOrigins) {
+            @Value("${app.cors.allowed-origins:http://localhost:5173}") String corsAllowedOrigins,
+            @Value("${springdoc.api-docs.enabled:true}") boolean apiDocsEnabled) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.rateLimitFilter = rateLimitFilter;
         this.objectMapper = objectMapper;
         this.corsAllowedOrigins = corsAllowedOrigins;
+        this.apiDocsEnabled = apiDocsEnabled;
     }
 
     @Bean
@@ -64,11 +67,13 @@ public class SecurityConfig {
                         writeError(response, HttpStatus.UNAUTHORIZED, "Unauthorized"))
                 .accessDeniedHandler((request, response, accessDeniedException) ->
                         writeError(response, HttpStatus.FORBIDDEN, "Forbidden")))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
-                .requestMatchers(
+            .authorizeHttpRequests(auth -> {
+                auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
+                auth.requestMatchers("/actuator/health", "/actuator/info").permitAll();
+                if (apiDocsEnabled) {
+                    auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll();
+                }
+                auth.requestMatchers(
                         "/api/v1/auth/google-login",
                         "/api/v1/auth/register",
                         "/api/v1/auth/login",
@@ -83,13 +88,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/v1/rounds/*/countdown").permitAll()
                 .requestMatchers("/api/v1/public/email-tracking/**").permitAll()
                 .requestMatchers("/api/v1/staff-invitations/decline").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/github").permitAll()
                 .requestMatchers("/api/v1/team-invitations/confirm", "/api/v1/team-invitations/decline").authenticated()
                 .requestMatchers("/api/v1/staff-invitations/accept").authenticated()
                 .requestMatchers("/api/v1/admin/**").hasRole("ORGANIZER")
                 .requestMatchers("/api/v1/my/**").authenticated()
                 .requestMatchers("/api/v1/me", "/api/v1/me/**").authenticated()
                 .requestMatchers("/api/v1/judge/**").hasRole("JUDGE")
-                .anyRequest().authenticated())
+                .anyRequest().authenticated();
+            })
             .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

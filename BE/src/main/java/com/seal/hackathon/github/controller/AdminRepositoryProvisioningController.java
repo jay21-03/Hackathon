@@ -2,6 +2,7 @@ package com.seal.hackathon.github.controller;
 
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.common.response.ApiResponse;
+import com.seal.hackathon.github.dto.GrantJudgeAccessResponse;
 import com.seal.hackathon.github.dto.ProvisionProblemRepositoriesResponse;
 import com.seal.hackathon.github.dto.RepoTemplateResponse;
 import com.seal.hackathon.github.dto.RepositoryLockResponse;
@@ -49,7 +50,8 @@ public class AdminRepositoryProvisioningController {
 
     @GetMapping("/problems/{problemId}/repo-template")
     public ApiResponse<RepoTemplateResponse> getRepoTemplate(@PathVariable Long problemId) {
-        return ApiResponse.ok(repositoryProvisioningService.getProblemTemplate(problemId));
+        Long currentUserId = currentUserProvider.getCurrentUser().getUserId();
+        return ApiResponse.ok(repositoryProvisioningService.getOrCreateProblemTemplate(problemId, currentUserId));
     }
 
     @PostMapping("/problems/{problemId}/repositories/provision")
@@ -60,9 +62,19 @@ public class AdminRepositoryProvisioningController {
         return ApiResponse.ok(repositoryProvisioningService.provisionForProblem(problemId, force, currentUserId));
     }
 
+    @PostMapping("/problems/{problemId}/repositories/lock")
+    public ApiResponse<RepositoryLockResponse> lockProblemRepositories(@PathVariable Long problemId) {
+        return ApiResponse.ok(repositoryProvisioningService.lockProblemRepositories(problemId));
+    }
+
     @PostMapping("/rounds/{roundId}/repositories/lock")
     public ApiResponse<RepositoryLockResponse> lockRoundRepositories(@PathVariable Long roundId) {
         return ApiResponse.ok(repositoryProvisioningService.lockRoundRepositories(roundId));
+    }
+
+    @PostMapping("/rounds/{roundId}/repositories/grant-judge-access")
+    public ApiResponse<GrantJudgeAccessResponse> grantJudgeAccessForRound(@PathVariable Long roundId) {
+        return ApiResponse.ok(repositoryProvisioningService.grantJudgeAccessForRound(roundId));
     }
 
     @PostMapping("/team-repositories/{repositoryId}/retry")

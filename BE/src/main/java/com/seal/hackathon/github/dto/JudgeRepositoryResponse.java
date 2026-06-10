@@ -9,21 +9,20 @@ import lombok.Value;
 
 @Value
 @Builder
-public class TeamRepositoryResponse {
+public class JudgeRepositoryResponse {
     Long id;
     Long teamId;
     String teamName;
     Long roundId;
-    String roundName;
-    /** Vòng thi mà đội đang tham gia (theo phân bảng hiện tại). */
-    Boolean currentRound;
     Long boardId;
+    String boardName;
     Long problemId;
+    String problemTitle;
     String repositoryUrl;
+    String cloneUrl;
     String repositoryName;
     String githubOwner;
     String githubRepoName;
-    Long githubRepoId;
     RepositoryAccessStatus accessStatus;
     RepositoryProvisionStatus provisionStatus;
     SubmissionStatus submissionStatus;
@@ -32,7 +31,7 @@ public class TeamRepositoryResponse {
     OffsetDateTime closedAt;
     OffsetDateTime provisionedAt;
     OffsetDateTime lastPushAt;
-    String lastError;
-    OffsetDateTime createdAt;
-    OffsetDateTime updatedAt;
+    String judgeGithubUsername;
+    boolean judgeHasGithubUsername;
+    Boolean judgeGithubAccessGranted;
 }

@@ -6,11 +6,12 @@ import lombok.Value;
 
 @Value
 @Builder
-public class RepositoryLockResponse {
-    Long problemId;
+public class GrantJudgeAccessResponse {
     Long roundId;
     int totalRepositories;
-    int lockedCount;
+    int totalJudges;
+    int grantedCount;
     int failedCount;
-    List<TeamRepositoryResponse> repositories;
+    int skippedCount;
+    List<JudgeAccessGrantItem> grants;
 }
