@@ -32,6 +32,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -40,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+@Slf4j
 @Service
 public class AuthProfileService {
 
@@ -110,7 +112,7 @@ public class AuthProfileService {
         return issueAuthResponse(user);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         String email = normalizeEmailNullable(request.getEmail());
         if (email == null) {
@@ -160,7 +162,12 @@ public class AuthProfileService {
         if (user.getStatus() == UserStatus.DISABLED) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is disabled");
         }
-        notificationService.backfillUserIdOnLogin(user.getId(), user.getEmail());
+        userRepository.flush();
+        try {
+            notificationService.backfillUserIdOnLogin(user.getId(), user.getEmail());
+        } catch (RuntimeException ex) {
+            log.warn("Notification backfill skipped on login for userId={}: {}", user.getId(), ex.getMessage());
+        }
         ensureBootstrapOrganizerRole(user);
         Set<String> roles = loadRoles(user.getId());
         String accessToken = jwtService.generateToken(user, roles);
@@ -195,6 +202,9 @@ public class AuthProfileService {
         user.setStudentId(normalizeTextNullable(request.getStudentId()));
         user.setUniversity(normalizeTextNullable(request.getUniversity()));
         user.setAvatarUrl(normalizeTextNullable(request.getAvatarUrl()));
+        if (StringUtils.hasText(request.getGithubUsername())) {
+            AuthCredentialPolicy.assertUsername(request.getGithubUsername());
+        }
         user.setGithubUsername(normalizeTextNullable(request.getGithubUsername()));
         user.setUpdatedAt(OffsetDateTime.now());
         userRepository.save(user);
@@ -205,15 +215,26 @@ public class AuthProfileService {
 
     @Transactional(readOnly = true)
     public List<UserSummaryResponse> listUsers() {
-        return listUsersPaged(0, 500).getItems();
+        return listUsersPaged(0, 500, null).getItems();
+    }
+
+    private String normalizeSearchQuery(String query) {
+        if (!StringUtils.hasText(query)) {
+            return null;
+        }
+        return query.trim();
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<UserSummaryResponse> listUsersPaged(int page, int size) {
+    public PagedResult<UserSummaryResponse> listUsersPaged(int page, int size, String query) {
         int resolvedSize = Math.min(Math.max(size, 1), 200);
         int resolvedPage = Math.max(page, 0);
-        Page<User> userPage = userRepository.findAll(
-                PageRequest.of(resolvedPage, resolvedSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+        PageRequest pageRequest = PageRequest.of(
+                resolvedPage, resolvedSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        String normalizedQuery = normalizeSearchQuery(query);
+        Page<User> userPage = StringUtils.hasText(normalizedQuery)
+                ? userRepository.searchByKeyword(normalizedQuery, pageRequest)
+                : userRepository.findAll(pageRequest);
         List<UserSummaryResponse> items = userPage.getContent().stream()
                 .map(user -> UserSummaryResponse.builder()
                         .id(user.getId())
@@ -270,9 +291,18 @@ public class AuthProfileService {
         User userByEmail = userRepository.findByEmail(verifiedUser.getEmail()).orElse(null);
 
         if (userByGoogleSub != null && userByEmail != null && !userByGoogleSub.getId().equals(userByEmail.getId())) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Google account is already linked to another user");
+            if (!StringUtils.hasText(userByEmail.getGoogleSub())) {
+                userByGoogleSub.setGoogleSub(null);
+                userRepository.save(userByGoogleSub);
+                userByEmail.setGoogleSub(verifiedUser.getGoogleSub());
+                userByEmail.setUpdatedAt(OffsetDateTime.now());
+                userByEmail = userRepository.save(userByEmail);
+                userByGoogleSub = null;
+            } else {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "GOOGLE_ACCOUNT_LINK_CONFLICT");
+            }
         }
 
         User targetUser = userByEmail != null ? userByEmail : userByGoogleSub;

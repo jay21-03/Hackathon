@@ -1,5 +1,6 @@
 package com.seal.hackathon.authprofile.dto;
 
+import com.seal.hackathon.common.validation.ValidPassword;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -8,6 +9,7 @@ public class SetPasswordRequest {
 
     private String currentPassword;
 
-    @NotBlank
+    @NotBlank(message = "PASSWORD_REQUIRED")
+    @ValidPassword
     private String newPassword;
 }

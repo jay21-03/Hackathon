@@ -85,8 +85,9 @@ public class AuthProfileController {
     @SecurityRequirement(name = "bearerAuth")
     public ApiResponse<com.seal.hackathon.common.response.PagedResult<UserSummaryResponse>> listUsers(
             @org.springframework.web.bind.annotation.RequestParam(defaultValue = "0") int page,
-            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "50") int size) {
-        return ApiResponse.ok(authProfileService.listUsersPaged(page, size));
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "50") int size,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String q) {
+        return ApiResponse.ok(authProfileService.listUsersPaged(page, size, q));
     }
 
     @PostMapping("/admin/users/{userId}/roles")
