@@ -36,6 +36,8 @@ public interface StaffInvitationRepository extends JpaRepository<StaffInvitation
 
 
 
+    List<StaffInvitation> findByBoardId(Long boardId);
+
     Optional<StaffInvitation> findByBoardIdAndEmailIgnoreCaseAndRoleAndStatus(
 
             Long boardId, String email, SystemRole role, StaffInvitationStatus status);
