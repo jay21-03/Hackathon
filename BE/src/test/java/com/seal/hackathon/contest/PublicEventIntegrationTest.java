@@ -3,7 +3,9 @@ package com.seal.hackathon.contest;
 import com.seal.hackathon.common.enums.EventStatus;
 import com.seal.hackathon.contest.entity.Event;
 import com.seal.hackathon.contest.repository.EventRepository;
+import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.support.IntegrationTestConfig;
+import com.seal.hackathon.support.IntegrationTestFixtures;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +44,9 @@ class PublicEventIntegrationTest {
     @Autowired
     EventRepository eventRepository;
 
+    @Autowired
+    AcademicTermRepository academicTermRepository;
+
     @BeforeEach
     void setUp() {
         eventRepository.deleteAll();
@@ -54,6 +59,7 @@ class PublicEventIntegrationTest {
                 .maxTeamSize(5)
                 .createdAt(now)
                 .updatedAt(now)
+                .academicTermId(IntegrationTestFixtures.defaultAcademicTermId(academicTermRepository))
                 .build());
     }
 

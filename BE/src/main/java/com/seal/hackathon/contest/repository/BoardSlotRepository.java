@@ -24,4 +24,10 @@ public interface BoardSlotRepository extends JpaRepository<BoardSlot, Long> {
 
 	Page<BoardSlot> findByRoundIdInAndTeamIdIsNotNullOrderByTeamNumberAsc(
 			Collection<Long> roundIds, Pageable pageable);
+
+	Page<BoardSlot> findByRoundIdAndTeamIdIsNotNullOrderByTeamNumberAsc(Long roundId, Pageable pageable);
+
+	boolean existsByBoardIdAndTeamIdIsNotNull(Long boardId);
+
+	boolean existsByRoundIdAndTeamIdIsNotNull(Long roundId);
 }

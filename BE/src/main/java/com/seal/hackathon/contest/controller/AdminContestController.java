@@ -21,6 +21,7 @@ import com.seal.hackathon.contest.dto.UpdateRoundRequest;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.common.idempotency.IdempotencyExecutor;
 import com.seal.hackathon.contest.service.ContestManagementService;
+import com.seal.hackathon.contest.service.ContestStructureDeletionService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -51,6 +52,7 @@ import com.seal.hackathon.contest.dto.RandomAssignResponse;
 public class AdminContestController {
 
     private final ContestManagementService contestManagementService;
+    private final ContestStructureDeletionService contestStructureDeletionService;
     private final IdempotencyExecutor idempotencyExecutor;
     private final CurrentUserProvider currentUserProvider;
 
@@ -103,6 +105,12 @@ public class AdminContestController {
             @PathVariable Long roundId,
             @Valid @RequestBody UpdateRoundRequest request) {
         return ApiResponse.ok(contestManagementService.updateRound(roundId, request));
+    }
+
+    @DeleteMapping("/rounds/{roundId}")
+    public ApiResponse<Void> deleteRound(@PathVariable Long roundId) {
+        contestStructureDeletionService.deleteRound(roundId);
+        return ApiResponse.ok(null);
     }
 
     @GetMapping("/rounds/{roundId}/boards")
@@ -271,6 +279,12 @@ public class AdminContestController {
     @DeleteMapping("/board-slots/{slotId}")
     public ApiResponse<Void> deleteBoardSlot(@PathVariable Long slotId) {
         contestManagementService.deleteBoardSlot(slotId);
+        return ApiResponse.ok(null);
+    }
+
+    @DeleteMapping("/boards/{boardId}")
+    public ApiResponse<Void> deleteBoard(@PathVariable Long boardId) {
+        contestStructureDeletionService.deleteBoard(boardId);
         return ApiResponse.ok(null);
     }
 }

@@ -40,6 +40,8 @@ public class Event {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private EventStatus status;
+    @Column(name = "academic_term_id", nullable = false)
+    private Long academicTermId;
     private Long createdBy;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;

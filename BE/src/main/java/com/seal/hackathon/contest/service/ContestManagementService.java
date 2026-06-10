@@ -1,8 +1,14 @@
 package com.seal.hackathon.contest.service;
 
+import com.seal.hackathon.academic.entity.AcademicTerm;
+import com.seal.hackathon.academic.repository.AcademicTermRepository;
+import com.seal.hackathon.academic.service.AcademicTermService;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
+import com.seal.hackathon.common.html.ProblemHtmlSanitizer;
+import com.seal.hackathon.common.storage.FileStorageService;
+import com.seal.hackathon.common.util.ContestTimelineValidation;
 import com.seal.hackathon.common.enums.BoardStatus;
 import com.seal.hackathon.common.enums.EventStatus;
 import com.seal.hackathon.common.enums.RoundStatus;
@@ -55,6 +61,7 @@ import com.seal.hackathon.registration.service.AuditLogWriter;
 import com.seal.hackathon.notification.service.NotificationService;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -95,6 +102,10 @@ public class ContestManagementService {
     private final CurrentUserProvider currentUserProvider;
     private final OrganizerAuthorizationService organizerAuthorizationService;
     private final NotificationService notificationService;
+    private final AcademicTermService academicTermService;
+    private final AcademicTermRepository academicTermRepository;
+    private final FileStorageService fileStorageService;
+    private final ProblemHtmlSanitizer problemHtmlSanitizer;
 
     @Transactional
     public EventResponse createEvent(CreateEventRequest request) {
@@ -111,6 +122,12 @@ public class ContestManagementService {
                 request.getRegistrationStartAt(),
                 request.getRegistrationEndAt(),
                 request.getMaxTeams());
+        AcademicTerm academicTerm = academicTermService.requireActiveTerm(request.getAcademicTermId());
+        validateEventWithinAcademicTerm(
+                request.getStartDate(),
+                request.getEndDate(),
+                academicTerm.getStartDate(),
+                academicTerm.getEndDate());
 
         CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
         OffsetDateTime now = OffsetDateTime.now();
@@ -125,6 +142,7 @@ public class ContestManagementService {
                 .minTeamSize(FIXED_MIN_TEAM_SIZE)
                 .maxTeamSize(FIXED_MAX_TEAM_SIZE)
                 .status(EventStatus.DRAFT)
+                .academicTermId(academicTerm.getId())
                 .createdBy(principal.getUserId())
                 .createdAt(now)
                 .updatedAt(now)
@@ -165,6 +183,12 @@ public class ContestManagementService {
         if (request.getMaxTeams() != null) {
             event.setMaxTeams(request.getMaxTeams());
         }
+        if (request.getAcademicTermId() != null) {
+            academicTermService.assertEventTermChangeAllowed(
+                    eventId, event.getAcademicTermId(), request.getAcademicTermId());
+            AcademicTerm academicTerm = academicTermService.requireActiveTerm(request.getAcademicTermId());
+            event.setAcademicTermId(academicTerm.getId());
+        }
 
         validateEventState(
                 event.getName(),
@@ -173,6 +197,12 @@ public class ContestManagementService {
                 event.getRegistrationStartAt(),
                 event.getRegistrationEndAt(),
                 event.getMaxTeams());
+        AcademicTerm academicTerm = academicTermService.requireActiveTerm(event.getAcademicTermId());
+        validateEventWithinAcademicTerm(
+                event.getStartDate(),
+                event.getEndDate(),
+                academicTerm.getStartDate(),
+                academicTerm.getEndDate());
         event.setMinTeamSize(FIXED_MIN_TEAM_SIZE);
         event.setMaxTeamSize(FIXED_MAX_TEAM_SIZE);
         event.setUpdatedAt(OffsetDateTime.now());
@@ -198,9 +228,12 @@ public class ContestManagementService {
     }
 
     @Transactional(readOnly = true)
-    public List<EventListItemResponse> listPublicEvents() {
-        return eventRepository.findAll(Sort.by(Sort.Direction.DESC, "startDate").and(Sort.by(Sort.Direction.DESC, "id")))
-                .stream()
+    public List<EventListItemResponse> listPublicEvents(Long academicTermId) {
+        Sort sort = Sort.by(Sort.Direction.DESC, "startDate").and(Sort.by(Sort.Direction.DESC, "id"));
+        List<Event> events = academicTermId == null
+                ? eventRepository.findAll(sort)
+                : eventRepository.findByAcademicTermId(academicTermId, sort);
+        return events.stream()
                 .map(this::toEventListItemResponse)
                 .toList();
     }
@@ -250,9 +283,12 @@ public class ContestManagementService {
         if (!EnumSet.of(RoundType.GROUP_STAGE, RoundType.FINAL).contains(request.getRoundType())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "roundType must be GROUP_STAGE or FINAL");
         }
-        if (!request.getStartAt().isBefore(request.getEndAt())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startAt must be before endAt");
-        }
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        validateRoundTimeline(request.getStartAt(), request.getEndAt());
+        validateRoundWithinEvent(
+                request.getStartAt(), request.getEndAt(), event.getStartDate(), event.getEndDate());
+        validateRoundNoOverlap(eventId, null, request.getStartAt(), request.getEndAt());
         if (roundRepository.existsByEventIdAndRoundOrder(eventId, request.getRoundOrder())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "roundOrder already exists in this event");
         }
@@ -299,6 +335,11 @@ public class ContestManagementService {
         }
 
         validateRoundTimeline(round.getStartAt(), round.getEndAt());
+        Event event = eventRepository.findById(round.getEventId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        validateRoundWithinEvent(
+                round.getStartAt(), round.getEndAt(), event.getStartDate(), event.getEndDate());
+        validateRoundNoOverlap(round.getEventId(), roundId, round.getStartAt(), round.getEndAt());
         round.setUpdatedAt(OffsetDateTime.now());
         return toRoundResponse(roundRepository.save(round));
     }
@@ -928,15 +969,19 @@ public class ContestManagementService {
     @Transactional
     public ProblemResponse createProblem(Long boardId, CreateProblemRequest request) {
         organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
+        Board board = getBoardEntity(boardId);
+        Round round = getRoundEntity(board.getRoundId());
 
         validateProblemWindow(request.getReleaseAt(), request.getCloseAt());
+        validateProblemWithinRound(
+                request.getReleaseAt(), request.getCloseAt(), round.getStartAt(), round.getEndAt());
 
         CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
         OffsetDateTime now = OffsetDateTime.now();
         Problem problem = Problem.builder()
                 .boardId(boardId)
                 .title(normalizeRequired(request.getTitle(), "title must not be blank"))
-                .description(normalizeNullable(request.getDescription()))
+                .description(sanitizeProblemDescription(request.getDescription()))
                 .attachmentUrl(normalizeNullable(request.getAttachmentUrl()))
                 .externalLink(normalizeNullable(request.getExternalLink()))
                 .releaseAt(request.getReleaseAt())
@@ -964,10 +1009,15 @@ public class ContestManagementService {
             problem.setTitle(normalizeRequired(request.getTitle(), "title must not be blank"));
         }
         if (request.getDescription() != null) {
-            problem.setDescription(normalizeNullable(request.getDescription()));
+            problem.setDescription(sanitizeProblemDescription(request.getDescription()));
         }
-        if (request.getAttachmentUrl() != null) {
-            problem.setAttachmentUrl(normalizeNullable(request.getAttachmentUrl()));
+        if (request.isAttachmentUrlProvided()) {
+            String newAttachmentUrl = normalizeNullable(request.getAttachmentUrl());
+            String oldAttachmentUrl = problem.getAttachmentUrl();
+            if (oldAttachmentUrl != null && !Objects.equals(oldAttachmentUrl, newAttachmentUrl)) {
+                fileStorageService.deleteByPublicUrl(oldAttachmentUrl);
+            }
+            problem.setAttachmentUrl(newAttachmentUrl);
         }
         if (request.getExternalLink() != null) {
             problem.setExternalLink(normalizeNullable(request.getExternalLink()));
@@ -986,6 +1036,10 @@ public class ContestManagementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "closeAt must not be null");
         }
         validateProblemWindow(problem.getReleaseAt(), problem.getCloseAt());
+        Board board = getBoardEntity(problem.getBoardId());
+        Round round = getRoundEntity(board.getRoundId());
+        validateProblemWithinRound(
+                problem.getReleaseAt(), problem.getCloseAt(), round.getStartAt(), round.getEndAt());
         if (!StringUtils.hasText(problem.getTitle())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title must not be blank");
         }
@@ -1001,7 +1055,9 @@ public class ContestManagementService {
     public void deleteProblem(Long problemId) {
         organizerAuthorizationService.requireProblemOwnedByCurrentOrganizer(problemId);
         Problem problem = getProblemEntity(problemId);
+        String attachmentUrl = problem.getAttachmentUrl();
         problemRepository.delete(problem);
+        fileStorageService.deleteByPublicUrl(attachmentUrl);
     }
 
     @Transactional
@@ -1158,7 +1214,7 @@ public class ContestManagementService {
         if (closeAt == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "closeAt must not be null");
         }
-        if (!releaseAt.isBefore(closeAt)) {
+        if (!ContestTimelineValidation.isProblemWindowValid(releaseAt, closeAt)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "closeAt must be after releaseAt");
         }
     }
@@ -1204,7 +1260,13 @@ public class ContestManagementService {
         return eventSlots.stream()
                 .filter(slot -> activeRound.getId().equals(slot.getRoundId()))
                 .findFirst()
-                .orElse(null);
+                .orElseGet(() -> eventSlots.stream()
+                        .max(Comparator.comparing(
+                                slot -> roundRepository.findById(slot.getRoundId())
+                                        .map(Round::getRoundOrder)
+                                        .orElse(Integer.MIN_VALUE),
+                                Comparator.nullsLast(Integer::compareTo)))
+                        .orElse(null));
     }
 
     /**
@@ -1276,6 +1338,14 @@ public class ContestManagementService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "registrationStartAt must be before or equal to registrationEndAt");
         }
+        if (!ContestTimelineValidation.isRegistrationEndWithinEvent(registrationEndAt, endDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "registrationEndAt must be on or before event endDate");
+        }
+        if (!ContestTimelineValidation.isRegistrationStartBeforeEvent(registrationStartAt, startDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "registrationStartAt should be on or before event startDate");
+        }
         if (maxTeams == null || maxTeams <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "maxTeams must be greater than 0");
         }
@@ -1291,8 +1361,80 @@ public class ContestManagementService {
         if (startAt == null || endAt == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startAt and endAt must not be null");
         }
-        if (!startAt.isBefore(endAt)) {
+        if (!ContestTimelineValidation.isRoundTimelineValid(startAt, endAt)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startAt must be before endAt");
+        }
+    }
+
+    private void validateEventWithinAcademicTerm(
+            LocalDate eventStartDate,
+            LocalDate eventEndDate,
+            LocalDate termStartDate,
+            LocalDate termEndDate) {
+        if (eventStartDate == null || eventEndDate == null || termStartDate == null || termEndDate == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event and academic term dates must not be null");
+        }
+        if (!ContestTimelineValidation.isEventWithinAcademicTerm(
+                eventStartDate, eventEndDate, termStartDate, termEndDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "event dates must be within academic term startDate and endDate");
+        }
+    }
+
+    private void validateRoundNoOverlap(
+            Long eventId, Long excludeRoundId, OffsetDateTime startAt, OffsetDateTime endAt) {
+        if (startAt == null || endAt == null) {
+            return;
+        }
+        for (Round existing : roundRepository.findByEventId(eventId)) {
+            if (excludeRoundId != null && excludeRoundId.equals(existing.getId())) {
+                continue;
+            }
+            if (existing.getStartAt() == null || existing.getEndAt() == null) {
+                continue;
+            }
+            if (ContestTimelineValidation.doRoundTimelinesOverlap(
+                    startAt, endAt, existing.getStartAt(), existing.getEndAt())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "round timeline overlaps with round \"" + existing.getName() + "\"");
+            }
+        }
+    }
+
+    private void validateRoundWithinEvent(
+            OffsetDateTime roundStartAt,
+            OffsetDateTime roundEndAt,
+            LocalDate eventStartDate,
+            LocalDate eventEndDate) {
+        if (roundStartAt == null || roundEndAt == null || eventStartDate == null || eventEndDate == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Round and event dates must not be null");
+        }
+        if (!ContestTimelineValidation.isRoundStartWithinEvent(roundStartAt, eventStartDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "round startAt must be on or after event startDate");
+        }
+        if (!ContestTimelineValidation.isRoundEndWithinEvent(roundEndAt, eventEndDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "round endAt must be on or before event endDate");
+        }
+    }
+
+    private void validateProblemWithinRound(
+            OffsetDateTime releaseAt,
+            OffsetDateTime closeAt,
+            OffsetDateTime roundStartAt,
+            OffsetDateTime roundEndAt) {
+        if (releaseAt == null || closeAt == null || roundStartAt == null || roundEndAt == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Problem and round dates must not be null");
+        }
+        if (!ContestTimelineValidation.isProblemReleaseWithinRound(releaseAt, roundStartAt)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "releaseAt must be on or after round startAt");
+        }
+        if (!ContestTimelineValidation.isProblemCloseWithinRound(closeAt, roundEndAt)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "closeAt must be on or before round endAt");
         }
     }
 
@@ -1309,6 +1451,10 @@ public class ContestManagementService {
             return null;
         }
         return value.trim();
+    }
+
+    private String sanitizeProblemDescription(String value) {
+        return problemHtmlSanitizer.sanitize(normalizeNullable(value));
     }
 
     private Round getRoundEntity(Long roundId) {
@@ -1332,6 +1478,7 @@ public class ContestManagementService {
     }
 
     private EventResponse toEventResponse(Event event) {
+        AcademicTerm term = resolveTerm(event.getAcademicTermId());
         return EventResponse.builder()
                 .id(event.getId())
                 .name(event.getName())
@@ -1344,6 +1491,9 @@ public class ContestManagementService {
                 .minTeamSize(event.getMinTeamSize())
                 .maxTeamSize(event.getMaxTeamSize())
                 .status(event.getStatus())
+                .academicTermId(term != null ? term.getId() : null)
+                .academicTermCode(term != null ? term.getCode() : null)
+                .academicTermName(term != null ? term.getName() : null)
                 .createdBy(event.getCreatedBy())
                 .createdAt(event.getCreatedAt())
                 .updatedAt(event.getUpdatedAt())
@@ -1351,6 +1501,7 @@ public class ContestManagementService {
     }
 
     private EventListItemResponse toEventListItemResponse(Event event) {
+        AcademicTerm term = resolveTerm(event.getAcademicTermId());
         return EventListItemResponse.builder()
                 .id(event.getId())
                 .name(event.getName())
@@ -1361,10 +1512,14 @@ public class ContestManagementService {
                 .minTeamSize(event.getMinTeamSize())
                 .maxTeamSize(event.getMaxTeamSize())
                 .status(event.getStatus())
+                .academicTermId(term != null ? term.getId() : null)
+                .academicTermCode(term != null ? term.getCode() : null)
+                .academicTermName(term != null ? term.getName() : null)
                 .build();
     }
 
     private EventDetailResponse toEventDetailResponse(Event event) {
+        AcademicTerm term = resolveTerm(event.getAcademicTermId());
         return EventDetailResponse.builder()
                 .id(event.getId())
                 .name(event.getName())
@@ -1377,7 +1532,17 @@ public class ContestManagementService {
                 .minTeamSize(event.getMinTeamSize())
                 .maxTeamSize(event.getMaxTeamSize())
                 .status(event.getStatus())
+                .academicTermId(term != null ? term.getId() : null)
+                .academicTermCode(term != null ? term.getCode() : null)
+                .academicTermName(term != null ? term.getName() : null)
                 .build();
+    }
+
+    private AcademicTerm resolveTerm(Long academicTermId) {
+        if (academicTermId == null) {
+            return null;
+        }
+        return academicTermRepository.findById(academicTermId).orElse(null);
     }
 
     private RoundResponse toRoundResponse(Round round) {

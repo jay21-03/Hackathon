@@ -18,4 +18,7 @@ public class EventListItemResponse {
     private Integer minTeamSize;
     private Integer maxTeamSize;
     private EventStatus status;
+    private Long academicTermId;
+    private String academicTermCode;
+    private String academicTermName;
 }

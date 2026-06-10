@@ -20,6 +20,9 @@ public class EventResponse {
     private Integer minTeamSize;
     private Integer maxTeamSize;
     private EventStatus status;
+    private Long academicTermId;
+    private String academicTermCode;
+    private String academicTermName;
     private Long createdBy;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
