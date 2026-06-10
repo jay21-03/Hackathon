@@ -21,7 +21,9 @@ import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.entity.TeamMember;
 import com.seal.hackathon.registration.repository.TeamMemberRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
+import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.support.IntegrationTestConfig;
+import com.seal.hackathon.support.IntegrationTestFixtures;
 import com.seal.hackathon.support.IntegrationTestDataCleaner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -79,6 +81,9 @@ public class NotificationIntegrationTest {
 
     @Autowired
     EventRepository eventRepository;
+
+    @Autowired
+    AcademicTermRepository academicTermRepository;
 
     @Autowired
     TeamRepository teamRepository;
@@ -142,7 +147,8 @@ public class NotificationIntegrationTest {
                 .createdBy(organizer.getId())
                 .createdAt(now)
                 .updatedAt(now)
-                .build());
+                
+                .academicTermId(IntegrationTestFixtures.defaultAcademicTermId(academicTermRepository)).build());
 
         team = teamRepository.save(Team.builder()
                 .eventId(event.getId())
@@ -202,6 +208,36 @@ public class NotificationIntegrationTest {
                         .header("Authorization", participantToken))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data").value(0));
+    }
+
+    @Test
+    void backfillInSameTransactionAsNewUser_linksPendingNotifications() {
+        OffsetDateTime now = OffsetDateTime.now();
+        String email = "first-google@fpt.edu.vn";
+        notificationRepository.save(com.seal.hackathon.notification.entity.Notification.builder()
+                .email(email)
+                .eventId(event.getId())
+                .notificationType(NotificationType.GENERAL)
+                .title("Invite before signup")
+                .content("Please login")
+                .isRead(false)
+                .createdAt(now)
+                .build());
+
+        User newUser = userRepository.save(User.builder()
+                .email(email)
+                .googleSub("google-sub-first-login")
+                .fullName("New Google User")
+                .status(UserStatus.ACTIVE)
+                .profileCompleted(true)
+                .createdAt(now)
+                .updatedAt(now)
+                .build());
+        userRepository.flush();
+
+        int updated = notificationService.backfillUserIdOnLogin(newUser.getId(), newUser.getEmail());
+        assertThat(updated).isEqualTo(1);
+        assertThat(notificationRepository.findByUserIdOrderByCreatedAtDesc(newUser.getId())).hasSize(1);
     }
 
     @Test

@@ -10,5 +10,6 @@ public enum NotificationType {
     SUBMISSION,
     PROBLEM_RELEASED,
     SCORING_REMINDER,
+    BOARD_READY_TO_SCORE,
     GENERAL
 }

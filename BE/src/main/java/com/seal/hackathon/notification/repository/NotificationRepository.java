@@ -58,7 +58,12 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             """)
     long countUnreadForUser(@Param("userId") Long userId, @Param("email") String email);
 
-    @Modifying
-    @Query("UPDATE Notification n SET n.userId = :userId WHERE n.email = :email AND n.userId IS NULL")
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Notification n
+            SET n.userId = :userId
+            WHERE LOWER(n.email) = LOWER(:email)
+              AND n.userId IS NULL
+            """)
     int backfillUserIdByEmail(@Param("userId") Long userId, @Param("email") String email);
 }

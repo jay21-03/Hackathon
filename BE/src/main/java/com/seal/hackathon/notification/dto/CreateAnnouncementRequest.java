@@ -13,6 +13,7 @@ public class CreateAnnouncementRequest {
     private String title;
 
     @NotBlank
+    @Size(max = 10000, message = "content must not exceed 10000 characters")
     private String content;
 
     /** Gửi ngay; mặc định true. false = lưu nháp (chưa fan-out). */

@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -48,7 +49,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
@@ -78,12 +78,16 @@ public class NotificationService {
     @Value("${app.mail.enabled:false}")
     private boolean mailEnabled;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void backfillUserIdOnLogin(Long userId, String email) {
+    /**
+     * Must run in the same transaction as user creation/login so FK on notifications.user_id
+     * sees the user row before commit (REQUIRES_NEW caused 409 on first Google login).
+     */
+    @Transactional
+    public int backfillUserIdOnLogin(Long userId, String email) {
         if (userId == null || !StringUtils.hasText(email)) {
-            return;
+            return 0;
         }
-        notificationRepository.backfillUserIdByEmail(userId, email.trim());
+        return notificationRepository.backfillUserIdByEmail(userId, email.trim().toLowerCase(Locale.ROOT));
     }
 
     @Transactional
@@ -149,7 +153,9 @@ public class NotificationService {
         String title = "Lời mời làm " + roleLabel;
         String content = "Bạn được mời làm " + roleLabel + " cho bảng «" + board.getName() + "» tại "
                 + eventName + ". Kiểm tra email để chấp nhận lời mời.";
-        String linkUrl = role == SystemRole.JUDGE ? "/judge/dashboard" : "/mentor/dashboard";
+        String linkUrl = role == SystemRole.JUDGE
+                ? "/judge/scoring?boardId=" + board.getId()
+                : "/mentor/dashboard";
         User user = userRepository.findByEmail(invitation.getEmail()).orElse(null);
         create(
                 user != null ? user.getId() : null,
@@ -429,6 +435,35 @@ public class NotificationService {
                 content,
                 linkUrl,
                 dedupeKey);
+        return created != null;
+    }
+
+    @Transactional
+    public boolean notifyJudgeBoardReadyToScore(
+            Long judgeId, Board board, Round round, Event event) {
+        if (judgeId == null || board == null) {
+            return false;
+        }
+        User judge = userRepository.findById(judgeId).orElse(null);
+        if (judge == null) {
+            return false;
+        }
+        String eventName = event != null ? event.getName() : "cuộc thi";
+        String roundName = round != null ? round.getName() : "vòng thi";
+        String title = "Sẵn sàng chấm — " + board.getName();
+        String content = eventName + " · " + roundName + ": bảng «" + board.getName()
+                + "» đã sẵn sàng. Mở phiếu chấm để bắt đầu.";
+        String linkUrl = "/judge/scoring?boardId=" + board.getId();
+        Long eventId = event != null ? event.getId() : null;
+        Notification created = create(
+                judge.getId(),
+                judge.getEmail(),
+                eventId,
+                NotificationType.BOARD_READY_TO_SCORE,
+                title,
+                content,
+                linkUrl,
+                "board-ready:j" + judgeId + ":b" + board.getId());
         return created != null;
     }
 
