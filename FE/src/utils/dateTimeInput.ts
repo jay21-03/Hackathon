@@ -1,6 +1,12 @@
-/** `datetime-local` / `date` input ↔ ISO cho API */
+import { parseLocalDateTimeValue } from "./dateTimeValidation";
+
+/** `datetime-local` → ISO UTC cho API. Ném lỗi nếu giá trị không hợp lệ. */
 export function toIsoFromLocal(value: string) {
-  return new Date(value).toISOString();
+  const parsed = parseLocalDateTimeValue(value);
+  if (!parsed) {
+    throw new Error("Thời gian không hợp lệ.");
+  }
+  return parsed.toISOString();
 }
 
 export function toLocalDateInput(iso: string) {

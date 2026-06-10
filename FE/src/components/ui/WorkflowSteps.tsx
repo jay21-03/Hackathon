@@ -49,7 +49,7 @@ export function WorkflowSteps({ title, description, steps, activeHref, onStepSel
         <p className="font-body-sm text-on-surface-variant">{description}</p>
       </div>
 
-      <div className="mt-md grid gap-sm sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))]">
+      <div className="mt-md grid gap-sm sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4">
         {steps.map((step, index) => {
           const state = step.state ?? "next";
           const content = (
@@ -84,7 +84,6 @@ export function WorkflowSteps({ title, description, steps, activeHref, onStepSel
             <button
               key={`${step.label}-${index}`}
               type="button"
-              disabled={step.state === "blocked"}
               className={className}
               onClick={() => onStepSelect(step.href!, step)}
             >

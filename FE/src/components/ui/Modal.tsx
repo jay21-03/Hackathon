@@ -7,13 +7,21 @@ interface ModalProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
-  size?: "md" | "lg" | "xl";
+  size?: "md" | "lg" | "xl" | "2xl";
 }
 
 const sizeClass = {
   md: "max-w-md",
   lg: "max-w-2xl",
-  xl: "max-w-4xl"
+  xl: "max-w-4xl",
+  "2xl": "max-w-6xl"
+};
+
+const heightClass = {
+  md: "max-h-[min(90vh,720px)]",
+  lg: "max-h-[min(90vh,720px)]",
+  xl: "max-h-[min(92vh,860px)]",
+  "2xl": "max-h-[min(92vh,920px)]"
 };
 
 export function Modal({ open, title, onClose, children, size = "lg" }: ModalProps) {
@@ -35,7 +43,7 @@ export function Modal({ open, title, onClose, children, size = "lg" }: ModalProp
       role="presentation"
     >
       <div
-        className={`flex max-h-[min(90vh,720px)] w-full flex-col rounded-xl border border-outline-variant bg-surface-container shadow-2xl ${sizeClass[size]}`}
+        className={`flex w-full flex-col rounded-xl border border-outline-variant bg-surface-container shadow-2xl ${sizeClass[size]} ${heightClass[size]}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"

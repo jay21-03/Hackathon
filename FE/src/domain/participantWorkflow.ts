@@ -10,8 +10,10 @@ export function buildParticipantWorkflowSteps(input: {
   hasSubmitted?: boolean;
   resultsPublished?: boolean;
   teamStatus?: string | null;
+  githubProvisioning?: boolean;
 }): WorkflowStep[] {
-  const { active, isConfirmed, hasBoard, hasSubmitted, resultsPublished, teamStatus } = input;
+  const { active, isConfirmed, hasBoard, hasSubmitted, resultsPublished, teamStatus, githubProvisioning } =
+    input;
   const blockedByStatus =
     teamStatus === "DISQUALIFIED" ||
     teamStatus === "REJECTED" ||
@@ -69,9 +71,16 @@ export function buildParticipantWorkflowSteps(input: {
   ];
 
   if (enableSubmissions) {
+    const submissionDetail = githubProvisioning
+      ? hasSubmitted
+        ? "Repository đã cấp — push code trước hạn."
+        : "Chờ BTC cấp repository GitHub."
+      : hasSubmitted
+        ? "Đã nộp repository."
+        : "Nộp link repository trước hạn.";
     steps.push({
       label: "Bài nộp",
-      detail: hasSubmitted ? "Đã nộp repository." : "Nộp link repository trước hạn.",
+      detail: submissionDetail,
       to: "/me/submission",
       state: stateFor("submission")
     });

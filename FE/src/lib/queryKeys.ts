@@ -1,7 +1,14 @@
 export const queryKeys = {
+  academicTerms: {
+    all: ["academicTerms"] as const,
+    list: () => [...queryKeys.academicTerms.all, "list"] as const,
+    detail: (id: number | null) => [...queryKeys.academicTerms.all, "detail", id ?? "none"] as const,
+    dashboard: (id: number | null) => [...queryKeys.academicTerms.all, "dashboard", id ?? "none"] as const
+  },
   events: {
     all: ["events"] as const,
-    list: () => [...queryKeys.events.all, "list"] as const,
+    list: (academicTermId?: number | null) =>
+      [...queryKeys.events.all, "list", academicTermId ?? "all"] as const,
     detail: (id: string | number) => [...queryKeys.events.all, "detail", String(id)] as const
   },
   teams: {
@@ -65,10 +72,20 @@ export const queryKeys = {
     all: ["announcements"] as const,
     byEvent: (eventId: number | null) => [...queryKeys.announcements.all, "event", eventId] as const
   },
+  repositories: {
+    all: ["repositories"] as const,
+    byEvent: (eventId: number | null) => [...queryKeys.repositories.all, "event", eventId] as const,
+    template: (problemId: number | null) =>
+      [...queryKeys.repositories.all, "template", problemId] as const,
+    my: () => [...queryKeys.repositories.all, "my"] as const,
+    myTeam: (teamId: number | null, eventId?: number | null) =>
+      [...queryKeys.repositories.all, "my-team", teamId, eventId] as const
+  },
   invitations: {
     all: ["invitations"] as const,
     staff: (
       eventId: number | null,
+      roundId: number | null,
       boardId: number | null,
       role: string,
       status: string,
@@ -80,6 +97,7 @@ export const queryKeys = {
         ...queryKeys.invitations.all,
         "staff",
         eventId,
+        roundId,
         boardId,
         role || "all",
         status || "all",

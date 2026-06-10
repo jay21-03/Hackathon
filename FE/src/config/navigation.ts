@@ -1,5 +1,7 @@
 import {
+  enableAcademicTerms,
   enableAnnouncements,
+  enableGithubProvisioning,
   enableNotifications,
   enablePhase7,
   enableRanking,
@@ -16,13 +18,25 @@ export type NavItem = {
   hidden?: boolean;
 };
 
-const notificationNavPrefixes = ["/me/notifications", "/organizer/notifications"];
-const scoringNavPrefixes = ["/organizer/rubric", "/organizer/scoring", "/judge/scoring"];
+const notificationNavPrefixes = ["/me/notifications", "/organizer/notifications", "/judge/notifications"];
+const scoringNavPrefixes = [
+  "/organizer/results-hub",
+  "/organizer/rubric",
+  "/organizer/scoring",
+  "/judge/scoring"
+];
 const submissionNavPrefixes = ["/me/submission", "/organizer/submissions"];
+const artifactsNavPrefixes = [
+  "/organizer/artifacts-hub",
+  "/organizer/submissions",
+  "/organizer/repositories"
+];
 const rankingNavPrefixes = [
+  "/organizer/results-hub",
   "/organizer/ranking",
   "/organizer/publish-results",
   "/organizer/export-success",
+  "/organizer/finals",
   "/events/",
   "/me/results"
 ];
@@ -31,11 +45,16 @@ function isScoringNavPath(to: string): boolean {
   return scoringNavPrefixes.some((prefix) => to === prefix || to.startsWith(`${prefix}/`));
 }
 
+function isArtifactsNavPath(to: string): boolean {
+  return artifactsNavPrefixes.some((prefix) => to === prefix || to.startsWith(`${prefix}/`));
+}
+
 /** Mục hiển thị trên sidebar (đã lọc hidden + phase 7 khi tắt cờ) */
 export function getVisibleNavItems(items: NavItem[]): NavItem[] {
   return items.filter((item) => {
     if (item.hidden) return false;
     if (isScoringNavPath(item.to)) return enableScoring;
+    if (isArtifactsNavPath(item.to)) return enableSubmissions || enableGithubProvisioning;
     if (isSubmissionNavPath(item.to)) return enableSubmissions;
     if (isRankingNavPath(item.to)) return enableRanking;
     if (isNotificationNavPath(item.to)) return enableNotifications;
@@ -62,25 +81,9 @@ export function isNotificationsNavItem(to: string): boolean {
 }
 
 function isPhase7NavPath(to: string): boolean {
-  const phase7Prefixes = [
-    "/organizer/check-ins",
-    "/organizer/finals",
-    "/organizer/ai-auditor",
-    "/organizer/ai-insights",
-    "/organizer/announcements",
-    "/me/check-in",
-    "/me/ai-review",
-    "/judge/scoring",
-    "/mentor/ai-review"
-  ];
+  const phase7Prefixes = ["/organizer/finals", "/organizer/announcements"];
   return phase7Prefixes.some((prefix) => to === prefix || to.startsWith(`${prefix}/`));
 }
-
-/** Sidebar trang chủ thí sinh — chọn cuộc thi trước khi vào không gian thi */
-export const participantHubNav: NavItem[] = [
-  { to: "/events", label: "Danh sách các cuộc thi", icon: "event", group: "Trang chủ" },
-  { to: "/profile", label: "Hồ sơ", icon: "person", group: "Tài khoản" }
-];
 
 /**
  * Sidebar BTC — thứ tự khớp quy trình thiết lập:
@@ -88,50 +91,52 @@ export const participantHubNav: NavItem[] = [
  */
 export const organizerNav: NavItem[] = [
   { to: "/organizer/dashboard", label: "Tổng quan", icon: "dashboard", group: "Tổng quan" },
+  {
+    to: "/organizer/academic-terms",
+    label: "Học kỳ",
+    icon: "calendar_month",
+    group: "Thiết lập",
+    hidden: !enableAcademicTerms
+  },
   { to: "/organizer/events", label: "Cuộc thi", icon: "event", group: "Thiết lập" },
   { to: "/organizer/events/new", label: "Tạo cuộc thi", icon: "add_circle", group: "Thiết lập" },
-  { to: "/organizer/registrations", label: "Đăng ký đội", icon: "fact_check", group: "Thiết lập" },
-  { to: "/organizer/invitations", label: "Mời thành viên", icon: "mail", group: "Thiết lập" },
+  { to: "/organizer/teams-hub", label: "Đội & lời mời", icon: "groups", group: "Thiết lập" },
   { to: "/organizer/boards", label: "Bảng thi", icon: "grid_view", group: "Vận hành thi" },
-  { to: "/organizer/problems", label: "Đề thi", icon: "code_blocks", group: "Vận hành thi" },
-  { to: "/organizer/assignments", label: "Mentor & giám khảo", icon: "supervisor_account", group: "Vận hành thi" },
-  { to: "/organizer/rubric", label: "Tiêu chí chấm", icon: "data_object", group: "Chấm điểm" },
-  { to: "/organizer/scoring", label: "Tiến độ chấm", icon: "gavel", group: "Chấm điểm" },
-  { to: "/organizer/submissions", label: "Bài nộp đội", icon: "upload_file", group: "Chấm điểm" },
-  { to: "/organizer/ranking", label: "Xếp hạng", icon: "leaderboard", group: "Kết quả" },
-  { to: "/organizer/publish-results", label: "Công bố kết quả", icon: "campaign", group: "Kết quả" },
-  { to: "/organizer/export-success", label: "Xuất kết quả", icon: "download", group: "Kết quả" },
+  { to: "/organizer/board-ops", label: "Vận hành bảng", icon: "tune", group: "Vận hành thi" },
+  {
+    to: "/organizer/artifacts-hub",
+    label: "Bài nộp & repo",
+    icon: "upload_file",
+    group: "Vận hành thi",
+    hidden: !enableSubmissions && !enableGithubProvisioning
+  },
+  { to: "/organizer/results-hub", label: "Kết quả", icon: "leaderboard", group: "Chấm & kết quả" },
   { to: "/organizer/users", label: "Người dùng", icon: "manage_accounts", group: "Quản trị" },
-  { to: "/organizer/check-ins", label: "Check-in", icon: "group_add", group: "Vận hành thi", hidden: true },
-  { to: "/organizer/ai-auditor", label: "Kiểm tra AI", icon: "policy", group: "Chấm điểm", hidden: true },
-  { to: "/organizer/ai-insights", label: "Nhận xét AI", icon: "psychology", group: "Chấm điểm", hidden: true },
-  { to: "/organizer/finals", label: "Chung kết", icon: "workspace_premium", group: "Kết quả", hidden: true },
   { to: "/organizer/announcements", label: "Thông báo chung", icon: "notifications_active", group: "Truyền thông" },
   { to: "/organizer/notifications", label: "Trung tâm thông báo", icon: "mark_email_read", group: "Truyền thông" }
 ];
 
 export const judgeNav: NavItem[] = [
   { to: "/judge/dashboard", label: "Đội được chấm", icon: "assignment", group: "Chấm điểm" },
-  { to: "/judge/scoring", label: "Phiếu chấm", icon: "gavel", group: "Chấm điểm" }
+  { to: "/judge/scoring", label: "Phiếu chấm", icon: "gavel", group: "Chấm điểm" },
+  { to: "/judge/notifications", label: "Thông báo", icon: "notifications", group: "Tài khoản" },
+  { to: "/judge/profile", label: "Hồ sơ", icon: "person", group: "Tài khoản" }
 ];
 
 export const mentorNav: NavItem[] = [
   { to: "/mentor/dashboard", label: "Đội phụ trách", icon: "groups", group: "Theo dõi" },
-  { to: "/mentor/ai-review", label: "Đánh giá AI", icon: "psychology", group: "Theo dõi", hidden: true }
+  { to: "/mentor/profile", label: "Hồ sơ", icon: "person", group: "Tài khoản" }
 ];
 
-/** Không gian thi — thứ tự: tổng quan → đội → bảng → đề */
+/** Không gian thi — một sidebar thống nhất (kể cả /events, /profile) */
 export const participantWorkspaceNav: NavItem[] = [
   { to: "/me", label: "Tổng quan", icon: "dashboard", group: "Tổng quan" },
   { to: "/me/team", label: "Đội của tôi", icon: "groups", group: "Đội" },
-  { to: "/team-invitations/status", label: "Trạng thái lời mời", icon: "mail", group: "Đội" },
   { to: "/me/board", label: "Bảng thi", icon: "grid_view", group: "Thi" },
   { to: "/me/problem", label: "Đề thi", icon: "code", group: "Thi" },
-  { to: "/profile", label: "Hồ sơ", icon: "person", group: "Tài khoản" },
-  { to: "/me/check-in", label: "Check-in", icon: "how_to_reg", group: "Thi", hidden: true },
   { to: "/me/submission", label: "Bài nộp", icon: "upload", group: "Thi" },
-  { to: "/me/ai-review", label: "Đánh giá AI", icon: "psychology", group: "Kết quả", hidden: true },
   { to: "/me/results", label: "Kết quả", icon: "leaderboard", group: "Kết quả" },
+  { to: "/profile", label: "Hồ sơ", icon: "person", group: "Tài khoản" },
   { to: "/me/notifications", label: "Thông báo", icon: "notifications", group: "Tài khoản" }
 ];
 

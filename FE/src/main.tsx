@@ -46,21 +46,27 @@ try {
   /* ignore */
 }
 
-const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
+
+const appTree = (
+  <QueryProvider>
+    <ToastProvider>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true
+        }}
+      >
+        <AppRouter />
+      </BrowserRouter>
+    </ToastProvider>
+  </QueryProvider>
+);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <GoogleOAuthProvider clientId={googleClientId || "missing-client-id.apps.googleusercontent.com"}>
-    <QueryProvider>
-      <ToastProvider>
-        <BrowserRouter
-          future={{
-            v7_startTransition: true,
-            v7_relativeSplatPath: true
-          }}
-        >
-          <AppRouter />
-        </BrowserRouter>
-      </ToastProvider>
-    </QueryProvider>
-  </GoogleOAuthProvider>
+  googleClientId ? (
+    <GoogleOAuthProvider clientId={googleClientId}>{appTree}</GoogleOAuthProvider>
+  ) : (
+    appTree
+  )
 );

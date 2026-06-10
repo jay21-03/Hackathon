@@ -10,7 +10,16 @@ import { PublicShell } from "../components/layout/PublicShell";
 import { WorkspaceShell } from "../components/layout/WorkspaceShell";
 import { ModuleSkeleton } from "../components/ui/ModuleSkeleton";
 import { FeatureRouteGate } from "../components/routing/FeatureRouteGate";
-import { enableAnnouncements, enableNotifications, enablePhase7, enableRanking, enableScoring, enableSubmissions } from "../config/features";
+import {
+  enableAcademicTerms,
+  enableAnnouncements,
+  enableGithubProvisioning,
+  enableNotifications,
+  enablePhase7,
+  enableRanking,
+  enableScoring,
+  enableSubmissions
+} from "../config/features";
 import {
   judgeNav,
   mentorNav,
@@ -40,7 +49,6 @@ const ResetPasswordPage = lazyPage(
 const EventDetailPage = lazyPage(() => import("../pages/events/EventDetailPage"), "EventDetailPage");
 const EventsDiscoveryPage = lazyPage(() => import("../pages/events/EventsDiscoveryPage"), "EventsDiscoveryPage");
 const ResultsPortalPage = lazyPage(() => import("../pages/public/ResultsPortalPage"), "ResultsPortalPage");
-const InvitationStatusPage = lazyPage(() => import("../pages/public/InvitationStatusPage"), "InvitationStatusPage");
 const TeamInvitationConfirmationPage = lazyPage(() => import("../pages/public/TeamInvitationConfirmationPage"), "TeamInvitationConfirmationPage");
 const TeamInvitationActionPage = lazyPage(() => import("../pages/public/TeamInvitationActionPage"), "TeamInvitationActionPage");
 const StaffInvitationActionPage = lazyPage(
@@ -51,14 +59,17 @@ const TeamInvitationLegacyRedirect = lazyPage(() => import("../pages/public/Team
 const TeamRegistrationPage = lazyPage(() => import("../pages/public/TeamRegistrationPage"), "TeamRegistrationPage");
 const JudgeDashboardPage = lazyPage(() => import("../pages/judge/JudgeDashboardPage"), "JudgeDashboardPage");
 const JudgeScoringPage = lazyPage(() => import("../pages/judge/JudgeScoringPage"), "JudgeScoringPage");
-const MentorAiReviewPage = lazyPage(() => import("../pages/mentor/MentorAiReviewPage"), "MentorAiReviewPage");
+const JudgeNotificationsPage = lazyPage(
+  () => import("../pages/judge/JudgeNotificationsPage"),
+  "JudgeNotificationsPage"
+);
 const MentorDashboardPage = lazyPage(() => import("../pages/mentor/MentorDashboardPage"), "MentorDashboardPage");
 const AnnouncementPage = lazyPage(() => import("../pages/organizer/AnnouncementPage"), "AnnouncementPage");
-const AiAuditorPage = lazyPage(() => import("../pages/organizer/AiAuditorPage"), "AiAuditorPage");
-const AiInsightsPage = lazyPage(() => import("../pages/organizer/AiInsightsPage"), "AiInsightsPage");
 const AssignmentManagementPage = lazyPage(() => import("../pages/organizer/AssignmentManagementPage"), "AssignmentManagementPage");
 const BoardManagementPage = lazyPage(() => import("../pages/organizer/BoardManagementPage"), "BoardManagementPage");
-const CheckInManagementPage = lazyPage(() => import("../pages/organizer/CheckInManagementPage"), "CheckInManagementPage");
+const BoardOperationsPage = lazyPage(() => import("../pages/organizer/BoardOperationsPage"), "BoardOperationsPage");
+const ResultsHubPage = lazyPage(() => import("../pages/organizer/ResultsHubPage"), "ResultsHubPage");
+const TeamsHubPage = lazyPage(() => import("../pages/organizer/TeamsHubPage"), "TeamsHubPage");
 const EventBasicInfoPage = lazyPage(() => import("../pages/organizer/EventBasicInfoPage"), "EventBasicInfoPage");
 const EventManagementPage = lazyPage(() => import("../pages/organizer/EventManagementPage"), "EventManagementPage");
 const CreateEventPage = lazyPage(() => import("../pages/organizer/CreateEventPage"), "CreateEventPage");
@@ -79,9 +90,19 @@ const SubmissionManagementPage = lazyPage(
   "SubmissionManagementPage"
 );
 const UserManagementPage = lazyPage(() => import("../pages/organizer/UserManagementPage"), "UserManagementPage");
-const AiReviewPage = lazyPage(() => import("../pages/participant/AiReviewPage"), "AiReviewPage");
+const RepositoryManagementPage = lazyPage(
+  () => import("../pages/organizer/RepositoryManagementPage"),
+  "RepositoryManagementPage"
+);
+const ArtifactsHubPage = lazyPage(
+  () => import("../pages/organizer/ArtifactsHubPage"),
+  "ArtifactsHubPage"
+);
+const AcademicTermManagementPage = lazyPage(
+  () => import("../pages/organizer/AcademicTermManagementPage"),
+  "AcademicTermManagementPage"
+);
 const AssignedBoardPage = lazyPage(() => import("../pages/participant/AssignedBoardPage"), "AssignedBoardPage");
-const CheckInPage = lazyPage(() => import("../pages/participant/CheckInPage"), "CheckInPage");
 const ParticipantOverviewPage = lazyPage(() => import("../pages/participant/ParticipantOverviewPage"), "ParticipantOverviewPage");
 const ProfilePage = lazyPage(() => import("../pages/participant/ProfilePage"), "ProfilePage");
 const ProblemPage = lazyPage(() => import("../pages/participant/ProblemPage"), "ProblemPage");
@@ -117,6 +138,25 @@ function gatedScoringRoute(redirectTo: string, component: ReactNode) {
 function gatedSubmissionRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
     <FeatureRouteGate enabled={enableSubmissions} redirectTo={redirectTo}>
+      {component}
+    </FeatureRouteGate>
+  );
+}
+
+function gatedGithubRoute(redirectTo: string, component: ReactNode) {
+  return routeElement(
+    <FeatureRouteGate enabled={enableGithubProvisioning} redirectTo={redirectTo}>
+      {component}
+    </FeatureRouteGate>
+  );
+}
+
+function gatedArtifactsHubRoute(redirectTo: string, component: ReactNode) {
+  return routeElement(
+    <FeatureRouteGate
+      enabled={enableSubmissions || enableGithubProvisioning}
+      redirectTo={redirectTo}
+    >
       {component}
     </FeatureRouteGate>
   );
@@ -214,7 +254,7 @@ export function AppRouter() {
             path="team-invitation/manual"
             element={routeElement(<TeamInvitationConfirmationPage />)}
           />
-          <Route path="team-invitations/status" element={routeElement(<InvitationStatusPage />)} />
+          <Route path="team-invitations/status" element={<Navigate to="/me/team" replace />} />
           <Route path="profile" element={routeElement(<ProfilePage />)} />
           <Route path="me" element={<ParticipantEventGate />}>
             <Route index element={routeElement(<ParticipantOverviewPage />)} />
@@ -222,11 +262,9 @@ export function AppRouter() {
             <Route path="status" element={<Navigate to="/me/team" replace />} />
             <Route path="board" element={routeElement(<AssignedBoardPage />)} />
             <Route path="profile" element={<Navigate to="/profile" replace />} />
-            <Route path="check-in" element={gatedRoute("/me", <CheckInPage />)} />
             <Route path="problem" element={routeElement(<ProblemPage />)} />
             <Route path="countdown" element={<Navigate to="/me/problem" replace />} />
             <Route path="submission" element={gatedSubmissionRoute("/me", <SubmissionPage />)} />
-            <Route path="ai-review" element={gatedRoute("/me", <AiReviewPage />)} />
             <Route
               path="results"
               element={gatedRankingRoute("/me", <ResultsPortalPage participantView />)}
@@ -251,28 +289,67 @@ export function AppRouter() {
           }
         >
           <Route path="dashboard" element={routeElement(<OrganizerOverviewPage />)} />
+          <Route
+            path="academic-terms"
+            element={
+              enableAcademicTerms ? (
+                routeElement(<AcademicTermManagementPage />)
+              ) : (
+                <Navigate to="/organizer/dashboard" replace />
+              )
+            }
+          />
           <Route path="events" element={routeElement(<EventManagementPage />)} />
           <Route path="events/new" element={routeElement(<CreateEventPage />)} />
           <Route path="events/wizard" element={routeElement(<EventWizardPage />)} />
           <Route path="events/basic-info" element={routeElement(<EventBasicInfoPage />)} />
-          <Route path="registrations" element={routeElement(<RegistrationManagementPage />)} />
+          <Route path="teams-hub" element={routeElement(<TeamsHubPage />)} />
+          <Route
+            path="registrations"
+            element={<Navigate to="/organizer/teams-hub#teams-step-registrations" replace />}
+          />
           <Route path="users" element={routeElement(<UserManagementPage />)} />
+          <Route path="board-ops" element={routeElement(<BoardOperationsPage />)} />
           <Route path="problems" element={routeElement(<ProblemManagementPage />)} />
+          <Route
+            path="artifacts-hub"
+            element={gatedArtifactsHubRoute("/organizer/dashboard", <ArtifactsHubPage />)}
+          />
+          <Route
+            path="repositories"
+            element={<Navigate to="/organizer/artifacts-hub#artifacts-step-repositories" replace />}
+          />
           <Route path="boards" element={routeElement(<BoardManagementPage />)} />
           <Route path="assignments" element={routeElement(<AssignmentManagementPage />)} />
-          <Route path="invitations" element={routeElement(<InvitationManagementPage />)} />
-          <Route path="rubric" element={gatedScoringRoute("/organizer/dashboard", <RubricSetupPage />)} />
-          <Route path="check-ins" element={gatedRoute("/organizer/dashboard", <CheckInManagementPage />)} />
-          <Route path="scoring" element={gatedScoringRoute("/organizer/dashboard", <ScoringProgressPage />)} />
+          <Route
+            path="invitations"
+            element={<Navigate to="/organizer/teams-hub#teams-step-invitations-members" replace />}
+          />
+          <Route
+            path="results-hub"
+            element={gatedScoringRoute("/organizer/dashboard", <ResultsHubPage />)}
+          />
+          <Route
+            path="rubric"
+            element={<Navigate to="/organizer/results-hub#results-step-rubric" replace />}
+          />
+          <Route
+            path="scoring"
+            element={<Navigate to="/organizer/results-hub#results-step-scoring" replace />}
+          />
           <Route
             path="submissions"
-            element={gatedSubmissionRoute("/organizer/dashboard", <SubmissionManagementPage />)}
+            element={<Navigate to="/organizer/artifacts-hub#artifacts-step-submissions" replace />}
           />
-          <Route path="ranking" element={gatedRankingRoute("/organizer/dashboard", <RankingPage />)} />
-          <Route path="finals" element={gatedRoute("/organizer/dashboard", <FinalsPage />)} />
-          <Route path="disqualifications" element={<Navigate to="/organizer/registrations" replace />} />
-          <Route path="ai-auditor" element={gatedRoute("/organizer/dashboard", <AiAuditorPage />)} />
-          <Route path="ai-insights" element={gatedRoute("/organizer/dashboard", <AiInsightsPage />)} />
+          <Route
+            path="ranking"
+            element={<Navigate to="/organizer/results-hub#results-step-ranking" replace />}
+          />
+          <Route
+            path="finals"
+            element={<Navigate to="/organizer/results-hub#results-step-finals" replace />}
+          />
+          <Route path="disqualifications" element={<Navigate to="/organizer/teams-hub#teams-step-registrations" replace />} />
           <Route path="announcements" element={gatedAnnouncementRoute("/organizer/dashboard", <AnnouncementPage />)} />
           <Route
             path="notifications"
@@ -280,11 +357,11 @@ export function AppRouter() {
           />
           <Route
             path="publish-results"
-            element={gatedRankingRoute("/organizer/dashboard", <PublishResultsPage />)}
+            element={<Navigate to="/organizer/results-hub#results-step-publish" replace />}
           />
           <Route
             path="export-success"
-            element={gatedRankingRoute("/organizer/dashboard", <ExportSuccessPage />)}
+            element={<Navigate to="/organizer/results-hub#results-step-export" replace />}
           />
         </Route>
         </Route>
@@ -297,6 +374,11 @@ export function AppRouter() {
         >
           <Route path="dashboard" element={routeElement(<JudgeDashboardPage />)} />
           <Route path="scoring" element={gatedScoringRoute("/judge/dashboard", <JudgeScoringPage />)} />
+          <Route
+            path="notifications"
+            element={gatedNotificationRoute("/judge/dashboard", <JudgeNotificationsPage />)}
+          />
+          <Route path="profile" element={routeElement(<ProfilePage />)} />
         </Route>
       </Route>
 
@@ -306,7 +388,7 @@ export function AppRouter() {
           element={<WorkspaceShell navItems={mentorNav} title="Mentor" subtitle="Theo dõi đội phụ trách" />}
         >
           <Route path="dashboard" element={routeElement(<MentorDashboardPage />)} />
-          <Route path="ai-review" element={gatedRoute("/mentor/dashboard", <MentorAiReviewPage />)} />
+          <Route path="profile" element={routeElement(<ProfilePage />)} />
         </Route>
       </Route>
 

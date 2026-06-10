@@ -1,3 +1,5 @@
+import { getApiFieldErrors } from "./apiError";
+
 const registrationErrorMap: Record<string, string> = {
   "Registration for this event is closed":
     "Cuộc thi chưa mở đăng ký hoặc đã hết hạn đăng ký. Ban tổ chức cần bấm «Mở đăng ký» trước.",
@@ -18,8 +20,62 @@ const registrationErrorMap: Record<string, string> = {
   "Reason is required for this status transition": "Cần nhập lý do khi từ chối hoặc loại đội.",
   "Invalid team status transition": "Không thể chuyển sang trạng thái này.",
   STUDENT_ID_REQUIRED: "MSSV là bắt buộc cho mỗi thành viên.",
-  UNIVERSITY_REQUIRED: "Trường là bắt buộc cho mỗi thành viên."
+  UNIVERSITY_REQUIRED: "Trường là bắt buộc cho mỗi thành viên.",
+  SUBMISSION_DEADLINE_PASSED: "Đã qua hạn nộp bài.",
+  NOT_RELEASED: "Đề chưa mở — chưa thể nộp bài.",
+  PROBLEM_CLOSED: "Đề đã đóng — không thể nộp bài.",
+  PROBLEM_UNAVAILABLE: "Chưa thể nộp bài trong thời điểm hiện tại.",
+  INVALID_REPOSITORY_URL: "Link phải là GitHub hoặc GitLab hợp lệ (có đường dẫn repository).",
+  "reason must not exceed 1000 characters": "Lý do tối đa 1.000 ký tự.",
+  "reason is required for REJECTED or DISQUALIFIED status":
+    "Cần nhập lý do khi từ chối hoặc loại đội.",
+  "minTeamSize and maxTeamSize are managed by the system":
+    "Quy mô đội do hệ thống quản lý — không gửi minTeamSize/maxTeamSize.",
+  "code must not exceed 50 characters": "Mã tiêu chí tối đa 50 ký tự.",
+  "name must not exceed 200 characters": "Tên tối đa 200 ký tự.",
+  "members must not exceed 50 items": "Tối đa 50 lời mời trong một lần."
 };
+
+function mapRegistrationFieldKey(key: string): string {
+  const memberMatch = key.match(/^members\[(\d+)\]\.(\w+)$/);
+  if (memberMatch) {
+    return `members.${memberMatch[1]}.${memberMatch[2]}`;
+  }
+  if (key === "name") return "teamName";
+  return key.includes(".") ? key.split(".").pop()! : key;
+}
+
+/** Gán fieldErrors từ API đăng ký/đội với message tiếng Việt. */
+export function applyRegistrationFormErrors(
+  error: unknown,
+  setFieldErrors: (errors: Record<string, string>) => void,
+  setMemberFieldErrors?: (errors: Record<number, Record<string, string>>) => void
+): boolean {
+  const raw = getApiFieldErrors(error);
+  if (!raw) return false;
+
+  const flat: Record<string, string> = {};
+  const members: Record<number, Record<string, string>> = {};
+
+  for (const [key, message] of Object.entries(raw)) {
+    const vi = mapRegistrationErrorMessage(message);
+    const memberMatch = key.match(/^members\[(\d+)\]\.(\w+)$/);
+    if (memberMatch && setMemberFieldErrors) {
+      const index = Number(memberMatch[1]);
+      const field = memberMatch[2];
+      if (!members[index]) members[index] = {};
+      members[index][field] = vi;
+      continue;
+    }
+    flat[mapRegistrationFieldKey(key)] = vi;
+  }
+
+  setFieldErrors(flat);
+  if (setMemberFieldErrors && Object.keys(members).length > 0) {
+    setMemberFieldErrors(members);
+  }
+  return true;
+}
 
 export function mapRegistrationErrorMessage(message: string) {
   const trimmed = message.trim();

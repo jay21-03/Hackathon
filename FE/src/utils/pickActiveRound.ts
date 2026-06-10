@@ -45,3 +45,34 @@ export function isRoundRunning(round: RoundScheduleLike, now: Date = new Date())
   const end = Date.parse(round.endAt);
   return Number.isFinite(start) && Number.isFinite(end) && ts >= start && ts < end;
 }
+
+/** Giữ lựa chọn hiện tại nếu còn hợp lệ; không thì ưu tiên vòng đang/hiện tại. */
+export function resolveDefaultRoundId<T extends RoundScheduleLike>(
+  rounds: T[],
+  preferredId?: number | null
+): number | null {
+  if (rounds.length === 0) return null;
+  if (preferredId != null && rounds.some((round) => round.id === preferredId)) {
+    return preferredId;
+  }
+  return pickActiveRound(rounds)?.id ?? rounds[0]?.id ?? null;
+}
+
+export type BoardRoundLike = { id: number; roundId?: number | null };
+
+/** Giữ bảng đang chọn nếu còn hợp lệ; không thì ưu tiên bảng thuộc vòng hiện tại. */
+export function resolveDefaultBoardId<
+  B extends BoardRoundLike,
+  R extends RoundScheduleLike
+>(boards: B[], rounds: R[], preferredBoardId?: number | null): number | null {
+  if (boards.length === 0) return null;
+  if (preferredBoardId != null && boards.some((board) => board.id === preferredBoardId)) {
+    return preferredBoardId;
+  }
+  const activeRound = pickActiveRound(rounds);
+  if (activeRound) {
+    const inActiveRound = boards.filter((board) => board.roundId === activeRound.id);
+    if (inActiveRound.length > 0) return inActiveRound[0]!.id;
+  }
+  return boards[0]!.id;
+}

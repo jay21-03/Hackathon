@@ -7,6 +7,23 @@ export interface User {
   status?: string;
 }
 
+export type AcademicTermType = "SPRING" | "SUMMER" | "FALL";
+export type AcademicTermStatus = "ACTIVE" | "ARCHIVED";
+
+export interface AcademicTerm {
+  id: number;
+  code: string;
+  name: string;
+  year: number;
+  termType: AcademicTermType;
+  startDate: string;
+  endDate: string;
+  status: AcademicTermStatus;
+  eventCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface EventListItem {
   id: number;
   name: string;
@@ -17,6 +34,9 @@ export interface EventListItem {
   minTeamSize?: number;
   maxTeamSize?: number;
   status: string;
+  academicTermId?: number;
+  academicTermCode?: string;
+  academicTermName?: string;
 }
 
 export interface Team {
@@ -56,12 +76,4 @@ export interface RankingResult {
   teamId: number;
   rank: number;
   averageScore: number;
-}
-
-export interface AiReview {
-  id: number;
-  teamId: number;
-  status: "PENDING" | "COMPLETED" | "FAILED";
-  reviewScore?: number;
-  reviewedAt?: string;
 }

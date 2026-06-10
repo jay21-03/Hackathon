@@ -1,3 +1,5 @@
+import { getApiFieldErrors } from "./apiError";
+
 const authErrorMap: Record<string, string> = {
   "Email domain is not allowed":
     "Email không thuộc domain được phép (fpt.edu.vn, fe.edu.vn, gmail.com, seal.edu.vn).",
@@ -13,7 +15,13 @@ const authErrorMap: Record<string, string> = {
   "GOOGLE_CLIENT_ID is not configured":
     "Đăng nhập Google chưa sẵn sàng. Liên hệ quản trị hệ thống.",
   "Invalid Google ID token":
-    "Không xác thực được Google. Kiểm tra Authorized JavaScript origins trong Google Cloud Console."
+    "Không xác thực được phiên Google. Vui lòng thử đăng nhập lại.",
+  "Google account is already linked to another user":
+    "Email Google này đã gắn tài khoản khác. Đăng nhập bằng email/mật khẩu hoặc liên hệ quản trị.",
+  GOOGLE_ACCOUNT_LINK_CONFLICT:
+    "Tài khoản Google không khớp email đã đăng ký. Dùng đúng email hoặc đăng nhập bằng mật khẩu.",
+  DATA_INTEGRITY_VIOLATION:
+    "Email đã tồn tại trong hệ thống. Thử đăng nhập bằng email/mật khẩu thay vì Google."
 };
 
 export function mapAuthErrorMessage(message: string) {
@@ -22,4 +30,20 @@ export function mapAuthErrorMessage(message: string) {
     if (trimmed.includes(key)) return vi;
   }
   return trimmed;
+}
+
+/** Gán fieldErrors từ API auth với message tiếng Việt. */
+export function applyAuthFormErrors(
+  error: unknown,
+  setFieldErrors: (errors: Record<string, string>) => void
+): boolean {
+  const raw = getApiFieldErrors(error);
+  if (!raw) return false;
+  const mapped: Record<string, string> = {};
+  for (const [key, message] of Object.entries(raw)) {
+    const field = key.includes(".") ? key.split(".").pop()! : key;
+    mapped[field] = mapAuthErrorMessage(message);
+  }
+  setFieldErrors(mapped);
+  return true;
 }
