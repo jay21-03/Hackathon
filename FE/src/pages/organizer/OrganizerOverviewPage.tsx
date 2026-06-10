@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "../../components/ui/Badge";
-import { EventSelector } from "../../components/ui/EventSelector";
+import { TermDashboardPanel } from "../../components/organizer/TermDashboardPanel";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
@@ -19,7 +20,7 @@ import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { queryKeys } from "../../lib/queryKeys";
 
 export function OrganizerOverviewPage() {
-  const { eventId, event, events, setEventId, loading, error } = useActiveEvent({ autoSelectFirst: true });
+  const { eventId, event, loading, error } = useActiveEvent({ autoSelectFirst: true });
   const { roundId, countdown, loading: roundLoading } = useEventRound(eventId);
   const { teams, loading: teamsLoading } = useEventTeams(eventId);
   const { context: setupContext } = useEventSetupProgress(eventId);
@@ -67,7 +68,7 @@ export function OrganizerOverviewPage() {
   if (pendingTeams > 0) {
     blockers.push({
       text: `${pendingTeams} đội đang chờ duyệt.`,
-      to: "/organizer/registrations",
+      to: "/organizer/teams-hub",
       label: "Duyệt đăng ký"
     });
   }
@@ -81,14 +82,14 @@ export function OrganizerOverviewPage() {
   if (boardCount > 0 && !setupContext.hasProblem) {
     blockers.push({
       text: "Chưa cấu hình đề thi cho bảng.",
-      to: "/organizer/problems",
-      label: "Cấu hình đề thi"
+      to: "/organizer/board-ops",
+      label: "Vận hành bảng"
     });
   }
   if (boardCount > 0 && enableScoring && !setupContext.hasRubric) {
     blockers.push({
       text: "Chưa thiết lập tiêu chí chấm.",
-      to: "/organizer/rubric",
+      to: "/organizer/results-hub",
       label: "Tiêu chí chấm"
     });
   }
@@ -100,7 +101,7 @@ export function OrganizerOverviewPage() {
   ) {
     blockers.push({
       text: "Chưa phân công giám khảo cho bảng thi.",
-      to: "/organizer/assignments",
+      to: "/organizer/board-ops#ops-step-judge",
       label: "Phân công GK"
     });
   }
@@ -112,7 +113,7 @@ export function OrganizerOverviewPage() {
   ) {
     blockers.push({
       text: `Chấm điểm chưa hoàn tất (${scoreProgress.summary.completionPercent}%).`,
-      to: "/organizer/scoring",
+      to: "/organizer/results-hub#results-step-scoring",
       label: "Tiến độ chấm"
     });
   }
@@ -123,7 +124,7 @@ export function OrganizerOverviewPage() {
     if (needsRanking.length > 0 && scoreProgress?.summary.completionPercent === 100) {
       blockers.push({
         text: `${needsRanking.length} bảng đã chấm xong nhưng chưa công bố kết quả.`,
-        to: "/organizer/publish-results",
+        to: "/organizer/results-hub#results-step-publish",
         label: "Công bố kết quả"
       });
     }
@@ -135,7 +136,7 @@ export function OrganizerOverviewPage() {
     ) {
       blockers.push({
         text: "Một số bảng chưa tính xếp hạng.",
-        to: "/organizer/ranking",
+        to: "/organizer/results-hub#results-step-ranking",
         label: "Tính xếp hạng"
       });
     }
@@ -144,49 +145,6 @@ export function OrganizerOverviewPage() {
   if (loading || teamsLoading || detailQuery.isLoading) {
     return <ModuleSkeleton rows={4} />;
   }
-
-  const nextAction =
-    pendingTeams > 0
-      ? {
-          text: `${pendingTeams} đội đang chờ duyệt.`,
-          to: "/organizer/registrations",
-          label: "Xem đăng ký đội"
-        }
-      : confirmedTeams > 0 && boardCount === 0
-        ? {
-            text: "Đã có đội xác nhận — cần tạo bảng và gán đội.",
-            to: "/organizer/boards",
-            label: "Thiết lập bảng thi"
-          }
-        : confirmedTeams > 0 && !setupContext.hasProblem
-          ? {
-              text: "Đã có bảng — cấu hình đề thi cho từng bảng.",
-              to: "/organizer/problems",
-              label: "Cấu hình đề thi"
-            }
-          : confirmedTeams > 0 && !setupContext.hasRubric
-            ? {
-                text: "Thiết lập tiêu chí chấm trước khi giám khảo bắt đầu.",
-                to: "/organizer/rubric",
-                label: "Tiêu chí chấm"
-              }
-            : confirmedTeams === 0
-              ? {
-                  text: "Chưa có đội xác nhận — kiểm tra đăng ký hoặc mở đăng ký.",
-                  to: "/organizer/registrations",
-                  label: "Xem đăng ký"
-                }
-              : enableScoring
-                ? {
-                    text: "Theo dõi tiến độ chấm hoặc xếp hạng.",
-                    to: "/organizer/scoring",
-                    label: "Tiến độ chấm"
-                  }
-                : {
-                    text: "Tiếp tục phân công mentor và giám khảo.",
-                    to: "/organizer/assignments",
-                    label: "Phân công"
-                  };
 
   return (
     <div className="space-y-lg">
@@ -199,7 +157,7 @@ export function OrganizerOverviewPage() {
             {event ? (
               <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
             ) : null}
-            <EventSelector events={events} eventId={eventId} onChange={setEventId} />
+            <OrganizerContextBar />
           </>
         }
       />
@@ -209,6 +167,8 @@ export function OrganizerOverviewPage() {
           <p className="font-body-sm text-on-surface">{error}</p>
         </div>
       ) : null}
+
+      <TermDashboardPanel />
 
       <RoundCountdown roundId={roundId} countdown={countdown} loading={roundLoading} />
 
@@ -240,18 +200,6 @@ export function OrganizerOverviewPage() {
           helper={`${structureQuery.data?.roundCount ?? 0} vòng`}
           icon="view_module"
         />
-      </section>
-
-      <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-        <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="font-headline-sm text-on-surface">Việc cần làm</h2>
-            <p className="font-body-sm text-on-surface-variant">{nextAction.text}</p>
-          </div>
-          <Link to={nextAction.to} className="font-label-md text-primary hover:underline">
-            {nextAction.label} →
-          </Link>
-        </div>
       </section>
 
       {blockers.length > 0 ? (

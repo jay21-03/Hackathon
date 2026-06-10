@@ -7,7 +7,10 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { enableAcademicTerms } from "../../config/features";
+import { AcademicTermSelector } from "../../components/ui/AcademicTermSelector";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useActiveTerm } from "../../hooks/useActiveTerm";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { fetchPublicEvents } from "../../services/eventsApi";
 import type { EventListItem } from "../../types/entities";
@@ -19,16 +22,18 @@ function formatDate(value: string) {
 export function EventManagementPage() {
   const navigate = useNavigate();
   const { setEventId } = useActiveEvent();
+  const { termId, terms, setTermId } = useActiveTerm();
   const [events, setEvents] = useState<EventListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchPublicEvents()
+    setLoading(true);
+    fetchPublicEvents(enableAcademicTerms ? (termId ?? undefined) : undefined)
       .then((result) => setEvents(result))
       .catch(() => setError("Không tải được danh sách cuộc thi."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [termId]);
 
   const openRegistrationCount = events.filter((e) => e.status === "REGISTRATION_OPEN").length;
   const draftCount = events.filter((e) => e.status === "DRAFT").length;
@@ -49,9 +54,14 @@ export function EventManagementPage() {
         title="Quản lý cấu hình cuộc thi"
         description="Chọn cuộc thi để chỉnh sửa và hoàn tất thiết lập theo từng bước."
         actions={
-          <ButtonLink to="/organizer/events/new" icon={<Icon name="add_circle" />}>
-            Tạo cuộc thi
-          </ButtonLink>
+          <div className="flex flex-wrap items-center gap-sm">
+            {enableAcademicTerms ? (
+              <AcademicTermSelector terms={terms} termId={termId} onChange={setTermId} />
+            ) : null}
+            <ButtonLink to="/organizer/events/new" icon={<Icon name="add_circle" />}>
+              Tạo cuộc thi
+            </ButtonLink>
+          </div>
         }
       />
 

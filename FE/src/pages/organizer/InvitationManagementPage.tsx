@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { EventSelector } from "../../components/ui/EventSelector";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
@@ -30,7 +30,10 @@ import {
 } from "../../services/staffInvitationService";
 import type { TeamInvitationStatus } from "../../services/registrationService";
 import { enableStaffInvitations } from "../../config/features";
-import { resolveApiError } from "../../utils/apiError";
+import { bulkStaffEmailsSchema, emailTemplateSchema, staffInviteSchema } from "../../domain/schemas";
+import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
+import { zodFieldErrors } from "../../utils/zodFieldErrors";
+import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
 import { createIdempotencyKey } from "../../utils/idempotency";
 import {
   fetchEmailTemplate,
@@ -62,21 +65,38 @@ function formatWhen(value?: string | null) {
   return new Date(value).toLocaleString("vi-VN");
 }
 
-export function InvitationManagementPage() {
+export function InvitationManagementPage({
+  embedded = false,
+  forcedTab
+}: { embedded?: boolean; forcedTab?: Tab } = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const { steps: setupSteps } = useEventSetupProgress(eventId, "/organizer/invitations");
-  const { boards, loading: boardsLoading } = useEventBoards(eventId);
-  const [tab, setTab] = useState<Tab>("members");
+  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { steps: setupSteps } = useEventSetupProgress(
+    eventId,
+    embedded ? "/organizer/teams-hub" : "/organizer/invitations"
+  );
+  const { rounds, boards, loading: boardsLoading } = useEventBoards(eventId);
+  const [tab, setTab] = useState<Tab>(forcedTab ?? "members");
+
+  useEffect(() => {
+    if (forcedTab) setTab(forcedTab);
+  }, [forcedTab]);
   const [density, setDensity] = useState<TableDensity>("comfortable");
   const [resendingId, setResendingId] = useState<number | null>(null);
+  const [staffRoundId, setStaffRoundId] = useState<number | null>(null);
   const [staffBoardId, setStaffBoardId] = useState<number | null>(null);
+  const activeStaffRoundId = resolveDefaultRoundId(rounds, staffRoundId);
+  const boardsInStaffRound = useMemo(
+    () => (activeStaffRoundId != null ? boards.filter((b) => b.roundId === activeStaffRoundId) : []),
+    [boards, activeStaffRoundId]
+  );
   const [staffRole, setStaffRole] = useState<StaffRole | "">("");
   const [staffStatus, setStaffStatus] = useState<StaffInvitationStatus>("INVITED");
   const [staffEmailFilter, setStaffEmailFilter] = useState("");
   const [staffPage, setStaffPage] = useState(0);
   const [staffEmail, setStaffEmail] = useState("");
+  const [staffFieldErrors, setStaffFieldErrors] = useState<Record<string, string>>({});
   const [staffBulkText, setStaffBulkText] = useState("");
   const [staffBulkOpen, setStaffBulkOpen] = useState(false);
   const [staffInviteRole, setStaffInviteRole] = useState<StaffRole>("MENTOR");
@@ -107,6 +127,7 @@ export function InvitationManagementPage() {
     teamPage: memberPage,
     teamSize: pageSize,
     staffEnabled: tab === "staff" && enableStaffInvitations,
+    staffRoundId: activeStaffRoundId,
     staffBoardId,
     staffRole,
     staffStatus,
@@ -116,8 +137,16 @@ export function InvitationManagementPage() {
   });
 
   useEffect(() => {
+    setStaffRoundId((prev) => resolveDefaultRoundId(rounds, prev));
+  }, [rounds]);
+
+  useEffect(() => {
+    setStaffBoardId((prev) => (prev && boardsInStaffRound.some((b) => b.id === prev) ? prev : null));
+  }, [boardsInStaffRound, activeStaffRoundId]);
+
+  useEffect(() => {
     setStaffPage(0);
-  }, [eventId, staffBoardId, staffRole, staffStatus, staffEmailFilter]);
+  }, [eventId, activeStaffRoundId, staffBoardId, staffRole, staffStatus, staffEmailFilter]);
 
   useEffect(() => {
     setMemberPage(0);
@@ -138,21 +167,29 @@ export function InvitationManagementPage() {
   }
 
   async function sendStaffInvite() {
-    if (!staffBoardId || !staffEmail.trim()) {
-      notify("Chọn bảng và nhập email.", "warning");
+    const parsed = staffInviteSchema.safeParse({
+      email: staffEmail,
+      boardId: staffBoardId ?? 0,
+      role: staffInviteRole
+    });
+    if (!parsed.success) {
+      setStaffFieldErrors(zodFieldErrors(parsed.error));
+      notify(parsed.error.issues[0]?.message ?? "Dữ liệu lời mời không hợp lệ.", "warning");
       return;
     }
+    setStaffFieldErrors({});
     setStaffSending(true);
     try {
       await createStaffInvitation(
-        staffBoardId,
-        { email: staffEmail.trim(), role: staffInviteRole },
-        createIdempotencyKey(`staff-invite-${staffBoardId}-${staffEmail.trim().toLowerCase()}`)
+        parsed.data.boardId,
+        { email: parsed.data.email, role: parsed.data.role },
+        createIdempotencyKey(`staff-invite-${parsed.data.boardId}-${parsed.data.email.toLowerCase()}`)
       );
       setStaffEmail("");
       await refetchStaff();
       notify("Đã gửi lời mời mentor/giám khảo.", "success");
     } catch (err) {
+      applyApiFormErrors(err, setStaffFieldErrors);
       notify(resolveApiError(err, "Không gửi được lời mời."), "danger");
     } finally {
       setStaffSending(false);
@@ -164,11 +201,13 @@ export function InvitationManagementPage() {
       notify("Chọn bảng trước khi gửi hàng loạt.", "warning");
       return;
     }
-    const items = parseBulkStaffEmails(staffBulkText);
-    if (!items.length) {
-      notify("Nhập ít nhất một email hợp lệ.", "warning");
+    const rawItems = parseBulkStaffEmails(staffBulkText);
+    const parsed = bulkStaffEmailsSchema.safeParse(rawItems);
+    if (!parsed.success) {
+      notify(parsed.error.issues[0]?.message ?? "Danh sách email không hợp lệ.", "warning");
       return;
     }
+    const items = parsed.data;
     setStaffSending(true);
     try {
       const result = await createStaffInvitationsBulk(staffBoardId, {
@@ -217,38 +256,47 @@ export function InvitationManagementPage() {
 
   return (
     <div className="space-y-lg">
-      <PageHeader
-        eyebrow="Mời thành viên"
-        title="Theo dõi lời mời"
-        description="Bulk mời, email có thương hiệu, theo dõi trạng thái theo tab Đang chờ / Đã chấp nhận / Từ chối / Hết hạn."
-        actions={
-          <>
-            <EventSelector events={events} eventId={eventId} onChange={setEventId} />
-            <TableDensityToggle value={density} onChange={setDensity} />
-          </>
-        }
-      />
+      {!embedded ? (
+        <>
+          <PageHeader
+            eyebrow="Mời thành viên"
+            title="Theo dõi lời mời"
+            description="Bulk mời, email có thương hiệu, theo dõi trạng thái theo tab Đang chờ / Đã chấp nhận / Từ chối / Hết hạn."
+            actions={
+              <>
+                <OrganizerContextBar />
+                <TableDensityToggle value={density} onChange={setDensity} />
+              </>
+            }
+          />
+          <WorkflowSteps
+            title="Quy trình thiết lập"
+            description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
+            steps={setupSteps}
+            activeHref="/organizer/invitations"
+          />
+        </>
+      ) : (
+        <div className="flex justify-end">
+          <TableDensityToggle value={density} onChange={setDensity} />
+        </div>
+      )}
 
-      <WorkflowSteps
-        title="Quy trình thiết lập"
-        description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
-        steps={setupSteps}
-        activeHref="/organizer/invitations"
-      />
-
-      <div className="flex flex-wrap gap-sm">
-        <Button type="button" variant={tab === "members" ? "primary" : "ghost"} onClick={() => setTab("members")}>
-          Thành viên đội
-        </Button>
-        {enableStaffInvitations ? (
-          <Button type="button" variant={tab === "staff" ? "primary" : "ghost"} onClick={() => setTab("staff")}>
-            Mentor / Giám khảo
+      {!embedded && !forcedTab ? (
+        <div className="flex flex-wrap gap-sm">
+          <Button type="button" variant={tab === "members" ? "primary" : "ghost"} onClick={() => setTab("members")}>
+            Thành viên đội
           </Button>
-        ) : null}
-        <Button type="button" variant={tab === "templates" ? "primary" : "ghost"} onClick={() => setTab("templates")}>
-          Mẫu email
-        </Button>
-      </div>
+          {enableStaffInvitations ? (
+            <Button type="button" variant={tab === "staff" ? "primary" : "ghost"} onClick={() => setTab("staff")}>
+              Mentor / Giám khảo
+            </Button>
+          ) : null}
+          <Button type="button" variant={tab === "templates" ? "primary" : "ghost"} onClick={() => setTab("templates")}>
+            Mẫu email
+          </Button>
+        </div>
+      ) : null}
 
       {tab === "templates" ? (
         <EmailTemplatesPanel eventId={eventId} />
@@ -337,14 +385,31 @@ export function InvitationManagementPage() {
           <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
             <div className="flex flex-wrap items-end gap-md">
               <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+                Vòng
+                <select
+                  className="min-w-[12rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+                  value={activeStaffRoundId ?? ""}
+                  onChange={(e) => setStaffRoundId(e.target.value ? Number(e.target.value) : null)}
+                  disabled={!rounds.length}
+                >
+                  {rounds.length === 0 ? <option value="">Chưa có vòng</option> : null}
+                  {rounds.map((round) => (
+                    <option key={round.id} value={round.id}>
+                      {round.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
                 Bảng
                 <select
                   className="min-w-[10rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
                   value={staffBoardId ?? ""}
                   onChange={(e) => setStaffBoardId(e.target.value ? Number(e.target.value) : null)}
+                  disabled={!boardsInStaffRound.length}
                 >
-                  <option value="">Chọn bảng</option>
-                  {boards.map((b) => (
+                  <option value="">Tất cả bảng vòng này</option>
+                  {boardsInStaffRound.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}
                     </option>
@@ -366,11 +431,19 @@ export function InvitationManagementPage() {
                 Email (từng người)
                 <input
                   type="email"
-                  className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+                  className={`rounded-lg border bg-surface px-3 py-2 font-body-sm ${
+                    staffFieldErrors.email ? "border-error" : "border-outline-variant"
+                  }`}
                   value={staffEmail}
                   onChange={(e) => setStaffEmail(e.target.value)}
                   placeholder="email@fpt.edu.vn"
                 />
+                {staffFieldErrors.email ? (
+                  <span className="font-body-sm text-error">{staffFieldErrors.email}</span>
+                ) : null}
+                {staffFieldErrors.boardId ? (
+                  <span className="font-body-sm text-error">{staffFieldErrors.boardId}</span>
+                ) : null}
               </label>
               <Button type="button" loading={staffSending} disabled={!staffBoardId} onClick={() => void sendStaffInvite()}>
                 Gửi lời mời
@@ -583,6 +656,7 @@ function EmailTemplatesPanel({ eventId }: { eventId: number | null }) {
   const [templateKey, setTemplateKey] = useState<EmailTemplateKey>("STAFF_INVITATION");
   const [subject, setSubject] = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
+  const [templateFieldErrors, setTemplateFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   const templateQuery = useQuery({
@@ -600,12 +674,20 @@ function EmailTemplatesPanel({ eventId }: { eventId: number | null }) {
 
   async function handleSave() {
     if (!eventId) return;
+    const parsed = emailTemplateSchema.safeParse({ subject, bodyHtml });
+    if (!parsed.success) {
+      setTemplateFieldErrors(zodFieldErrors(parsed.error));
+      notify(parsed.error.issues[0]?.message ?? "Mẫu email chưa hợp lệ.", "warning");
+      return;
+    }
+    setTemplateFieldErrors({});
     setSaving(true);
     try {
-      await saveEmailTemplate(eventId, templateKey, { subject, bodyHtml });
+      await saveEmailTemplate(eventId, templateKey, parsed.data);
       await templateQuery.refetch();
       notify("Đã lưu mẫu email.", "success");
     } catch (err) {
+      applyApiFormErrors(err, setTemplateFieldErrors);
       notify(resolveApiError(err, "Không lưu được mẫu email."), "danger");
     } finally {
       setSaving(false);
@@ -663,18 +745,28 @@ function EmailTemplatesPanel({ eventId }: { eventId: number | null }) {
       <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
         Tiêu đề
         <input
-          className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+          className={`rounded-lg border bg-surface px-3 py-2 font-body-sm ${
+            templateFieldErrors.subject ? "border-error" : "border-outline-variant"
+          }`}
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
         />
+        {templateFieldErrors.subject ? (
+          <span className="font-body-sm text-error">{templateFieldErrors.subject}</span>
+        ) : null}
       </label>
       <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
         Nội dung HTML
         <textarea
-          className="min-h-[16rem] font-mono rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+          className={`min-h-[16rem] font-mono rounded-lg border bg-surface px-3 py-2 font-body-sm ${
+            templateFieldErrors.bodyHtml ? "border-error" : "border-outline-variant"
+          }`}
           value={bodyHtml}
           onChange={(e) => setBodyHtml(e.target.value)}
         />
+        {templateFieldErrors.bodyHtml ? (
+          <span className="font-body-sm text-error">{templateFieldErrors.bodyHtml}</span>
+        ) : null}
       </label>
       <div className="flex flex-wrap gap-sm">
         <Button type="button" loading={saving} onClick={() => void handleSave()}>

@@ -19,10 +19,16 @@ export async function fetchCurrentUser() {
   return data.data;
 }
 
-export async function fetchAdminUsers(params?: { page?: number; size?: number }) {
+export async function fetchAdminUsers(params?: { page?: number; size?: number; q?: string }) {
   const { data } = await apiClient.get<ApiResponse<PagedResult<UserSummaryResponse>>>(
     "/v1/admin/users",
-    { params: { page: params?.page ?? 0, size: params?.size ?? 100 } }
+    {
+      params: {
+        page: params?.page ?? 0,
+        size: params?.size ?? 100,
+        ...(params?.q?.trim() ? { q: params.q.trim() } : {})
+      }
+    }
   );
   return (
     data.data ?? {

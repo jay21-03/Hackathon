@@ -5,7 +5,7 @@ import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { EventSelector } from "../../components/ui/EventSelector";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
@@ -16,7 +16,9 @@ import {
   type AnnouncementAudience,
   type AnnouncementItem
 } from "../../services/announcementService";
-import { resolveApiError } from "../../utils/apiError";
+import { announcementSchema } from "../../domain/schemas";
+import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
+import { zodFieldErrors } from "../../utils/zodFieldErrors";
 
 function formatWhen(iso?: string | null) {
   if (!iso) return "—";
@@ -36,12 +38,13 @@ const AUDIENCE_LABELS: Record<AnnouncementAudience, string> = {
 export function AnnouncementPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [audience, setAudience] = useState<AnnouncementAudience>("ALL");
   const [publishNow, setPublishNow] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const announcementsQuery = useQuery({
     queryKey: queryKeys.announcements.byEvent(eventId),
@@ -56,18 +59,17 @@ export function AnnouncementPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!eventId || !title.trim() || !content.trim()) {
-      notify("Nhập tiêu đề và nội dung.", "warning");
+    if (!eventId) return;
+    const parsed = announcementSchema.safeParse({ title, content, audience, publishNow });
+    if (!parsed.success) {
+      setFieldErrors(zodFieldErrors(parsed.error));
+      notify(parsed.error.issues[0]?.message ?? "Dữ liệu thông báo không hợp lệ.", "warning");
       return;
     }
+    setFieldErrors({});
     setSubmitting(true);
     try {
-      const created = await createEventAnnouncement(eventId, {
-        title: title.trim(),
-        content: content.trim(),
-        publishNow,
-        audience
-      });
+      const created = await createEventAnnouncement(eventId, parsed.data);
       setTitle("");
       setContent("");
       await invalidateAnnouncements();
@@ -82,6 +84,7 @@ export function AnnouncementPage() {
         notify("Đã lưu nháp — chưa gửi tới người nhận.", "success");
       }
     } catch (err) {
+      applyApiFormErrors(err, setFieldErrors);
       notify(resolveApiError(err, "Gửi thông báo thất bại."), "danger");
     } finally {
       setSubmitting(false);
@@ -102,7 +105,7 @@ export function AnnouncementPage() {
         description="Gửi thông báo tới participant, mentor và giám khảo đã tham gia cuộc thi. Mỗi người nhận một thông báo in-app."
       />
 
-      <EventSelector events={events} eventId={eventId} onChange={setEventId} />
+      <OrganizerContextBar />
 
       {announcementsQuery.isError ? (
         <RetryPanel message="Không tải được lịch sử thông báo." onRetry={() => void announcementsQuery.refetch()} />
@@ -116,21 +119,33 @@ export function AnnouncementPage() {
         <label className="block space-y-xs">
           <span className="font-label-md text-on-surface">Tiêu đề</span>
           <input
-            className="w-full rounded-lg border border-outline-variant bg-surface px-sm py-2 font-body-md"
+            className={`w-full rounded-lg border bg-surface px-sm py-2 font-body-md ${fieldErrors.title ? "border-error" : "border-outline-variant"}`}
             value={title}
             maxLength={255}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, title: "" }));
+            }}
             placeholder="Ví dụ: Cập nhật lịch nộp bài"
           />
+          {fieldErrors.title ? (
+            <span className="font-body-sm text-error">{fieldErrors.title}</span>
+          ) : null}
         </label>
         <label className="block space-y-xs">
           <span className="font-label-md text-on-surface">Nội dung</span>
           <textarea
-            className="min-h-[120px] w-full rounded-lg border border-outline-variant bg-surface px-sm py-2 font-body-md"
+            className={`min-h-[120px] w-full rounded-lg border bg-surface px-sm py-2 font-body-md ${fieldErrors.content ? "border-error" : "border-outline-variant"}`}
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => {
+              setContent(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, content: "" }));
+            }}
             placeholder="Nội dung chi tiết gửi tới người tham gia cuộc thi…"
           />
+          {fieldErrors.content ? (
+            <span className="font-body-sm text-error">{fieldErrors.content}</span>
+          ) : null}
         </label>
         <label className="block space-y-xs">
           <span className="font-label-md text-on-surface">Đối tượng nhận</span>

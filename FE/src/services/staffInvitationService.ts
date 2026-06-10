@@ -90,6 +90,8 @@ export async function fetchStaffInvitations(
 
   params?: {
 
+    roundId?: number | null;
+
     boardId?: number | null;
 
     role?: StaffRole | null;
@@ -115,6 +117,8 @@ export async function fetchStaffInvitations(
     {
 
       params: {
+
+        roundId: params?.roundId ?? undefined,
 
         boardId: params?.boardId ?? undefined,
 

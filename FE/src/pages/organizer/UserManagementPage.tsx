@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -13,6 +14,7 @@ import {
 } from "../../components/ui/TableDensityToggle";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { useUserManagement } from "../../hooks/useUserManagement";
+import { assignRoleSchema } from "../../domain/schemas";
 import { assignUserRole } from "../../services/userService";
 import { resolveApiError } from "../../utils/apiError";
 
@@ -20,22 +22,34 @@ export function UserManagementPage() {
   const { notify } = useToast();
   const [density, setDensity] = useState<TableDensity>("comfortable");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [listPage, setListPage] = useState(0);
   const [assigningId, setAssigningId] = useState<number | null>(null);
   const pageSize = 25;
-  const { users, total, totalPages, loading, error, invalidate } = useUserManagement(listPage, pageSize);
+  const { users, total, totalPages, loading, error, invalidate } = useUserManagement(
+    listPage,
+    pageSize,
+    debouncedSearch
+  );
   const cell = getDensityCellClass(density);
 
-  const filteredUsers = users.filter((user) =>
-    [user.fullName, user.email, user.roles.join(" ")].some((value) =>
-      value.toLowerCase().includes(search.trim().toLowerCase())
-    )
-  );
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search);
+      setListPage(0);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   async function handleAssignRole(userId: number, role: "ORGANIZER" | "MENTOR" | "JUDGE") {
+    const parsed = assignRoleSchema.safeParse({ role });
+    if (!parsed.success) {
+      notify(parsed.error.issues[0]?.message ?? "Vai trò không hợp lệ.", "warning");
+      return;
+    }
     setAssigningId(userId);
     try {
-      await assignUserRole(userId, role);
+      await assignUserRole(userId, parsed.data.role);
       await invalidate();
       notify("Đã gán vai trò.", "success");
     } catch (err) {
@@ -65,11 +79,11 @@ export function UserManagementPage() {
         <TableToolbar
           searchValue={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Tìm theo tên, email, vai trò…"
+          searchPlaceholder="Tìm toàn hệ thống theo tên, email, username…"
           actions={<TableDensityToggle value={density} onChange={setDensity} />}
         />
         <DataTable headers={["Họ tên", "Email", "Vai trò", "Trạng thái", "Gán vai trò"]}>
-          {filteredUsers.map((user) => (
+          {users.map((user) => (
             <tr key={user.id} className="font-body-sm text-on-surface">
               <td className={cell}>{user.fullName}</td>
               <td className={`${cell} break-all`}>{user.email}</td>
@@ -99,17 +113,35 @@ export function UserManagementPage() {
                       ["JUDGE", "Giám khảo"],
                       ["ORGANIZER", "Ban tổ chức"]
                     ] as const
-                  ).map(([role, label]) => (
-                    <Button
-                      key={role}
-                      size="sm"
-                      variant="ghost"
-                      disabled={assigningId === user.id || user.roles.includes(role)}
-                      onClick={() => void handleAssignRole(user.id, role)}
-                    >
-                      {label}
-                    </Button>
-                  ))}
+                  ).map(([role, label]) => {
+                    const disabled = assigningId === user.id || user.roles.includes(role);
+                    if (role === "ORGANIZER" && !disabled) {
+                      return (
+                        <ConfirmAction
+                          key={role}
+                          title="Gán quyền ban tổ chức?"
+                          message={`${user.fullName || user.email} sẽ có quyền quản trị cuộc thi và dữ liệu nhạy cảm.`}
+                          confirmLabel="Gán quyền"
+                          onConfirm={() => void handleAssignRole(user.id, role)}
+                        >
+                          <Button size="sm" variant="ghost">
+                            {label}
+                          </Button>
+                        </ConfirmAction>
+                      );
+                    }
+                    return (
+                      <Button
+                        key={role}
+                        size="sm"
+                        variant="ghost"
+                        disabled={disabled}
+                        onClick={() => void handleAssignRole(user.id, role)}
+                      >
+                        {label}
+                      </Button>
+                    );
+                  })}
                 </div>
               </td>
             </tr>

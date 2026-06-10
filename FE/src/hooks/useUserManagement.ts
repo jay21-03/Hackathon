@@ -3,12 +3,13 @@ import { queryKeys } from "../lib/queryKeys";
 import { fetchAdminUsers, type UserSummaryResponse } from "../services/userService";
 import { resolveApiError } from "../utils/apiError";
 
-export function useUserManagement(page = 0, size = 100) {
+export function useUserManagement(page = 0, size = 100, query = "") {
   const queryClient = useQueryClient();
+  const normalizedQuery = query.trim();
 
   const usersQuery = useQuery({
-    queryKey: [...queryKeys.users.admin(), page, size],
-    queryFn: () => fetchAdminUsers({ page, size })
+    queryKey: [...queryKeys.users.admin(), page, size, normalizedQuery],
+    queryFn: () => fetchAdminUsers({ page, size, q: normalizedQuery || undefined })
   });
 
   async function invalidate() {

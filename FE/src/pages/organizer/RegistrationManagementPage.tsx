@@ -1,14 +1,13 @@
 import { useMemo, useState } from "react";
 import type { PagedResult } from "../../types/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ConfirmAction } from "../../components/feedback/ConfirmAction";
+import { ReasonConfirmAction } from "../../components/feedback/ReasonConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { DataTable, tableActionCellClass, tableRowClass } from "../../components/ui/DataTable";
-import { EventSelector } from "../../components/ui/EventSelector";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
-import { NextStepPanel } from "../../components/ui/NextStepPanel";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { TableToolbar } from "../../components/ui/TableToolbar";
@@ -26,12 +25,12 @@ import {
   type TeamDetailResponse
 } from "../../services/registrationService";
 import { downloadTeamsCsv } from "../../utils/exportTeamsCsv";
-import { resolveApiError } from "../../utils/apiError";
+import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
+import { mapRegistrationErrorMessage } from "../../utils/registrationErrors";
 import { formatAuditAction } from "../../utils/auditActionLabels";
 import { Icon } from "../../components/ui/Icon";
 import { TeamDetailModal } from "../../components/organizer/TeamDetailModal";
 import { fetchEventAuditLogs } from "../../services/auditApi";
-
 type Filter = "ALL" | "PENDING" | "CONFIRMED" | "WAITLIST" | "REJECTED" | "DISQUALIFIED";
 
 function formatDate(value: string) {
@@ -56,11 +55,14 @@ function summarizeAuditDetail(raw: string) {
   return raw.length > 120 ? `${raw.slice(0, 120)}…` : raw;
 }
 
-export function RegistrationManagementPage() {
+export function RegistrationManagementPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const { steps: setupSteps } = useEventSetupProgress(eventId, "/organizer/registrations");
+  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { steps: setupSteps } = useEventSetupProgress(
+    eventId,
+    embedded ? "/organizer/teams-hub" : "/organizer/registrations"
+  );
   const [listPage, setListPage] = useState(0);
   const { teams: registrations, loading, error, total, totalPages } = useEventTeams(eventId, {
     page: listPage,
@@ -79,7 +81,6 @@ export function RegistrationManagementPage() {
   const [detailTeam, setDetailTeam] = useState<TeamDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
-
   const auditQuery = useQuery({
     queryKey: [...queryKeys.events.detail(eventId ?? ""), "audit-logs"],
     queryFn: () => fetchEventAuditLogs(eventId!),
@@ -154,6 +155,12 @@ export function RegistrationManagementPage() {
       if (previous) {
         queryClient.setQueryData(teamsKey, previous);
       }
+      const reasonErrors: Record<string, string> = {};
+      if (applyApiFormErrors(err, (errors) => Object.assign(reasonErrors, errors))) {
+        const reasonMsg = reasonErrors.reason ?? "Kiểm tra lại lý do từ chối/loại đội.";
+        notify(mapRegistrationErrorMessage(reasonMsg), "danger");
+        return;
+      }
       const msg = resolveApiError(err, "Không cập nhật được trạng thái đội.");
       notify(msg, "danger");
     }
@@ -176,46 +183,34 @@ export function RegistrationManagementPage() {
 
   return (
     <div className="space-y-lg">
-      <PageHeader
-        eyebrow="Đăng ký đội"
-        title="Theo dõi hồ sơ đăng ký"
-        description="Duyệt, từ chối hoặc danh sách chờ. Đội tự chuyển Đã xác nhận khi mọi thành viên xác nhận email — không cần bấm Duyệt."
-        actions={
-          <>
-            <EventSelector events={events} eventId={eventId} onChange={setEventId} />
-            <Badge tone={error ? "danger" : "success"}>
-              {confirmed}/{quota || "—"} quota
-            </Badge>
-          </>
-        }
-      />
-
-      <WorkflowSteps
-        title="Quy trình thiết lập"
-        description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
-        steps={setupSteps}
-        activeHref="/organizer/registrations"
-      />
-
-      {confirmed > 0 ? (
-        <NextStepPanel
-          variant={pending === 0 ? "success" : "primary"}
-          action={{
-            title: "Bước tiếp: Thiết lập bảng thi",
-            description: `Đã có ${confirmed} đội xác nhận. Tạo vòng, bảng, vị trí và gán đội trước khi cấu hình đề.`,
-            to: "/organizer/boards",
-            cta: "Đi tới Bảng thi"
-          }}
-        />
+      {!embedded ? (
+        <>
+          <PageHeader
+            eyebrow="Đăng ký đội"
+            title="Theo dõi hồ sơ đăng ký"
+            description="Duyệt, từ chối hoặc danh sách chờ. Đội tự chuyển Đã xác nhận khi mọi thành viên xác nhận email — không cần bấm Duyệt."
+            actions={
+              <>
+                <OrganizerContextBar />
+                <Badge tone={error ? "danger" : "success"}>
+                  {confirmed}/{quota || "—"} quota
+                </Badge>
+              </>
+            }
+          />
+          <WorkflowSteps
+            title="Quy trình thiết lập"
+            description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
+            steps={setupSteps}
+            activeHref="/organizer/registrations"
+          />
+        </>
       ) : (
-        <NextStepPanel
-          action={{
-            title: "Bước tiếp: Duyệt hoặc chờ xác nhận đội",
-            description:
-              "Duyệt đội trong bảng bên dưới, hoặc chờ thành viên xác nhận email. Chưa có đội confirmed thì chưa phân bảng được.",
-            cta: "Xem bảng đăng ký"
-          }}
-        />
+        <div className="flex flex-wrap items-center justify-end gap-sm">
+          <Badge tone={error ? "danger" : "success"}>
+            {confirmed}/{quota || "—"} quota
+          </Badge>
+        </div>
       )}
 
       {error ? (
@@ -297,23 +292,24 @@ export function RegistrationManagementPage() {
                     >
                       Chờ
                     </Button>
-                  <ConfirmAction
+                  <ReasonConfirmAction
                     title="Từ chối hồ sơ?"
                     message="Đội sẽ không được tính vào danh sách tham gia hợp lệ. Nên liên hệ đội trước khi từ chối."
                     confirmLabel="Từ chối"
-                    onConfirm={() => updateStatus(registration.id, "REJECTED", "Từ chối bởi ban tổ chức")}
+                    reasonPlaceholder="Ví dụ: Hồ sơ không đủ điều kiện tham gia…"
+                    onConfirm={(reason) => updateStatus(registration.id, "REJECTED", reason)}
                   >
                     <Button type="button" variant="danger">
                       Từ chối
                     </Button>
-                  </ConfirmAction>
-                  <ConfirmAction
+                  </ReasonConfirmAction>
+                  <ReasonConfirmAction
                     title="Loại đội khỏi cuộc thi?"
                     message="Đội bị loại sẽ không được chấm điểm. Cần ghi rõ lý do vi phạm."
                     confirmLabel="Loại đội"
-                    onConfirm={() =>
-                      updateStatus(registration.id, "DISQUALIFIED", "Vi phạm quy chế — loại bởi ban tổ chức")
-                    }
+                    reasonLabel="Lý do vi phạm"
+                    reasonPlaceholder="Ví dụ: Vi phạm quy chế nộp bài…"
+                    onConfirm={(reason) => updateStatus(registration.id, "DISQUALIFIED", reason)}
                   >
                     <Button
                       type="button"
@@ -322,7 +318,7 @@ export function RegistrationManagementPage() {
                     >
                       Loại đội
                     </Button>
-                  </ConfirmAction>
+                  </ReasonConfirmAction>
                 </div>
               </td>
             </tr>

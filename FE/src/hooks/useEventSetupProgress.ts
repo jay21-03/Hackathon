@@ -4,6 +4,7 @@ import { resolveOrganizerSetupSteps } from "../domain/organizerSetupSteps";
 import { queryKeys } from "../lib/queryKeys";
 import { fetchBoardProblems, fetchEventRounds, fetchRoundBoards } from "../services/contestApi";
 import { fetchRubric } from "../services/scoringApi";
+import { pickActiveRound } from "../utils/pickActiveRound";
 import { useEventTeams } from "./useEventTeams";
 
 export function useEventSetupProgress(eventId: number | null, currentPath?: string) {
@@ -14,7 +15,7 @@ export function useEventSetupProgress(eventId: number | null, currentPath?: stri
     enabled: Boolean(eventId),
     queryFn: async () => {
       const rounds = await fetchEventRounds(eventId!);
-      const round = rounds[0];
+      const round = pickActiveRound(rounds) ?? rounds[0];
       const boards = round ? await fetchRoundBoards(round.id) : [];
       let hasProblem = false;
       let hasRubric = false;
@@ -34,8 +35,9 @@ export function useEventSetupProgress(eventId: number | null, currentPath?: stri
     }
   });
 
+  const confirmedCount = teams.filter((team) => team.status === "CONFIRMED").length;
   const ctx: OrganizerSetupContext = {
-    hasTeams: teams.length > 0,
+    hasTeams: confirmedCount > 0,
     hasBoards: (setupQuery.data?.boardsCount ?? 0) > 0,
     hasProblem: setupQuery.data?.hasProblem ?? false,
     hasRubric: setupQuery.data?.hasRubric ?? false

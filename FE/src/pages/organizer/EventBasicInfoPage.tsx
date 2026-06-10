@@ -7,10 +7,12 @@ import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
-import { eventConfigSaveSchema } from "../../domain/schemas";
+import { eventConfigSaveSchemaForTerm } from "../../domain/schemas";
 import { TextField } from "../../components/ui/FormField";
-import { EventSelector } from "../../components/ui/EventSelector";
+import { enableAcademicTerms } from "../../config/features";
+import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useActiveTerm } from "../../hooks/useActiveTerm";
 import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
 import { queryKeys } from "../../lib/queryKeys";
 import { Badge } from "../../components/ui/Badge";
@@ -18,14 +20,16 @@ import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { openEventRegistration, updateEvent, type EventDetail } from "../../services/eventsApi";
 import { useEventDetail } from "../../hooks/useEventDetail";
 import { canOpenRegistration, isRegistrationOpen } from "../../utils/registrationErrors";
-import { resolveApiError } from "../../utils/apiError";
+import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { toIsoFromLocal, toLocalDateInput, toLocalDateTimeInput } from "../../utils/dateTimeInput";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
+import type { HubEmbedProps } from "../../utils/hubEmbedUtils";
 
-export function EventBasicInfoPage() {
+export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const { eventId, events, setEventId, loading: eventsLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { eventId, loading: eventsLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { terms } = useActiveTerm();
   const { event: fetchedEvent, loading: detailLoading, error: detailQueryError, refetch } = useEventDetail(eventId);
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [name, setName] = useState("");
@@ -38,7 +42,11 @@ export function EventBasicInfoPage() {
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [opening, setOpening] = useState(false);
-  const { steps: setupSteps, loading: setupLoading } = useEventSetupProgress(eventId, "/organizer/events/basic-info");
+  const [academicTermId, setAcademicTermId] = useState<number | "">("");
+  const { steps: setupSteps, loading: setupLoading } = useEventSetupProgress(
+    eventId,
+    embedded ? "/organizer/events/wizard" : "/organizer/events/basic-info"
+  );
 
   useEffect(() => {
     if (!fetchedEvent) return;
@@ -53,6 +61,7 @@ export function EventBasicInfoPage() {
     setRegistrationEndAt(
       fetchedEvent.registrationEndAt ? toLocalDateTimeInput(fetchedEvent.registrationEndAt) : ""
     );
+    setAcademicTermId(fetchedEvent.academicTermId ?? "");
     setLoadError("");
   }, [fetchedEvent]);
 
@@ -85,7 +94,9 @@ export function EventBasicInfoPage() {
 
   async function save() {
     if (!eventId) return;
-    const parsed = eventConfigSaveSchema.safeParse({
+    const resolvedTermId = academicTermId !== "" ? Number(academicTermId) : event?.academicTermId;
+    const selectedTerm = terms.find((term) => term.id === resolvedTermId);
+    const parsed = eventConfigSaveSchemaForTerm(selectedTerm?.startDate, selectedTerm?.endDate).safeParse({
       name,
       quota,
       startDate,
@@ -106,7 +117,10 @@ export function EventBasicInfoPage() {
         startDate: parsed.data.startDate,
         endDate: parsed.data.endDate,
         registrationStartAt: toIsoFromLocal(parsed.data.registrationStartAt),
-        registrationEndAt: toIsoFromLocal(parsed.data.registrationEndAt)
+        registrationEndAt: toIsoFromLocal(parsed.data.registrationEndAt),
+        ...(enableAcademicTerms && academicTermId !== ""
+          ? { academicTermId: Number(academicTermId) }
+          : {})
       });
       if (updated) {
         setEvent(updated);
@@ -126,6 +140,7 @@ export function EventBasicInfoPage() {
       await refetch();
       notify("Đã lưu thông tin cuộc thi.", "success");
     } catch (err) {
+      applyApiFormErrors(err, setFieldErrors, { maxTeams: "quota" });
       notify(resolveApiError(err, "Không thể lưu cấu hình cuộc thi."), "danger");
     } finally {
       setSaving(false);
@@ -157,26 +172,35 @@ export function EventBasicInfoPage() {
 
   return (
     <div className="space-y-lg">
-      <PageHeader
-        eyebrow="Cuộc thi"
-        title={event.name}
-        description="Chỉnh sửa thông tin và hoàn tất các bước thiết lập bên dưới."
-        actions={
-          <>
-            <ButtonLink to="/organizer/events" variant="ghost" icon={<Icon name="arrow_back" />}>
-              Danh sách
-            </ButtonLink>
-            <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
-            <EventSelector events={events} eventId={eventId} onChange={setEventId} />
-          </>
-        }
-      />
+      {!embedded ? (
+        <PageHeader
+          eyebrow="Cuộc thi"
+          title={event.name}
+          description="Chỉnh sửa thông tin và hoàn tất các bước thiết lập bên dưới."
+          actions={
+            <>
+              <ButtonLink to="/organizer/events" variant="ghost" icon={<Icon name="arrow_back" />}>
+                Danh sách
+              </ButtonLink>
+              <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
+              <OrganizerContextBar />
+            </>
+          }
+        />
+      ) : (
+        <div className="flex flex-wrap items-center gap-sm">
+          <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
+          <span className="font-label-md text-on-surface">{event.name}</span>
+        </div>
+      )}
 
-      <WorkflowSteps
-        title="Quy trình thiết lập"
-        description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
-        steps={setupSteps}
-      />
+      {!embedded ? (
+        <WorkflowSteps
+          title="Quy trình thiết lập"
+          description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
+          steps={setupSteps}
+        />
+      ) : null}
 
       {!isRegistrationOpen(event.status) ? (
         <section className="flex flex-col gap-md rounded-xl border border-warning/40 bg-warning-container/30 p-md sm:flex-row sm:items-center sm:justify-between">
@@ -200,6 +224,31 @@ export function EventBasicInfoPage() {
           Cập nhật khung đăng ký và ngày thi — lưu để áp dụng cho thí sinh.
         </p>
         <div className="mt-md grid gap-md md:grid-cols-2">
+          {enableAcademicTerms ? (
+            <div className="md:col-span-2">
+              <label className="space-y-1">
+                <span className="font-label-sm text-on-surface-variant">Học kỳ</span>
+                <select
+                  value={academicTermId}
+                  onChange={(e) =>
+                    setAcademicTermId(e.target.value ? Number(e.target.value) : "")
+                  }
+                  className="w-full rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2"
+                >
+                  {terms
+                    .filter((t) => t.status === "ACTIVE")
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.code}
+                      </option>
+                    ))}
+                </select>
+                <p className="font-label-sm text-on-surface-variant">
+                  Không đổi được kỳ sau khi đã có đội, điểm, ranking hoặc repository.
+                </p>
+              </label>
+            </div>
+          ) : null}
           <div className="md:col-span-2">
             <TextField
               label="Tên cuộc thi"
@@ -225,6 +274,9 @@ export function EventBasicInfoPage() {
             onChange={(e) => setEndDate(e.target.value)}
             error={fieldErrors.endDate}
           />
+          <p className="md:col-span-2 font-body-sm text-on-surface-variant">
+            Ngày và giờ hiển thị theo múi giờ trên máy bạn (datetime-local).
+          </p>
           <TextField
             label="Mở đăng ký"
             required
