@@ -1,24 +1,37 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../../components/feedback/ToastProvider";
+import { JudgeTeamListTable } from "../../components/judge/JudgeTeamListTable";
+import { JudgeTeamScoringModal } from "../../components/judge/JudgeTeamScoringModal";
 import { Badge } from "../../components/ui/Badge";
 import { Button, ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
-import { buildJudgeWorkflowSteps } from "../../domain/judgeWorkflow";
 import { StatCard } from "../../components/ui/StatCard";
+import { enableGithubProvisioning } from "../../config/features";
 import { useJudgeAssignments } from "../../hooks/useJudgeAssignments";
 import { useScoreMatrix } from "../../hooks/useScoreMatrix";
 import { invalidateAfterScoreMatrixMutation } from "../../lib/invalidateScoringQueries";
+import {
+  fetchJudgeRepositoriesForRound,
+  type JudgeRepositoryResponse
+} from "../../services/judgeRepositoryService";
 import {
   saveScoreMatrix,
   submitScoreMatrix,
   type ScoreMatrixResponse
 } from "../../services/scoringApi";
-import { resolveApiError } from "../../utils/apiError";
+import {
+  formatBoardAssignmentShortLabel,
+  groupAssignmentsByEvent,
+  pickPriorityJudgeAssignment,
+  readinessLabel,
+  readinessTone
+} from "../../utils/judgeAssignmentUtils";
+import { validateTeamScoresForDraft, validateTeamScoresForSubmit } from "../../domain/schemas";
+import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
 
 type CellKey = `${number}-${number}`;
@@ -50,20 +63,55 @@ export function JudgeScoringPage() {
   const { matrix, loading: matrixLoading, error: matrixError, refetch: refetchMatrix } = useScoreMatrix(boardId);
   const [cells, setCells] = useState<Record<CellKey, string>>({});
   const [feedbackByTeam, setFeedbackByTeam] = useState<Record<number, string>>({});
+  const [scoringTeamId, setScoringTeamId] = useState<number | null>(null);
   const [expandedCriteriaId, setExpandedCriteriaId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!boardId && assignments.length > 0) {
-      setBoardId(assignments[0].boardId);
+  const selectedAssignment = useMemo(
+    () => assignments.find((item) => item.boardId === boardId) ?? null,
+    [assignments, boardId]
+  );
+
+  const reposQuery = useQuery({
+    queryKey: ["judge", "repositories", selectedAssignment?.roundId, boardId],
+    queryFn: () => fetchJudgeRepositoriesForRound(selectedAssignment!.roundId!),
+    enabled: enableGithubProvisioning && selectedAssignment?.roundId != null
+  });
+
+  const repoByTeamId = useMemo(() => {
+    const map = new Map<number, JudgeRepositoryResponse>();
+    for (const repo of reposQuery.data ?? []) {
+      if (boardId != null && repo.boardId !== boardId) continue;
+      map.set(repo.teamId, repo);
     }
-  }, [assignments, boardId]);
+    return map;
+  }, [reposQuery.data, boardId]);
+
+  const groupedAssignments = useMemo(
+    () => groupAssignmentsByEvent(assignments),
+    [assignments]
+  );
+
+  useEffect(() => {
+    if (assignments.length === 0) return;
+    const paramId = boardIdParam ? Number(boardIdParam) : null;
+    const validParam =
+      paramId != null && Number.isFinite(paramId) && assignments.some((a) => a.boardId === paramId)
+        ? paramId
+        : null;
+    const nextId =
+      validParam ?? pickPriorityJudgeAssignment(assignments, boardId)?.boardId ?? null;
+    if (nextId != null && nextId !== boardId) {
+      setBoardId(nextId);
+    }
+  }, [assignments, boardIdParam, boardId]);
 
   useEffect(() => {
     if (!boardId) return;
     setSearchParams({ boardId: String(boardId) }, { replace: true });
+    setScoringTeamId(null);
   }, [boardId, setSearchParams]);
 
   useEffect(() => {
@@ -78,9 +126,14 @@ export function JudgeScoringPage() {
     );
   }, [matrix]);
 
-  const draftTeams = useMemo(
-    () => matrix?.teams.filter((t) => t.editable) ?? [],
+  const unsubmittedTeams = useMemo(
+    () => matrix?.teams.filter((t) => t.status === "DRAFT") ?? [],
     [matrix]
+  );
+
+  const scoringTeam = useMemo(
+    () => matrix?.teams.find((row) => row.teamId === scoringTeamId) ?? null,
+    [matrix, scoringTeamId]
   );
 
   const error = assignmentsError ?? matrixError ?? actionError;
@@ -94,7 +147,7 @@ export function JudgeScoringPage() {
     if (!matrix) return [];
     const idSet = teamIds ? new Set(teamIds) : null;
     return matrix.teams
-      .filter((row) => row.editable && (!idSet || idSet.has(row.teamId)))
+      .filter((row) => (!idSet || idSet.has(row.teamId)))
       .map((row) => ({
         teamId: row.teamId,
         generalFeedback: feedbackByTeam[row.teamId]?.trim() || undefined,
@@ -110,6 +163,24 @@ export function JudgeScoringPage() {
       }));
   }
 
+  function validateDraftForTeams(teamIds: number[]): string | null {
+    if (!matrix) return "Chưa có dữ liệu chấm điểm.";
+    const criteria = matrix.criteria.map((c) => ({
+      id: c.id,
+      name: c.name,
+      minScore: Number(c.minScore),
+      maxScore: Number(c.maxScore)
+    }));
+    for (const id of teamIds) {
+      const error = validateTeamScoresForDraft(id, criteria, cells);
+      if (error) {
+        const team = matrix.teams.find((row) => row.teamId === id);
+        return team ? `${team.teamName}: ${error}` : error;
+      }
+    }
+    return null;
+  }
+
   async function persistDraft(teamIds?: number[]) {
     if (!boardId || !matrix) return null;
     const rows = buildSaveRows(teamIds);
@@ -117,8 +188,15 @@ export function JudgeScoringPage() {
     return saveScoreMatrix(boardId, { rows });
   }
 
-  async function handleSave() {
+  async function handleSaveAll() {
     if (!boardId || !matrix) return;
+    const teamIds = matrix.teams.map((row) => row.teamId);
+    const validationError = validateDraftForTeams(teamIds);
+    if (validationError) {
+      setActionError(validationError);
+      notify(validationError, "warning");
+      return;
+    }
     setSaving(true);
     setActionError(null);
     try {
@@ -127,13 +205,14 @@ export function JudgeScoringPage() {
         notify("Không có ô nháp để lưu.", "warning");
         return;
       }
-      if (result.skippedSubmittedTeamIds?.length) {
-        notify(`${result.skippedSubmittedTeamIds.length} đội đã nộp — bỏ qua khi lưu.`, "warning");
-      }
       await invalidateAfterScoreMatrixMutation(queryClient, boardId);
-      notify("Đã lưu nháp.", "success");
+      notify("Đã lưu điểm.", "success");
     } catch (err) {
-      const msg = resolveApiError(err, "Lưu nháp thất bại.");
+      let msg = resolveApiError(err, "Lưu nháp thất bại.");
+      applyApiFormErrors(err, (errors) => {
+        const first = Object.values(errors)[0];
+        if (first) msg = first;
+      });
       setActionError(msg);
       notify(msg, "danger");
     } finally {
@@ -141,8 +220,65 @@ export function JudgeScoringPage() {
     }
   }
 
-  async function handleSubmit(submitAll: boolean, teamId?: number) {
+  async function handleSaveTeam(teamId: number) {
     if (!boardId) return;
+    const validationError = validateDraftForTeams([teamId]);
+    if (validationError) {
+      setActionError(validationError);
+      notify(validationError, "warning");
+      return;
+    }
+    setSaving(true);
+    setActionError(null);
+    try {
+      await persistDraft([teamId]);
+      await invalidateAfterScoreMatrixMutation(queryClient, boardId);
+      await refetchMatrix();
+      notify("Đã lưu điểm.", "success");
+    } catch (err) {
+      let msg = resolveApiError(err, "Lưu điểm thất bại.");
+      applyApiFormErrors(err, (errors) => {
+        const first = Object.values(errors)[0];
+        if (first) msg = first;
+      });
+      setActionError(msg);
+      notify(msg, "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function validateBeforeSubmit(teamIds: number[]): string | null {
+    if (!matrix) return "Chưa có dữ liệu chấm điểm.";
+    const criteria = matrix.criteria.map((c) => ({
+      id: c.id,
+      name: c.name,
+      minScore: Number(c.minScore),
+      maxScore: Number(c.maxScore)
+    }));
+    for (const id of teamIds) {
+      const error = validateTeamScoresForSubmit(id, criteria, cells);
+      if (error) {
+        const team = matrix.teams.find((row) => row.teamId === id);
+        return team ? `${team.teamName}: ${error}` : error;
+      }
+    }
+    return null;
+  }
+
+  async function handleSubmit(submitAll: boolean, teamId?: number) {
+    if (!boardId || !matrix) return;
+    const targetTeamIds = teamId
+      ? [teamId]
+      : submitAll
+        ? unsubmittedTeams.map((t) => t.teamId)
+        : [];
+    const validationError = validateBeforeSubmit(targetTeamIds);
+    if (validationError) {
+      setActionError(validationError);
+      notify(validationError, "warning");
+      return;
+    }
     setSubmitting(true);
     setActionError(null);
     try {
@@ -158,12 +294,24 @@ export function JudgeScoringPage() {
         notify(`${result.failed.length} đội lỗi — ${detail}`, "warning");
       }
       if (result.submitted?.length) {
-        notify(`Đã nộp ${result.submitted.length} phiếu chấm.`, "success");
+        const teamRow = teamId ? matrix?.teams.find((row) => row.teamId === teamId) : null;
+        if (teamId && teamRow?.status === "SUBMITTED") {
+          notify("Đã cập nhật phiếu chấm.", "success");
+        } else if (teamId) {
+          notify("Đã nộp phiếu chấm.", "success");
+        } else {
+          notify(`Đã nộp ${result.submitted.length} phiếu chấm.`, "success");
+        }
       }
       await invalidateAfterScoreMatrixMutation(queryClient, boardId);
       await refetchMatrix();
+      if (teamId) setScoringTeamId(null);
     } catch (err) {
-      const msg = resolveApiError(err, "Nộp phiếu thất bại.");
+      let msg = resolveApiError(err, "Nộp phiếu thất bại.");
+      applyApiFormErrors(err, (errors) => {
+        const first = Object.values(errors)[0];
+        if (first) msg = first;
+      });
       setActionError(msg);
       notify(msg, "danger");
     } finally {
@@ -177,28 +325,22 @@ export function JudgeScoringPage() {
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Chấm điểm"
-        title="Ma trận chấm điểm"
-        description="Chấm tất cả đội trên bảng theo tiêu chí đã cấu hình. Lưu nháp trước khi nộp."
+        title="Danh sách đội"
+        description="Chọn đội và bấm Chấm điểm để mở phiếu chấm, xem repository và nộp kết quả."
         actions={
           matrix ? (
-            <Badge tone={draftTeams.length ? "warning" : "success"}>
+            <Badge tone={unsubmittedTeams.length ? "warning" : "success"}>
               {matrix.summary.submittedCount}/{matrix.summary.teamCount} đã nộp
             </Badge>
           ) : null
         }
       />
 
-      <WorkflowSteps
-        title="Quy trình chấm"
-        description="Chọn bảng rồi điền ma trận và nộp phiếu."
-        steps={buildJudgeWorkflowSteps("scoring", assignments.length > 0)}
-      />
-
-      {matrix && draftTeams.length > 0 && matrix.summary.submittedCount < matrix.summary.teamCount ? (
+      {matrix && unsubmittedTeams.length > 0 ? (
         <div className="rounded-xl border border-warning-container bg-warning-container/25 p-md">
           <p className="font-body-sm text-on-surface">
-            Còn {draftTeams.length} phiếu chưa nộp. Rubric có thể bị khóa sau khi BTC bắt đầu công bố
-            kết quả — hãy hoàn tất và nộp phiếu sớm.
+            Còn {unsubmittedTeams.length} phiếu chưa nộp. Rubric có thể bị khóa sau khi BTC bắt đầu công bố
+            kết quả — hãy hoàn tất và nộp phiếu sớm. Phiếu đã nộp vẫn có thể cập nhật lại.
           </p>
         </div>
       ) : null}
@@ -212,13 +354,22 @@ export function JudgeScoringPage() {
             onChange={(e) => setBoardId(e.target.value ? Number(e.target.value) : null)}
           >
             {assignments.length === 0 ? <option value="">Chưa có phân công</option> : null}
-            {assignments.map((a) => (
-              <option key={a.id} value={a.boardId}>
-                Bảng #{a.boardId}
-              </option>
+            {groupedAssignments.map((group) => (
+              <optgroup key={group.eventName} label={group.eventName}>
+                {group.items.map((assignment) => (
+                  <option key={assignment.id} value={assignment.boardId}>
+                    {formatBoardAssignmentShortLabel(assignment)}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </label>
+        {selectedAssignment?.readiness ? (
+          <Badge tone={readinessTone(selectedAssignment.readiness)}>
+            {readinessLabel(selectedAssignment.readiness)}
+          </Badge>
+        ) : null}
         {matrix ? (
           <p className="font-body-sm text-on-surface-variant">
             {matrix.board.roundName ?? `Vòng ${matrix.board.roundId}`} · {matrix.criteria.length} tiêu chí
@@ -257,152 +408,58 @@ export function JudgeScoringPage() {
             <StatCard label="Đã nộp" value={matrix.summary.submittedCount} icon="task_alt" tone="success" />
           </section>
 
-          {expandedCriteriaId != null ? (
-            <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
-              {(() => {
-                const criterion = matrix.criteria.find((c) => c.id === expandedCriteriaId);
-                if (!criterion) return null;
-                return (
-                  <>
-                    <div className="mb-sm flex items-center justify-between">
-                      <h3 className="font-title-sm text-on-surface">
-                        {criterion.name}
-                      </h3>
-                      <Button type="button" size="sm" variant="ghost" onClick={() => setExpandedCriteriaId(null)}>
-                        Đóng
-                      </Button>
-                    </div>
-                    <div className="grid gap-sm md:grid-cols-2">
-                      {criterion.levelDescriptors?.map((level) => (
-                        <div key={level.level} className="rounded-lg border border-outline-variant/60 p-sm">
-                          <p className="font-label-sm text-on-surface">
-                            {level.label} ({level.minScore}–{level.maxScore})
-                          </p>
-                          <p className="font-body-sm text-on-surface-variant">{level.description || "—"}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                );
-              })()}
-            </section>
+          {matrix.teams.length > 0 ? (
+            <div className="flex flex-wrap gap-md">
+              <Button type="button" variant="secondary" loading={saving} onClick={() => void handleSaveAll()}>
+                Lưu tất cả
+              </Button>
+              {unsubmittedTeams.length > 0 ? (
+                <Button
+                  type="button"
+                  loading={submitting}
+                  onClick={() => void handleSubmit(true)}
+                >
+                  Nộp tất cả phiếu nháp
+                </Button>
+              ) : null}
+            </div>
           ) : null}
 
-          <div className="flex flex-wrap gap-md">
-            <Button type="button" variant="secondary" loading={saving} onClick={() => void handleSave()}>
-              Lưu nháp
-            </Button>
-            <Button
-              type="button"
-              loading={submitting}
-              disabled={draftTeams.length === 0}
-              onClick={() => void handleSubmit(true)}
-            >
-              Nộp tất cả phiếu nháp
-            </Button>
-          </div>
+          <JudgeTeamListTable
+            teams={matrix.teams}
+            criteriaCount={matrix.criteria.length}
+            onScoreTeam={setScoringTeamId}
+          />
 
-          <section className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container">
-            <table className="min-w-full text-left">
-              <thead className="table-header-bg">
-                <tr className="font-label-sm text-on-surface-variant">
-                  <th className="sticky left-0 z-10 bg-surface-container-high px-md py-sm">Đội</th>
-                  {matrix.criteria.map((c) => (
-                    <th key={c.id} className="min-w-[5rem] px-sm py-sm" title={c.name}>
-                      <button
-                        type="button"
-                        className="text-left font-label-sm text-primary hover:underline"
-                        onClick={() => setExpandedCriteriaId(c.id)}
-                      >
-                        {c.code}
-                      </button>
-                      <span className="block font-body-sm text-on-surface-variant/80">{c.weight}%</span>
-                    </th>
-                  ))}
-                  <th className="min-w-[8rem] px-md py-sm">Ghi chú</th>
-                  <th className="px-md py-sm">Tổng</th>
-                  <th className="px-md py-sm">TT</th>
-                  <th className="px-md py-sm" />
-                </tr>
-              </thead>
-              <tbody className="table-divider">
-                {matrix.teams.map((row) => (
-                  <tr
-                    key={row.teamId}
-                    className={`font-body-sm text-on-surface ${row.editable ? "bg-warning-container/15" : ""}`}
-                  >
-                    <td className="sticky left-0 z-10 bg-surface-container px-md py-sm">
-                      <span className="font-label-md">{row.teamName}</span>
-                      <span className="block text-on-surface-variant">Vị trí #{row.slotNumber}</span>
-                      {row.repositoryUrl ? (
-                        <a
-                          href={row.repositoryUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-1 block truncate font-body-sm text-primary hover:underline"
-                        >
-                          Repository
-                        </a>
-                      ) : (
-                        <span className="mt-1 block font-body-sm text-on-surface-variant">Chưa nộp repo</span>
-                      )}
-                    </td>
-                    {matrix.criteria.map((c) => {
-                      const key = cellKey(row.teamId, c.id);
-                      return (
-                        <td key={c.id} className="px-sm py-sm">
-                          <input
-                            type="number"
-                            min={c.minScore}
-                            max={c.maxScore}
-                            step={0.1}
-                            disabled={!row.editable}
-                            className="w-16 rounded border border-outline-variant bg-surface px-2 py-1 text-center"
-                            value={cells[key] ?? ""}
-                            onChange={(e) => setCell(row.teamId, c.id, e.target.value)}
-                          />
-                        </td>
-                      );
-                    })}
-                    <td className="px-md py-sm">
-                      <textarea
-                        className="min-h-[2.5rem] w-full min-w-[8rem] rounded border border-outline-variant bg-surface px-2 py-1 font-body-sm"
-                        disabled={!row.editable}
-                        placeholder="Tùy chọn"
-                        value={feedbackByTeam[row.teamId] ?? ""}
-                        onChange={(e) =>
-                          setFeedbackByTeam((prev) => ({ ...prev, [row.teamId]: e.target.value }))
-                        }
-                      />
-                    </td>
-                    <td className="px-md py-sm font-label-md">
-                      {row.computed?.judgeTeamScore != null
-                        ? Number(row.computed.judgeTeamScore).toFixed(2)
-                        : "—"}
-                    </td>
-                    <td className="px-md py-sm">
-                      <Badge tone={row.status === "SUBMITTED" ? "success" : "warning"}>
-                        {row.status === "SUBMITTED" ? "Đã nộp" : "Nháp"}
-                      </Badge>
-                    </td>
-                    <td className="px-md py-sm">
-                      {row.editable ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          loading={submitting}
-                          onClick={() => void handleSubmit(false, row.teamId)}
-                        >
-                          Nộp
-                        </Button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
+          <JudgeTeamScoringModal
+            open={scoringTeamId != null}
+            team={scoringTeam}
+            criteria={matrix.criteria}
+            cells={cells}
+            feedback={scoringTeam ? (feedbackByTeam[scoringTeam.teamId] ?? "") : ""}
+            repository={scoringTeam ? (repoByTeamId.get(scoringTeam.teamId) ?? null) : null}
+            saving={saving}
+            submitting={submitting}
+            expandedCriteriaId={expandedCriteriaId}
+            onClose={() => setScoringTeamId(null)}
+            onCellChange={(criteriaId, value) => {
+              if (!scoringTeam) return;
+              setCell(scoringTeam.teamId, criteriaId, value);
+            }}
+            onFeedbackChange={(value) => {
+              if (!scoringTeam) return;
+              setFeedbackByTeam((prev) => ({ ...prev, [scoringTeam.teamId]: value }));
+            }}
+            onToggleCriteria={setExpandedCriteriaId}
+            onSave={() => {
+              if (!scoringTeam) return;
+              void handleSaveTeam(scoringTeam.teamId);
+            }}
+            onSubmit={() => {
+              if (!scoringTeam) return;
+              void handleSubmit(false, scoringTeam.teamId);
+            }}
+          />
         </>
       )}
     </div>

@@ -5,6 +5,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
 import { PageHeader } from "../ui/PageHeader";
 import { StatCard } from "../ui/StatCard";
+import { JudgeAssignmentsTable } from "../judge/JudgeAssignmentsTable";
 import type { AssignmentResponse } from "../../services/assignmentService";
 import { resolveApiError } from "../../utils/apiError";
 
@@ -17,6 +18,8 @@ interface StaffAssignmentDashboardProps {
   error: unknown;
   workflow?: ReactNode;
   scorePath?: (boardId: number) => string;
+  layout?: "cards" | "table";
+  alwaysShowFilters?: boolean;
   emptyTitle: string;
   emptyDescription: string;
   boardFooter?: (assignment: AssignmentResponse) => ReactNode;
@@ -31,11 +34,17 @@ export function StaffAssignmentDashboard({
   error,
   workflow,
   scorePath,
+  layout = "cards",
+  alwaysShowFilters = false,
   emptyTitle,
   emptyDescription,
   boardFooter
 }: StaffAssignmentDashboardProps) {
   const allAssignments = assignments;
+  const [eventFilter, setEventFilter] = useState<number | "">("");
+  const [roundFilter, setRoundFilter] = useState<number | "">("");
+  const [boardFilter, setBoardFilter] = useState<number | "">("");
+
   const eventOptions = useMemo(() => {
     const map = new Map<number, string>();
     for (const item of allAssignments) {
@@ -49,16 +58,27 @@ export function StaffAssignmentDashboard({
   const roundOptions = useMemo(() => {
     const map = new Map<number, string>();
     for (const item of allAssignments) {
+      if (eventFilter !== "" && item.eventId !== eventFilter) continue;
       if (item.roundId != null) {
         map.set(item.roundId, item.roundName ?? `Vòng #${item.roundId}`);
       }
     }
     return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [allAssignments]);
+  }, [allAssignments, eventFilter]);
 
-  const [eventFilter, setEventFilter] = useState<number | "">("");
-  const [roundFilter, setRoundFilter] = useState<number | "">("");
-  const [boardFilter, setBoardFilter] = useState<number | "">("");
+  const boardOptions = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const item of allAssignments) {
+      if (eventFilter !== "" && item.eventId !== eventFilter) continue;
+      if (roundFilter !== "" && item.roundId !== roundFilter) continue;
+      map.set(item.boardId, item.boardName ?? `Bảng #${item.boardId}`);
+    }
+    return [...map.entries()].map(([id, name]) => ({ id, name }));
+  }, [allAssignments, eventFilter, roundFilter]);
+
+  const showFilters = alwaysShowFilters
+    ? allAssignments.length > 0
+    : eventOptions.length > 1 || roundOptions.length > 1 || boardOptions.length > 1;
 
   const filtered = useMemo(
     () =>
@@ -92,16 +112,20 @@ export function StaffAssignmentDashboard({
 
       {workflow}
 
-      <div className="flex flex-wrap gap-md">
-        {eventOptions.length > 1 ? (
-          <label className="flex min-w-[200px] flex-col gap-1 font-label-sm text-on-surface-variant">
-            Lọc theo cuộc thi
+      {showFilters ? (
+        <div className="flex flex-wrap gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
+          <label className="flex min-w-[200px] flex-1 flex-col gap-1 font-label-sm text-on-surface-variant">
+            Cuộc thi
             <select
               className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
               value={eventFilter}
-              onChange={(e) => setEventFilter(e.target.value ? Number(e.target.value) : "")}
+              onChange={(e) => {
+                setEventFilter(e.target.value ? Number(e.target.value) : "");
+                setRoundFilter("");
+                setBoardFilter("");
+              }}
             >
-              <option value="">Tất cả</option>
+              <option value="">Tất cả cuộc thi</option>
               {eventOptions.map((event) => (
                 <option key={event.id} value={event.id}>
                   {event.name}
@@ -109,14 +133,15 @@ export function StaffAssignmentDashboard({
               ))}
             </select>
           </label>
-        ) : null}
-        {roundOptions.length > 1 ? (
-          <label className="flex min-w-[200px] flex-col gap-1 font-label-sm text-on-surface-variant">
-            Lọc theo vòng
+          <label className="flex min-w-[200px] flex-1 flex-col gap-1 font-label-sm text-on-surface-variant">
+            Vòng
             <select
               className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
               value={roundFilter}
-              onChange={(e) => setRoundFilter(e.target.value ? Number(e.target.value) : "")}
+              onChange={(e) => {
+                setRoundFilter(e.target.value ? Number(e.target.value) : "");
+                setBoardFilter("");
+              }}
             >
               <option value="">Tất cả vòng</option>
               {roundOptions.map((round) => (
@@ -126,25 +151,23 @@ export function StaffAssignmentDashboard({
               ))}
             </select>
           </label>
-        ) : null}
-        {filtered.length > 1 ? (
-          <label className="flex min-w-[200px] flex-col gap-1 font-label-sm text-on-surface-variant">
-            Lọc theo bảng
+          <label className="flex min-w-[200px] flex-1 flex-col gap-1 font-label-sm text-on-surface-variant">
+            Bảng
             <select
               className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
               value={boardFilter}
               onChange={(e) => setBoardFilter(e.target.value ? Number(e.target.value) : "")}
             >
               <option value="">Tất cả bảng</option>
-              {filtered.map((item) => (
-                <option key={item.boardId} value={item.boardId}>
-                  {item.boardName ?? `Bảng #${item.boardId}`}
+              {boardOptions.map((board) => (
+                <option key={board.id} value={board.id}>
+                  {board.name}
                 </option>
               ))}
             </select>
           </label>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {errorMessage ? (
         <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
@@ -169,6 +192,8 @@ export function StaffAssignmentDashboard({
 
       {filtered.length === 0 ? (
         <EmptyState title={emptyTitle} description={emptyDescription} icon="view_module" />
+      ) : layout === "table" && scorePath ? (
+        <JudgeAssignmentsTable assignments={filtered} scorePath={scorePath} />
       ) : (
         <div className="grid gap-md md:grid-cols-2">
           {filtered.map((item) => (

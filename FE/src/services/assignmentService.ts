@@ -1,6 +1,17 @@
 import { apiClient } from "./apiClient";
 import type { ApiResponse } from "../types/api";
 
+export type JudgeBoardReadiness =
+  | "NO_PROBLEM"
+  | "WAITING_PROBLEM_RELEASE"
+  | "WAITING_RUBRIC"
+  | "WAITING_TEAMS"
+  | "WAITING_REPOSITORIES"
+  | "READY_TO_SCORE"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "PROBLEM_CLOSED";
+
 export interface AssignmentResponse {
   id: number;
   boardId: number;
@@ -12,6 +23,12 @@ export interface AssignmentResponse {
   assigneeId: number;
   createdAt: string;
   createdBy: number;
+  readiness?: JudgeBoardReadiness | null;
+  teamsCount?: number | null;
+  submittedSheetsCount?: number | null;
+  draftSheetsCount?: number | null;
+  problemReleaseAt?: string | null;
+  problemCloseAt?: string | null;
 }
 
 export async function fetchMentorAssignments() {
