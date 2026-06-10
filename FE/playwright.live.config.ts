@@ -1,11 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
+process.env.LIVE_STACK = process.env.LIVE_STACK ?? "1";
+
 export default defineConfig({
-  testDir: "./tests/e2e",
-  timeout: 30_000,
-  expect: {
-    timeout: 5_000
-  },
+  testDir: "./tests/e2e/live",
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
+  globalSetup: "./tests/e2e/live/global-setup.ts",
   use: {
     baseURL: "http://127.0.0.1:5173",
     trace: "on-first-retry"
@@ -22,10 +23,5 @@ export default defineConfig({
       VITE_ENABLE_ACADEMIC_TERMS: "true"
     }
   },
-  projects: [
-    {
-      name: "desktop",
-      use: { ...devices["Desktop Chrome"] }
-    }
-  ]
+  projects: [{ name: "live-chrome", use: { ...devices["Desktop Chrome"] } }]
 });

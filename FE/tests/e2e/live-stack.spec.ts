@@ -67,7 +67,7 @@ test.describe("live stack", () => {
   });
 
   test("organizer scoring page loads against real API", async ({ page }) => {
-    await page.goto("/organizer/scoring");
+    await page.goto("/organizer/results-hub#results-step-scoring");
     await expect(page).toHaveURL(/\/login/);
   });
 });

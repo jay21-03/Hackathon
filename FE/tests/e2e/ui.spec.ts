@@ -17,7 +17,7 @@ test("participant overview shows team from API", async ({ page }) => {
 test("organizer dashboard loads with event selector", async ({ page }) => {
   await seedAuth(page, "organizer");
   await page.goto("/organizer/dashboard");
-  await waitForWorkspace(page, "Việc cần làm");
+  await waitForWorkspace(page, "Đội đã xác nhận");
   await expect(page.locator("body")).toContainText("SEAL Hackathon 2026");
 });
 
@@ -25,6 +25,34 @@ test("login page renders auth shell", async ({ page }) => {
   await page.goto("/login");
   await expect(page.locator("body")).toContainText("Đăng nhập SEAL Hackathon");
   await expect(page.locator("body")).toContainText("Quên mật khẩu?");
+});
+
+test("login shows validation error for invalid email", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByPlaceholder("you@example.com").fill("not-an-email");
+  await page.getByPlaceholder("Mật khẩu").fill("short");
+  await page.getByRole("button", { name: "Đăng nhập" }).click();
+  await expect(page.locator("body")).toContainText("Email chưa đúng định dạng");
+});
+
+test("create event shows validation when end date is before start date", async ({ page }) => {
+  await seedAuth(page, "organizer");
+  await page.goto("/organizer/events/create");
+  await page.getByLabel(/Tên cuộc thi/i).fill("E2E Event");
+  await page.locator('input[type="date"]').nth(0).fill("2026-12-10");
+  await page.locator('input[type="date"]').nth(1).fill("2026-12-01");
+  await page.locator('input[type="datetime-local"]').nth(0).fill("2026-12-01T08:00");
+  await page.locator('input[type="datetime-local"]').nth(1).fill("2026-12-05T23:59");
+  await page.getByRole("button", { name: "Tạo cuộc thi" }).click();
+  await expect(page.locator("body")).toContainText("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu");
+});
+
+test("signup shows validation error for weak password", async ({ page }) => {
+  await page.goto("/login/signup");
+  await page.getByPlaceholder("you@gmail.com").fill("user@example.com");
+  await page.getByPlaceholder("Mật khẩu").fill("weak");
+  await page.getByRole("button", { name: "Tạo tài khoản" }).click();
+  await expect(page.locator("body")).toContainText("Mật khẩu cần");
 });
 
 test("submission page loads with API data", async ({ page }) => {
@@ -39,7 +67,7 @@ test("submission page loads with API data", async ({ page }) => {
 
 test("scoring progress page loads with API data", async ({ page }) => {
   await seedAuth(page, "organizer");
-  await page.goto("/organizer/scoring");
+  await page.goto("/organizer/results-hub#results-step-scoring");
   await waitForWorkspace(page, "Tiến độ chấm");
   await expect(page.locator("body")).toContainText("Đội E2E Alpha");
 });

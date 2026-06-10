@@ -9,7 +9,10 @@ const sampleEvent = {
   registrationEndAt: "2026-12-31T23:59:00+07:00",
   minTeamSize: 1,
   maxTeamSize: 5,
-  status: "REGISTRATION_OPEN"
+  status: "REGISTRATION_OPEN",
+  academicTermId: 1,
+  academicTermCode: "SPRING_2026",
+  academicTermName: "Spring 2026"
 };
 
 const sampleRound = {
@@ -21,6 +24,17 @@ const sampleRound = {
   startAt: "2026-06-01T08:00:00+07:00",
   endAt: "2026-06-01T18:00:00+07:00",
   status: "ACTIVE"
+};
+
+export const sampleProblem = {
+  id: 1,
+  boardId: 1,
+  title: "Đề E2E",
+  description: "<p>Mô tả đề <strong>rich text</strong></p>",
+  attachmentUrl: "/api/v1/files/problems/1/mock-de.pdf",
+  externalLink: "https://drive.google.com/file/d/mock/view",
+  releaseAt: "2026-06-01T08:00:00+07:00",
+  closeAt: "2026-12-31T23:59:00+07:00"
 };
 
 export const sampleTeam = {
@@ -44,8 +58,25 @@ const eventDetail = {
   minTeamSize: 1,
   maxTeamSize: 5,
   maxTeams: 50,
-  description: "E2E event"
+  description: "E2E event",
+  academicTermId: 1,
+  academicTermCode: "SPRING_2026",
+  academicTermName: "Spring 2026"
 };
+
+const sampleAcademicTerms = [
+  {
+    id: 1,
+    code: "SPRING_2026",
+    name: "Spring 2026",
+    year: 2026,
+    termType: "SPRING",
+    startDate: "2026-01-01",
+    endDate: "2026-05-31",
+    status: "ACTIVE",
+    eventCount: 1
+  }
+];
 
 function ok<T>(data: T) {
   return { success: true, message: "ok", data };
@@ -72,15 +103,45 @@ export async function mockCoreApis(page: Page) {
     await json(route, ok(null));
   });
 
-  await page.route("**/api/v1/me**", async (route) => {
+  let profileGithubUsername: string | null = null;
+
+  await page.route("**/api/v1/me/profile**", async (route) => {
+    if (route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as { githubUsername?: string };
+      profileGithubUsername = body.githubUsername ?? null;
+      await json(
+        route,
+        ok({
+          id: 1,
+          email: "participant@seal.edu.vn",
+          fullName: "Thí sinh E2E",
+          githubUsername: profileGithubUsername,
+          status: "ACTIVE",
+          roles: ["PARTICIPANT"]
+        })
+      );
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/me", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname !== "/api/v1/me") {
+      await route.continue();
+      return;
+    }
     await json(
       route,
       ok({
         id: 1,
-        email: "organizer@seal.edu.vn",
-        fullName: "Ban tổ chức E2E",
+        email: profileGithubUsername ? "participant@seal.edu.vn" : "organizer@seal.edu.vn",
+        fullName: profileGithubUsername ? "Thí sinh E2E" : "Ban tổ chức E2E",
+        githubUsername: profileGithubUsername,
         status: "ACTIVE",
-        roles: ["ORGANIZER", "PARTICIPANT", "MENTOR", "JUDGE"]
+        roles: profileGithubUsername
+          ? ["PARTICIPANT"]
+          : ["ORGANIZER", "PARTICIPANT", "MENTOR", "JUDGE"]
       })
     );
   });
@@ -98,8 +159,19 @@ export async function mockCoreApis(page: Page) {
     );
   });
 
+  let mockAttachmentUrl: string | null = sampleProblem.attachmentUrl ?? null;
+
   await page.route("**/api/v1/my/problem**", async (route) => {
-    await json(route, ok({ available: false, reason: "NOT_RELEASED" }));
+    await json(
+      route,
+      ok({
+        available: true,
+        problem: {
+          ...sampleProblem,
+          attachmentUrl: mockAttachmentUrl
+        }
+      })
+    );
   });
 
   await page.route("**/api/v1/my/teams**", async (route) => {
@@ -139,6 +211,72 @@ export async function mockCoreApis(page: Page) {
       return;
     }
     await route.continue();
+  });
+
+  const termScopedParticipants = {
+    academicTerm: { id: 1, code: "SPRING_2026", name: "Spring 2026" },
+    items: [
+      { id: 1, teamId: 10, eventId: 1, email: "captain@seal.edu.vn", fullName: "Nguyễn Văn A", status: "CONFIRMED" }
+    ],
+    totalElements: 1,
+    page: 0,
+    size: 20,
+    totalPages: 1
+  };
+
+  await page.route("**/api/v1/admin/academic-terms/*/participants**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(route, ok(termScopedParticipants));
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/admin/academic-terms/*/mentors**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(route, ok({ ...termScopedParticipants, items: [{ id: 3, email: "mentor@seal.edu.vn", fullName: "Mentor E2E" }] }));
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/admin/academic-terms/*/judges**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(route, ok({ ...termScopedParticipants, items: [] }));
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/admin/academic-terms/**/dashboard**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(route, ok({
+        academicTerm: { id: 1, code: "SPRING_2026", name: "Spring 2026" },
+        eventCount: 1,
+        teamCount: 1,
+        participantCount: 1,
+        mentorCount: 1,
+        judgeCount: 1,
+        rankingCount: 0,
+        repositoryCount: 0,
+        scoreSheetCount: 0
+      }));
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/admin/academic-terms**", async (route) => {
+    const url = route.request().url();
+    if (route.request().method() === "GET" && /\/academic-terms(\?|$)/.test(url)) {
+      await json(route, ok(sampleAcademicTerms));
+      return;
+    }
+    if (route.request().method() === "POST") {
+      await json(route, ok({ ...sampleAcademicTerms[0], id: 2, code: "FALL_2026", name: "Fall 2026", termType: "FALL" }));
+      return;
+    }
+    await route.fallback();
   });
 
   await page.route("**/api/v1/events**", async (route) => {
@@ -245,6 +383,163 @@ export async function mockCoreApis(page: Page) {
       }
     ]
   };
+
+  const sampleRepoTemplate = {
+    id: 1,
+    problemId: 1,
+    templateOwner: "seal-org",
+    templateRepo: "hackathon-starter",
+    defaultBranch: "main",
+    enabled: true
+  };
+
+  const sampleProvisionedRepo = {
+    id: 501,
+    teamId: 10,
+    teamName: "Đội E2E Alpha",
+    roundId: 1,
+    boardId: 1,
+    problemId: 1,
+    repositoryUrl: "https://github.com/seal-org/seal-event-1-team-10-problem-1",
+    repositoryName: "seal-event-1-team-10-problem-1",
+    githubOwner: "seal-org",
+    githubRepoName: "seal-event-1-team-10-problem-1",
+    accessStatus: "OPEN",
+    provisionStatus: "CREATED",
+    lastError: null
+  };
+
+  await page.route("**/api/v1/admin/problems/*/repo-template**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(route, ok(sampleRepoTemplate));
+      return;
+    }
+    if (route.request().method() === "PUT" || route.request().method() === "POST") {
+      await json(route, ok(sampleRepoTemplate));
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/admin/events/*/repositories**", async (route) => {
+    await json(route, ok([sampleProvisionedRepo]));
+  });
+
+  await page.route("**/api/v1/admin/problems/*/repositories/provision**", async (route) => {
+    await json(
+      route,
+      ok({
+        problemId: 1,
+        boardId: 1,
+        roundId: 1,
+        totalTeams: 1,
+        createdCount: 1,
+        failedCount: 0,
+        skippedCount: 0,
+        repositories: [sampleProvisionedRepo]
+      })
+    );
+  });
+
+  await page.route("**/api/v1/me/repositories**", async (route) => {
+    await json(route, ok([sampleProvisionedRepo]));
+  });
+
+  await page.route("**/api/v1/me/teams/*/repository**", async (route) => {
+    await json(route, ok([sampleProvisionedRepo]));
+  });
+
+  await page.route("**/api/v1/admin/events/*/files**", async (route) => {
+    if (route.request().method() === "POST") {
+      mockAttachmentUrl = "/api/v1/files/problems/1/mock-de.pdf";
+      await json(
+        route,
+        ok({
+          url: mockAttachmentUrl,
+          fileName: "de-thi.pdf",
+          size: 2048,
+          mimeType: "application/pdf"
+        })
+      );
+      return;
+    }
+    if (route.request().method() === "DELETE") {
+      mockAttachmentUrl = null;
+      await json(route, ok(null));
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/files/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/pdf",
+      body: Buffer.from("%PDF-1.4 mock")
+    });
+  });
+
+  await page.route("**/api/v1/admin/problems/*", async (route) => {
+    if (route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as { attachmentUrl?: string | null };
+      if (body.attachmentUrl !== undefined) {
+        mockAttachmentUrl = body.attachmentUrl;
+      }
+      await json(
+        route,
+        ok({
+          ...sampleProblem,
+          attachmentUrl: mockAttachmentUrl
+        })
+      );
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/admin/boards/*/problems**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(
+        route,
+        ok([
+          {
+            ...sampleProblem,
+            attachmentUrl: mockAttachmentUrl
+          }
+        ])
+      );
+      return;
+    }
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON() as { attachmentUrl?: string | null };
+      await json(
+        route,
+        ok({
+          ...sampleProblem,
+          attachmentUrl: body.attachmentUrl ?? mockAttachmentUrl
+        })
+      );
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/admin/rounds/*/repositories/lock**", async (route) => {
+    if (route.request().method() === "POST") {
+      await json(
+        route,
+        ok({
+          roundId: 1,
+          totalRepositories: 1,
+          lockedCount: 1,
+          failedCount: 0,
+          repositories: [{ ...sampleProvisionedRepo, accessStatus: "CLOSED" }]
+        })
+      );
+      return;
+    }
+    await route.continue();
+  });
 
   await page.route("**/api/v1/admin/rounds/**", async (route) => {
     await json(route, ok([]));

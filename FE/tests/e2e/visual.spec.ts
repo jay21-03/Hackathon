@@ -39,7 +39,7 @@ test("organizer dashboard layout is stable", async ({ page }) => {
   test.setTimeout(60_000);
   await seedAuth(page, "organizer");
   await page.goto("/organizer/dashboard");
-  await waitForWorkspace(page, "Việc cần làm");
+  await waitForWorkspace(page, "Đội đã xác nhận");
   await page.waitForLoadState("networkidle");
   await expectStableScreenshot(page);
 });

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { mockCoreApis } from "./helpers/mockApi";
+import { mockRepoProvisioningApis } from "./helpers/mockRepoApis";
 import { seedAuth, type E2ERole } from "./helpers/auth";
 
 const publicRoutes = ["/events", "/login"];
@@ -8,10 +9,13 @@ const protectedRoutes: Array<{ role: E2ERole; path: string; expectText: RegExp }
   { role: "participant", path: "/me", expectText: /Đội E2E|Tổng quan|Chưa có đội/i },
   { role: "participant", path: "/me/problem", expectText: /Đề thi|Chưa có đội/i },
   { role: "organizer", path: "/organizer/dashboard", expectText: /Tổng quan|SEAL Hackathon/i },
+  { role: "organizer", path: "/organizer/academic-terms", expectText: /Học kỳ/i },
   { role: "organizer", path: "/organizer/events", expectText: /Quản lý cấu hình|Tạo cuộc thi/i },
   { role: "organizer", path: "/organizer/events/new", expectText: /Tạo cuộc thi mới/i },
-  { role: "organizer", path: "/organizer/invitations", expectText: /Theo dõi lời mời|Thành viên đội/i },
-  { role: "organizer", path: "/organizer/ranking", expectText: /Bảng xếp hạng|Tính bảng/i },
+  { role: "organizer", path: "/organizer/events/wizard", expectText: /Quy trình vận hành|Thông tin/i },
+  { role: "organizer", path: "/organizer/teams-hub", expectText: /Đội & lời mời|Đăng ký đội/i },
+  { role: "organizer", path: "/organizer/artifacts-hub", expectText: /Bài nộp & repository|Repository đội thi/i },
+  { role: "organizer", path: "/organizer/results-hub", expectText: /Chấm điểm & kết quả|Tiêu chí chấm/i },
   { role: "organizer", path: "/organizer/publish-results", expectText: /Công bố kết quả/i },
   { role: "participant", path: "/me/results", expectText: /Kết quả|chưa được ban tổ chức công bố/i },
   { role: "mentor", path: "/mentor/dashboard", expectText: /Mentor|đội/i },
@@ -20,6 +24,7 @@ const protectedRoutes: Array<{ role: E2ERole; path: string; expectText: RegExp }
 
 test.beforeEach(async ({ page }) => {
   await mockCoreApis(page);
+  await mockRepoProvisioningApis(page);
 });
 
 for (const path of publicRoutes) {

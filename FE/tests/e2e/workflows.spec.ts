@@ -21,6 +21,15 @@ test("organizer edit page shows integrated setup steps", async ({ page }) => {
   await expect(page.locator("body")).toContainText("Thông tin");
 });
 
+test("event wizard embeds basic info step", async ({ page }) => {
+  await seedAuth(page, "organizer");
+  await page.goto("/organizer/events/wizard#wizard-step-basic");
+  await waitForWorkspace(page, /Quy trình vận hành/i);
+  await expect(page.locator("body")).toContainText("Thông tin & lịch");
+  await page.getByRole("button", { name: "Đội & lời mời" }).click();
+  await expect(page.locator("body")).toContainText("Đăng ký đội");
+});
+
 test("participant problem page waits for backend API", async ({ page }) => {
   await seedAuth(page, "participant");
   await page.goto("/me/problem");
@@ -57,7 +66,7 @@ test("organizer phase 7 submissions page renders", async ({ page }) => {
       })
     });
   });
-  await page.goto("/organizer/submissions");
+  await page.goto("/organizer/artifacts-hub#artifacts-step-submissions");
   await expect(page.locator("body")).toContainText(/Bài nộp|Đã nộp/i);
 });
 
@@ -77,7 +86,7 @@ test("organizer registrations page renders", async ({ page }) => {
     }
     await route.continue();
   });
-  await page.goto("/organizer/registrations");
+  await page.goto("/organizer/teams-hub");
   await expect(page.locator("body")).toContainText(/Duyệt đăng ký|đăng ký/i);
 });
 
