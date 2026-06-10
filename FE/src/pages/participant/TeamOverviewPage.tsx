@@ -17,8 +17,13 @@ import { useMyTeam } from "../../hooks/useMyTeam";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
 import { cancelPendingInvitation, inviteTeamMember, resendTeamInvitation } from "../../services/registrationService";
+import { teamMemberInviteSchema } from "../../domain/schemas";
 import { resolveApiError } from "../../utils/apiError";
-import { canRegisterForEvent, mapRegistrationErrorMessage } from "../../utils/registrationErrors";
+import {
+  applyRegistrationFormErrors,
+  canRegisterForEvent,
+  mapRegistrationErrorMessage
+} from "../../utils/registrationErrors";
 
 function buildMemberName(email: string) {
   const local = email.split("@")[0] ?? "";
@@ -55,6 +60,7 @@ export function TeamOverviewPage() {
   const { event, eventId, loading: eventLoading } = useActiveEvent();
   const { team, loading: teamLoading, error, refetch } = useMyTeam(eventId);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteFieldErrors, setInviteFieldErrors] = useState<Record<string, string>>({});
   const [inviting, setInviting] = useState(false);
   const [resendingId, setResendingId] = useState<number | null>(null);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
@@ -111,25 +117,35 @@ export function TeamOverviewPage() {
 
   async function submitInvite(event: React.FormEvent) {
     event.preventDefault();
-    const trimmedEmail = inviteEmail.trim();
-    if (!trimmedEmail) {
-      notify("Nhập email thành viên cần mời.", "warning");
+    if (!canAddMember) {
+      notify(`Đội đã đủ ${maxTeamSize} thành viên.`, "warning");
       return;
     }
+    const parsed = teamMemberInviteSchema.safeParse({ email: inviteEmail });
+    if (!parsed.success) {
+      setInviteFieldErrors({ email: parsed.error.issues[0]?.message ?? "Email không hợp lệ." });
+      notify(parsed.error.issues[0]?.message ?? "Email không hợp lệ.", "warning");
+      return;
+    }
+    setInviteFieldErrors({});
 
     setInviting(true);
     try {
       await inviteTeamMember(team.id, {
-        email: trimmedEmail,
-        fullName: buildMemberName(trimmedEmail)
-      }, { idempotencyKey: `invite-${team.id}-${trimmedEmail.toLowerCase()}` });
+        email: parsed.data.email,
+        fullName: buildMemberName(parsed.data.email)
+      }, { idempotencyKey: `invite-${team.id}-${parsed.data.email.toLowerCase()}` });
       setInviteEmail("");
       await invalidateAfterTeamMutation(queryClient);
       await refetch();
       notify("Đã gửi lời mời thành viên.", "success");
     } catch (err) {
-      const message = mapRegistrationErrorMessage(resolveApiError(err, "Mời thành viên thất bại."));
-      notify(message, "danger");
+      if (!applyRegistrationFormErrors(err, setInviteFieldErrors)) {
+        const message = mapRegistrationErrorMessage(resolveApiError(err, "Mời thành viên thất bại."));
+        notify(message, "danger");
+      } else {
+        notify("Kiểm tra lại email thành viên.", "warning");
+      }
     } finally {
       setInviting(false);
     }
@@ -233,7 +249,11 @@ export function TeamOverviewPage() {
                   label="Email thành viên"
                   type="email"
                   value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
+                  onChange={(event) => {
+                    setInviteEmail(event.target.value);
+                    setInviteFieldErrors((prev) => ({ ...prev, email: "" }));
+                  }}
+                  error={inviteFieldErrors.email}
                   placeholder="email@fpt.edu.vn"
                   className="flex-1"
                 />

@@ -95,9 +95,6 @@ export function TeamInvitationConfirmationPage() {
           <ButtonLink to="/me/team" variant="secondary" icon={<Icon name="groups" />}>
             Xem đội của tôi
           </ButtonLink>
-          <ButtonLink to="/team-invitations/status" variant="secondary" icon={<Icon name="fact_check" />}>
-            Xem trạng thái
-          </ButtonLink>
         </div>
       </section>
     </InvitationPanel>

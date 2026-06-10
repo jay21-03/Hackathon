@@ -9,9 +9,11 @@ import {
   authInputClassName
 } from "../../components/auth/AuthFormShell";
 import { Button } from "../../components/ui/Button";
+import { loginSchema } from "../../domain/schemas";
 import { googleLogin, loginWithPassword } from "../../services/authService";
-import { mapAuthErrorMessage } from "../../utils/authErrors";
+import { applyAuthFormErrors, mapAuthErrorMessage } from "../../utils/authErrors";
 import { finishAuthSession } from "../../utils/authFinish";
+import { zodFieldErrors } from "../../utils/zodFieldErrors";
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
 
@@ -23,6 +25,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   async function handleGoogleLogin(idToken: string) {
     setAuthError(null);
@@ -40,12 +43,20 @@ export function LoginPage() {
   async function handlePasswordLogin(event: React.FormEvent) {
     event.preventDefault();
     setAuthError(null);
+    const parsed = loginSchema.safeParse({ email, password });
+    if (!parsed.success) {
+      setFieldErrors(zodFieldErrors(parsed.error));
+      return;
+    }
+    setFieldErrors({});
     setLoading(true);
     try {
-      const result = await loginWithPassword({ email: email.trim(), password });
+      const result = await loginWithPassword(parsed.data);
       await finishAuthSession(result, { from });
     } catch (error) {
-      setAuthError(mapAuthErrorMessage(error instanceof Error ? error.message : "Đăng nhập thất bại."));
+      if (!applyAuthFormErrors(error, setFieldErrors)) {
+        setAuthError(mapAuthErrorMessage(error instanceof Error ? error.message : "Đăng nhập thất bại."));
+      }
     } finally {
       setLoading(false);
     }
@@ -77,9 +88,7 @@ export function LoginPage() {
             disabled={loading}
             onSuccess={(token) => void handleGoogleLogin(token)}
             onError={() =>
-              setAuthError(
-                "Google từ chối origin này — thêm http://localhost:5173 vào Authorized JavaScript origins."
-              )
+              setAuthError("Không đăng nhập được bằng Google. Thử lại hoặc dùng email/mật khẩu.")
             }
           />
         </div>
@@ -91,26 +100,36 @@ export function LoginPage() {
         <AuthFieldLabel label="Email" required>
           <input
             type="email"
-            className={authInputClassName()}
+            className={authInputClassName(fieldErrors.email ? "border-error" : "")}
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, email: "" }));
+            }}
             placeholder="you@example.com"
             autoComplete="email"
             disabled={loading}
-            required
           />
+          {fieldErrors.email ? (
+            <span className="font-body-sm text-error">{fieldErrors.email}</span>
+          ) : null}
         </AuthFieldLabel>
         <AuthFieldLabel label="Mật khẩu" required>
           <input
             type="password"
-            className={authInputClassName()}
+            className={authInputClassName(fieldErrors.password ? "border-error" : "")}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, password: "" }));
+            }}
             placeholder="Mật khẩu"
             autoComplete="current-password"
             disabled={loading}
-            required
           />
+          {fieldErrors.password ? (
+            <span className="font-body-sm text-error">{fieldErrors.password}</span>
+          ) : null}
         </AuthFieldLabel>
         <p className="text-right font-body-sm">
           <Link to="/login/forgot-password" className="text-primary hover:underline">

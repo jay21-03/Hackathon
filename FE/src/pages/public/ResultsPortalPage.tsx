@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { isAuthenticated } from "../../auth/authSession";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
+import { ParticipantWorkflowBar } from "../../components/participant/ParticipantWorkflowBar";
 import { EventResultsView } from "../../components/results/EventResultsView";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -46,12 +47,18 @@ export function ResultsPortalPage({ participantView }: ResultsPortalPageProps) {
     : null;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-lg p-page">
+    <div className="space-y-lg">
       <PageHeader
-        eyebrow={participantView ? "Không gian thi" : "Công khai"}
+        eyebrow={participantView ? "Kết quả" : "Công khai"}
         title={results?.eventName ?? "Kết quả cuộc thi"}
-        description="Bảng xếp hạng chính thức sau khi ban tổ chức công bố. Khách có thể xem mà không cần đăng nhập."
+        description={
+          participantView
+            ? "Chọn vòng và bảng để xem xếp hạng — mặc định hiển thị bảng của đội bạn."
+            : "Bảng xếp hạng chính thức sau khi ban tổ chức công bố."
+        }
       />
+
+      {participantView ? <ParticipantWorkflowBar active="results" /> : null}
 
       {error ? (
         <RetryPanel message={error} onRetry={() => void resultsQuery.refetch()} />

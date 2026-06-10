@@ -324,9 +324,9 @@ export function TeamInvitationActionPage({ action }: TeamInvitationActionPagePro
 
         ) : null}
 
-        <ButtonLink to="/team-invitations/status" variant="secondary" icon={<Icon name="fact_check" />}>
+        <ButtonLink to="/me/team" variant="secondary" icon={<Icon name="groups" />}>
 
-          Trạng thái lời mời
+          Đội của tôi
 
         </ButtonLink>
 

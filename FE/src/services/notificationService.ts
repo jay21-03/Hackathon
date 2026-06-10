@@ -10,6 +10,7 @@ export type NotificationType =
   | "SLOT_ASSIGNED"
   | "SUBMISSION"
   | "PROBLEM_RELEASED"
+  | "BOARD_READY_TO_SCORE"
   | "GENERAL";
 
 export interface NotificationItem {

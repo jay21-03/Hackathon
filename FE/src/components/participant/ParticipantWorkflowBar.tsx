@@ -1,5 +1,6 @@
 import { WorkflowSteps } from "../ui/WorkflowSteps";
 import { buildParticipantWorkflowSteps, type ParticipantWorkflowPhase } from "../../domain/participantWorkflow";
+import { enableGithubProvisioning } from "../../config/features";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useMyBoard } from "../../hooks/useMyBoard";
 import { useMySubmission } from "../../hooks/useMySubmission";
@@ -31,7 +32,8 @@ export function ParticipantWorkflowBar({ active }: ParticipantWorkflowBarProps) 
         hasBoard,
         hasSubmitted,
         resultsPublished,
-        teamStatus: team?.status
+        teamStatus: team?.status,
+        githubProvisioning: enableGithubProvisioning
       })}
     />
   );

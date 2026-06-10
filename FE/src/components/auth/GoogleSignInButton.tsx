@@ -1,4 +1,5 @@
 import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
+import { useEffect, useState } from "react";
 
 interface GoogleSignInButtonProps {
   onSuccess: (idToken: string) => void | Promise<void>;
@@ -7,7 +8,13 @@ interface GoogleSignInButtonProps {
 }
 
 export function GoogleSignInButton({ onSuccess, onError, disabled }: GoogleSignInButtonProps) {
-  if (disabled) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (disabled || !mounted) {
     return null;
   }
 
@@ -22,6 +29,7 @@ export function GoogleSignInButton({ onSuccess, onError, disabled }: GoogleSignI
       }}
       onError={() => onError?.()}
       useOneTap={false}
+      auto_select={false}
     />
   );
 }

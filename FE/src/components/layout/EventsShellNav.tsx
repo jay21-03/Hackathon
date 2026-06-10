@@ -40,7 +40,7 @@ export function EventsShellNav() {
             Hồ sơ
           </NavLink>
           <NavLink
-            to="/team-invitations/status"
+            to="/me/team"
             className={({ isActive }) =>
               `rounded-lg px-3 py-2 font-label-md ${
                 isActive
@@ -49,7 +49,7 @@ export function EventsShellNav() {
               }`
             }
           >
-            Lời mời
+            Đội của tôi
           </NavLink>
         </>
       ) : null}

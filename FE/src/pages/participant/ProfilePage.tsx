@@ -1,29 +1,33 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { profileSchema } from "../../domain/schemas";
+import { getAuthSession } from "../../auth/authSession";
+import { enableGithubProvisioning } from "../../config/features";
+import { passwordPolicySchema, profileUpdateSchema } from "../../domain/schemas";
+import { applyApiFormErrors } from "../../utils/apiError";
 import { setMyPassword } from "../../services/authService";
 import { fetchMyProfile, updateMyProfile } from "../../services/profileService";
-import { mapAuthErrorMessage } from "../../utils/authErrors";
+import { applyAuthFormErrors, mapAuthErrorMessage } from "../../utils/authErrors";
 
 export function ProfilePage() {
   const { notify } = useToast();
+  const role = getAuthSession().role;
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [hasPassword, setHasPassword] = useState<boolean | null>(null);
   const [studentId, setStudentId] = useState("");
   const [university, setUniversity] = useState("");
+  const [githubUsername, setGithubUsername] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-
-  const valid = useMemo(() => fullName.trim().length >= 2 && email.includes("@"), [email, fullName]);
 
   useEffect(() => {
     let active = true;
@@ -35,6 +39,7 @@ export function ProfilePage() {
         setHasPassword(result.hasPassword === true);
         setStudentId(result.studentId ?? "");
         setUniversity(result.university ?? "");
+        setGithubUsername(result.githubUsername ?? "");
       })
       .catch(() => {
         if (active) setFormError("Không tải được hồ sơ từ hệ thống.");
@@ -48,8 +53,13 @@ export function ProfilePage() {
   }, []);
 
   async function savePassword() {
-    if (!newPassword.trim()) {
-      setPasswordError("Nhập mật khẩu mới.");
+    const parsed = passwordPolicySchema.safeParse(newPassword);
+    if (!parsed.success) {
+      setPasswordError(parsed.error.issues[0]?.message ?? "Mật khẩu không hợp lệ.");
+      return;
+    }
+    if (hasPassword === true && !currentPassword.trim()) {
+      setPasswordError("Nhập mật khẩu hiện tại.");
       return;
     }
     setPasswordError("");
@@ -68,33 +78,45 @@ export function ProfilePage() {
         "success"
       );
     } catch (error) {
-      setPasswordError(
-        mapAuthErrorMessage(error instanceof Error ? error.message : "Đặt mật khẩu thất bại.")
-      );
+      let msg = mapAuthErrorMessage(error instanceof Error ? error.message : "Đặt mật khẩu thất bại.");
+      applyAuthFormErrors(error, (errors) => {
+        const fieldMsg = errors.newPassword ?? errors.currentPassword;
+        if (fieldMsg) msg = fieldMsg;
+      });
+      setPasswordError(msg);
     } finally {
       setPasswordSaving(false);
     }
   }
 
   async function saveProfile() {
-    const parsed = profileSchema.safeParse({ fullName, email, studentId, university });
+    const parsed = profileUpdateSchema.safeParse({ fullName, studentId, university, githubUsername });
     if (!parsed.success) {
-      setFormError(parsed.error.issues[0]?.message ?? "Hồ sơ chua hop le.");
+      const first = parsed.error.issues[0];
+      const key = first?.path[0];
+      if (typeof key === "string") {
+        setFieldErrors({ [key]: first.message });
+      }
+      setFormError(first?.message ?? "Hồ sơ chưa hợp lệ.");
       return;
     }
     setFormError("");
+    setFieldErrors({});
     setSaving(true);
     try {
       const result = await updateMyProfile({
         fullName,
         studentId: studentId || undefined,
-        university: university || undefined
+        university: university || undefined,
+        githubUsername: githubUsername.trim() || undefined
       });
       setFullName(result.fullName ?? fullName);
       setStudentId(result.studentId ?? studentId);
       setUniversity(result.university ?? university);
+      setGithubUsername(result.githubUsername ?? githubUsername);
       notify("Đã lưu hồ sơ ca nhan.", "success");
-    } catch {
+    } catch (error) {
+      applyApiFormErrors(error, setFieldErrors);
       notify("Lưu hồ sơ thất bại.", "danger");
     } finally {
       setSaving(false);
@@ -115,11 +137,17 @@ export function ProfilePage() {
             <label className="grid gap-xs font-label-md text-on-surface">
               Ho va ten
               <input
-                className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
+                className={`rounded-lg border bg-surface-container-high px-3 py-2 font-body-md text-on-surface ${fieldErrors.fullName ? "border-error" : "border-outline-variant"}`}
                 value={fullName}
-                onChange={(event) => setFullName(event.target.value)}
+                onChange={(event) => {
+                  setFullName(event.target.value);
+                  setFieldErrors((prev) => ({ ...prev, fullName: "" }));
+                }}
                 disabled={loading}
               />
+              {fieldErrors.fullName ? (
+                <span className="font-body-sm text-error">{fieldErrors.fullName}</span>
+              ) : null}
             </label>
             <label className="grid gap-xs font-label-md text-on-surface">
               Email
@@ -132,6 +160,29 @@ export function ProfilePage() {
             </label>
           </div>
           <div className="mt-md grid gap-md md:grid-cols-2">
+            {enableGithubProvisioning ? (
+              <label className="grid gap-xs font-label-md text-on-surface md:col-span-2">
+                GitHub username
+                <input
+                  className={`rounded-lg border bg-surface-container-high px-3 py-2 font-body-md text-on-surface ${fieldErrors.githubUsername ? "border-error" : "border-outline-variant"}`}
+                  value={githubUsername}
+                  onChange={(event) => {
+                    setGithubUsername(event.target.value);
+                    setFieldErrors((prev) => ({ ...prev, githubUsername: "" }));
+                  }}
+                  placeholder="ten-tai-khoan-github"
+                  disabled={loading}
+                />
+                {fieldErrors.githubUsername ? (
+                  <span className="font-body-sm text-error">{fieldErrors.githubUsername}</span>
+                ) : null}
+                <span className="font-body-sm text-on-surface-variant">
+                  {role === "judge"
+                    ? "Cần để BTC cấp quyền xem (pull) repository GitHub của đội khi chấm điểm."
+                    : "Cần để hệ thống cấp quyền push vào repository đội khi provision GitHub."}
+                </span>
+              </label>
+            ) : null}
             <label className="grid gap-xs font-label-md text-on-surface">
               Ma so sinh vien
               <input
@@ -154,7 +205,7 @@ export function ProfilePage() {
           {formError && <p className="mt-md font-body-sm text-error">{formError}</p>}
           <Button
             className="mt-lg"
-            disabled={!valid || saving || loading}
+            disabled={saving || loading}
             icon={<Icon name={saving ? "sync" : "save"} />}
             onClick={saveProfile}
           >

@@ -20,6 +20,7 @@ import { getAuthSession } from "../../auth/authSession";
 import { getApiErrorMessage } from "../../utils/apiError";
 import { createIdempotencyKey } from "../../utils/idempotency";
 import {
+  applyRegistrationFormErrors,
   canRegisterForEvent,
   isRegistrationStatusOpen,
   mapRegistrationErrorMessage,
@@ -50,6 +51,9 @@ export function TeamRegistrationPage() {
   );
   const [errors, setErrors] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [memberFieldErrors, setMemberFieldErrors] = useState<
+    Record<number, Record<string, string>>
+  >({});
   const [submittedStatus, setSubmittedStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -82,6 +86,21 @@ export function TeamRegistrationPage() {
 
   function updateMember(index: number, patch: Partial<MemberFormRow>) {
     setMembers((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+    setMemberFieldErrors((current) => {
+      const next = { ...current };
+      const row = next[index];
+      if (!row) return next;
+      const rowNext = { ...row };
+      for (const key of Object.keys(patch)) {
+        delete rowNext[key];
+      }
+      if (Object.keys(rowNext).length === 0) {
+        delete next[index];
+      } else {
+        next[index] = rowNext;
+      }
+      return next;
+    });
   }
 
   function buildMemberName(email: string) {
@@ -107,6 +126,7 @@ export function TeamRegistrationPage() {
       return;
     }
     setFieldErrors({});
+    setMemberFieldErrors({});
 
     if (!eventId) {
       notify("Chưa chọn cuộc thi để đăng ký.", "warning");
@@ -145,10 +165,14 @@ export function TeamRegistrationPage() {
       await invalidateAfterTeamMutation(queryClient);
       notify(`Đăng ký thành công: ${getStatusLabel(status)}.`, "success");
     } catch (err) {
-      const raw = getApiErrorMessage(err, "Đăng ký đội thất bại.");
-      const message = mapRegistrationErrorMessage(raw);
-      setErrors([message]);
-      notify(message, "danger");
+      if (!applyRegistrationFormErrors(err, setFieldErrors, setMemberFieldErrors)) {
+        const raw = getApiErrorMessage(err, "Đăng ký đội thất bại.");
+        const message = mapRegistrationErrorMessage(raw);
+        setErrors([message]);
+        notify(message, "danger");
+      } else {
+        notify("Kiểm tra lại thông tin đăng ký đội.", "warning");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -251,7 +275,9 @@ export function TeamRegistrationPage() {
               </Badge>
             </div>
 
-            {members.map((member, index) => (
+            {members.map((member, index) => {
+              const rowErrors = memberFieldErrors[index] ?? {};
+              return (
               <div
                 key={index}
                 className="grid gap-sm rounded-lg border border-outline-variant/60 p-sm md:grid-cols-4"
@@ -264,31 +290,41 @@ export function TeamRegistrationPage() {
                     data-testid={`member-email-${index}`}
                     value={member.email}
                     onChange={(event) => updateMember(index, { email: event.target.value })}
-                    className="form-input"
+                    className={`form-input${rowErrors.email ? " border-error" : ""}`}
                     placeholder="email@seal.edu.vn"
                     type="email"
                   />
+                  {rowErrors.email ? (
+                    <span className="font-body-sm text-error">{rowErrors.email}</span>
+                  ) : null}
                 </label>
                 <label className="flex flex-col gap-xs">
                   <span className="font-label-sm normal-case text-on-surface-variant">MSSV</span>
                   <input
                     value={member.studentId}
                     onChange={(event) => updateMember(index, { studentId: event.target.value })}
-                    className="form-input"
+                    className={`form-input${rowErrors.studentId ? " border-error" : ""}`}
                     placeholder="SE123456"
                   />
+                  {rowErrors.studentId ? (
+                    <span className="font-body-sm text-error">{rowErrors.studentId}</span>
+                  ) : null}
                 </label>
                 <label className="flex flex-col gap-xs">
                   <span className="font-label-sm normal-case text-on-surface-variant">Trường</span>
                   <input
                     value={member.university}
                     onChange={(event) => updateMember(index, { university: event.target.value })}
-                    className="form-input"
+                    className={`form-input${rowErrors.university ? " border-error" : ""}`}
                     placeholder="Đại học …"
                   />
+                  {rowErrors.university ? (
+                    <span className="font-body-sm text-error">{rowErrors.university}</span>
+                  ) : null}
                 </label>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {errors.length > 0 && (

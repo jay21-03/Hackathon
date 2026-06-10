@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
@@ -9,16 +9,27 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { ParticipantWorkflowBar } from "../../components/participant/ParticipantWorkflowBar";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
-import { repositoryUrlSchema } from "../../domain/schemas";
+import { submissionFormSchema } from "../../domain/schemas";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useMySubmission } from "../../hooks/useMySubmission";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { useParticipantTeamGuard } from "../../hooks/useParticipantTeamGuard";
 import { ParticipantTeamBlocked } from "../../components/participant/ParticipantTeamBlocked";
+import { enableGithubProvisioning } from "../../config/features";
 import { queryKeys } from "../../lib/queryKeys";
+import {
+  ACCESS_STATUS_LABELS,
+  PROVISION_STATUS_LABELS,
+  SUBMISSION_STATUS_LABELS,
+  accessStatusTone,
+  fetchMyTeamRepositories,
+  formatRepositoryTimestamp,
+  provisionStatusTone,
+  submissionStatusTone,
+  type TeamRepositoryResponse
+} from "../../services/repositoryProvisioningService";
 import { saveSubmissionDraft, submitSubmission } from "../../services/submissionApi";
-import { resolveApiError } from "../../utils/apiError";
-import { zodFirstError } from "../../utils/formValidation";
+import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 
 const blockReasonLabels: Record<string, string> = {
   NO_TEAM: "Chưa có đội thi.",
@@ -28,14 +39,25 @@ const blockReasonLabels: Record<string, string> = {
   TEAM_NOT_CONFIRMED: "Đội chưa được xác nhận.",
   NOT_ASSIGNED: "Chưa được phân bảng.",
   NO_PROBLEM: "Ban tổ chức chưa cấu hình đề cho bảng của bạn.",
-  NOT_RELEASED: "Đề chưa mở — chưa thể nộp bài.",
-  PROBLEM_CLOSED: "Đề đã đóng — không thể nộp bài.",
+  NOT_RELEASED: "Đề chưa mở — repository sẽ được cấp khi ban tổ chức provision.",
+  PROBLEM_CLOSED: "Hết giờ làm bài — kiểm tra trạng thái push bên dưới.",
   PROBLEM_UNAVAILABLE: "Chưa thể nộp bài trong thời điểm hiện tại.",
   SUBMISSION_DEADLINE_PASSED: "Đã qua hạn nộp bài.",
   SUBMISSION_ALREADY_SUBMITTED: "Bài đã nộp — không thể sửa hoặc nộp lại.",
   INVALID_REPOSITORY_URL: "Link phải là GitHub hoặc GitLab hợp lệ.",
   REPOSITORY_URL_REQUIRED: "Nhập link repository trước khi nộp."
 };
+
+function applySubmissionApiErrors(
+  error: unknown,
+  setUrlError: (value: string | null) => void,
+  setNameError: (value: string | null) => void
+) {
+  applyApiFormErrors(error, (errors) => {
+    if (errors.repositoryUrl) setUrlError(errors.repositoryUrl);
+    if (errors.repositoryName) setNameError(errors.repositoryName);
+  });
+}
 
 function mapSubmissionError(error: unknown, fallback: string) {
   return resolveApiError(error, fallback);
@@ -53,6 +75,111 @@ function statusTone(status: string | null | undefined): "success" | "warning" | 
   return "neutral";
 }
 
+function pushGuidance(repo: TeamRepositoryResponse) {
+  if (repo.accessStatus === "CLOSED") {
+    return "Repository đã khóa push — ban tổ chức đã chốt bài.";
+  }
+  if (repo.accessStatus === "FAILED") {
+    return "Không thể mở quyền push — liên hệ ban tổ chức.";
+  }
+  if (repo.provisionStatus === "PENDING") {
+    return "Ban tổ chức sẽ tạo repository khi bắt đầu vòng thi.";
+  }
+  if (repo.provisionStatus === "FAILED") {
+    return "Tạo repository thất bại — liên hệ ban tổ chức để provision lại.";
+  }
+  if (repo.accessStatus === "OPEN") {
+    return "Clone repository và push code lên nhánh mặc định trước hạn nộp.";
+  }
+  return "Chờ ban tổ chức mở quyền push.";
+}
+
+function RepositoryDetailCard({ repo }: { repo: TeamRepositoryResponse }) {
+  const submissionStatus = repo.submissionStatus ?? (repo.provisionStatus === "CREATED" ? "SUBMITTED" : null);
+
+  return (
+    <li className="space-y-sm rounded-lg border border-outline-variant/60 p-md">
+      <div className="flex flex-wrap items-start justify-between gap-sm">
+        <div className="min-w-0 flex-1">
+          {repo.roundName ? (
+            <p className="mb-xs font-label-sm text-on-surface-variant">
+              {repo.roundName}
+              {repo.currentRound ? " · Vòng hiện tại" : " · Vòng trước"}
+            </p>
+          ) : null}
+          {repo.repositoryUrl ? (
+            <a
+              href={repo.repositoryUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-body-md text-primary underline-offset-2 hover:underline"
+            >
+              {repo.githubRepoName ?? repo.repositoryName ?? repo.repositoryUrl}
+            </a>
+          ) : (
+            <span className="font-body-md text-on-surface-variant">Đang tạo repository…</span>
+          )}
+          {repo.githubOwner && repo.githubRepoName ? (
+            <p className="mt-xs font-body-sm text-on-surface-variant">
+              {repo.githubOwner}/{repo.githubRepoName}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-xs">
+          <Badge tone={provisionStatusTone(repo.provisionStatus)}>
+            {PROVISION_STATUS_LABELS[repo.provisionStatus]}
+          </Badge>
+          <Badge tone={accessStatusTone(repo.accessStatus)}>
+            {ACCESS_STATUS_LABELS[repo.accessStatus]}
+          </Badge>
+          {submissionStatus ? (
+            <Badge tone={submissionStatusTone(submissionStatus)}>
+              {SUBMISSION_STATUS_LABELS[submissionStatus]}
+            </Badge>
+          ) : null}
+        </div>
+      </div>
+
+      <p className="font-body-sm text-on-surface-variant">{pushGuidance(repo)}</p>
+
+      {repo.lastError ? <p className="font-body-sm text-error">{repo.lastError}</p> : null}
+
+      <dl className="grid gap-xs sm:grid-cols-2">
+        {repo.provisionedAt ? (
+          <div>
+            <dt className="font-label-sm text-on-surface-variant">Cấp lúc</dt>
+            <dd className="font-body-sm text-on-surface">{formatRepositoryTimestamp(repo.provisionedAt)}</dd>
+          </div>
+        ) : null}
+        {repo.openedAt ? (
+          <div>
+            <dt className="font-label-sm text-on-surface-variant">Mở push</dt>
+            <dd className="font-body-sm text-on-surface">{formatRepositoryTimestamp(repo.openedAt)}</dd>
+          </div>
+        ) : null}
+        {repo.closedAt ? (
+          <div>
+            <dt className="font-label-sm text-on-surface-variant">Khóa push</dt>
+            <dd className="font-body-sm text-on-surface">{formatRepositoryTimestamp(repo.closedAt)}</dd>
+          </div>
+        ) : null}
+        {repo.submittedAt ? (
+          <div>
+            <dt className="font-label-sm text-on-surface-variant">Ghi nhận nộp</dt>
+            <dd className="font-body-sm text-on-surface">{formatRepositoryTimestamp(repo.submittedAt)}</dd>
+          </div>
+        ) : null}
+        {repo.lastPushAt ? (
+          <div>
+            <dt className="font-label-sm text-on-surface-variant">Lần push cuối</dt>
+            <dd className="font-body-sm text-on-surface">{formatRepositoryTimestamp(repo.lastPushAt)}</dd>
+          </div>
+        ) : null}
+      </dl>
+    </li>
+  );
+}
+
 export function SubmissionPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -62,8 +189,25 @@ export function SubmissionPage() {
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [repositoryName, setRepositoryName] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"draft" | "submit" | null>(null);
   const teamGuard = useParticipantTeamGuard(team);
+
+  const provisionedReposQuery = useQuery({
+    queryKey: queryKeys.repositories.myTeam(team?.id ?? null, eventId),
+    queryFn: () => fetchMyTeamRepositories(team!.id, eventId),
+    enabled: enableGithubProvisioning && Boolean(team?.id && eventId),
+    refetchInterval: (query) => {
+      const repos = query.state.data ?? [];
+      return repos.some((repo) => repo.accessStatus === "OPEN") ? 60_000 : false;
+    }
+  });
+
+  const provisionedRepos = provisionedReposQuery.data ?? [];
+  const provisionedMode = enableGithubProvisioning;
+  const currentRepos = provisionedRepos.filter((repo) => repo.currentRound);
+  const historyRepos = provisionedRepos.filter((repo) => !repo.currentRound);
+  const primaryRepo = currentRepos[0] ?? null;
 
   useEffect(() => {
     if (submission) {
@@ -72,13 +216,19 @@ export function SubmissionPage() {
     }
   }, [submission]);
 
-  function validateUrl(value: string) {
-    const parsed = repositoryUrlSchema.safeParse(value);
+  function validateSubmissionForm(urlValue: string, nameValue: string) {
+    const parsed = submissionFormSchema.safeParse({
+      repositoryUrl: urlValue,
+      repositoryName: nameValue
+    });
     if (!parsed.success) {
-      setUrlError(zodFirstError(parsed.error));
+      const errors = parsed.error.flatten().fieldErrors;
+      setUrlError(errors.repositoryUrl?.[0] ?? null);
+      setNameError(errors.repositoryName?.[0] ?? null);
       return false;
     }
     setUrlError(null);
+    setNameError(null);
     return true;
   }
 
@@ -88,7 +238,7 @@ export function SubmissionPage() {
   }
 
   async function handleSaveDraft() {
-    if (!eventId || !validateUrl(repositoryUrl)) return;
+    if (!eventId || !validateSubmissionForm(repositoryUrl, repositoryName)) return;
     setBusy("draft");
     try {
       await saveSubmissionDraft({
@@ -99,6 +249,7 @@ export function SubmissionPage() {
       await invalidateSubmission();
       notify("Đã lưu bản nháp.", "success");
     } catch (err) {
+      applySubmissionApiErrors(err, setUrlError, setNameError);
       notify(mapSubmissionError(err, "Lưu nháp thất bại."), "danger");
     } finally {
       setBusy(null);
@@ -106,7 +257,7 @@ export function SubmissionPage() {
   }
 
   async function handleSubmit() {
-    if (!eventId || !validateUrl(repositoryUrl)) return;
+    if (!eventId || !validateSubmissionForm(repositoryUrl, repositoryName)) return;
     setBusy("submit");
     try {
       await submitSubmission({
@@ -117,6 +268,7 @@ export function SubmissionPage() {
       await invalidateSubmission();
       notify("Đã nộp bài chính thức.", "success");
     } catch (err) {
+      applySubmissionApiErrors(err, setUrlError, setNameError);
       notify(mapSubmissionError(err, "Nộp bài thất bại."), "danger");
     } finally {
       setBusy(null);
@@ -157,104 +309,214 @@ export function SubmissionPage() {
   const blocked = submission?.blockReason;
   const editable = submission?.editable ?? false;
   const displayStatus = statusLabel(submission?.status ?? null);
+  const pageDescription = provisionedMode
+    ? "Ban tổ chức cấp repository GitHub — push code trước hạn, không cần nộp link thủ công."
+    : "Gửi link repository GitHub hoặc GitLab trước deadline.";
 
   return (
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Bài nộp"
         title={team.name}
-        description="Gửi link repository GitHub hoặc GitLab trước deadline."
+        description={pageDescription}
         actions={<Badge tone={statusTone(submission?.status ?? null)}>{displayStatus}</Badge>}
       />
 
       <ParticipantWorkflowBar active="submission" />
 
-      {blocked ? (
-        <div className="rounded-xl border border-warning/40 bg-warning-container/30 p-md">
-          <p className="font-body-sm text-on-surface-variant">
-            {blockReasonLabels[blocked] ?? blocked}
-          </p>
-        </div>
-      ) : null}
+      {provisionedMode ? (
+        <>
+          <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
+            <h2 className="font-title-sm text-on-surface">Tổng quan bài nộp</h2>
+            <p className="mt-xs font-body-sm text-on-surface-variant">
+              Hệ thống tự ghi nhận nộp khi ban tổ chức cấp repository. Bạn chỉ cần push code trong thời gian
+              repository đang mở.
+            </p>
+            <dl className="mt-md grid gap-md sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border border-outline-variant/60 bg-surface px-3 py-2">
+                <dt className="font-label-sm text-on-surface-variant">Trạng thái nộp</dt>
+                <dd className="mt-xs">
+                  <Badge tone={statusTone(submission?.status ?? null)}>{displayStatus}</Badge>
+                </dd>
+              </div>
+              <div className="rounded-lg border border-outline-variant/60 bg-surface px-3 py-2">
+                <dt className="font-label-sm text-on-surface-variant">Repository</dt>
+                <dd className="mt-xs">
+                  {primaryRepo ? (
+                    <Badge tone={provisionStatusTone(primaryRepo.provisionStatus)}>
+                      {PROVISION_STATUS_LABELS[primaryRepo.provisionStatus]}
+                    </Badge>
+                  ) : (
+                    <Badge tone="warning">Chưa cấp</Badge>
+                  )}
+                </dd>
+              </div>
+              <div className="rounded-lg border border-outline-variant/60 bg-surface px-3 py-2">
+                <dt className="font-label-sm text-on-surface-variant">Quyền push</dt>
+                <dd className="mt-xs">
+                  {primaryRepo ? (
+                    <Badge tone={accessStatusTone(primaryRepo.accessStatus)}>
+                      {ACCESS_STATUS_LABELS[primaryRepo.accessStatus]}
+                    </Badge>
+                  ) : (
+                    <Badge tone="neutral">—</Badge>
+                  )}
+                </dd>
+              </div>
+              <div className="rounded-lg border border-outline-variant/60 bg-surface px-3 py-2">
+                <dt className="font-label-sm text-on-surface-variant">Hạn nộp</dt>
+                <dd className="mt-xs font-body-sm text-on-surface">
+                  {submission?.deadlineAt
+                    ? formatRepositoryTimestamp(submission.deadlineAt)
+                    : "Chưa cấu hình"}
+                </dd>
+              </div>
+            </dl>
+          </section>
 
-      {submission?.deadlineAt ? (
-        <p className="font-body-sm text-on-surface-variant">
-          Hạn nộp:{" "}
-          {new Date(submission.deadlineAt).toLocaleString("vi-VN", {
-            dateStyle: "medium",
-            timeStyle: "short"
-          })}
-        </p>
-      ) : null}
+          <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
+            <h2 className="font-title-sm text-on-surface">Repository vòng hiện tại</h2>
+            <p className="mt-xs font-body-sm text-on-surface-variant">
+              Mỗi vòng thi có repository riêng. Vào chung kết, ban tổ chức cấp repo mới — repo vòng trước chỉ để
+              tham khảo.
+            </p>
+            {provisionedReposQuery.isLoading ? (
+              <p className="mt-sm font-body-sm text-on-surface-variant">Đang tải repository…</p>
+            ) : currentRepos.length === 0 && historyRepos.length === 0 ? (
+              <div className="mt-md">
+                <EmptyState
+                  icon="upload"
+                  title="Chưa có repository"
+                  description="Ban tổ chức sẽ tạo repository GitHub khi mở đề vòng hiện tại."
+                />
+              </div>
+            ) : currentRepos.length === 0 ? (
+              <div className="mt-md">
+                <EmptyState
+                  icon="hourglass_empty"
+                  title="Chưa cấp repo vòng này"
+                  description="Đội đã vào vòng mới — chờ ban tổ chức provision repository cho vòng chung kết."
+                />
+              </div>
+            ) : (
+              <ul className="mt-md space-y-md">
+                {currentRepos.map((repo) => (
+                  <RepositoryDetailCard key={repo.id} repo={repo} />
+                ))}
+              </ul>
+            )}
+          </section>
 
-      {submission?.submittedAt ? (
-        <p className="font-body-sm text-on-surface-variant">
-          Nộp lúc:{" "}
-          {new Date(submission.submittedAt).toLocaleString("vi-VN", {
-            dateStyle: "medium",
-            timeStyle: "short"
-          })}
-        </p>
-      ) : null}
+          {historyRepos.length > 0 ? (
+            <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
+              <h2 className="font-title-sm text-on-surface">Repository các vòng trước</h2>
+              <ul className="mt-md space-y-md">
+                {historyRepos.map((repo) => (
+                  <RepositoryDetailCard key={repo.id} repo={repo} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
-      {!blocked ? (
-        <section className="max-w-xl space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
-          <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
-            Link repository (GitHub / GitLab) *
-            <input
-              type="url"
-              className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
-              placeholder="https://github.com/org/repo"
-              value={repositoryUrl}
-              disabled={!editable || busy !== null}
-              onChange={(e) => {
-                setRepositoryUrl(e.target.value);
-                if (urlError) validateUrl(e.target.value);
-              }}
-              onBlur={() => repositoryUrl && validateUrl(repositoryUrl)}
-            />
-            {urlError ? <span className="text-error">{urlError}</span> : null}
-          </label>
+          {blocked ? (
+            <div className="rounded-xl border border-warning/40 bg-warning-container/30 p-md">
+              <p className="font-body-sm text-on-surface-variant">
+                {blockReasonLabels[blocked] ?? blocked}
+              </p>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <>
+          {blocked ? (
+            <div className="rounded-xl border border-warning/40 bg-warning-container/30 p-md">
+              <p className="font-body-sm text-on-surface-variant">
+                {blockReasonLabels[blocked] ?? blocked}
+              </p>
+            </div>
+          ) : null}
 
-          <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
-            Tên dự án (tùy chọn)
-            <input
-              className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
-              value={repositoryName}
-              disabled={!editable || busy !== null}
-              onChange={(e) => setRepositoryName(e.target.value)}
-            />
-          </label>
-
-          <div className="flex flex-wrap gap-md">
-            <Button
-              type="button"
-              variant="secondary"
-              loading={busy === "draft"}
-              disabled={!editable || busy !== null}
-              onClick={() => void handleSaveDraft()}
-            >
-              Lưu bản nháp
-            </Button>
-            <ConfirmAction
-              title="Nộp bài chính thức"
-              message="Sau khi nộp, ban tổ chức và giám khảo sẽ dùng link này. Bạn không thể sửa hoặc nộp lại sau khi đã nộp chính thức."
-              confirmLabel="Nộp bài"
-              onConfirm={() => void handleSubmit()}
-            >
-              <Button type="button" loading={busy === "submit"} disabled={!editable || busy !== null}>
-                Nộp chính thức
-              </Button>
-            </ConfirmAction>
-          </div>
-
-          {submission?.status === "DRAFT" ? (
+          {submission?.deadlineAt ? (
             <p className="font-body-sm text-on-surface-variant">
-              Bản nháp chưa được coi là đã nộp — bấm «Nộp chính thức» khi sẵn sàng.
+              Hạn nộp: {formatRepositoryTimestamp(submission.deadlineAt)}
             </p>
           ) : null}
-        </section>
-      ) : null}
+
+          {submission?.submittedAt ? (
+            <p className="font-body-sm text-on-surface-variant">
+              Nộp lúc: {formatRepositoryTimestamp(submission.submittedAt)}
+            </p>
+          ) : null}
+
+          {!blocked ? (
+            <section className="max-w-xl space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
+              <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+                Link repository (GitHub / GitLab) *
+                <input
+                  type="url"
+                  className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+                  placeholder="https://github.com/org/repo"
+                  value={repositoryUrl}
+                  disabled={!editable || busy !== null}
+                  onChange={(e) => {
+                    setRepositoryUrl(e.target.value);
+                    if (urlError || nameError) {
+                      validateSubmissionForm(e.target.value, repositoryName);
+                    }
+                  }}
+                  onBlur={() =>
+                    repositoryUrl && validateSubmissionForm(repositoryUrl, repositoryName)
+                  }
+                />
+                {urlError ? <span className="text-error">{urlError}</span> : null}
+              </label>
+
+              <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+                Tên dự án (tùy chọn)
+                <input
+                  className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+                  value={repositoryName}
+                  disabled={!editable || busy !== null}
+                  onChange={(e) => {
+                    setRepositoryName(e.target.value);
+                    if (nameError) validateSubmissionForm(repositoryUrl, e.target.value);
+                  }}
+                  onBlur={() => validateSubmissionForm(repositoryUrl, repositoryName)}
+                />
+                {nameError ? <span className="text-error">{nameError}</span> : null}
+              </label>
+
+              <div className="flex flex-wrap gap-md">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={busy === "draft"}
+                  disabled={!editable || busy !== null}
+                  onClick={() => void handleSaveDraft()}
+                >
+                  Lưu bản nháp
+                </Button>
+                <ConfirmAction
+                  title="Nộp bài chính thức"
+                  message="Sau khi nộp, ban tổ chức và giám khảo sẽ dùng link này. Bạn không thể sửa hoặc nộp lại sau khi đã nộp chính thức."
+                  confirmLabel="Nộp bài"
+                  onConfirm={() => void handleSubmit()}
+                >
+                  <Button type="button" loading={busy === "submit"} disabled={!editable || busy !== null}>
+                    Nộp chính thức
+                  </Button>
+                </ConfirmAction>
+              </div>
+
+              {submission?.status === "DRAFT" ? (
+                <p className="font-body-sm text-on-surface-variant">
+                  Bản nháp chưa được coi là đã nộp — bấm «Nộp chính thức» khi sẵn sàng.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

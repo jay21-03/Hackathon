@@ -13,6 +13,7 @@ export interface CurrentUserResponse {
   status?: string;
   profileCompleted?: boolean;
   hasPassword?: boolean;
+  githubUsername?: string | null;
   roles?: string[];
 }
 
@@ -29,6 +30,7 @@ export async function updateMyProfile(payload: {
   studentId?: string;
   university?: string;
   avatarUrl?: string;
+  githubUsername?: string;
 }) {
   const { data } = await apiClient.put<ApiResponse<CurrentUserResponse>>("/v1/me/profile", payload);
   if (!data.data) {

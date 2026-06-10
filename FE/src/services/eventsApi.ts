@@ -14,10 +14,15 @@ export interface EventDetail {
   minTeamSize: number;
   maxTeamSize: number;
   maxTeams: number;
+  academicTermId?: number;
+  academicTermCode?: string;
+  academicTermName?: string;
 }
 
-export async function fetchPublicEvents(): Promise<EventListItem[]> {
-  const { data } = await apiClient.get<ApiResponse<EventListItem[]>>("/v1/events");
+export async function fetchPublicEvents(academicTermId?: number): Promise<EventListItem[]> {
+  const { data } = await apiClient.get<ApiResponse<EventListItem[]>>("/v1/events", {
+    params: academicTermId ? { academicTermId } : undefined
+  });
   return data.data ?? [];
 }
 
@@ -33,6 +38,7 @@ export interface UpdateEventPayload {
   endDate?: string;
   registrationStartAt?: string;
   registrationEndAt?: string;
+  academicTermId?: number;
 }
 
 export async function updateEvent(eventId: string, payload: UpdateEventPayload) {
@@ -58,6 +64,7 @@ export interface CreateEventPayload {
   registrationStartAt: string;
   registrationEndAt: string;
   maxTeams: number;
+  academicTermId: number;
 }
 
 export async function createEvent(payload: CreateEventPayload) {

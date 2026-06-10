@@ -27,7 +27,8 @@ const TYPE_FILTER_OPTIONS: { value: "" | NotificationType; label: string }[] = [
   { value: "SUBMISSION", label: "Bài nộp" },
   { value: "PROBLEM_RELEASED", label: "Công bố đề" },
   { value: "RANKING_PUBLISHED", label: "Kết quả xếp hạng" },
-  { value: "STAFF_INVITE", label: "Lời mời BTC" }
+  { value: "STAFF_INVITE", label: "Lời mời BTC" },
+  { value: "BOARD_READY_TO_SCORE", label: "Sẵn sàng chấm" }
 ];
 
 function formatWhen(iso: string) {

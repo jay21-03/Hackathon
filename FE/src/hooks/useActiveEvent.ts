@@ -2,11 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { enableAcademicTerms } from "../config/features";
 import { queryKeys } from "../lib/queryKeys";
 
 import { fetchPublicEvents } from "../services/eventsApi";
 
 import { getApiErrorMessage } from "../utils/apiError";
+
+import { useActiveTerm } from "./useActiveTerm";
 
 
 
@@ -45,6 +48,8 @@ type UseActiveEventOptions = {
 
 export function useActiveEvent(options?: UseActiveEventOptions) {
   const autoSelectFirst = options?.autoSelectFirst ?? false;
+  const { termId, enabled: termFilterEnabled } = useActiveTerm();
+  const filterTermId = termFilterEnabled && enableAcademicTerms ? termId : null;
 
   const [manualEventId, setManualEventId] = useState<number | null>(readStoredEventId);
 
@@ -64,9 +69,9 @@ export function useActiveEvent(options?: UseActiveEventOptions) {
 
   const eventsQuery = useQuery({
 
-    queryKey: queryKeys.events.list(),
+    queryKey: queryKeys.events.list(filterTermId),
 
-    queryFn: fetchPublicEvents
+    queryFn: () => fetchPublicEvents(filterTermId ?? undefined)
 
   });
 
@@ -124,5 +129,4 @@ export function useActiveEvent(options?: UseActiveEventOptions) {
   };
 
 }
-
 

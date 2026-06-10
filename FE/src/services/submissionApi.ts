@@ -51,11 +51,12 @@ export interface AdminTeamSubmissionResponse {
   repositoryUrl: string | null;
   repositoryName: string | null;
   submittedAt: string | null;
+  lastPushAt?: string | null;
 }
 
 export async function fetchEventSubmissions(
   eventId: number,
-  options?: { boardId?: number | null; page?: number; size?: number }
+  options?: { boardId?: number | null; roundId?: number | null; page?: number; size?: number }
 ) {
   const { data } = await apiClient.get<ApiResponse<PagedResult<AdminTeamSubmissionResponse>>>(
     `/v1/admin/events/${eventId}/submissions`,
@@ -63,7 +64,8 @@ export async function fetchEventSubmissions(
       params: {
         page: options?.page ?? 0,
         size: options?.size ?? 50,
-        ...(options?.boardId ? { boardId: options.boardId } : {})
+        ...(options?.boardId ? { boardId: options.boardId } : {}),
+        ...(options?.roundId ? { roundId: options.roundId } : {})
       }
     }
   );
@@ -78,9 +80,18 @@ export async function fetchEventSubmissions(
   );
 }
 
-export async function fetchTeamSubmission(teamId: number) {
+export async function fetchTeamSubmission(
+  teamId: number,
+  options?: { boardId?: number | null; roundId?: number | null }
+) {
   const { data } = await apiClient.get<ApiResponse<AdminTeamSubmissionResponse>>(
-    `/v1/admin/teams/${teamId}/submission`
+    `/v1/admin/teams/${teamId}/submission`,
+    {
+      params: {
+        ...(options?.boardId ? { boardId: options.boardId } : {}),
+        ...(options?.roundId ? { roundId: options.roundId } : {})
+      }
+    }
   );
   if (!data.data) {
     throw new Error(data.message || "Không tải được bài nộp của đội.");

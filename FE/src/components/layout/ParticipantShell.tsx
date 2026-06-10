@@ -4,7 +4,6 @@ import {
   getVisibleNavItems,
   isNotificationsNavItem,
   navItemUsesEnd,
-  participantHubNav,
   participantWorkspaceNav
 } from "../../config/navigation";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
@@ -20,20 +19,16 @@ import { sidebarNavClassName, sidebarPrimaryActionClassName } from "./sidebarSty
 export function ParticipantShell() {
   const location = useLocation();
   const { event } = useActiveEvent();
-  const isWorkspace = location.pathname.startsWith("/me");
-  const navItems = isWorkspace ? participantWorkspaceNav : participantHubNav;
-  const visibleNavItems = getVisibleNavItems(navItems);
+  const visibleNavItems = getVisibleNavItems(participantWorkspaceNav);
   const unreadQuery = useUnreadNotificationCount();
   const unreadCount = unreadQuery.data ?? 0;
 
-  const title = isWorkspace ? "Không gian thi" : "SEAL Hackathon";
-  const subtitle = isWorkspace
-    ? event?.name ?? "Chọn cuộc thi từ danh sách"
-    : "Chọn cuộc thi để tham gia";
-
-  const primaryAction = isWorkspace
-    ? { label: "Danh sách các cuộc thi", icon: "event", to: "/events" as const }
-    : undefined;
+  const title = "Thí Sinh";
+  const subtitle = event?.name ?? "Chọn cuộc thi từ danh sách";
+  const primaryAction = { label: "Danh sách các cuộc thi", icon: "event", to: "/events" as const };
+  const onEventsList =
+    location.pathname === "/events" ||
+    (location.pathname.startsWith("/events/") && !location.pathname.includes("/register"));
 
   function handleLogout() {
     setAuthenticated(false);
@@ -59,21 +54,22 @@ export function ParticipantShell() {
         <RoleSwitcher compact />
       </div>
 
-      {primaryAction?.to ? (
-        <ButtonLink
-          to={primaryAction.to}
-          className={sidebarPrimaryActionClassName}
-          icon={<Icon name={primaryAction.icon} className="text-[18px]" />}
-        >
-          {primaryAction.label}
-        </ButtonLink>
-      ) : null}
+      <ButtonLink
+        to={primaryAction.to}
+        className={
+          onEventsList
+            ? `${sidebarPrimaryActionClassName} ring-2 ring-primary/30`
+            : sidebarPrimaryActionClassName
+        }
+        icon={<Icon name={primaryAction.icon} className="text-[18px]" />}
+      >
+        {primaryAction.label}
+      </ButtonLink>
 
       <nav className="flex flex-grow flex-col gap-1 overflow-y-auto pr-1">
         {visibleNavItems.map((item, index) => {
           const showGroup = item.group && item.group !== visibleNavItems[index - 1]?.group;
           const end = navItemUsesEnd(item, location.pathname);
-          const hubPrimary = !isWorkspace && item.to === "/events";
           return (
             <div key={item.to} className={showGroup && index > 0 ? "mt-sm" : undefined}>
               {showGroup ? (
@@ -84,19 +80,15 @@ export function ParticipantShell() {
               <NavLink
                 to={item.to}
                 end={end}
-                className={({ isActive }) =>
-                  hubPrimary
-                    ? `${sidebarPrimaryActionClassName} flex items-center gap-3 rounded-lg py-2.5 font-label-md`
-                    : sidebarNavClassName(isActive)
-                }
+                className={({ isActive }) => sidebarNavClassName(isActive)}
               >
                 {({ isActive }) => (
                   <>
                     <span className="relative inline-flex shrink-0">
                       <Icon
                         name={item.icon}
-                        filled={isActive || hubPrimary}
-                        className={`text-[20px] ${isActive || hubPrimary ? "text-primary" : ""}`}
+                        filled={isActive}
+                        className={`text-[20px] ${isActive ? "text-primary" : ""}`}
                       />
                       {isNotificationsNavItem(item.to) && unreadCount > 0 ? (
                         <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold leading-none text-on-error">

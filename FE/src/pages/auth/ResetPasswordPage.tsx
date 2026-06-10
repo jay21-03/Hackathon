@@ -7,8 +7,10 @@ import {
   authInputClassName
 } from "../../components/auth/AuthFormShell";
 import { Button } from "../../components/ui/Button";
+import { resetPasswordSchema } from "../../domain/schemas";
 import { resetPasswordWithToken } from "../../services/authService";
-import { mapAuthErrorMessage } from "../../utils/authErrors";
+import { applyAuthFormErrors, mapAuthErrorMessage } from "../../utils/authErrors";
+import { zodFieldErrors } from "../../utils/zodFieldErrors";
 
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -17,24 +19,32 @@ export function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [done, setDone] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!token) {
-      setError("Liên kết đặt lại mật khẩu không hợp lệ.");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setError("Mật khẩu xác nhận không khớp.");
-      return;
-    }
     setError(null);
+    const parsed = resetPasswordSchema.safeParse({ token, newPassword, confirmPassword });
+    if (!parsed.success) {
+      const errors = zodFieldErrors(parsed.error);
+      if (errors.token) {
+        setError(errors.token);
+        return;
+      }
+      setFieldErrors(errors);
+      return;
+    }
+    setFieldErrors({});
     setLoading(true);
     try {
-      await resetPasswordWithToken({ token, newPassword });
+      await resetPasswordWithToken({
+        token: parsed.data.token,
+        newPassword: parsed.data.newPassword
+      });
       setDone(true);
     } catch (err) {
+      applyAuthFormErrors(err, setFieldErrors);
       setError(mapAuthErrorMessage(err instanceof Error ? err.message : "Đặt lại mật khẩu thất bại."));
     } finally {
       setLoading(false);
@@ -76,24 +86,34 @@ export function ResetPasswordPage() {
           >
             <input
               type="password"
-              className={authInputClassName()}
+              className={authInputClassName(fieldErrors.newPassword ? "border-error" : "")}
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              onChange={(e) => {
+                setNewPassword(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, newPassword: "" }));
+              }}
               autoComplete="new-password"
               disabled={loading}
-              required
             />
+            {fieldErrors.newPassword ? (
+              <span className="font-body-sm text-error">{fieldErrors.newPassword}</span>
+            ) : null}
           </AuthFieldLabel>
           <AuthFieldLabel label="Xác nhận mật khẩu" required>
             <input
               type="password"
-              className={authInputClassName()}
+              className={authInputClassName(fieldErrors.confirmPassword ? "border-error" : "")}
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, confirmPassword: "" }));
+              }}
               autoComplete="new-password"
               disabled={loading}
-              required
             />
+            {fieldErrors.confirmPassword ? (
+              <span className="font-body-sm text-error">{fieldErrors.confirmPassword}</span>
+            ) : null}
           </AuthFieldLabel>
           <Button type="submit" loading={loading} className="w-full justify-center">
             Lưu mật khẩu mới

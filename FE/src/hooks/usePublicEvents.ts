@@ -6,7 +6,7 @@ import { getApiErrorMessage } from "../utils/apiError";
 export function usePublicEvents() {
   const query = useQuery({
     queryKey: queryKeys.events.list(),
-    queryFn: fetchPublicEvents,
+    queryFn: () => fetchPublicEvents(),
     staleTime: 60_000
   });
 

@@ -1,4 +1,5 @@
 import { buildParticipantWorkflowSteps } from "../domain/participantWorkflow";
+import { enableGithubProvisioning } from "../config/features";
 import { useMyBoard } from "./useMyBoard";
 import { useMySubmission } from "./useMySubmission";
 import { useMyTeam } from "./useMyTeam";
@@ -22,7 +23,8 @@ export function useParticipantEventProgress(eventId: number | null) {
     hasBoard,
     hasSubmitted,
     resultsPublished,
-    teamStatus: team?.status
+    teamStatus: team?.status,
+    githubProvisioning: enableGithubProvisioning
   });
 
   const steps: { label: string; state: ProgressStepState }[] = workflowSteps.map((step) => ({
