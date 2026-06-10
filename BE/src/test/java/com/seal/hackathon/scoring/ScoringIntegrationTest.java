@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.support.IntegrationTestDataCleaner;
+import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.support.IntegrationTestConfig;
+import com.seal.hackathon.support.IntegrationTestFixtures;
 import com.seal.hackathon.authprofile.entity.User;
 import com.seal.hackathon.authprofile.entity.UserRole;
 import com.seal.hackathon.authprofile.repository.UserRepository;
@@ -88,6 +90,9 @@ class ScoringIntegrationTest {
 
     @Autowired
     EventRepository eventRepository;
+
+    @Autowired
+    AcademicTermRepository academicTermRepository;
 
     @Autowired
     RoundRepository roundRepository;
@@ -176,6 +181,7 @@ class ScoringIntegrationTest {
                 .minTeamSize(1)
                 .maxTeamSize(5)
                 .status(EventStatus.DRAFT)
+                .academicTermId(IntegrationTestFixtures.defaultAcademicTermId(academicTermRepository))
                 .createdBy(organizer.getId())
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
@@ -306,6 +312,98 @@ class ScoringIntegrationTest {
                         .content(objectMapper.writeValueAsString(rubricBody)))
                 .andExpect(MockMvcResultMatchers.status().isConflict())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("RUBRIC_LOCKED"));
+    }
+
+    @Test
+    void judgeCanUpdateSubmittedScoreSheet() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        String judgeJwt = jwtService.generateToken(judge, Set.of("JUDGE"));
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/boards/" + board.getId() + "/judges")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of("userId", judge.getId()))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        List<Map<String, Object>> levels = List.of(
+                Map.of("level", "EXCELLENT", "label", "Xuất sắc", "minScore", 9, "maxScore", 10, "description", "A"),
+                Map.of("level", "GOOD", "label", "Tốt", "minScore", 7, "maxScore", 8.9, "description", "B"),
+                Map.of("level", "SATISFACTORY", "label", "Đạt", "minScore", 5, "maxScore", 6.9, "description", "C"),
+                Map.of("level", "UNSATISFACTORY", "label", "Chưa đạt", "minScore", 0, "maxScore", 4.9, "description", "D"));
+
+        Map<String, Object> rubricBody = Map.of(
+                "replaceExisting", true,
+                "criteria", List.of(Map.of(
+                        "code", "R1_01",
+                        "name", "Ý tưởng",
+                        "weight", 100,
+                        "minScore", 0,
+                        "maxScore", 10,
+                        "sortOrder", 1,
+                        "levelDescriptors", levels)));
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/rounds/" + round.getId() + "/criteria")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(rubricBody)))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        MvcResult matrixResult = mockMvc.perform(MockMvcRequestBuilders.get(
+                                "/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .header("Authorization", "Bearer " + judgeJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andReturn();
+
+        JsonNode matrix = objectMapper.readTree(matrixResult.getResponse().getContentAsString());
+        long criteriaId = matrix.path("data").path("criteria").get(0).path("id").asLong();
+        long teamId = matrix.path("data").path("teams").get(0).path("teamId").asLong();
+
+        Map<String, Object> initialSave = Map.of(
+                "rows", List.of(Map.of(
+                        "teamId", teamId,
+                        "scores", List.of(Map.of("criteriaId", criteriaId, "scoreValue", 7.0)))));
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(initialSave)))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/judge/boards/" + board.getId() + "/score-matrix/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(Map.of("teamIds", List.of(teamId)))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.submitted.length()").value(1));
+
+        Map<String, Object> updatedSave = Map.of(
+                "rows", List.of(Map.of(
+                        "teamId", teamId,
+                        "scores", List.of(Map.of("criteriaId", criteriaId, "scoreValue", 9.0)))));
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(updatedSave)))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.savedTeamIds.length()").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.skippedSubmittedTeamIds.length()").value(0));
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/judge/boards/" + board.getId() + "/score-matrix/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(Map.of("teamIds", List.of(teamId)))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.submitted.length()").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.submitted[0].judgeTeamScore").value(90.0));
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .header("Authorization", "Bearer " + judgeJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.teams[0].editable").value(true))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.teams[0].computed.judgeTeamScore").value(90.0));
     }
 
     @Test

@@ -51,7 +51,7 @@ public class JudgeScoringController {
     @PostMapping("/boards/{boardId}/score-matrix/submit")
     public ApiResponse<SubmitMatrixResponse> submitScoreMatrix(
             @PathVariable Long boardId,
-            @RequestBody SubmitMatrixRequest request,
+            @Valid @RequestBody SubmitMatrixRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         Long userId = currentUserProvider.getCurrentUser().getUserId();
         SubmitMatrixRequest body = request != null ? request : new SubmitMatrixRequest();

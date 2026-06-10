@@ -19,6 +19,7 @@ import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.registration.entity.Team;
+import com.seal.hackathon.assignment.service.BoardScoringReadinessService;
 import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.scoring.dto.BoardBriefDto;
@@ -92,6 +93,7 @@ public class ScoringService {
     private final CurrentUserProvider currentUserProvider;
     private final NotificationService notificationService;
     private final OrganizerAuthorizationService organizerAuthorizationService;
+    private final BoardScoringReadinessService boardScoringReadinessService;
 
     @Transactional(readOnly = true)
     public RubricResponse getRubric(Long roundId) {
@@ -122,7 +124,9 @@ public class ScoringService {
         }
 
         List<ScoreCriteria> saved = scoreCriteriaRepository.findByRoundIdOrderBySortOrderAsc(roundId);
-        return buildRubricResponse(roundId, saved);
+        RubricResponse response = buildRubricResponse(roundId, saved);
+        boardScoringReadinessService.notifyReadyJudgesForRound(roundId);
+        return response;
     }
 
     @Transactional
@@ -164,12 +168,6 @@ public class ScoringService {
             ScoreSheet sheet = scoreSheetRepository
                     .findByBoardIdAndTeamIdAndJudgeId(boardId, row.getTeamId(), judge.getUserId())
                     .orElseGet(() -> ensureDraftSheet(boardId, row.getTeamId(), judge.getUserId(), ctx.assignment.getId()));
-
-            if (sheet.getStatus() == ScoreSheetStatus.SUBMITTED) {
-                skipped.add(row.getTeamId());
-                rows.add(buildTeamRow(sheet, criteria, teamName(row.getTeamId()), slotNumber(boardId, row.getTeamId())));
-                continue;
-            }
 
             assertTeamInBoard(boardId, row.getTeamId());
             assertTeamScorable(row.getTeamId());
@@ -236,8 +234,10 @@ public class ScoringService {
                         .findByBoardIdAndTeamIdAndJudgeId(boardId, teamId, judge.getUserId())
                         .orElseGet(() -> ensureDraftSheet(boardId, teamId, judge.getUserId(), ctx.assignment.getId()));
 
-                if (sheet.getStatus() == ScoreSheetStatus.SUBMITTED) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "ALREADY_SUBMITTED");
+                if (sheet.getStatus() == ScoreSheetStatus.SUBMITTED
+                        && request != null
+                        && request.isSubmitAll()) {
+                    continue;
                 }
 
                 submitSheetInternal(sheet, criteria);
@@ -363,9 +363,6 @@ public class ScoringService {
     }
 
     private void submitSheetInternal(ScoreSheet sheet, List<ScoreCriteria> criteria) {
-        if (sheet.getStatus() == ScoreSheetStatus.SUBMITTED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "ALREADY_SUBMITTED");
-        }
         assertTeamScorable(sheet.getTeamId());
 
         Map<Long, ScoreItem> items = scoreItemRepository.findByScoreSheetId(sheet.getId()).stream()
@@ -464,7 +461,7 @@ public class ScoringService {
                 .sheetId(sheet.getId())
                 .status(sheet.getStatus())
                 .generalFeedback(sheet.getGeneralFeedback())
-                .editable(sheet.getStatus() == ScoreSheetStatus.DRAFT)
+                .editable(true)
                 .scores(scores)
                 .computed(ComputedScoreDto.builder()
                         .judgeTeamScore(computeTotal(sheet.getId(), criteria))
@@ -752,9 +749,14 @@ public class ScoringService {
     }
 
     private String repositoryUrlForTeam(Long teamId) {
-        return teamRepositoryEntityRepository.findByTeamId(teamId)
+        return teamRepositoryEntityRepository.findAllByTeamId(teamId).stream()
+                .filter(entity -> entity.getProblemId() != null && StringUtils.hasText(entity.getRepositoryUrl()))
                 .map(entity -> entity.getRepositoryUrl())
-                .orElse(null);
+                .findFirst()
+                .orElseGet(() -> teamRepositoryEntityRepository
+                        .findFirstByTeamIdAndProblemIdIsNullOrderByUpdatedAtDesc(teamId)
+                        .map(entity -> entity.getRepositoryUrl())
+                        .orElse(null));
     }
 
     private record BoardContext(Board board, Round round, JudgeAssignment assignment) {}
