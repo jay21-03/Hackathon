@@ -35,4 +35,5 @@ public class TeamRepositoryResponse {
     String lastError;
     OffsetDateTime createdAt;
     OffsetDateTime updatedAt;
+    RepoCommitResponse latestCommit;
 }

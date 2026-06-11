@@ -2,7 +2,9 @@ package com.seal.hackathon.github.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
@@ -112,6 +114,32 @@ public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
     }
 
     @Override
+    public Optional<GitHubCommitInfo> getLatestCommit(String owner, String repo, String branch) {
+        String resolvedBranch = StringUtils.hasText(branch) ? branch.trim() : "main";
+        try {
+            List<Map<String, Object>> response = execute(() -> restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/repos/{owner}/{repo}/commits")
+                            .queryParam("sha", resolvedBranch)
+                            .queryParam("per_page", 1)
+                            .build(owner, repo))
+                    .headers(this::authorize)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {
+                    }));
+            if (response == null || response.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(toCommitInfo(response.get(0)));
+        } catch (GitHubClientException ex) {
+            if (ex.getStatusCode() == 404 || ex.getStatusCode() == 409) {
+                return Optional.empty();
+            }
+            throw ex;
+        }
+    }
+
+    @Override
     public Optional<GitHubRepositoryInfo> getRepository(String owner, String repo) {
         try {
             Map<String, Object> response = execute(() -> restClient.get()
@@ -144,6 +172,38 @@ public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
                     responseBody);
         } catch (RestClientException ex) {
             throw new GitHubClientException(503, "GitHub API request failed");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private GitHubCommitInfo toCommitInfo(Map<String, Object> response) {
+        if (response == null) {
+            throw new GitHubClientException(502, "GitHub API returned an empty commit response");
+        }
+        Map<String, Object> commit = response.get("commit") instanceof Map<?, ?> rawCommit
+                ? (Map<String, Object>) rawCommit
+                : Map.of();
+        Map<String, Object> author = commit.get("author") instanceof Map<?, ?> rawAuthor
+                ? (Map<String, Object>) rawAuthor
+                : Map.of();
+        return GitHubCommitInfo.builder()
+                .sha(asString(response.get("sha")))
+                .message(asString(commit.get("message")))
+                .authorName(asString(author.get("name")))
+                .authorEmail(asString(author.get("email")))
+                .committedAt(parseOffsetDateTime(asString(author.get("date"))))
+                .htmlUrl(asString(response.get("html_url")))
+                .build();
+    }
+
+    private OffsetDateTime parseOffsetDateTime(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(value.trim());
+        } catch (Exception ex) {
+            return null;
         }
     }
 

@@ -25,6 +25,8 @@ import {
   fetchMyTeamRepositories,
   formatRepositoryTimestamp,
   provisionStatusTone,
+  refreshRepoCommit,
+  shortCommitSha,
   submissionStatusTone,
   type TeamRepositoryResponse
 } from "../../services/repositoryProvisioningService";
@@ -89,13 +91,38 @@ function pushGuidance(repo: TeamRepositoryResponse) {
     return "Tạo repository thất bại — liên hệ ban tổ chức để provision lại.";
   }
   if (repo.accessStatus === "OPEN") {
-    return "Clone repository và push code lên nhánh mặc định trước hạn nộp.";
+    return "Clone repository và push code trước hạn đóng đề — hệ thống tự chốt nộp khi hết giờ.";
   }
   return "Chờ ban tổ chức mở quyền push.";
 }
 
-function RepositoryDetailCard({ repo }: { repo: TeamRepositoryResponse }) {
-  const submissionStatus = repo.submissionStatus ?? (repo.provisionStatus === "CREATED" ? "SUBMITTED" : null);
+function RepositoryDetailCard({
+  repo,
+  onCommitRefreshed
+}: {
+  repo: TeamRepositoryResponse;
+  onCommitRefreshed: () => Promise<void>;
+}) {
+  const { notify } = useToast();
+  const submissionStatus = repo.submissionStatus ?? null;
+  const latestCommit = repo.latestCommit ?? null;
+  const canRefreshCommit =
+    repo.provisionStatus === "CREATED" &&
+    (repo.accessStatus === "OPEN" || repo.accessStatus === "CLOSED");
+  const [refreshingCommit, setRefreshingCommit] = useState(false);
+
+  async function handleRefreshCommit() {
+    setRefreshingCommit(true);
+    try {
+      await refreshRepoCommit(repo.id);
+      await onCommitRefreshed();
+      notify("Đã cập nhật commit mới nhất.", "success");
+    } catch (err) {
+      notify(resolveApiError(err, "Không lấy được commit mới nhất."), "danger");
+    } finally {
+      setRefreshingCommit(false);
+    }
+  }
 
   return (
     <li className="space-y-sm rounded-lg border border-outline-variant/60 p-md">
@@ -176,6 +203,82 @@ function RepositoryDetailCard({ repo }: { repo: TeamRepositoryResponse }) {
           </div>
         ) : null}
       </dl>
+
+      <div className="rounded-lg border border-outline-variant/60 bg-surface/50 p-sm">
+        <div className="flex flex-wrap items-center justify-between gap-sm">
+          <h3 className="font-label-sm text-on-surface">Commit chốt nộp</h3>
+          {canRefreshCommit ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              loading={refreshingCommit}
+              disabled={refreshingCommit}
+              onClick={() => void handleRefreshCommit()}
+            >
+              Cập nhật commit
+            </Button>
+          ) : null}
+        </div>
+        {latestCommit ? (
+          <dl className="mt-sm grid gap-xs sm:grid-cols-2">
+            <div>
+              <dt className="font-label-sm text-on-surface-variant">SHA</dt>
+              <dd className="font-body-sm text-on-surface">
+                {latestCommit.htmlUrl ? (
+                  <a
+                    href={latestCommit.htmlUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary underline-offset-2 hover:underline"
+                  >
+                    {shortCommitSha(latestCommit.sha)}
+                  </a>
+                ) : (
+                  shortCommitSha(latestCommit.sha)
+                )}
+                {latestCommit.branch ? (
+                  <span className="ml-xs text-on-surface-variant">({latestCommit.branch})</span>
+                ) : null}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-label-sm text-on-surface-variant">Thời gian commit</dt>
+              <dd className="font-body-sm text-on-surface">
+                {formatRepositoryTimestamp(latestCommit.committedAt) ?? "—"}
+              </dd>
+            </div>
+            {latestCommit.authorName ? (
+              <div>
+                <dt className="font-label-sm text-on-surface-variant">Tác giả</dt>
+                <dd className="font-body-sm text-on-surface">{latestCommit.authorName}</dd>
+              </div>
+            ) : null}
+            {latestCommit.capturedAt ? (
+              <div>
+                <dt className="font-label-sm text-on-surface-variant">Ghi nhận lúc</dt>
+                <dd className="font-body-sm text-on-surface">
+                  {formatRepositoryTimestamp(latestCommit.capturedAt)}
+                </dd>
+              </div>
+            ) : null}
+            {latestCommit.message ? (
+              <div className="sm:col-span-2">
+                <dt className="font-label-sm text-on-surface-variant">Message</dt>
+                <dd className="font-body-sm text-on-surface whitespace-pre-wrap">{latestCommit.message}</dd>
+              </div>
+            ) : null}
+          </dl>
+        ) : (
+          <p className="mt-sm font-body-sm text-on-surface-variant">
+            {submissionStatus === "SUBMITTED"
+              ? "Chưa ghi nhận commit — thử «Cập nhật commit» hoặc liên hệ ban tổ chức."
+              : canRefreshCommit
+                ? "Chưa có commit — push code rồi bấm «Cập nhật commit» để xem trước khi hết giờ."
+                : "Commit sẽ được hệ thống tự chốt khi hết giờ đóng đề."}
+          </p>
+        )}
+      </div>
     </li>
   );
 }
@@ -235,6 +338,13 @@ export function SubmissionPage() {
   async function invalidateSubmission() {
     if (!eventId) return;
     await queryClient.invalidateQueries({ queryKey: queryKeys.submission.my(eventId) });
+  }
+
+  async function invalidateProvisionedRepos() {
+    if (!team?.id) return;
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.repositories.myTeam(team.id, eventId)
+    });
   }
 
   async function handleSaveDraft() {
@@ -329,8 +439,8 @@ export function SubmissionPage() {
           <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
             <h2 className="font-title-sm text-on-surface">Tổng quan bài nộp</h2>
             <p className="mt-xs font-body-sm text-on-surface-variant">
-              Hệ thống tự ghi nhận nộp khi ban tổ chức cấp repository. Bạn chỉ cần push code trong thời gian
-              repository đang mở.
+              Ban tổ chức cấp repository GitHub khi mở đề. Bạn push code trong thời gian mở — hệ thống tự chốt
+              «đã nộp» khi hết giờ đóng đề (closeAt), không cần bấm nút xác nhận.
             </p>
             <dl className="mt-md grid gap-md sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border border-outline-variant/60 bg-surface px-3 py-2">
@@ -401,7 +511,11 @@ export function SubmissionPage() {
             ) : (
               <ul className="mt-md space-y-md">
                 {currentRepos.map((repo) => (
-                  <RepositoryDetailCard key={repo.id} repo={repo} />
+                  <RepositoryDetailCard
+                    key={repo.id}
+                    repo={repo}
+                    onCommitRefreshed={invalidateProvisionedRepos}
+                  />
                 ))}
               </ul>
             )}
@@ -412,7 +526,11 @@ export function SubmissionPage() {
               <h2 className="font-title-sm text-on-surface">Repository các vòng trước</h2>
               <ul className="mt-md space-y-md">
                 {historyRepos.map((repo) => (
-                  <RepositoryDetailCard key={repo.id} repo={repo} />
+                  <RepositoryDetailCard
+                    key={repo.id}
+                    repo={repo}
+                    onCommitRefreshed={invalidateProvisionedRepos}
+                  />
                 ))}
               </ul>
             </section>

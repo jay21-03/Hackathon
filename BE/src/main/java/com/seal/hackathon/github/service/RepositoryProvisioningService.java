@@ -85,6 +85,7 @@ public class RepositoryProvisioningService {
     private final JudgeAssignmentRepository judgeAssignmentRepository;
     private final CurrentUserProvider currentUserProvider;
     private final ContestManagementService contestManagementService;
+    private final RepoCommitService repoCommitService;
 
     @Value("${app.github.org:}")
     private String githubOrg;
@@ -318,8 +319,12 @@ public class RepositoryProvisioningService {
             if (repository.getAccessStatus() != RepositoryAccessStatus.OPEN) {
                 continue;
             }
+            OffsetDateTime problemCloseAt = resolveProblemCloseAt(repository.getProblemId());
+            finalizeSubmissionAtClose(repository, problemCloseAt, now);
             if (!StringUtils.hasText(repository.getGithubOwner())
                     || !StringUtils.hasText(repository.getGithubRepoName())) {
+                repository.setUpdatedAt(now);
+                responses.add(toRepositoryResponse(teamRepositoryEntityRepository.save(repository), true));
                 continue;
             }
             try {
@@ -686,8 +691,8 @@ public class RepositoryProvisioningService {
             repository.setAccessStatus(RepositoryAccessStatus.OPEN);
             repository.setProvisionedAt(now);
             repository.setOpenedAt(now);
-            repository.setStatus(SubmissionStatus.SUBMITTED);
-            repository.setSubmittedAt(now);
+            repository.setStatus(SubmissionStatus.DRAFT);
+            repository.setSubmittedAt(null);
             repository.setLastError(null);
             repository.setUpdatedAt(now);
             return new ProvisionOutcome(teamRepositoryEntityRepository.save(repository), true, false);
@@ -819,7 +824,8 @@ public class RepositoryProvisioningService {
                 .accessStatus(repository.getAccessStatus())
                 .provisionStatus(repository.getProvisionStatus())
                 .submissionStatus(resolveSubmissionStatus(repository))
-                .submittedAt(repository.getSubmittedAt())
+                .submittedAt(com.seal.hackathon.common.util.SubmissionLifecycle.effectiveSubmittedAt(
+                        repository, resolveProblemCloseAt(repository.getProblemId())))
                 .openedAt(repository.getOpenedAt())
                 .closedAt(repository.getClosedAt())
                 .provisionedAt(repository.getProvisionedAt())
@@ -827,6 +833,7 @@ public class RepositoryProvisioningService {
                 .lastError(exposeLastError ? repository.getLastError() : null)
                 .createdAt(repository.getCreatedAt())
                 .updatedAt(repository.getUpdatedAt())
+                .latestCommit(repoCommitService.findLatestResponse(repository.getId()).orElse(null))
                 .build();
     }
 
@@ -845,11 +852,23 @@ public class RepositoryProvisioningService {
     }
 
     private SubmissionStatus resolveSubmissionStatus(TeamRepository repository) {
-        if (repository.getProvisionStatus() == RepositoryProvisionStatus.CREATED
-                && (repository.getStatus() == null || repository.getStatus() == SubmissionStatus.DRAFT)) {
-            return SubmissionStatus.SUBMITTED;
+        return com.seal.hackathon.common.util.SubmissionLifecycle.effectiveStatus(
+                repository, resolveProblemCloseAt(repository.getProblemId()));
+    }
+
+    private OffsetDateTime resolveProblemCloseAt(Long problemId) {
+        if (problemId == null) {
+            return null;
         }
-        return repository.getStatus();
+        return problemRepository.findById(problemId).map(Problem::getCloseAt).orElse(null);
+    }
+
+    private void finalizeSubmissionAtClose(
+            TeamRepository repository, OffsetDateTime problemCloseAt, OffsetDateTime now) {
+        com.seal.hackathon.common.util.SubmissionLifecycle.finalizeAtClose(repository, problemCloseAt, now);
+        if (repository.getStatus() == SubmissionStatus.SUBMITTED) {
+            repoCommitService.captureLatestCommitSilently(repository.getId());
+        }
     }
 
     private String resolveTeamName(Long teamId) {
@@ -884,7 +903,8 @@ public class RepositoryProvisioningService {
                 .accessStatus(repository.getAccessStatus())
                 .provisionStatus(repository.getProvisionStatus())
                 .submissionStatus(resolveSubmissionStatus(repository))
-                .submittedAt(repository.getSubmittedAt())
+                .submittedAt(com.seal.hackathon.common.util.SubmissionLifecycle.effectiveSubmittedAt(
+                        repository, resolveProblemCloseAt(repository.getProblemId())))
                 .openedAt(repository.getOpenedAt())
                 .closedAt(repository.getClosedAt())
                 .provisionedAt(repository.getProvisionedAt())

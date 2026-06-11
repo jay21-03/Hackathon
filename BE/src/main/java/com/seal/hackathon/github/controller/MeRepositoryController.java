@@ -3,13 +3,16 @@ package com.seal.hackathon.github.controller;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.common.response.ApiResponse;
 import com.seal.hackathon.github.dto.JudgeRepositoryResponse;
+import com.seal.hackathon.github.dto.RepoCommitResponse;
 import com.seal.hackathon.github.dto.TeamRepositoryResponse;
+import com.seal.hackathon.github.service.RepoCommitService;
 import com.seal.hackathon.github.service.RepositoryProvisioningService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeRepositoryController {
 
     private final RepositoryProvisioningService repositoryProvisioningService;
+    private final RepoCommitService repoCommitService;
     private final CurrentUserProvider currentUserProvider;
 
     @GetMapping("/repositories")
@@ -45,5 +49,19 @@ public class MeRepositoryController {
     @GetMapping("/judge/rounds/{roundId}/repositories")
     public ApiResponse<List<JudgeRepositoryResponse>> getJudgeRepositoriesForRound(@PathVariable Long roundId) {
         return ApiResponse.ok(repositoryProvisioningService.getJudgeRepositoriesForRoundForCurrentUser(roundId));
+    }
+
+    @GetMapping("/team-repositories/{repositoryId}/commits/latest")
+    public ApiResponse<RepoCommitResponse> getLatestCommit(@PathVariable Long repositoryId) {
+        Long currentUserId = currentUserProvider.getCurrentUser().getUserId();
+        return ApiResponse.ok(repoCommitService
+                .getLatestCommit(repositoryId, currentUserId)
+                .orElse(null));
+    }
+
+    @PostMapping("/team-repositories/{repositoryId}/commits/refresh")
+    public ApiResponse<RepoCommitResponse> refreshLatestCommit(@PathVariable Long repositoryId) {
+        Long currentUserId = currentUserProvider.getCurrentUser().getUserId();
+        return ApiResponse.ok(repoCommitService.refreshLatestCommit(repositoryId, currentUserId));
     }
 }

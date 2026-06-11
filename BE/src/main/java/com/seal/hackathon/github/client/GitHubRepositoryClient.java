@@ -18,4 +18,7 @@ public interface GitHubRepositoryClient {
 
     /** Returns collaborator permission (e.g. pull, push) if the user has access. */
     Optional<String> getCollaboratorPermission(String owner, String repo, String username);
+
+    /** Latest commit on the given branch (empty repository returns empty). */
+    Optional<GitHubCommitInfo> getLatestCommit(String owner, String repo, String branch);
 }

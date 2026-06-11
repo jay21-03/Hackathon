@@ -18,6 +18,19 @@ export interface RepoTemplateResponse {
 
 export type SubmissionStatus = "DRAFT" | "SUBMITTED";
 
+export interface RepoCommitResponse {
+  id: number;
+  teamRepositoryId: number;
+  sha: string;
+  message?: string | null;
+  authorName?: string | null;
+  authorEmail?: string | null;
+  committedAt?: string | null;
+  htmlUrl?: string | null;
+  branch?: string | null;
+  capturedAt?: string | null;
+}
+
 export interface TeamRepositoryResponse {
   id: number;
   teamId: number;
@@ -43,6 +56,7 @@ export interface TeamRepositoryResponse {
   lastError?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  latestCommit?: RepoCommitResponse | null;
 }
 
 export interface SaveRepoTemplateRequest {
@@ -178,6 +192,28 @@ export async function fetchMyTeamRepositories(teamId: number, eventId?: number |
   return data.data ?? [];
 }
 
+export async function fetchLatestRepoCommit(repositoryId: number) {
+  const { data } = await apiClient.get<ApiResponse<RepoCommitResponse | null>>(
+    `/v1/me/team-repositories/${repositoryId}/commits/latest`
+  );
+  return data.data ?? null;
+}
+
+export async function refreshRepoCommit(repositoryId: number) {
+  const { data } = await apiClient.post<ApiResponse<RepoCommitResponse>>(
+    `/v1/me/team-repositories/${repositoryId}/commits/refresh`
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Không cập nhật được commit mới nhất.");
+  }
+  return data.data;
+}
+
+export function shortCommitSha(sha: string | null | undefined) {
+  if (!sha) return "—";
+  return sha.length > 7 ? sha.slice(0, 7) : sha;
+}
+
 export const ACCESS_STATUS_LABELS: Record<RepositoryAccessStatus, string> = {
   PENDING: "Chờ mở",
   OPEN: "Đang mở",
@@ -207,8 +243,8 @@ export function provisionStatusTone(
 }
 
 export const SUBMISSION_STATUS_LABELS: Record<SubmissionStatus, string> = {
-  DRAFT: "Chưa nộp",
-  SUBMITTED: "Đã nộp (tự động)"
+  DRAFT: "Đang làm bài",
+  SUBMITTED: "Đã chốt nộp"
 };
 
 export function submissionStatusTone(

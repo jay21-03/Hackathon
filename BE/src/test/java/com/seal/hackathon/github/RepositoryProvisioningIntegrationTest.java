@@ -2,6 +2,7 @@ package com.seal.hackathon.github;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seal.hackathon.aireview.repository.RepoCommitRepository;
 import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.authprofile.entity.User;
 import com.seal.hackathon.authprofile.entity.UserRole;
@@ -148,6 +149,9 @@ class RepositoryProvisioningIntegrationTest {
 
     @Autowired
     FakeGitHubRepositoryClient fakeGitHubRepositoryClient;
+
+    @Autowired
+    RepoCommitRepository repoCommitRepository;
 
     @Autowired
     IntegrationTestDataCleaner dataCleaner;
@@ -300,7 +304,7 @@ class RepositoryProvisioningIntegrationTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.createdCount").value(1))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.repositories[0].provisionStatus").value("CREATED"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.repositories[0].accessStatus").value("OPEN"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data.repositories[0].submissionStatus").value("SUBMITTED"));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.repositories[0].submissionStatus").value("DRAFT"));
 
         assertThat(fakeGitHubRepositoryClient.collaboratorPermission("seal-org", repoName(team.getId(), releasedProblem.getId()), "seal-participant"))
                 .isEqualTo("push");
@@ -364,11 +368,17 @@ class RepositoryProvisioningIntegrationTest {
         mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/me/teams/{teamId}/repository", team.getId())
                         .header("Authorization", "Bearer " + participantJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].accessStatus").value("CLOSED"));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].accessStatus").value("CLOSED"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].submissionStatus").value("SUBMITTED"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].latestCommit.sha").value("abc123def4567890"));
 
         assertThat(fakeGitHubRepositoryClient.collaboratorPermission(
                         "seal-org", repoName(team.getId(), releasedProblem.getId()), "seal-participant"))
                 .isEqualTo("pull");
+
+        var teamRepo = teamRepositoryEntityRepository.findAllByTeamId(team.getId()).getFirst();
+        assertThat(repoCommitRepository.findTopByTeamRepositoryIdOrderByCommittedAtDescIdDesc(teamRepo.getId()))
+                .isPresent();
     }
 
     @Test
@@ -385,10 +395,41 @@ class RepositoryProvisioningIntegrationTest {
                 .header("Authorization", "Bearer " + organizerJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.lockedCount").value(1))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data.repositories[0].accessStatus").value("CLOSED"));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.repositories[0].accessStatus").value("CLOSED"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.repositories[0].submissionStatus").value("SUBMITTED"));
 
         assertThat(fakeGitHubRepositoryClient.collaboratorPermission("seal-org", repoName(team.getId(), releasedProblem.getId()), "seal-participant"))
                 .isEqualTo("pull");
+
+        var teamRepo = teamRepositoryEntityRepository.findAllByTeamId(team.getId()).getFirst();
+        assertThat(repoCommitRepository.findTopByTeamRepositoryIdOrderByCommittedAtDescIdDesc(teamRepo.getId()))
+                .isPresent();
+    }
+
+    @Test
+    void participantCanRefreshAndViewLatestCommit() throws Exception {
+        saveTemplate(releasedProblem.getId());
+        provision(releasedProblem.getId());
+
+        var teamRepo = teamRepositoryEntityRepository.findAllByTeamId(team.getId()).getFirst();
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                        "/api/v1/me/team-repositories/{repositoryId}/commits/refresh", teamRepo.getId())
+                .header("Authorization", "Bearer " + participantJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.sha").value("abc123def4567890"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.message").value("Initial commit"));
+
+        mockMvc.perform(MockMvcRequestBuilders.get(
+                        "/api/v1/me/team-repositories/{repositoryId}/commits/latest", teamRepo.getId())
+                .header("Authorization", "Bearer " + participantJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.sha").value("abc123def4567890"));
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/me/teams/{teamId}/repository", team.getId())
+                        .header("Authorization", "Bearer " + participantJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].latestCommit.sha").value("abc123def4567890"));
     }
 
     @Test
