@@ -103,6 +103,24 @@ public class ScoringService {
     }
 
     @Transactional
+    public RubricResponse copyRubricFromRound(Long targetRoundId, Long sourceRoundId, boolean replaceExisting) {
+        organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(targetRoundId);
+        organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(sourceRoundId);
+        List<ScoreCriteria> sourceCriteria =
+                scoreCriteriaRepository.findByRoundIdOrderBySortOrderAsc(sourceRoundId);
+        if (sourceCriteria.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "RUBRIC_NOT_CONFIGURED");
+        }
+        List<CriteriaRequestItem> items = sourceCriteria.stream()
+                .map(this::toCriteriaRequestItem)
+                .toList();
+        SaveRubricRequest request = new SaveRubricRequest();
+        request.setReplaceExisting(replaceExisting);
+        request.setCriteria(items);
+        return saveRubric(targetRoundId, request);
+    }
+
+    @Transactional
     public RubricResponse saveRubric(Long roundId, SaveRubricRequest request) {
         organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
 
@@ -675,6 +693,19 @@ public class ScoringService {
                 .totalWeight(total)
                 .locked(isRubricLocked(roundId))
                 .build();
+    }
+
+    private CriteriaRequestItem toCriteriaRequestItem(ScoreCriteria entity) {
+        CriteriaRequestItem item = new CriteriaRequestItem();
+        item.setCode(entity.getCode());
+        item.setName(entity.getName());
+        item.setDescription(entity.getDescription());
+        item.setWeight(entity.getWeight());
+        item.setMinScore(entity.getMinScore());
+        item.setMaxScore(entity.getMaxScore());
+        item.setSortOrder(entity.getSortOrder());
+        item.setLevelDescriptors(entity.getLevelDescriptors());
+        return item;
     }
 
     private CriteriaResponse toCriteriaResponse(ScoreCriteria entity) {

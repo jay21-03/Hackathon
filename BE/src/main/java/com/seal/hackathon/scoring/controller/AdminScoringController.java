@@ -8,9 +8,10 @@ import com.seal.hackathon.common.idempotency.IdempotencyExecutor;
 
 import com.seal.hackathon.common.response.ApiResponse;
 
+import com.seal.hackathon.scoring.dto.ApplyRubricActionRequest;
 import com.seal.hackathon.scoring.dto.RubricResponse;
-
 import com.seal.hackathon.scoring.dto.SaveRubricRequest;
+import com.seal.hackathon.scoring.service.CriteriaTemplateService;
 
 import com.seal.hackathon.scoring.dto.ScoreProgressResponse;
 
@@ -52,6 +53,8 @@ public class AdminScoringController {
 
     private final ScoringService scoringService;
 
+    private final CriteriaTemplateService criteriaTemplateService;
+
     private final IdempotencyExecutor idempotencyExecutor;
 
     private final CurrentUserProvider currentUserProvider;
@@ -67,6 +70,24 @@ public class AdminScoringController {
     }
 
 
+
+    @PostMapping("/rounds/{roundId}/criteria/apply-template/{templateId}")
+    public ApiResponse<RubricResponse> applyCriteriaTemplate(
+            @PathVariable Long roundId,
+            @PathVariable Long templateId,
+            @RequestBody(required = false) ApplyRubricActionRequest request) {
+        boolean replaceExisting = request == null || request.isReplaceExisting();
+        return ApiResponse.ok(criteriaTemplateService.applyTemplateToRound(roundId, templateId, replaceExisting));
+    }
+
+    @PostMapping("/rounds/{targetRoundId}/criteria/copy-from-round/{sourceRoundId}")
+    public ApiResponse<RubricResponse> copyRubricFromRound(
+            @PathVariable Long targetRoundId,
+            @PathVariable Long sourceRoundId,
+            @RequestBody(required = false) ApplyRubricActionRequest request) {
+        boolean replaceExisting = request == null || request.isReplaceExisting();
+        return ApiResponse.ok(scoringService.copyRubricFromRound(targetRoundId, sourceRoundId, replaceExisting));
+    }
 
     @PostMapping("/rounds/{roundId}/criteria")
 
