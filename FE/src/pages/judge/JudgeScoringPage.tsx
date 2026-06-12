@@ -24,6 +24,7 @@ import {
   type ScoreMatrixResponse
 } from "../../services/scoringApi";
 import {
+  excludeArchivedTermJudgeAssignments,
   formatBoardAssignmentShortLabel,
   groupAssignmentsByEvent,
   pickPriorityJudgeAssignment,
@@ -58,7 +59,12 @@ export function JudgeScoringPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const boardIdParam = searchParams.get("boardId");
-  const { assignments, loading: assignmentsLoading, error: assignmentsError } = useJudgeAssignments();
+  const { assignments: allAssignments, loading: assignmentsLoading, error: assignmentsError } =
+    useJudgeAssignments();
+  const assignments = useMemo(
+    () => excludeArchivedTermJudgeAssignments(allAssignments),
+    [allAssignments]
+  );
   const [boardId, setBoardId] = useState<number | null>(boardIdParam ? Number(boardIdParam) : null);
   const { matrix, loading: matrixLoading, error: matrixError, refetch: refetchMatrix } = useScoreMatrix(boardId);
   const [cells, setCells] = useState<Record<CellKey, string>>({});

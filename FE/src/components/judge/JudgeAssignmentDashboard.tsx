@@ -8,6 +8,8 @@ import { JudgeAssignmentsTable } from "./JudgeAssignmentsTable";
 import type { AssignmentResponse } from "../../services/assignmentService";
 import { resolveApiError } from "../../utils/apiError";
 import {
+  excludeArchivedTermJudgeAssignments,
+  isArchivedTermAssignment,
   listActiveJudgeEvents,
   partitionJudgeAssignments,
   sortAssignmentsByPriority
@@ -29,13 +31,32 @@ export function JudgeAssignmentDashboard({
   scorePath
 }: JudgeAssignmentDashboardProps) {
   const [tab, setTab] = useState<JudgeDashboardTab>("todo");
+  const [showArchivedDone, setShowArchivedDone] = useState(false);
   const [eventFilter, setEventFilter] = useState<number | "">("");
   const [roundFilter, setRoundFilter] = useState<number | "">("");
 
-  const activeEvents = useMemo(() => listActiveJudgeEvents(assignments), [assignments]);
+  const visibleAssignments = useMemo(() => {
+    const includeArchived = tab === "done" && showArchivedDone;
+    return includeArchived ? assignments : excludeArchivedTermJudgeAssignments(assignments);
+  }, [assignments, tab, showArchivedDone]);
+
+  const { todo: todoCount, done: doneCount } = useMemo(
+    () => partitionJudgeAssignments(excludeArchivedTermJudgeAssignments(assignments)),
+    [assignments]
+  );
+
+  const archivedDoneHiddenCount = useMemo(() => {
+    const { done: allDone } = partitionJudgeAssignments(assignments);
+    return allDone.filter(isArchivedTermAssignment).length;
+  }, [assignments]);
+
+  const activeEvents = useMemo(() => listActiveJudgeEvents(visibleAssignments), [visibleAssignments]);
   const showEventContextBar = activeEvents.length > 1;
 
-  const { todo, done } = useMemo(() => partitionJudgeAssignments(assignments), [assignments]);
+  const { todo, done } = useMemo(
+    () => partitionJudgeAssignments(visibleAssignments),
+    [visibleAssignments]
+  );
   const tabAssignments = tab === "todo" ? todo : done;
 
   useEffect(() => {
@@ -103,19 +124,37 @@ export function JudgeAssignmentDashboard({
               : "border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-high"
           }`}
         >
-          Cần chấm ({todo.length})
+          Cần chấm ({todoCount.length})
         </button>
         <button
           type="button"
-          onClick={() => setTab("done")}
+          onClick={() => {
+            setTab("done");
+            setShowArchivedDone(false);
+          }}
           className={`rounded-full border px-4 py-2 font-label-sm transition ${
             tab === "done"
               ? "border-primary bg-primary-container text-on-primary-container"
               : "border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-high"
           }`}
         >
-          Đã xong ({done.length})
+          Đã xong ({doneCount.length})
         </button>
+        {tab === "done" && archivedDoneHiddenCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowArchivedDone((prev) => !prev)}
+            className={`rounded-full border px-4 py-2 font-label-sm transition ${
+              showArchivedDone
+                ? "border-secondary bg-secondary-container text-on-secondary-container"
+                : "border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-high"
+            }`}
+          >
+            {showArchivedDone
+              ? "Ẩn kỳ đã đóng"
+              : `Xem kỳ đã đóng (${archivedDoneHiddenCount})`}
+          </button>
+        ) : null}
       </div>
 
       {showEventContextBar ? (
