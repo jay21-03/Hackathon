@@ -1,0 +1,5 @@
+ALTER TABLE repo_commits
+    ADD COLUMN IF NOT EXISTS branch VARCHAR(100);
+
+ALTER TABLE repo_commits
+    ADD COLUMN IF NOT EXISTS commit_url VARCHAR(2048);
