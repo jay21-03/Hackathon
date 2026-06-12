@@ -2,6 +2,7 @@ package com.seal.hackathon.ranking.service;
 
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.common.enums.ScoreSheetStatus;
+import com.seal.hackathon.common.util.ContestOrdering;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
@@ -46,7 +47,7 @@ public class PublishReadinessService {
         List<BoardPublishReadinessDto> boards = new ArrayList<>();
         List<String> eventBlockers = new ArrayList<>();
 
-        for (Round round : roundRepository.findByEventId(eventId)) {
+        for (Round round : ContestOrdering.sortRounds(roundRepository.findByEventId(eventId))) {
             List<ScoreCriteria> criteria = scoreCriteriaRepository.findByRoundIdOrderBySortOrderAsc(round.getId());
             if (criteria.isEmpty()) {
                 eventBlockers.add("Vòng «" + round.getName() + "» chưa có tiêu chí chấm.");
@@ -59,7 +60,7 @@ public class PublishReadinessService {
                 }
             }
 
-            for (Board board : boardRepository.findByRoundId(round.getId())) {
+            for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(round.getId()))) {
                 if (!rankingResultRepository.existsByBoardId(board.getId())) {
                     continue;
                 }

@@ -5,5 +5,5 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AdvancementRepository extends JpaRepository<Advancement, Long> {
-	List<Advancement> findByToRoundId(Long toRoundId);
+	List<Advancement> findByToRoundIdOrderByCreatedAtDescIdDesc(Long toRoundId);
 }

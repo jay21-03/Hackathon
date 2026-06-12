@@ -1,6 +1,7 @@
 package com.seal.hackathon.ranking.service;
 
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
+import com.seal.hackathon.common.util.ContestOrdering;
 import com.seal.hackathon.common.enums.ScoreSheetStatus;
 import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.contest.entity.Board;
@@ -75,8 +76,8 @@ public class RankingService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
         List<BoardRankingResponse> boards = new ArrayList<>();
-        for (Round round : roundRepository.findByEventId(eventId)) {
-            for (Board board : boardRepository.findByRoundId(round.getId())) {
+        for (Round round : ContestOrdering.sortRounds(roundRepository.findByEventId(eventId))) {
+            for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(round.getId()))) {
                 if (rankingResultRepository.existsByBoardId(board.getId())) {
                     boards.add(buildBoardRankingResponse(board, false));
                 }
@@ -97,8 +98,8 @@ public class RankingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
         List<BoardRankingResponse> publishedBoards = new ArrayList<>();
         OffsetDateTime latestPublish = null;
-        for (Round round : roundRepository.findByEventId(eventId)) {
-            for (Board board : boardRepository.findByRoundId(round.getId())) {
+        for (Round round : ContestOrdering.sortRounds(roundRepository.findByEventId(eventId))) {
+            for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(round.getId()))) {
                 if (!rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(board.getId())) {
                     continue;
                 }
@@ -145,7 +146,7 @@ public class RankingService {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(round.getEventId());
         int boardsCalculated = 0;
         int teamsRanked = 0;
-        for (Board board : boardRepository.findByRoundId(roundId)) {
+        for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(roundId))) {
             if (!force && rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(board.getId())) {
                 continue;
             }
@@ -197,8 +198,8 @@ public class RankingService {
         int publishedBoards = 0;
         int newlyPublishedBoards = 0;
         int teamsPublished = 0;
-        for (Round round : roundRepository.findByEventId(eventId)) {
-            for (Board board : boardRepository.findByRoundId(round.getId())) {
+        for (Round round : ContestOrdering.sortRounds(roundRepository.findByEventId(eventId))) {
+            for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(round.getId()))) {
                 if (!rankingResultRepository.existsByBoardId(board.getId())) {
                     continue;
                 }

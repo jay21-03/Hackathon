@@ -1,6 +1,7 @@
 package com.seal.hackathon.ranking.service;
 
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
+import com.seal.hackathon.common.util.ContestOrdering;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Round;
@@ -88,7 +89,7 @@ public class AdvancementService {
         int slotsAssigned = 0;
 
         for (AdvancementCandidateDto candidate : candidates) {
-            if (advancementRepository.findByToRoundId(toRound.getId()).stream()
+            if (advancementRepository.findByToRoundIdOrderByCreatedAtDescIdDesc(toRound.getId()).stream()
                     .anyMatch(a -> a.getTeamId().equals(candidate.getTeamId()))) {
                 continue;
             }
@@ -127,7 +128,7 @@ public class AdvancementService {
     public List<AdvancementResponse> listAdvancements(Long eventId, Long toRoundId) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         loadRoundForEvent(toRoundId, eventId);
-        return advancementRepository.findByToRoundId(toRoundId).stream()
+        return advancementRepository.findByToRoundIdOrderByCreatedAtDescIdDesc(toRoundId).stream()
                 .map(adv -> {
                     Team team = teamRepository.findById(adv.getTeamId()).orElse(null);
                     return toAdvancementResponse(adv, team != null ? team.getName() : "Team #" + adv.getTeamId());
@@ -161,7 +162,7 @@ public class AdvancementService {
     private List<AdvancementCandidateDto> collectSuggestedCandidates(Long fromRoundId, int topN) {
         List<AdvancementCandidateDto> candidates = new ArrayList<>();
         Set<Long> seenTeams = new LinkedHashSet<>();
-        for (Board board : boardRepository.findByRoundId(fromRoundId)) {
+        for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(fromRoundId))) {
             List<RankingResult> rankings = rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId()).stream()
                     .filter(r -> r.getPublishedAt() != null)
                     .limit(topN)
@@ -173,13 +174,17 @@ public class AdvancementService {
                 candidates.add(toCandidateDto(board, result));
             }
         }
+        candidates.sort(Comparator
+                .comparing(AdvancementCandidateDto::getFromBoardName, Comparator.nullsLast(String::compareToIgnoreCase))
+                .thenComparing(AdvancementCandidateDto::getRank, Comparator.nullsLast(Integer::compareTo))
+                .thenComparing(AdvancementCandidateDto::getTeamName, Comparator.nullsLast(String::compareToIgnoreCase)));
         return candidates;
     }
 
     private List<AdvancementCandidateDto> collectAllEligibleTeams(Long fromRoundId) {
         List<AdvancementCandidateDto> all = new ArrayList<>();
         Set<Long> seenTeams = new LinkedHashSet<>();
-        for (Board board : boardRepository.findByRoundId(fromRoundId)) {
+        for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(fromRoundId))) {
             List<RankingResult> rankings = rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId()).stream()
                     .filter(r -> r.getPublishedAt() != null)
                     .toList();

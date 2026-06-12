@@ -329,7 +329,7 @@ class AdvancementIntegrationTest {
 
         BoardSlot updatedSlot = boardSlotRepository.findById(finalsSlot.getId()).orElseThrow();
         assertThat(updatedSlot.getTeamId()).isEqualTo(team.getId());
-        assertThat(advancementRepository.findByToRoundId(finalsRound.getId())).hasSize(1);
+        assertThat(advancementRepository.findByToRoundIdOrderByCreatedAtDescIdDesc(finalsRound.getId())).hasSize(1);
 
         rankingResultRepository.findByBoardIdOrderByRankAsc(groupBoard.getId()).forEach(result ->
                 assertThat(result.getPublishedAt()).isNotNull());
