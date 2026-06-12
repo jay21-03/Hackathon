@@ -5,6 +5,8 @@ import com.seal.hackathon.contest.dto.EventDetailResponse;
 import com.seal.hackathon.contest.dto.EventListItemResponse;
 import com.seal.hackathon.contest.dto.RoundResponse;
 import com.seal.hackathon.contest.service.ContestManagementService;
+import com.seal.hackathon.award.dto.EventAwardsResponse;
+import com.seal.hackathon.award.service.AwardService;
 import com.seal.hackathon.ranking.dto.PublicEventResultsResponse;
 import com.seal.hackathon.ranking.service.RankingService;
 import java.util.List;
@@ -22,6 +24,7 @@ public class EventController {
 
     private final ContestManagementService contestManagementService;
     private final RankingService rankingService;
+    private final AwardService awardService;
 
     @GetMapping
     public ApiResponse<List<EventListItemResponse>> getEvents(
@@ -44,5 +47,11 @@ public class EventController {
     @GetMapping("/{eventId}/results")
     public ApiResponse<PublicEventResultsResponse> getPublishedResults(@PathVariable Long eventId) {
         return ApiResponse.ok(rankingService.getPublicEventResults(eventId));
+    }
+
+    /** Giải thưởng đã công bố — public, chỉ trả dữ liệu sau publish. */
+    @GetMapping("/{eventId}/awards")
+    public ApiResponse<EventAwardsResponse> getPublishedAwards(@PathVariable Long eventId) {
+        return ApiResponse.ok(awardService.getPublicAwards(eventId));
     }
 }

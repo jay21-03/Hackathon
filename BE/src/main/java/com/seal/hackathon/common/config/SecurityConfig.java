@@ -84,6 +84,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/v1/events/*").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/events/*/rounds").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/events/*/results").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/events/*/awards").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/events/*/announcements").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/rounds/*/countdown").permitAll()
                 .requestMatchers("/api/v1/public/email-tracking/**").permitAll()

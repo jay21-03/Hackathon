@@ -28,6 +28,9 @@ import com.seal.hackathon.notification.dto.NotificationResponse;
 import com.seal.hackathon.notification.entity.Announcement;
 import com.seal.hackathon.notification.entity.Notification;
 import com.seal.hackathon.notification.repository.NotificationRepository;
+import com.seal.hackathon.award.entity.AwardCategory;
+import com.seal.hackathon.award.entity.TeamAward;
+import com.seal.hackathon.award.repository.AwardCategoryRepository;
 import com.seal.hackathon.ranking.entity.RankingResult;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.entity.TeamMember;
@@ -74,6 +77,7 @@ public class NotificationService {
     private final MentorAssignmentRepository mentorAssignmentRepository;
     private final JudgeAssignmentRepository judgeAssignmentRepository;
     private final UserRepository userRepository;
+    private final AwardCategoryRepository awardCategoryRepository;
 
     @Value("${app.mail.enabled:false}")
     private boolean mailEnabled;
@@ -205,7 +209,7 @@ public class NotificationService {
         String linkUrl = "/me/team?eventId=" + team.getEventId();
         String statusKey = newStatus.name();
 
-        for (TeamMember member : teamMemberRepository.findByTeamId(team.getId())) {
+        for (TeamMember member : teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId())) {
             if (member.getStatus() != TeamMemberStatus.CONFIRMED) {
                 continue;
             }
@@ -231,7 +235,7 @@ public class NotificationService {
                 + slot.getTeamNumber() + " tại bảng «" + board.getName() + "».";
         String linkUrl = "/me/board?eventId=" + event.getId();
 
-        for (TeamMember member : teamMemberRepository.findByTeamId(team.getId())) {
+        for (TeamMember member : teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId())) {
             if (member.getStatus() != TeamMemberStatus.CONFIRMED) {
                 continue;
             }
@@ -273,7 +277,7 @@ public class NotificationService {
         String content = event.getName() + " — đội «" + team.getName() + "» đã nộp bài: " + repoDisplay + ".";
         String linkUrl = "/me/submission?eventId=" + event.getId();
 
-        for (TeamMember member : teamMemberRepository.findByTeamId(team.getId())) {
+        for (TeamMember member : teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId())) {
             if (member.getStatus() != TeamMemberStatus.CONFIRMED) {
                 continue;
             }
@@ -308,7 +312,7 @@ public class NotificationService {
             if (team == null) {
                 continue;
             }
-            for (TeamMember member : teamMemberRepository.findByTeamId(team.getId())) {
+            for (TeamMember member : teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId())) {
                 if (member.getStatus() != TeamMemberStatus.CONFIRMED) {
                     continue;
                 }
@@ -369,8 +373,8 @@ public class NotificationService {
         int count = 0;
 
         if (resolvedAudience == AnnouncementAudience.ALL || resolvedAudience == AnnouncementAudience.PARTICIPANTS) {
-            for (Team team : teamRepository.findByEventId(event.getId())) {
-                for (TeamMember member : teamMemberRepository.findByTeamId(team.getId())) {
+            for (Team team : teamRepository.findByEventIdOrderByNameAscIdAsc(event.getId())) {
+                for (TeamMember member : teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId())) {
                     if (member.getStatus() != TeamMemberStatus.CONFIRMED) {
                         continue;
                     }
@@ -498,7 +502,7 @@ public class NotificationService {
             if (team == null) {
                 continue;
             }
-            for (TeamMember member : teamMemberRepository.findByTeamId(team.getId())) {
+            for (TeamMember member : teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId())) {
                 if (member.getStatus() != TeamMemberStatus.CONFIRMED) {
                     continue;
                 }
@@ -514,6 +518,50 @@ public class NotificationService {
                         member.getEmail(),
                         event.getId(),
                         NotificationType.RANKING_PUBLISHED,
+                        title,
+                        content,
+                        linkUrl,
+                        dedupeKey);
+            }
+        }
+    }
+
+    @Transactional
+    public void notifyAwardsPublished(Event event, List<TeamAward> awards) {
+        if (awards == null || awards.isEmpty()) {
+            return;
+        }
+        Set<Long> categoryIds = awards.stream().map(TeamAward::getAwardCategoryId).collect(java.util.stream.Collectors.toSet());
+        Map<Long, String> categoryNames = awardCategoryRepository.findAllById(categoryIds).stream()
+                .collect(java.util.stream.Collectors.toMap(AwardCategory::getId, AwardCategory::getName, (a, b) -> a));
+        Map<Long, List<TeamAward>> awardsByTeam = awards.stream()
+                .collect(java.util.stream.Collectors.groupingBy(TeamAward::getTeamId));
+        for (Map.Entry<Long, List<TeamAward>> entry : awardsByTeam.entrySet()) {
+            Team team = teamRepository.findById(entry.getKey()).orElse(null);
+            if (team == null) {
+                continue;
+            }
+            String awardLabels = entry.getValue().stream()
+                    .map(award -> categoryNames.getOrDefault(award.getAwardCategoryId(), "Giải thưởng"))
+                    .distinct()
+                    .collect(java.util.stream.Collectors.joining(", "));
+            for (TeamMember member : teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId())) {
+                if (member.getStatus() != TeamMemberStatus.CONFIRMED) {
+                    continue;
+                }
+                String dedupeKey = member.getUserId() != null
+                        ? "awards:e" + event.getId() + ":t" + team.getId() + ":u" + member.getUserId()
+                        : "awards:e" + event.getId() + ":t" + team.getId() + ":e"
+                                + member.getEmail().toLowerCase(Locale.ROOT);
+                String title = "Chúc mừng — đội bạn đạt giải!";
+                String content = event.getName() + " — đội «" + team.getName() + "» nhận: " + awardLabels
+                        + ". Xem chi tiết tại trang kết quả.";
+                String linkUrl = "/me/results?eventId=" + event.getId();
+                create(
+                        member.getUserId(),
+                        member.getEmail(),
+                        event.getId(),
+                        NotificationType.AWARDS_PUBLISHED,
                         title,
                         content,
                         linkUrl,
