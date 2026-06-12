@@ -398,7 +398,7 @@ public class RepositoryProvisioningService {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
-        List<Long> teamIds = teamRepository.findByEventId(eventId).stream()
+        List<Long> teamIds = teamRepository.findByEventIdOrderByNameAscIdAsc(eventId).stream()
                 .map(Team::getId)
                 .toList();
         if (teamIds.isEmpty()) {
@@ -758,7 +758,7 @@ public class RepositoryProvisioningService {
         if (assignedTeamIds.isEmpty()) {
             return List.of();
         }
-        return teamRepository.findByEventIdAndStatus(scope.round().getEventId(), TeamStatus.CONFIRMED).stream()
+        return teamRepository.findByEventIdAndStatusOrderByNameAscIdAsc(scope.round().getEventId(), TeamStatus.CONFIRMED).stream()
                 .filter(team -> assignedTeamIds.contains(team.getId()))
                 .toList();
     }

@@ -1,5 +1,7 @@
 package com.seal.hackathon.assignment.service;
 
+import com.seal.hackathon.academic.entity.AcademicTerm;
+import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.assignment.dto.AssignmentResponse;
 import com.seal.hackathon.assignment.dto.CreateAssignmentRequest;
 import com.seal.hackathon.assignment.entity.JudgeAssignment;
@@ -44,6 +46,7 @@ public class BoardAssignmentService {
     private final TeamRepository teamRepository;
     private final RoundRepository roundRepository;
     private final EventRepository eventRepository;
+    private final AcademicTermRepository academicTermRepository;
     private final UserRoleRepository userRoleRepository;
     private final CurrentUserProvider currentUserProvider;
     private final OrganizerAuthorizationService organizerAuthorizationService;
@@ -258,6 +261,13 @@ public class BoardAssignmentService {
         Event event = eventRepository.findById(round.getEventId()).orElse(null);
         if (event != null) {
             response.setEventName(event.getName());
+            response.setAcademicTermId(event.getAcademicTermId());
+            if (event.getAcademicTermId() != null) {
+                AcademicTerm term = academicTermRepository.findById(event.getAcademicTermId()).orElse(null);
+                if (term != null) {
+                    response.setAcademicTermStatus(term.getStatus());
+                }
+            }
         }
         return response;
     }

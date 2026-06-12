@@ -250,7 +250,9 @@ class JudgeBoardReadinessIntegrationTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].readiness").value("NO_PROBLEM"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].eventName").value("ReadinessEvent"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].roundName").value("Vòng 1"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].boardName").value("Bảng A"));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].boardName").value("Bảng A"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].academicTermId").isNumber())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].academicTermStatus").value("ACTIVE"));
     }
 
     @Test

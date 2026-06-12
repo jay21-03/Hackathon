@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.authprofile.entity.User;
 import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.common.enums.EventStatus;
+import com.seal.hackathon.common.enums.UserStatus;
 import com.seal.hackathon.common.enums.TeamMemberStatus;
 import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.exception.BusinessException;
@@ -43,6 +44,7 @@ import java.security.MessageDigest;
 import java.time.ZoneOffset;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -168,6 +170,9 @@ public class RegistrationServiceImpl implements RegistrationService {
         validateRegistrationWindow(event);
         User contactUser = userRepository.findById(contactUserId)
                 .orElseThrow(() -> new BusinessException("Contact user not found"));
+        if (contactUser.getStatus() != UserStatus.ACTIVE) {
+            throw new BusinessException("ACCOUNT_PENDING_APPROVAL");
+        }
 
         List<MemberRequest> normalizedMembers = normalizeAndValidateMembers(request.getMembers(), contactEmail, contactUser.getFullName());
 
@@ -395,7 +400,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         Team team = teamRepository.findByIdAndEventId(parts.teamId(), member.getEventId())
                 .orElseThrow(() -> new BusinessException("Team not found"));
 
-        List<TeamMember> teamMembers = teamMemberRepository.findByTeamId(team.getId());
+        List<TeamMember> teamMembers = teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId());
         boolean allConfirmed = teamMembers.stream().allMatch(teamMember -> teamMember.getStatus() == TeamMemberStatus.CONFIRMED);
         if (allConfirmed) {
             Event event = eventRepository.findById(team.getEventId())
@@ -450,7 +455,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         team.setUpdatedAt(now);
         teamRepository.save(team);
 
-        List<TeamMember> teamMembers = teamMemberRepository.findByTeamId(team.getId());
+        List<TeamMember> teamMembers = teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId());
 
         appendLifecycleArtifacts(team, "INVITATION_DECLINED", "InvitationDeclined", actorUserId, actorEmail, now,
                 "{\"teamId\": " + team.getId() + ", \"teamMemberId\": " + member.getId() + ", \"teamStatus\": \"" + team.getStatus() + "\"}");
@@ -572,7 +577,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         validateRegistrationWindow(event);
 
-        List<TeamMember> existingMembers = teamMemberRepository.findByTeamId(teamId);
+        List<TeamMember> existingMembers = teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(teamId);
         if (existingMembers.size() >= event.getMaxTeamSize()) {
             throw new BusinessException("Team has reached the maximum size of " + event.getMaxTeamSize());
         }
@@ -724,7 +729,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     }
 
     private void recalculateTeamStatusAfterMemberChange(Team team, OffsetDateTime now) {
-        List<TeamMember> members = teamMemberRepository.findByTeamId(team.getId());
+        List<TeamMember> members = teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId());
         if (members.isEmpty()) {
             team.setStatus(TeamStatus.PENDING);
             team.setConfirmedAt(null);
@@ -764,6 +769,8 @@ public class RegistrationServiceImpl implements RegistrationService {
                 .distinct()
                 .map(teamId -> teamRepository.findByIdAndEventId(teamId, eventId))
                 .flatMap(Optional::stream)
+                .sorted(Comparator.comparing(Team::getName, Comparator.nullsLast(String::compareToIgnoreCase))
+                        .thenComparing(Team::getId))
                 .map(this::loadTeamDetail)
                 .collect(Collectors.toList());
     }
@@ -778,8 +785,8 @@ public class RegistrationServiceImpl implements RegistrationService {
     public List<TeamDetailDto> getEventTeams(Long eventId, TeamStatus status) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         List<com.seal.hackathon.registration.entity.Team> teams = status == null
-                ? teamRepository.findByEventId(eventId)
-                : teamRepository.findByEventIdAndStatus(eventId, status);
+                ? teamRepository.findByEventIdOrderByNameAscIdAsc(eventId)
+                : teamRepository.findByEventIdAndStatusOrderByNameAscIdAsc(eventId, status);
         if (teams.isEmpty()) {
             return List.of();
         }
@@ -797,8 +804,11 @@ public class RegistrationServiceImpl implements RegistrationService {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         int resolvedPage = Math.max(page, 0);
         int resolvedSize = Math.min(Math.max(size, 1), 200);
+        org.springframework.data.domain.Sort teamSort = org.springframework.data.domain.Sort.by(
+                org.springframework.data.domain.Sort.Order.asc("name"),
+                org.springframework.data.domain.Sort.Order.asc("id"));
         org.springframework.data.domain.Pageable pageable =
-                org.springframework.data.domain.PageRequest.of(resolvedPage, resolvedSize);
+                org.springframework.data.domain.PageRequest.of(resolvedPage, resolvedSize, teamSort);
         org.springframework.data.domain.Page<Team> teamPage = status == null
                 ? teamRepository.findByEventId(eventId, pageable)
                 : teamRepository.findByEventIdAndStatus(eventId, status, pageable);
@@ -825,7 +835,9 @@ public class RegistrationServiceImpl implements RegistrationService {
     public List<com.seal.hackathon.registration.dto.AuditLogResponse> getEventAuditLogs(Long eventId, int limit) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         int resolvedLimit = Math.min(Math.max(limit, 1), 200);
-        List<Long> teamIds = teamRepository.findByEventId(eventId).stream().map(Team::getId).toList();
+        List<Long> teamIds = teamRepository.findByEventIdOrderByNameAscIdAsc(eventId).stream()
+                .map(Team::getId)
+                .toList();
         List<Long> boardIds = new ArrayList<>();
         List<Long> slotIds = new ArrayList<>();
         for (Round round : roundRepository.findByEventId(eventId)) {
@@ -1075,7 +1087,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     }
 
     private TeamDetailDto loadTeamDetail(Team team) {
-        return toDetailDto(team, teamMemberRepository.findByTeamId(team.getId()));
+        return toDetailDto(team, teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId()));
     }
 
     private String writeStoredResponse(TeamDetailDto dto) {
@@ -1102,7 +1114,14 @@ public class RegistrationServiceImpl implements RegistrationService {
         dto.setStatus(team.getStatus() == null ? null : team.getStatus().name());
         dto.setConfirmedAt(team.getConfirmedAt());
         dto.setRejectedReason(team.getRejectedReason());
-        dto.setMembers(members.stream().map(this::toMemberDto).collect(Collectors.toList()));
+        dto.setMembers(members.stream()
+                .sorted(Comparator
+                        .comparing(TeamMember::getContactPerson, Comparator.nullsLast(Boolean::compareTo))
+                        .reversed()
+                        .thenComparing(TeamMember::getFullName, Comparator.nullsLast(String::compareToIgnoreCase))
+                        .thenComparing(TeamMember::getId))
+                .map(this::toMemberDto)
+                .collect(Collectors.toList()));
         return dto;
     }
 

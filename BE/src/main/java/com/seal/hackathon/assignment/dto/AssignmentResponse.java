@@ -1,5 +1,6 @@
 package com.seal.hackathon.assignment.dto;
 
+import com.seal.hackathon.common.enums.AcademicTermStatus;
 import com.seal.hackathon.common.enums.JudgeBoardReadiness;
 import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
@@ -19,6 +20,8 @@ public class AssignmentResponse {
     private String roundName;
     private Long eventId;
     private String eventName;
+    private Long academicTermId;
+    private AcademicTermStatus academicTermStatus;
     private Long assigneeId; // mentorId or judgeId
     private OffsetDateTime createdAt;
     private Long createdBy;
