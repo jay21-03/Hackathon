@@ -1,6 +1,12 @@
-export type ArtifactsHubStep = "#artifacts-step-submissions" | "#artifacts-step-repositories";
+export type ArtifactsHubStep =
+  | "#artifacts-step-rubric"
+  | "#artifacts-step-submissions"
+  | "#artifacts-step-repositories";
 
 const LEGACY_HASH: Record<string, ArtifactsHubStep> = {
+  "#artifacts-step-rubric": "#artifacts-step-rubric",
+  "#rubric": "#artifacts-step-rubric",
+  "#results-step-rubric": "#artifacts-step-rubric",
   "#artifacts-step-submissions": "#artifacts-step-submissions",
   "#submissions": "#artifacts-step-submissions",
   "#artifacts-step-repositories": "#artifacts-step-repositories",
@@ -8,7 +14,7 @@ const LEGACY_HASH: Record<string, ArtifactsHubStep> = {
 };
 
 export function normalizeArtifactsHubStep(anchor: string): ArtifactsHubStep {
-  return LEGACY_HASH[anchor] ?? "#artifacts-step-submissions";
+  return LEGACY_HASH[anchor] ?? "#artifacts-step-rubric";
 }
 
 export function resolveArtifactsHubStep(
@@ -21,5 +27,5 @@ export function resolveArtifactsHubStep(
   const lastDone = [...microSteps].reverse().find((step) => step.state === "done" && step.anchor);
   return lastDone?.anchor
     ? normalizeArtifactsHubStep(lastDone.anchor)
-    : "#artifacts-step-submissions";
+    : "#artifacts-step-rubric";
 }

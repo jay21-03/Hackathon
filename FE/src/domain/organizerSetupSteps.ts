@@ -4,16 +4,17 @@ import { ORGANIZER_MACRO_STEPS } from "./organizerWorkflow";
 export type OrganizerSetupContext = {
   hasTeams: boolean;
   hasBoards: boolean;
+  hasSlots: boolean;
   hasProblem: boolean;
   hasRubric: boolean;
 };
 
 const SETUP_REQUIRES: Record<string, (ctx: OrganizerSetupContext) => boolean> = {
   basic: () => true,
+  boards: (ctx) => ctx.hasBoards && ctx.hasSlots,
   "teams-hub": (ctx) => ctx.hasTeams,
-  boards: (ctx) => ctx.hasBoards,
   "board-ops": (ctx) => ctx.hasProblem,
-  "artifacts-hub": (ctx) => ctx.hasProblem,
+  "artifacts-hub": (ctx) => ctx.hasProblem && ctx.hasRubric,
   "results-hub": (ctx) => ctx.hasRubric
 };
 
@@ -21,24 +22,26 @@ export function resolveOrganizerSetupSteps(
   ctx: OrganizerSetupContext,
   currentPath?: string
 ): WorkflowStep[] {
-  let lastDone = -1;
-  for (let i = 0; i < ORGANIZER_MACRO_STEPS.length; i++) {
-    const step = ORGANIZER_MACRO_STEPS[i];
-    const requires = SETUP_REQUIRES[step.id] ?? (() => true);
-    if (requires(ctx)) lastDone = i;
-  }
+  const firstIncomplete = ORGANIZER_MACRO_STEPS.findIndex(
+    (step) => !(SETUP_REQUIRES[step.id] ?? (() => true))(ctx)
+  );
 
   return ORGANIZER_MACRO_STEPS.map((step, index) => {
+    const stepDone = (SETUP_REQUIRES[step.id] ?? (() => true))(ctx);
+
     let state: WorkflowStep["state"];
     if (currentPath && step.path === currentPath) {
       state = "active";
-    } else if (index <= lastDone) {
+    } else if (stepDone) {
       state = "done";
-    } else if (index === lastDone + 1) {
+    } else if (firstIncomplete === -1) {
+      state = "done";
+    } else if (index === firstIncomplete) {
       state = "next";
     } else {
       state = "blocked";
     }
+
     return { label: step.label, detail: step.detail, to: step.path, state };
   });
 }

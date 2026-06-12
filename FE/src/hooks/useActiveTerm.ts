@@ -33,7 +33,7 @@ export function useActiveTerm() {
   }, []);
 
   const termsQuery = useQuery({
-    queryKey: queryKeys.academicTerms.list(),
+    queryKey: queryKeys.academicTerms.list("ACTIVE"),
     queryFn: () => fetchAcademicTerms("ACTIVE"),
     enabled: canManageTerms && !rolesLoading
   });

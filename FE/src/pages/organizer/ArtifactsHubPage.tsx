@@ -17,7 +17,9 @@ import {
   type ArtifactsHubStep
 } from "./artifactsHubUtils";
 import { handleEmbeddedNextStep, type HubEmbedProps } from "../../utils/hubEmbedUtils";
+import { macroPathToWizardStep } from "./eventWizardUtils";
 import { RepositoryManagementPage } from "./RepositoryManagementPage";
+import { RubricSetupPage } from "./RubricSetupPage";
 import { SubmissionManagementPage } from "./SubmissionManagementPage";
 
 export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedProps = {}) {
@@ -58,6 +60,8 @@ export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedPro
   );
 
   const { microSteps } = useArtifactsHubProgress({
+    hasBoards: context.hasBoards,
+    hasRubric: context.hasRubric,
     showSubmissions: enableSubmissions,
     showRepositories: enableGithubProvisioning,
     submittedCount,
@@ -98,7 +102,7 @@ export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedPro
         <PageHeader
           eyebrow="Vận hành thi"
           title="Bài nộp & repository"
-          description="Theo dõi bài nộp đội và provision GitHub — một luồng liền mạch sau khi mở đề."
+          description="Tiêu chí chấm, provision GitHub và theo dõi nộp bài — một luồng liền mạch sau vận hành bảng."
           actions={<OrganizerContextBar />}
         />
       ) : null}
@@ -108,19 +112,34 @@ export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedPro
         description="Chọn một bước — mỗi lần chỉ hiện nội dung bước đó."
         activeHref={currentStep}
         onStepSelect={(href) => handleEmbeddedNextStep(href, embedded, onWizardStep, goToStep)}
-        steps={microSteps.map((step) => ({
-          label: step.label,
-          detail: step.detail,
-          href: step.anchor,
-          state: step.state
-        }))}
+        steps={microSteps.map((step) => {
+          if (embedded && step.to) {
+            const wizardHref = macroPathToWizardStep(step.to);
+            if (wizardHref) {
+              return {
+                label: step.label,
+                detail: step.detail,
+                href: wizardHref,
+                state: step.state
+              };
+            }
+          }
+          return {
+            label: step.label,
+            detail: step.detail,
+            href: step.anchor,
+            to: step.to,
+            state: step.state
+          };
+        })}
       />
 
-      {enableSubmissions && currentStep === "#artifacts-step-submissions" ? (
-        <SubmissionManagementPage embedded />
-      ) : null}
+      {currentStep === "#artifacts-step-rubric" ? <RubricSetupPage embedded /> : null}
       {enableGithubProvisioning && currentStep === "#artifacts-step-repositories" ? (
         <RepositoryManagementPage embedded />
+      ) : null}
+      {enableSubmissions && currentStep === "#artifacts-step-submissions" ? (
+        <SubmissionManagementPage embedded />
       ) : null}
     </div>
   );

@@ -6,7 +6,7 @@ export interface BoardWithSlots {
 }
 import type { TeamDetailResponse } from "../../services/registrationService";
 
-export type BoardSetupStep = "#board-step-round" | "#board-step-board" | "#board-step-slots";
+export type BoardSetupStep = "#board-step-round" | "#board-step-layout";
 
 import { toIsoFromLocal, toLocalDateTimeInput } from "../../utils/dateTimeInput";
 
@@ -15,7 +15,14 @@ export { toIsoFromLocal, toLocalDateTimeInput as toLocalInput } from "../../util
 const toLocalInput = toLocalDateTimeInput;
 
 export function normalizeBoardStep(anchor: string): BoardSetupStep {
-  if (anchor === "#board-step-slot" || anchor === "#board-step-assign") return "#board-step-slots";
+  if (
+    anchor === "#board-step-board" ||
+    anchor === "#board-step-slots" ||
+    anchor === "#board-step-slot" ||
+    anchor === "#board-step-assign"
+  ) {
+    return "#board-step-layout";
+  }
   return anchor as BoardSetupStep;
 }
 

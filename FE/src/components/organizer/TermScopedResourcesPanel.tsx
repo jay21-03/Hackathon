@@ -31,10 +31,19 @@ import {
 
 interface TermScopedResourcesPanelProps {
   hubStep: TermHubStep;
+  termId?: number | null;
+  termCode?: string | null;
 }
 
-export function TermScopedResourcesPanel({ hubStep }: TermScopedResourcesPanelProps) {
-  const { termId, term, enabled } = useActiveTerm();
+export function TermScopedResourcesPanel({
+  hubStep,
+  termId: termIdOverride,
+  termCode
+}: TermScopedResourcesPanelProps) {
+  const activeTerm = useActiveTerm();
+  const termId = termIdOverride ?? activeTerm.termId;
+  const enabled = termIdOverride != null ? true : activeTerm.enabled;
+  const term = termIdOverride != null ? null : activeTerm.term;
   const [tab, setTab] = useState<TermScopedTab>(() => defaultTabForStep(hubStep));
   const [page, setPage] = useState(0);
   const pageSize = 20;
@@ -129,7 +138,9 @@ export function TermScopedResourcesPanel({ hubStep }: TermScopedResourcesPanelPr
         <div>
           <h2 className="font-headline-sm text-on-surface">{stepTitles[hubStep]}</h2>
           <p className="font-body-sm text-on-surface-variant">
-            {term ? `${term.code} — dữ liệu trên mọi cuộc thi trong kỳ` : "Đang tải…"}
+            {term?.code ?? termCode
+              ? `${term?.code ?? termCode} — dữ liệu trên mọi cuộc thi trong kỳ`
+              : "Đang tải…"}
           </p>
         </div>
         <div className="flex flex-wrap gap-xs">

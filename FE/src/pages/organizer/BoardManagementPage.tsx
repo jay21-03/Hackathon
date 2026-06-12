@@ -45,7 +45,8 @@ import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { zodFirstError } from "../../utils/formValidation";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
 import { isRoundRunning, pickActiveRound } from "../../utils/pickActiveRound";
-import { type HubEmbedProps } from "../../utils/hubEmbedUtils";
+import { handleEmbeddedNextStep, type HubEmbedProps } from "../../utils/hubEmbedUtils";
+import { macroPathToWizardStep } from "./eventWizardUtils";
 import {
   defaultRoundTimes,
   normalizeBoardStep,
@@ -218,7 +219,7 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
       setShowAddRound(false);
       await invalidate(created.id);
       notify("Đã tạo vòng thi. Tiếp theo: thêm bảng bên dưới.", "success");
-      goToStep("#board-step-board");
+      goToStep("#board-step-layout");
     } catch (err) {
       applyApiFormErrors(err, setRoundFieldErrors);
       notify(resolveApiError(err, "Tạo vòng thi thất bại."), "danger");
@@ -258,7 +259,7 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
       setBoardName("");
       await invalidate();
       notify("Đã tạo bảng thi. Tiếp theo: thêm vị trí trên bảng vừa tạo.", "success");
-      goToStep("#board-step-slots");
+      goToStep("#board-step-layout");
     } catch (err) {
       applyApiFormErrors(err, setCreateBoardFieldErrors);
       notify(resolveApiError(err, "Tạo bảng thi thất bại."), "danger");
@@ -450,7 +451,7 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
       });
       await invalidate();
       notify("Đã lưu vòng thi.", "success");
-      if (boards.length === 0) goToStep("#board-step-board");
+      if (boards.length === 0) goToStep("#board-step-layout");
     } catch (err) {
       applyApiFormErrors(err, setRoundFieldErrors);
       notify(resolveApiError(err, "Cập nhật vòng thi thất bại."), "danger");
@@ -600,7 +601,7 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
         <PageHeader
           eyebrow="Bảng thi và phân công"
           title="Quản lý bảng thi"
-          description="Vòng → bảng → vị trí & gán đội trên cùng một màn."
+          description="Vòng → bảng & vị trí — gán đội tại Vận hành bảng khi đã có đội."
           actions={
             <>
               <ButtonLink to="/organizer/events/basic-info" variant="ghost" icon={<Icon name="settings" />}>
@@ -658,14 +659,27 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
         title="Các bước trên trang này"
         description="Chọn một bước — mỗi lần chỉ hiện form của bước đó."
         activeHref={currentStep}
-        onStepSelect={(href) => goToStep(href)}
-        steps={microSteps.map((step) => ({
-          label: step.label,
-          detail: step.detail,
-          href: step.anchor,
-          to: step.to,
-          state: step.state
-        }))}
+        onStepSelect={(href) => handleEmbeddedNextStep(href, embedded, onWizardStep, goToStep)}
+        steps={microSteps.map((step) => {
+          if (embedded && step.to) {
+            const wizardHref = macroPathToWizardStep(step.to);
+            if (wizardHref) {
+              return {
+                label: step.label,
+                detail: step.detail,
+                href: wizardHref,
+                state: step.state
+              };
+            }
+          }
+          return {
+            label: step.label,
+            detail: step.detail,
+            href: step.anchor,
+            to: step.to,
+            state: step.state
+          };
+        })}
       />
 
       {currentStep === "#board-step-round" ? (
@@ -700,92 +714,84 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
         />
       ) : null}
 
-      {currentStep === "#board-step-board" ? (
+      {currentStep === "#board-step-layout" ? (
         rounds.length === 0 ? (
           <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
             <p className="font-body-md text-on-surface-variant">Hoàn thành bước «Vòng thi» trước khi thêm bảng.</p>
           </div>
         ) : (
-          <BoardListSection
-            selectedRound={selectedRound}
-            boards={boards}
-            boardEdits={boardEdits}
-            boardName={boardName}
-            boardOrder={boardOrder}
-            createBoardFieldErrors={createBoardFieldErrors}
-            boardFieldErrors={boardFieldErrors}
-            busy={busy}
-            selectedRoundId={selectedRoundId}
-            onBoardNameChange={(value) => {
-              setBoardName(value);
-              setCreateBoardFieldErrors((prev) => ({ ...prev, name: "" }));
-            }}
-            onBoardOrderChange={(value) => {
-              setBoardOrder(value);
-              setCreateBoardFieldErrors((prev) => ({ ...prev, boardOrder: "" }));
-            }}
-            onBoardEditsChange={setBoardEdits}
-            onCreateBoard={() => void handleCreateBoard()}
-            onSaveBoard={(boardId) => void handleSaveBoard(boardId)}
-            onDeleteBoard={(boardId) => void handleDeleteBoard(boardId)}
-            onClearBoardFieldError={(boardId, field) => {
-              setBoardFieldErrors((prev) => {
-                const current = prev[boardId];
-                if (!current?.[field]) return prev;
-                const nextBoard = { ...current, [field]: "" };
-                return { ...prev, [boardId]: nextBoard };
-              });
-            }}
-          />
-        )
-      ) : null}
-
-      {currentStep === "#board-step-slots" ? (
-        boards.length === 0 ? (
-          <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-            <p className="font-body-md text-on-surface-variant">
-              Hoàn thành bước «Bảng» trước khi thêm vị trí và gán đội.
-            </p>
+          <div className="space-y-lg">
+            <BoardListSection
+              selectedRound={selectedRound}
+              boards={boards}
+              boardEdits={boardEdits}
+              boardName={boardName}
+              boardOrder={boardOrder}
+              createBoardFieldErrors={createBoardFieldErrors}
+              boardFieldErrors={boardFieldErrors}
+              busy={busy}
+              selectedRoundId={selectedRoundId}
+              onBoardNameChange={(value) => {
+                setBoardName(value);
+                setCreateBoardFieldErrors((prev) => ({ ...prev, name: "" }));
+              }}
+              onBoardOrderChange={(value) => {
+                setBoardOrder(value);
+                setCreateBoardFieldErrors((prev) => ({ ...prev, boardOrder: "" }));
+              }}
+              onBoardEditsChange={setBoardEdits}
+              onCreateBoard={() => void handleCreateBoard()}
+              onSaveBoard={(boardId) => void handleSaveBoard(boardId)}
+              onDeleteBoard={(boardId) => void handleDeleteBoard(boardId)}
+              onClearBoardFieldError={(boardId, field) => {
+                setBoardFieldErrors((prev) => {
+                  const current = prev[boardId];
+                  if (!current?.[field]) return prev;
+                  const nextBoard = { ...current, [field]: "" };
+                  return { ...prev, [boardId]: nextBoard };
+                });
+              }}
+            />
+            <BoardSlotsSection
+              boards={boards}
+              teams={teams}
+              confirmedTeams={confirmedTeams}
+              teamMap={teamMap}
+              teamById={teamById}
+              allSlots={allSlots}
+              stats={stats}
+              busy={busy}
+              selectedRoundId={selectedRoundId}
+              forceReplace={forceReplace}
+              slotTeamNumber={slotTeamNumber}
+              moveFromId={moveFromId}
+              moveToId={moveToId}
+              swapAId={swapAId}
+              swapBId={swapBId}
+              onForceReplaceChange={setForceReplace}
+              onSlotTeamNumberChange={(boardId, value) =>
+                setSlotTeamNumber((current) => ({ ...current, [boardId]: value }))
+              }
+              onSlotTeamPickChange={(slotId, value) =>
+                setSlotTeamPick((current) => ({ ...current, [slotId]: value }))
+              }
+              onMoveFromIdChange={setMoveFromId}
+              onMoveToIdChange={setMoveToId}
+              onSwapAIdChange={setSwapAId}
+              onSwapBIdChange={setSwapBId}
+              slotPickValue={slotPickValue}
+              teamsForSlot={teamsForSlot}
+              onRandomAssign={() => void handleRandomAssign()}
+              onMove={() => void handleMove()}
+              onSwap={() => void handleSwap()}
+              onCreateSlot={(boardId) => void handleCreateSlot(boardId)}
+              onAssignSlot={(slotId, occupied) => void handleAssignSlot(slotId, occupied)}
+              onUnassignSlot={(slotId) => void handleUnassignSlot(slotId)}
+              onDeleteSlot={(slotId) => void handleDeleteSlot(slotId)}
+              onOpenTeamDetail={(teamId, contextLabel) => void openTeamDetail(teamId, contextLabel)}
+              showAssignment={false}
+            />
           </div>
-        ) : (
-          <BoardSlotsSection
-            boards={boards}
-            teams={teams}
-            confirmedTeams={confirmedTeams}
-            teamMap={teamMap}
-            teamById={teamById}
-            allSlots={allSlots}
-            stats={stats}
-            busy={busy}
-            selectedRoundId={selectedRoundId}
-            forceReplace={forceReplace}
-            slotTeamNumber={slotTeamNumber}
-            moveFromId={moveFromId}
-            moveToId={moveToId}
-            swapAId={swapAId}
-            swapBId={swapBId}
-            onForceReplaceChange={setForceReplace}
-            onSlotTeamNumberChange={(boardId, value) =>
-              setSlotTeamNumber((current) => ({ ...current, [boardId]: value }))
-            }
-            onSlotTeamPickChange={(slotId, value) =>
-              setSlotTeamPick((current) => ({ ...current, [slotId]: value }))
-            }
-            onMoveFromIdChange={setMoveFromId}
-            onMoveToIdChange={setMoveToId}
-            onSwapAIdChange={setSwapAId}
-            onSwapBIdChange={setSwapBId}
-            slotPickValue={slotPickValue}
-            teamsForSlot={teamsForSlot}
-            onRandomAssign={() => void handleRandomAssign()}
-            onMove={() => void handleMove()}
-            onSwap={() => void handleSwap()}
-            onCreateSlot={(boardId) => void handleCreateSlot(boardId)}
-            onAssignSlot={(slotId, occupied) => void handleAssignSlot(slotId, occupied)}
-            onUnassignSlot={(slotId) => void handleUnassignSlot(slotId)}
-            onDeleteSlot={(slotId) => void handleDeleteSlot(slotId)}
-            onOpenTeamDetail={(teamId, contextLabel) => void openTeamDetail(teamId, contextLabel)}
-          />
         )
       ) : null}
 

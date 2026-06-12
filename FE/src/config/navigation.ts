@@ -37,6 +37,7 @@ const rankingNavPrefixes = [
   "/organizer/publish-results",
   "/organizer/export-success",
   "/organizer/finals",
+  "/organizer/awards",
   "/events/",
   "/me/results"
 ];
@@ -100,8 +101,8 @@ export const organizerNav: NavItem[] = [
   },
   { to: "/organizer/events", label: "Cuộc thi", icon: "event", group: "Thiết lập" },
   { to: "/organizer/events/new", label: "Tạo cuộc thi", icon: "add_circle", group: "Thiết lập" },
+  { to: "/organizer/boards", label: "Bảng thi", icon: "grid_view", group: "Thiết lập" },
   { to: "/organizer/teams-hub", label: "Đội & lời mời", icon: "groups", group: "Thiết lập" },
-  { to: "/organizer/boards", label: "Bảng thi", icon: "grid_view", group: "Vận hành thi" },
   { to: "/organizer/board-ops", label: "Vận hành bảng", icon: "tune", group: "Vận hành thi" },
   {
     to: "/organizer/artifacts-hub",

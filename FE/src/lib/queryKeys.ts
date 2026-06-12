@@ -1,7 +1,8 @@
 export const queryKeys = {
   academicTerms: {
     all: ["academicTerms"] as const,
-    list: () => [...queryKeys.academicTerms.all, "list"] as const,
+    list: (scope: "all" | "ACTIVE" | "ARCHIVED" = "all") =>
+      [...queryKeys.academicTerms.all, "list", scope] as const,
     detail: (id: number | null) => [...queryKeys.academicTerms.all, "detail", id ?? "none"] as const,
     dashboard: (id: number | null) => [...queryKeys.academicTerms.all, "dashboard", id ?? "none"] as const
   },
@@ -61,6 +62,11 @@ export const queryKeys = {
     board: (boardId: number | null) => [...queryKeys.rankings.all, "board", boardId] as const,
     event: (eventId: number | null) => [...queryKeys.rankings.all, "event", eventId] as const,
     public: (eventId: number | null) => [...queryKeys.rankings.all, "public", eventId] as const
+  },
+  awards: {
+    all: ["awards"] as const,
+    event: (eventId: number | null) => [...queryKeys.awards.all, "event", eventId] as const,
+    public: (eventId: number | null) => [...queryKeys.awards.all, "public", eventId] as const
   },
   notifications: {
     all: ["notifications"] as const,

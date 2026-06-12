@@ -16,27 +16,27 @@ export const ORGANIZER_MACRO_STEPS: OrganizerMacroStep[] = [
     path: "/organizer/events/basic-info"
   },
   {
+    id: "boards",
+    label: "Bảng thi",
+    detail: "Vòng, bảng và vị trí",
+    path: "/organizer/boards"
+  },
+  {
     id: "teams-hub",
     label: "Đội & lời mời",
     detail: "Đăng ký, duyệt đội và theo dõi lời mời",
     path: "/organizer/teams-hub"
   },
   {
-    id: "boards",
-    label: "Bảng thi",
-    detail: "Vòng, bảng, vị trí, gán đội",
-    path: "/organizer/boards"
-  },
-  {
     id: "board-ops",
     label: "Vận hành bảng",
-    detail: "Đề thi, mentor & giám khảo",
+    detail: "Gán đội, mentor, giám khảo & đề thi",
     path: "/organizer/board-ops"
   },
   {
     id: "artifacts-hub",
     label: "Bài nộp & repo",
-    detail: "Theo dõi nộp bài và repository GitHub",
+    detail: "Tiêu chí chấm, repository GitHub và nộp bài",
     path: "/organizer/artifacts-hub"
   },
   {
@@ -46,4 +46,3 @@ export const ORGANIZER_MACRO_STEPS: OrganizerMacroStep[] = [
     path: "/organizer/results-hub"
   }
 ];
-

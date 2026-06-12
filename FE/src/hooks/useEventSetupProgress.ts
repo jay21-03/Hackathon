@@ -2,7 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import type { OrganizerSetupContext } from "../domain/organizerSetupSteps";
 import { resolveOrganizerSetupSteps } from "../domain/organizerSetupSteps";
 import { queryKeys } from "../lib/queryKeys";
-import { fetchBoardProblems, fetchEventRounds, fetchRoundBoards } from "../services/contestApi";
+import {
+  fetchBoardProblems,
+  fetchBoardSlots,
+  fetchEventRounds,
+  fetchRoundBoards
+} from "../services/contestApi";
 import { fetchRubric } from "../services/scoringApi";
 import { pickActiveRound } from "../utils/pickActiveRound";
 import { useEventTeams } from "./useEventTeams";
@@ -17,6 +22,11 @@ export function useEventSetupProgress(eventId: number | null, currentPath?: stri
       const rounds = await fetchEventRounds(eventId!);
       const round = pickActiveRound(rounds) ?? rounds[0];
       const boards = round ? await fetchRoundBoards(round.id) : [];
+      let slotsCount = 0;
+      for (const board of boards) {
+        const slots = await fetchBoardSlots(board.id);
+        slotsCount += slots.length;
+      }
       let hasProblem = false;
       let hasRubric = false;
       if (boards[0]) {
@@ -31,7 +41,7 @@ export function useEventSetupProgress(eventId: number | null, currentPath?: stri
           hasRubric = false;
         }
       }
-      return { boardsCount: boards.length, hasProblem, hasRubric };
+      return { boardsCount: boards.length, slotsCount, hasProblem, hasRubric };
     }
   });
 
@@ -39,6 +49,7 @@ export function useEventSetupProgress(eventId: number | null, currentPath?: stri
   const ctx: OrganizerSetupContext = {
     hasTeams: confirmedCount > 0,
     hasBoards: (setupQuery.data?.boardsCount ?? 0) > 0,
+    hasSlots: (setupQuery.data?.slotsCount ?? 0) > 0,
     hasProblem: setupQuery.data?.hasProblem ?? false,
     hasRubric: setupQuery.data?.hasRubric ?? false
   };

@@ -72,11 +72,11 @@ export function EventWizardPage() {
       {currentStep === "#wizard-step-basic" ? (
         <EventBasicInfoPage embedded onWizardStep={goToStep} />
       ) : null}
-      {currentStep === "#wizard-step-teams-hub" ? (
-        <TeamsHubPage embedded onWizardStep={goToStep} />
-      ) : null}
       {currentStep === "#wizard-step-boards" ? (
         <BoardManagementPage embedded onWizardStep={goToStep} />
+      ) : null}
+      {currentStep === "#wizard-step-teams-hub" ? (
+        <TeamsHubPage embedded onWizardStep={goToStep} />
       ) : null}
       {currentStep === "#wizard-step-board-ops" ? (
         <BoardOperationsPage embedded onWizardStep={goToStep} />

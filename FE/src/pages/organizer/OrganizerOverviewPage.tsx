@@ -89,7 +89,7 @@ export function OrganizerOverviewPage() {
   if (boardCount > 0 && enableScoring && !setupContext.hasRubric) {
     blockers.push({
       text: "Chưa thiết lập tiêu chí chấm.",
-      to: "/organizer/results-hub",
+      to: "/organizer/artifacts-hub#artifacts-step-rubric",
       label: "Tiêu chí chấm"
     });
   }

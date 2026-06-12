@@ -49,6 +49,7 @@ export interface BoardSlotsSectionProps {
   onUnassignSlot: (slotId: number) => void;
   onDeleteSlot: (slotId: number) => void;
   onOpenTeamDetail: (teamId: number, contextLabel: string) => void;
+  showAssignment?: boolean;
 }
 
 export function BoardSlotsSection({
@@ -83,50 +84,66 @@ export function BoardSlotsSection({
   onAssignSlot,
   onUnassignSlot,
   onDeleteSlot,
-  onOpenTeamDetail
+  onOpenTeamDetail,
+  showAssignment = true
 }: BoardSlotsSectionProps) {
   return (
     <section
-      id="board-step-slots"
+      id={showAssignment ? "board-step-slots" : "board-step-layout-slots"}
       className="scroll-mt-24 rounded-xl border border-outline-variant bg-surface-container p-lg space-y-md"
     >
       <div className="flex flex-wrap items-center justify-between gap-sm">
         <div>
-          <h2 className="font-headline-sm text-on-surface">Vị trí & gán đội</h2>
+          <h2 className="font-headline-sm text-on-surface">
+            {showAssignment ? "Vị trí & gán đội" : "Vị trí trên bảng"}
+          </h2>
           <p className="mt-xs font-body-sm text-on-surface-variant">
-            Thêm vị trí và gán đội trên cùng màn — không cần chuyển bước.
+            {showAssignment
+              ? "Thêm vị trí và gán đội — có thể dùng phân công ngẫu nhiên."
+              : "Thêm vị trí trống — gán đội tại Vận hành bảng khi đã có đội xác nhận."}
           </p>
         </div>
-        <Button type="button" disabled={busy || !selectedRoundId} onClick={onRandomAssign}>
-          Phân công ngẫu nhiên
-        </Button>
+        {showAssignment ? (
+          <Button type="button" disabled={busy || !selectedRoundId} onClick={onRandomAssign}>
+            Phân công ngẫu nhiên
+          </Button>
+        ) : null}
       </div>
 
-      <div className="flex flex-wrap gap-md rounded-lg border border-outline-variant/60 bg-surface-container-low p-md font-body-sm text-on-surface-variant">
-        <span>
-          <strong className="text-on-surface">{confirmedTeams.length}</strong> đội đã xác nhận
-        </span>
-        <span>·</span>
-        <span>
-          <strong className="text-on-surface">{stats.assignedCount}</strong>/{stats.slotsCount} vị trí đã gán
-        </span>
-        <span>·</span>
-        <a href="/organizer/teams-hub" className="text-primary hover:underline">
-          Duyệt thêm đội
-        </a>
-      </div>
+      {showAssignment ? (
+        <div className="flex flex-wrap gap-md rounded-lg border border-outline-variant/60 bg-surface-container-low p-md font-body-sm text-on-surface-variant">
+          <span>
+            <strong className="text-on-surface">{confirmedTeams.length}</strong> đội đã xác nhận
+          </span>
+          <span>·</span>
+          <span>
+            <strong className="text-on-surface">{stats.assignedCount}</strong>/{stats.slotsCount} vị trí
+            đã gán
+          </span>
+          <span>·</span>
+          <a href="/organizer/teams-hub" className="text-primary hover:underline">
+            Duyệt thêm đội
+          </a>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-outline-variant/60 bg-surface-container-low p-md font-body-sm text-on-surface-variant">
+          <strong className="text-on-surface">{stats.slotsCount}</strong> vị trí trên các bảng đang chọn.
+        </div>
+      )}
 
-      <label className="inline-flex items-center gap-sm font-body-sm text-on-surface-variant">
-        <input
-          type="checkbox"
-          checked={forceReplace}
-          onChange={(e) => onForceReplaceChange(e.target.checked)}
-          className="h-4 w-4 rounded border-outline-variant"
-        />
-        Ghi đè khi gán vào vị trí đã có đội
-      </label>
+      {showAssignment ? (
+        <label className="inline-flex items-center gap-sm font-body-sm text-on-surface-variant">
+          <input
+            type="checkbox"
+            checked={forceReplace}
+            onChange={(e) => onForceReplaceChange(e.target.checked)}
+            className="h-4 w-4 rounded border-outline-variant"
+          />
+          Ghi đè khi gán vào vị trí đã có đội
+        </label>
+      ) : null}
 
-      {allSlots.length > 1 ? (
+      {showAssignment && allSlots.length > 1 ? (
         <>
           <h3 className="font-label-md text-on-surface">Di chuyển / hoán đổi vị trí</h3>
           <div className="flex flex-wrap gap-md items-end">
@@ -246,7 +263,9 @@ export function BoardSlotsSection({
 
               {slots.length === 0 ? (
                 <p className="font-body-sm text-on-surface-variant">
-                  Chưa có vị trí — thêm vị trí rồi gán đội ngay bên dưới.
+                  {showAssignment
+                    ? "Chưa có vị trí — thêm vị trí rồi gán đội ngay bên dưới."
+                    : "Chưa có vị trí — dùng «Thêm vị trí» phía trên."}
                 </p>
               ) : (
                 <div className="space-y-sm">
@@ -263,67 +282,91 @@ export function BoardSlotsSection({
                           <span className="shrink-0 font-label-sm text-on-surface">
                             Vị trí #{slot.teamNumber}
                           </span>
-                          <select
-                            className="form-input min-w-[180px] flex-1"
-                            value={pickValue}
-                            onChange={(e) => onSlotTeamPickChange(slot.id, e.target.value)}
-                          >
-                            <option value="">Chọn đội đã duyệt</option>
-                            {teamsForSlot(slot.id, slot.teamId).map((team) => {
-                              const { total, confirmed } = countTeamMembers(team);
-                              return (
-                                <option key={team.id} value={team.id}>
-                                  {team.name} ({confirmed}/{total} TV)
-                                </option>
-                              );
-                            })}
-                          </select>
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={busy || !pickValue}
-                            onClick={() => onAssignSlot(slot.id, Boolean(slot.teamId))}
-                          >
-                            {slot.teamId ? "Ghi đè" : "Gán"}
-                          </Button>
-                          {displayTeam ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              icon={<Icon name="info" className="text-[18px]" />}
-                              onClick={() =>
-                                onOpenTeamDetail(
-                                  displayTeam.id,
-                                  `Bảng «${board.name}» · Vị trí #${slot.teamNumber}`
-                                )
-                              }
-                            >
-                              Chi tiết đội
-                            </Button>
-                          ) : null}
-                          {slot.teamId ? (
-                            <ConfirmAction
-                              title="Gỡ đội khỏi vị trí?"
-                              message={`Gỡ «${teamMap[slot.teamId] ?? "đội này"}» khỏi vị trí #${slot.teamNumber}.`}
-                              confirmLabel="Gỡ đội"
-                              onConfirm={() => onUnassignSlot(slot.id)}
-                            >
-                              <Button type="button" size="sm" variant="danger" disabled={busy}>
-                                Gỡ
+                          {showAssignment ? (
+                            <>
+                              <select
+                                className="form-input min-w-[180px] flex-1"
+                                value={pickValue}
+                                onChange={(e) => onSlotTeamPickChange(slot.id, e.target.value)}
+                              >
+                                <option value="">Chọn đội đã duyệt</option>
+                                {teamsForSlot(slot.id, slot.teamId).map((team) => {
+                                  const { total, confirmed } = countTeamMembers(team);
+                                  return (
+                                    <option key={team.id} value={team.id}>
+                                      {team.name} ({confirmed}/{total} TV)
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={busy || !pickValue}
+                                onClick={() => onAssignSlot(slot.id, Boolean(slot.teamId))}
+                              >
+                                {slot.teamId ? "Ghi đè" : "Gán"}
                               </Button>
-                            </ConfirmAction>
+                              {displayTeam ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  icon={<Icon name="info" className="text-[18px]" />}
+                                  onClick={() =>
+                                    onOpenTeamDetail(
+                                      displayTeam.id,
+                                      `Bảng «${board.name}» · Vị trí #${slot.teamNumber}`
+                                    )
+                                  }
+                                >
+                                  Chi tiết đội
+                                </Button>
+                              ) : null}
+                              {slot.teamId ? (
+                                <ConfirmAction
+                                  title="Gỡ đội khỏi vị trí?"
+                                  message={`Gỡ «${teamMap[slot.teamId] ?? "đội này"}» khỏi vị trí #${slot.teamNumber}.`}
+                                  confirmLabel="Gỡ đội"
+                                  onConfirm={() => onUnassignSlot(slot.id)}
+                                >
+                                  <Button type="button" size="sm" variant="danger" disabled={busy}>
+                                    Gỡ
+                                  </Button>
+                                </ConfirmAction>
+                              ) : (
+                                <ConfirmAction
+                                  title="Xóa vị trí trống?"
+                                  message={`Xóa vị trí #${slot.teamNumber} trên bảng «${board.name}».`}
+                                  confirmLabel="Xóa vị trí"
+                                  onConfirm={() => onDeleteSlot(slot.id)}
+                                >
+                                  <Button type="button" size="sm" variant="ghost" disabled={busy}>
+                                    Xóa
+                                  </Button>
+                                </ConfirmAction>
+                              )}
+                            </>
                           ) : (
-                            <ConfirmAction
-                              title="Xóa vị trí trống?"
-                              message={`Xóa vị trí #${slot.teamNumber} trên bảng «${board.name}».`}
-                              confirmLabel="Xóa vị trí"
-                              onConfirm={() => onDeleteSlot(slot.id)}
-                            >
-                              <Button type="button" size="sm" variant="ghost" disabled={busy}>
-                                Xóa
-                              </Button>
-                            </ConfirmAction>
+                            <>
+                              <span className="font-body-sm text-on-surface-variant">
+                                {slot.teamId
+                                  ? `${teamMap[slot.teamId] ?? "Đã gán"} — gỡ tại Vận hành bảng`
+                                  : "Trống"}
+                              </span>
+                              {!slot.teamId ? (
+                                <ConfirmAction
+                                  title="Xóa vị trí trống?"
+                                  message={`Xóa vị trí #${slot.teamNumber} trên bảng «${board.name}».`}
+                                  confirmLabel="Xóa vị trí"
+                                  onConfirm={() => onDeleteSlot(slot.id)}
+                                >
+                                  <Button type="button" size="sm" variant="ghost" disabled={busy}>
+                                    Xóa
+                                  </Button>
+                                </ConfirmAction>
+                              ) : null}
+                            </>
                           )}
                         </div>
                       </div>

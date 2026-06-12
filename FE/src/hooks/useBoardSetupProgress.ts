@@ -22,7 +22,7 @@ export function useBoardSetupProgress(
     const hasRounds = roundsCount > 0;
     const hasBoards = boardsCount > 0;
     const hasSlots = slotsCount > 0;
-    const hasAssignments = assignedCount > 0;
+    const structureReady = hasRounds && hasBoards && hasSlots;
 
     const microSteps: Array<{
       label: string;
@@ -38,26 +38,20 @@ export function useBoardSetupProgress(
         anchor: "#board-step-round"
       },
       {
-        label: "Bảng",
-        detail: hasBoards ? `${boardsCount} bảng` : "Thêm ít nhất một bảng",
-        state: !hasRounds ? "blocked" : hasBoards ? "done" : "active",
-        anchor: "#board-step-board"
-      },
-      {
-        label: "Vị trí & gán đội",
-        detail: hasSlots
-          ? hasAssignments
-            ? `${assignedCount}/${slotsCount} vị trí đã gán`
-            : `${slotsCount} vị trí — chưa gán`
-          : "Thêm vị trí và gán đội trên cùng màn",
-        state: !hasBoards ? "blocked" : hasAssignments ? "done" : hasSlots ? "active" : "next",
-        anchor: "#board-step-slots"
+        label: "Bảng & vị trí",
+        detail: hasBoards
+          ? hasSlots
+            ? `${boardsCount} bảng · ${slotsCount} vị trí`
+            : `${boardsCount} bảng — thêm vị trí`
+          : "Thêm bảng và vị trí trên cùng màn",
+        state: !hasRounds ? "blocked" : structureReady ? "done" : hasBoards ? "active" : "next",
+        anchor: "#board-step-layout"
       },
       {
         label: "Tiếp theo",
-        detail: "Đề thi & phân công",
-        state: hasAssignments ? "next" : "blocked",
-        to: hasAssignments ? "/organizer/board-ops" : undefined
+        detail: "Đội & lời mời",
+        state: structureReady ? "next" : "blocked",
+        to: structureReady ? "/organizer/teams-hub" : undefined
       }
     ];
 
@@ -72,31 +66,22 @@ export function useBoardSetupProgress(
         cta: "Đi tới form vòng"
       };
       completedMacroIndex = 1;
-    } else if (!hasBoards) {
+    } else if (!structureReady) {
       nextAction = {
-        title: "Bước tiếp: Thêm bảng",
-        description: "Dùng «Tên bảng mới» + «Thêm bảng» cho vòng đang chọn.",
-        href: "#board-step-board",
-        cta: "Đi tới form bảng"
+        title: "Bước tiếp: Bảng & vị trí",
+        description: "Thêm bảng và vị trí — gán đội sẽ làm ở Vận hành bảng khi đã có đội.",
+        href: "#board-step-layout",
+        cta: "Đi tới bảng & vị trí"
       };
       completedMacroIndex = 2;
-    } else if (!hasSlots || !hasAssignments) {
-      nextAction = {
-        title: "Bước tiếp: Vị trí & gán đội",
-        description:
-          "Thêm vị trí và gán đội ngay trên cùng màn — dùng «Phân công ngẫu nhiên» hoặc chọn từng vị trí.",
-        href: "#board-step-slots",
-        cta: "Đi tới vị trí & gán đội"
-      };
-      completedMacroIndex = 3;
     } else {
       nextAction = {
-        title: "Hoàn tất bảng thi — sang bước tiếp",
-        description: "Cấu hình đề thi theo bảng, sau đó gán mentor và giám khảo.",
-        to: "/organizer/board-ops",
-        cta: "Vận hành bảng"
+        title: "Hoàn tất khung bảng — sang Đội & lời mời",
+        description: "Theo dõi đăng ký và lời mời trong lúc chờ đủ đội.",
+        to: "/organizer/teams-hub",
+        cta: "Đi tới Đội & lời mời"
       };
-      completedMacroIndex = 4;
+      completedMacroIndex = 3;
     }
 
     return {

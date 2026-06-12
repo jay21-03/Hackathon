@@ -22,6 +22,8 @@ import { TermDashboardPanel } from "../../components/organizer/TermDashboardPane
 
 import { TermScopedResourcesPanel } from "../../components/organizer/TermScopedResourcesPanel";
 
+import { AcademicTermSelector } from "../../components/ui/AcademicTermSelector";
+
 import { useActiveTerm } from "../../hooks/useActiveTerm";
 
 import { useTermHubProgress } from "../../hooks/useTermHubProgress";
@@ -52,7 +54,7 @@ import {
 
 } from "../../services/academicTermService";
 
-import type { AcademicTerm, AcademicTermType } from "../../types/entities";
+import type { AcademicTerm, AcademicTermStatus, AcademicTermType } from "../../types/entities";
 
 import { useToast } from "../../components/feedback/ToastProvider";
 
@@ -75,6 +77,8 @@ const TERM_TYPES: { value: AcademicTermType; label: string }[] = [
 
 
 type PageView = "create" | "list" | "insights";
+
+type ListStatusFilter = "ALL" | AcademicTermStatus;
 
 
 
@@ -188,11 +192,15 @@ export function AcademicTermManagementPage() {
 
   const queryClient = useQueryClient();
 
-  const { termId, setTermId, enabled: termEnabled } = useActiveTerm();
+  const { setTermId, enabled: termEnabled } = useActiveTerm();
 
   const [activeStep, setActiveStep] = useState<TermHubStep | null>(null);
 
   const [view, setView] = useState<PageView>("list");
+
+  const [insightsTermId, setInsightsTermId] = useState<number | null>(null);
+
+  const [listStatusFilter, setListStatusFilter] = useState<ListStatusFilter>("ALL");
 
   const [saving, setSaving] = useState(false);
 
@@ -220,7 +228,7 @@ export function AcademicTermManagementPage() {
 
   const termsQuery = useQuery({
 
-    queryKey: queryKeys.academicTerms.list(),
+    queryKey: queryKeys.academicTerms.list("all"),
 
     queryFn: () => fetchAcademicTerms()
 
@@ -232,15 +240,20 @@ export function AcademicTermManagementPage() {
 
   const hasTerms = terms.length > 0;
 
+  const filteredTerms =
+    listStatusFilter === "ALL" ? terms : terms.filter((term) => term.status === listStatusFilter);
+
+  const insightsTerm = terms.find((item) => item.id === insightsTermId) ?? null;
+
 
 
   const dashboardQuery = useQuery({
 
-    queryKey: [...queryKeys.academicTerms.detail(termId), "dashboard"],
+    queryKey: [...queryKeys.academicTerms.detail(insightsTermId), "dashboard"],
 
-    queryFn: () => fetchTermDashboard(termId!),
+    queryFn: () => fetchTermDashboard(insightsTermId!),
 
-    enabled: termEnabled && termId != null && view === "insights"
+    enabled: termEnabled && insightsTermId != null && view === "insights"
 
   });
 
@@ -280,11 +293,13 @@ export function AcademicTermManagementPage() {
 
       setActiveStep(normalizeTermHubStep(hash));
 
+      setInsightsTermId((current) => resolveInsightsTermId(current));
+
       setView("insights");
 
     }
 
-  }, [hasTerms]);
+  }, [hasTerms, terms]);
 
 
 
@@ -295,6 +310,40 @@ export function AcademicTermManagementPage() {
     setActiveStep(step);
 
     window.history.replaceState(null, "", `/organizer/academic-terms${step}`);
+
+  }
+
+
+
+  function openInsights(term: AcademicTerm) {
+
+    setInsightsTermId(term.id);
+
+    if (term.status === "ACTIVE") {
+
+      setTermId(term.id);
+
+    }
+
+    setActiveStep("#term-step-overview");
+
+    setView("insights");
+
+  }
+
+
+
+  function resolveInsightsTermId(preferredId?: number | null) {
+
+    if (preferredId != null && terms.some((item) => item.id === preferredId)) {
+
+      return preferredId;
+
+    }
+
+    const active = terms.find((item) => item.status === "ACTIVE");
+
+    return active?.id ?? terms[0]?.id ?? null;
 
   }
 
@@ -339,6 +388,14 @@ export function AcademicTermManagementPage() {
       notify(parsed.error.issues[0]?.message ?? "Dữ liệu học kỳ không hợp lệ.", "warning");
       return;
     }
+    if (terms.some((item) => item.status === "ACTIVE")) {
+      notify(
+        "Đã có học kỳ đang hoạt động. Lưu trữ kỳ hiện tại trước khi thêm học kỳ mới.",
+        "warning"
+      );
+      return;
+    }
+
     setFormErrors({});
     setSaving(true);
 
@@ -517,8 +574,14 @@ export function AcademicTermManagementPage() {
         hasTerms={hasTerms}
         onViewChange={(next) => {
           if (next === "insights") {
-            const active = terms.find((t) => t.status === "ACTIVE") ?? terms[0];
-            if (active) setTermId(active.id);
+            const nextTermId = resolveInsightsTermId(insightsTermId);
+            if (nextTermId != null) {
+              setInsightsTermId(nextTermId);
+              const selected = terms.find((item) => item.id === nextTermId);
+              if (selected?.status === "ACTIVE") {
+                setTermId(nextTermId);
+              }
+            }
           }
           setView(next);
         }}
@@ -746,6 +809,46 @@ export function AcademicTermManagementPage() {
 
         <section className="space-y-md">
 
+          <div className="flex flex-wrap items-center gap-sm">
+
+            <span className="font-label-sm text-on-surface-variant">Lọc trạng thái:</span>
+
+            {(
+              [
+                { id: "ALL" as const, label: "Tất cả" },
+                { id: "ACTIVE" as const, label: "Đang hoạt động" },
+                { id: "ARCHIVED" as const, label: "Đã lưu trữ" }
+              ] as const
+            ).map((filter) => (
+
+              <button
+
+                key={filter.id}
+
+                type="button"
+
+                className={`rounded-lg px-md py-xs font-label-md ${
+
+                  listStatusFilter === filter.id
+
+                    ? "bg-primary text-on-primary"
+
+                    : "bg-surface-container-high text-on-surface"
+
+                }`}
+
+                onClick={() => setListStatusFilter(filter.id)}
+
+              >
+
+                {filter.label}
+
+              </button>
+
+            ))}
+
+          </div>
+
           <div className="overflow-x-auto rounded-xl border border-outline-variant">
 
             <table className="min-w-full text-left font-body-md">
@@ -772,7 +875,21 @@ export function AcademicTermManagementPage() {
 
               <tbody>
 
-                {terms.map((term) => (
+                {filteredTerms.length === 0 ? (
+
+                  <tr>
+
+                    <td colSpan={6} className="px-md py-lg text-center font-body-sm text-on-surface-variant">
+
+                      Không có học kỳ nào trong bộ lọc này.
+
+                    </td>
+
+                  </tr>
+
+                ) : null}
+
+                {filteredTerms.map((term) => (
 
                   <tr key={term.id} className="border-t border-outline-variant/60">
 
@@ -858,22 +975,6 @@ export function AcademicTermManagementPage() {
 
                           <>
 
-                            <Button
-
-                              type="button"
-
-                              variant="ghost"
-
-                              onClick={() => startEdit(term)}
-
-                              icon={<Icon name="edit" />}
-
-                            >
-
-                              Sửa
-
-                            </Button>
-
                             {term.status === "ACTIVE" ? (
 
                               <Button
@@ -882,23 +983,31 @@ export function AcademicTermManagementPage() {
 
                                 variant="ghost"
 
-                                onClick={() => {
+                                onClick={() => startEdit(term)}
 
-                                  setTermId(term.id);
-
-                                  setView("insights");
-
-                                  setActiveStep("#term-step-overview");
-
-                                }}
+                                icon={<Icon name="edit" />}
 
                               >
 
-                                Theo dõi
+                                Sửa
 
                               </Button>
 
                             ) : null}
+
+                            <Button
+
+                              type="button"
+
+                              variant="ghost"
+
+                              onClick={() => openInsights(term)}
+
+                            >
+
+                              {term.status === "ACTIVE" ? "Theo dõi" : "Xem"}
+
+                            </Button>
 
                           </>
 
@@ -946,15 +1055,49 @@ export function AcademicTermManagementPage() {
 
 
 
-      {view === "insights" && termEnabled && termId ? (
+      {view === "insights" && termEnabled && insightsTermId ? (
 
         <section className="space-y-md">
+
+          <div className="flex flex-wrap items-center justify-between gap-sm rounded-xl border border-outline-variant bg-surface-container px-md py-sm">
+
+            {terms.length > 1 ? (
+
+              <AcademicTermSelector
+
+                terms={terms}
+
+                termId={insightsTermId}
+
+                onChange={setInsightsTermId}
+
+              />
+
+            ) : insightsTerm ? (
+
+              <p className="font-label-md text-on-surface">
+
+                {insightsTerm.code}
+
+                {insightsTerm.status === "ARCHIVED" ? " — Đã lưu trữ (chỉ xem)" : ""}
+
+              </p>
+
+            ) : null}
+
+            {insightsTerm?.status === "ARCHIVED" ? (
+
+              <Badge tone="neutral">Kỳ đã lưu trữ — chỉ xem, không chỉnh sửa</Badge>
+
+            ) : null}
+
+          </div>
 
           <WorkflowSteps
 
             title="Theo dõi học kỳ đang chọn"
 
-            description="Chọn một mục để xem dữ liệu gom theo kỳ."
+            description="Chọn một mục để xem dữ liệu gom theo kỳ (kể cả kỳ đã lưu trữ)."
 
             activeHref={currentStep}
 
@@ -976,11 +1119,11 @@ export function AcademicTermManagementPage() {
 
 
 
-          {currentStep === "#term-step-overview" ? <TermDashboardPanel /> : null}
+          {currentStep === "#term-step-overview" ? <TermDashboardPanel termId={insightsTermId} /> : null}
 
           {currentStep !== "#term-step-overview" ? (
 
-            <TermScopedResourcesPanel hubStep={currentStep} />
+            <TermScopedResourcesPanel hubStep={currentStep} termId={insightsTermId} termCode={insightsTerm?.code} />
 
           ) : null}
 
@@ -990,9 +1133,13 @@ export function AcademicTermManagementPage() {
 
 
 
-      {view === "insights" && (!termEnabled || !termId) ? (
+      {view === "insights" && termEnabled && !insightsTermId ? (
 
-        <p className="font-body-sm text-on-surface-variant">Chọn học kỳ đang hoạt động trong danh sách để theo dõi.</p>
+        <p className="font-body-sm text-on-surface-variant">
+
+          Chọn học kỳ trong tab Danh sách (nút Theo dõi / Xem) hoặc tạo học kỳ mới để theo dõi số liệu.
+
+        </p>
 
       ) : null}
 

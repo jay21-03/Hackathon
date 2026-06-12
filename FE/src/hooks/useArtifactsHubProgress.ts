@@ -3,6 +3,8 @@ import type { NextStepAction } from "../components/ui/NextStepPanel";
 import type { WorkflowStepState } from "../domain/organizerWorkflow";
 
 interface ArtifactsHubProgressInput {
+  hasBoards: boolean;
+  hasRubric: boolean;
   showSubmissions: boolean;
   showRepositories: boolean;
   submittedCount: number;
@@ -13,6 +15,8 @@ interface ArtifactsHubProgressInput {
 }
 
 export function useArtifactsHubProgress({
+  hasBoards,
+  hasRubric,
   showSubmissions,
   showRepositories,
   submittedCount,
@@ -27,29 +31,24 @@ export function useArtifactsHubProgress({
       detail: string;
       state: WorkflowStepState;
       anchor?: string;
-    }> = [];
-
-    if (showSubmissions) {
-      microSteps.push({
-        label: "Bài nộp đội",
-        detail:
-          totalTeams > 0
-            ? `${submittedCount}/${totalTeams} đội đã nộp`
-            : "Theo dõi link repository đội nộp",
-        state: totalTeams > 0 && submittedCount >= totalTeams ? "done" : "active",
-        anchor: "#artifacts-step-submissions"
-      });
-    }
+      to?: string;
+    }> = [
+      {
+        label: "Tiêu chí chấm",
+        detail: hasRubric ? "Đã có rubric" : "Cấu hình rubric theo vòng",
+        state: !hasBoards ? "blocked" : hasRubric ? "done" : "active",
+        anchor: "#artifacts-step-rubric"
+      }
+    ];
 
     if (showRepositories) {
-      const repoState: WorkflowStepState = !hasProblem
-        ? "blocked"
-        : repoFailedCount > 0
-          ? "active"
-          : repoProvisionedCount > 0
-            ? "done"
-            : showSubmissions && submittedCount < totalTeams
-              ? "next"
+      const repoState: WorkflowStepState =
+        !hasRubric || !hasProblem
+          ? "blocked"
+          : repoFailedCount > 0
+            ? "active"
+            : repoProvisionedCount > 0
+              ? "done"
               : "active";
       microSteps.push({
         label: "Repository GitHub",
@@ -63,13 +62,47 @@ export function useArtifactsHubProgress({
       });
     }
 
+    if (showSubmissions) {
+      const reposReady =
+        !showRepositories || !hasProblem || repoProvisionedCount > 0 || repoFailedCount > 0;
+      microSteps.push({
+        label: "Bài nộp đội",
+        detail:
+          totalTeams > 0
+            ? `${submittedCount}/${totalTeams} đội đã nộp`
+            : "Theo dõi link repository đội nộp",
+        state: !hasRubric
+          ? "blocked"
+          : !reposReady
+            ? "next"
+            : totalTeams > 0 && submittedCount >= totalTeams
+              ? "done"
+              : "active",
+        anchor: "#artifacts-step-submissions"
+      });
+    }
+
+    microSteps.push({
+      label: "Tiếp theo",
+      detail: "Chấm điểm & kết quả",
+      state: hasRubric ? "next" : "blocked",
+      to: hasRubric ? "/organizer/results-hub" : undefined
+    });
+
     let nextAction: NextStepAction;
-    if (showSubmissions && totalTeams > 0 && submittedCount < totalTeams) {
+    if (!hasBoards) {
       nextAction = {
-        title: "Theo dõi bài nộp",
-        description: `${submittedCount}/${totalTeams} đội đã nộp chính thức.`,
-        href: "#artifacts-step-submissions",
-        cta: "Mở Bài nộp đội"
+        title: "Chưa có bảng thi",
+        description: "Hoàn thành Bảng thi và Vận hành bảng trước.",
+        to: "/organizer/boards",
+        cta: "Đi tới Bảng thi"
+      };
+    } else if (!hasRubric) {
+      nextAction = {
+        title: "Bước tiếp: Tiêu chí chấm",
+        description: "Thiết lập rubric trước khi provision GitHub và theo dõi nộp bài.",
+        href: "#artifacts-step-rubric",
+        cta: "Đi tới rubric"
       };
     } else if (showRepositories && repoFailedCount > 0) {
       nextAction = {
@@ -84,6 +117,13 @@ export function useArtifactsHubProgress({
         description: "Cấu hình mẫu repo và provision cho các đội trên bảng.",
         href: "#artifacts-step-repositories",
         cta: "Cấu hình GitHub"
+      };
+    } else if (showSubmissions && totalTeams > 0 && submittedCount < totalTeams) {
+      nextAction = {
+        title: "Theo dõi bài nộp",
+        description: `${submittedCount}/${totalTeams} đội đã nộp chính thức.`,
+        href: "#artifacts-step-submissions",
+        cta: "Mở Bài nộp đội"
       };
     } else if (showSubmissions) {
       nextAction = {
@@ -103,6 +143,8 @@ export function useArtifactsHubProgress({
 
     return { microSteps, nextAction };
   }, [
+    hasBoards,
+    hasRubric,
     showSubmissions,
     showRepositories,
     submittedCount,

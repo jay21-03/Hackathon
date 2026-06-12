@@ -5,8 +5,15 @@ import { fetchTermDashboard } from "../../services/academicTermService";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
 import { StatCard } from "../ui/StatCard";
 
-export function TermDashboardPanel() {
-  const { termId, term, enabled } = useActiveTerm();
+interface TermDashboardPanelProps {
+  termId?: number | null;
+}
+
+export function TermDashboardPanel({ termId: termIdOverride }: TermDashboardPanelProps = {}) {
+  const activeTerm = useActiveTerm();
+  const termId = termIdOverride ?? activeTerm.termId;
+  const enabled = termIdOverride != null ? true : activeTerm.enabled;
+  const term = termIdOverride != null ? null : activeTerm.term;
 
   const dashboardQuery = useQuery({
     queryKey: [...queryKeys.academicTerms.detail(termId), "dashboard"],
