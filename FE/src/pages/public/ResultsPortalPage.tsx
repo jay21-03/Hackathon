@@ -3,12 +3,14 @@ import { Link, useParams } from "react-router-dom";
 import { isAuthenticated } from "../../auth/authSession";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { ParticipantWorkflowBar } from "../../components/participant/ParticipantWorkflowBar";
+import { EventAwardsView } from "../../components/results/EventAwardsView";
 import { EventResultsView } from "../../components/results/EventResultsView";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { queryKeys } from "../../lib/queryKeys";
+import { fetchPublicEventAwards } from "../../services/awardApi";
 import { fetchPublicEventResults } from "../../services/rankingApi";
 import { resolveApiError } from "../../utils/apiError";
 
@@ -32,6 +34,12 @@ export function ResultsPortalPage({ participantView }: ResultsPortalPageProps) {
   const resultsQuery = useQuery({
     queryKey: queryKeys.rankings.public(eventId),
     queryFn: () => fetchPublicEventResults(eventId!),
+    enabled: Boolean(eventId) && !Number.isNaN(eventId!)
+  });
+
+  const awardsQuery = useQuery({
+    queryKey: queryKeys.awards.public(eventId),
+    queryFn: () => fetchPublicEventAwards(eventId!),
     enabled: Boolean(eventId) && !Number.isNaN(eventId!)
   });
 
@@ -68,6 +76,13 @@ export function ResultsPortalPage({ participantView }: ResultsPortalPageProps) {
         <EventResultsView
           results={results}
           participantView={participantView}
+          highlightTeamId={team?.id ?? null}
+        />
+      ) : null}
+
+      {awardsQuery.data ? (
+        <EventAwardsView
+          awards={awardsQuery.data}
           highlightTeamId={team?.id ?? null}
         />
       ) : null}

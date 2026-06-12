@@ -3,6 +3,7 @@ import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
 import type { BoardRanking, PublicEventResults } from "../../services/rankingApi";
+import { sortBoardRankings } from "../../utils/sortContestData";
 
 interface EventResultsViewProps {
   results: PublicEventResults;
@@ -85,13 +86,14 @@ function FilterPills<T extends string | number>({
 }
 
 export function EventResultsView({ results, participantView, highlightTeamId }: EventResultsViewProps) {
-  const roundGroups = useMemo(() => groupBoardsByRound(results.boards), [results.boards]);
+  const sortedBoards = useMemo(() => sortBoardRankings(results.boards), [results.boards]);
+  const roundGroups = useMemo(() => groupBoardsByRound(sortedBoards), [sortedBoards]);
   const myBoard = useMemo(
-    () => findBoardForTeam(results.boards, highlightTeamId),
-    [results.boards, highlightTeamId]
+    () => findBoardForTeam(sortedBoards, highlightTeamId),
+    [sortedBoards, highlightTeamId]
   );
 
-  const defaultRoundGroup = roundGroups[roundGroups.length - 1] ?? roundGroups[0] ?? null;
+  const defaultRoundGroup = roundGroups[0] ?? null;
   const [roundKeySelected, setRoundKeySelected] = useState(defaultRoundGroup?.key ?? "");
   const [boardIdSelected, setBoardIdSelected] = useState<number | null>(
     defaultRoundGroup?.boards[0]?.boardId ?? null
@@ -99,7 +101,7 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
 
   useEffect(() => {
     if (roundGroups.length === 0) return;
-    const preferredRound = roundGroups[roundGroups.length - 1] ?? roundGroups[0];
+    const preferredRound = roundGroups[0];
     const boardInRound =
       myBoard && preferredRound.boards.some((board) => board.boardId === myBoard.boardId)
         ? myBoard

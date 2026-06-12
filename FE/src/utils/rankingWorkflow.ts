@@ -17,7 +17,7 @@ export function buildRankingWorkflowSteps(active: RankingWorkflowPhase): Workflo
     {
       label: "Tiêu chí chấm",
       detail: "Cấu hình rubric cho vòng thi.",
-      to: "/organizer/results-hub#results-step-rubric",
+      to: "/organizer/artifacts-hub#artifacts-step-rubric",
       state: stateFor("rubric")
     },
     {

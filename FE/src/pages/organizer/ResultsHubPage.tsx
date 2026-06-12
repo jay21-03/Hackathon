@@ -13,12 +13,13 @@ import { useResultsHubProgress } from "../../hooks/useResultsHubProgress";
 import { useScoreProgress } from "../../hooks/useScoreProgress";
 import { queryKeys } from "../../lib/queryKeys";
 import { fetchAdvancements } from "../../services/advancementApi";
+import { fetchEventAwards } from "../../services/awardApi";
 import { fetchEventRankings } from "../../services/rankingApi";
+import { AwardManagementPage } from "./AwardManagementPage";
 import { ExportSuccessPage } from "./ExportSuccessPage";
 import { FinalsPage } from "./FinalsPage";
 import { PublishResultsPage } from "./PublishResultsPage";
 import { RankingPage } from "./RankingPage";
-import { RubricSetupPage } from "./RubricSetupPage";
 import { ScoringProgressPage } from "./ScoringProgressPage";
 import { resolveDefaultBoardId } from "../../utils/pickActiveRound";
 import { type HubEmbedProps } from "../../utils/hubEmbedUtils";
@@ -56,12 +57,19 @@ export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps
     enabled: Boolean(eventId && finalsRound && enablePhase7)
   });
 
+  const awardsQuery = useQuery({
+    queryKey: queryKeys.awards.event(eventId),
+    queryFn: () => fetchEventAwards(eventId!),
+    enabled: Boolean(eventId)
+  });
+
   const rankingBoards = rankingsQuery.data?.boards ?? [];
   const hasRankings = rankingBoards.some((b) => b.entries.length > 0);
   const hasPublished = rankingBoards.some((b) => b.published);
   const scoringComplete = (progress?.summary.completionPercent ?? 0) >= 100;
   const showFinalsStep = enablePhase7 && rounds.length >= 2;
   const finalsDone = (advancementsQuery.data?.length ?? 0) > 0;
+  const awardsPublished = awardsQuery.data?.published ?? false;
 
   const { microSteps } = useResultsHubProgress({
     hasBoards: setupContext.hasBoards,
@@ -70,7 +78,8 @@ export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps
     hasRankings,
     hasPublished,
     showFinalsStep,
-    finalsDone
+    finalsDone,
+    awardsPublished
   });
 
   const [activeStep, setActiveStep] = useState<ResultsHubStep | null>(null);
@@ -86,6 +95,10 @@ export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps
 
   useEffect(() => {
     const hash = window.location.hash;
+    if (hash === "#results-step-rubric" || hash === "#rubric") {
+      window.location.replace("/organizer/artifacts-hub#artifacts-step-rubric");
+      return;
+    }
     if (hash) setActiveStep(normalizeResultsHubStep(hash));
   }, []);
 
@@ -107,7 +120,7 @@ export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps
         <PageHeader
           eyebrow="Kết quả"
           title="Chấm điểm & kết quả"
-          description="Rubric → chấm → xếp hạng → công bố → chuyển vòng chung kết → xuất."
+          description="Chấm → xếp hạng → công bố → chuyển vòng chung kết → trao giải → xuất."
           actions={<OrganizerContextBar />}
         />
       ) : null}
@@ -121,11 +134,11 @@ export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps
       />
 
       <div>
-      {currentStep === "#results-step-rubric" ? <RubricSetupPage embedded /> : null}
       {currentStep === "#results-step-scoring" ? <ScoringProgressPage embedded /> : null}
       {currentStep === "#results-step-ranking" ? <RankingPage embedded /> : null}
       {currentStep === "#results-step-publish" ? <PublishResultsPage embedded /> : null}
       {currentStep === "#results-step-finals" && showFinalsStep ? <FinalsPage embedded /> : null}
+      {currentStep === "#results-step-awards" ? <AwardManagementPage embedded /> : null}
       {currentStep === "#results-step-export" ? <ExportSuccessPage embedded /> : null}
       </div>
     </div>

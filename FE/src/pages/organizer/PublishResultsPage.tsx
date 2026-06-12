@@ -147,7 +147,13 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
               : "Thiết lập tiêu chí chấm và hoàn tất chấm điểm trước khi công bố."
           }
           action={
-            <Link to={!setupContext.hasBoards ? "/organizer/boards" : "/organizer/rubric"}>
+            <Link
+              to={
+                !setupContext.hasBoards
+                  ? "/organizer/boards"
+                  : "/organizer/artifacts-hub#artifacts-step-rubric"
+              }
+            >
               <Button type="button" variant="ghost">
                 {!setupContext.hasBoards ? "Đến Bảng thi" : "Đến Tiêu chí chấm"}
               </Button>

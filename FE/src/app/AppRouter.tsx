@@ -336,7 +336,7 @@ export function AppRouter() {
           />
           <Route
             path="rubric"
-            element={<Navigate to="/organizer/results-hub#results-step-rubric" replace />}
+            element={<Navigate to="/organizer/artifacts-hub#artifacts-step-rubric" replace />}
           />
           <Route
             path="scoring"
@@ -353,6 +353,10 @@ export function AppRouter() {
           <Route
             path="finals"
             element={<Navigate to="/organizer/results-hub#results-step-finals" replace />}
+          />
+          <Route
+            path="awards"
+            element={<Navigate to="/organizer/results-hub#results-step-awards" replace />}
           />
           <Route path="disqualifications" element={<Navigate to="/organizer/teams-hub#teams-step-registrations" replace />} />
           <Route path="announcements" element={gatedAnnouncementRoute("/organizer/dashboard", <AnnouncementPage />)} />
