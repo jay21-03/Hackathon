@@ -158,6 +158,12 @@ class AcademicTermIntegrationTest {
 
     @Test
     void createTerm_listTerms_and_filterEvents() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/admin/academic-terms/" + springTerm.getId())
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("status", "ARCHIVED"))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
         mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/academic-terms")
                         .header("Authorization", "Bearer " + organizerJwt)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -228,6 +234,42 @@ class AcademicTermIntegrationTest {
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.academicTerm.code").value("SPRING_2026"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.eventCount").exists());
+    }
+
+    @Test
+    void onlyOneActiveTermAllowed() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/academic-terms")
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "code", "FALL_2026",
+                                "name", "Fall 2026",
+                                "year", 2026,
+                                "termType", "FALL",
+                                "startDate", "2026-09-01",
+                                "endDate", "2026-12-31",
+                                "status", "ACTIVE"))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("ACADEMIC_TERM_ACTIVE_EXISTS"));
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/academic-terms")
+                        .param("status", "ARCHIVED")
+                        .header("Authorization", "Bearer " + organizerJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.length()").value(0));
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/admin/academic-terms/" + springTerm.getId())
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("status", "ARCHIVED"))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/academic-terms")
+                        .param("status", "ARCHIVED")
+                        .header("Authorization", "Bearer " + organizerJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.length()").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].status").value("ARCHIVED"));
     }
 
     @Test

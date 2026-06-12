@@ -93,6 +93,7 @@ public class AcademicTermService {
         AcademicTermStatus status = request.getStatus() == null
                 ? AcademicTermStatus.ACTIVE
                 : request.getStatus();
+        assertSingleActiveTerm(null, status);
 
         AcademicTerm term = AcademicTerm.builder()
                 .code(normalizedCode)
@@ -124,6 +125,7 @@ public class AcademicTermService {
             term.setEndDate(request.getEndDate());
         }
         if (request.getStatus() != null) {
+            assertSingleActiveTerm(termId, request.getStatus());
             term.setStatus(request.getStatus());
         }
 
@@ -281,7 +283,7 @@ public class AcademicTermService {
     }
 
     private boolean eventHasOperationalData(Long eventId) {
-        if (!teamRepository.findByEventId(eventId).isEmpty()) {
+        if (!teamRepository.findByEventIdOrderByNameAscIdAsc(eventId).isEmpty()) {
             return true;
         }
         List<Long> boardIds = roundRepository.findByEventId(eventId).stream()
@@ -296,11 +298,23 @@ public class AcademicTermService {
                 return true;
             }
         }
-        List<Long> teamIds = teamRepository.findByEventId(eventId).stream().map(Team::getId).toList();
+        List<Long> teamIds = teamRepository.findByEventIdOrderByNameAscIdAsc(eventId).stream().map(Team::getId).toList();
         if (!teamIds.isEmpty() && !teamRepositoryEntityRepository.findByTeamIdIn(teamIds).isEmpty()) {
             return true;
         }
         return false;
+    }
+
+    private void assertSingleActiveTerm(Long excludingTermId, AcademicTermStatus targetStatus) {
+        if (targetStatus != AcademicTermStatus.ACTIVE) {
+            return;
+        }
+        boolean conflict = excludingTermId == null
+                ? academicTermRepository.existsByStatus(AcademicTermStatus.ACTIVE)
+                : academicTermRepository.existsByStatusAndIdNot(AcademicTermStatus.ACTIVE, excludingTermId);
+        if (conflict) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "ACADEMIC_TERM_ACTIVE_EXISTS");
+        }
     }
 
     private void validateCreateRequest(CreateAcademicTermRequest request, String normalizedCode) {

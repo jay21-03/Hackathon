@@ -23,6 +23,10 @@ public interface AcademicTermRepository extends JpaRepository<AcademicTerm, Long
 
     List<AcademicTerm> findByStatusOrderByYearDescTermTypeAsc(AcademicTermStatus status);
 
+    boolean existsByStatus(AcademicTermStatus status);
+
+    boolean existsByStatusAndIdNot(AcademicTermStatus status, Long id);
+
     List<AcademicTerm> findAllByOrderByYearDescTermTypeAsc();
 
     @Query("SELECT COUNT(e) FROM Event e WHERE e.academicTermId = :termId")

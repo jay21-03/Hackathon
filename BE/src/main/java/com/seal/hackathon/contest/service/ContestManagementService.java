@@ -765,7 +765,8 @@ public class ContestManagementService {
         assertRoundAllowsAssignment(round);
 
         // fetch confirmed teams for the event and exclude already assigned in this round
-        List<com.seal.hackathon.registration.entity.Team> confirmedTeams = teamRepository.findByEventIdAndStatus(round.getEventId(), com.seal.hackathon.common.enums.TeamStatus.CONFIRMED);
+        List<com.seal.hackathon.registration.entity.Team> confirmedTeams = teamRepository.findByEventIdAndStatusOrderByNameAscIdAsc(
+                round.getEventId(), com.seal.hackathon.common.enums.TeamStatus.CONFIRMED);
         Set<Long> alreadyAssigned = new HashSet<>();
         boardSlotRepository.findByRoundId(roundId).stream().filter(bs -> bs.getTeamId() != null).forEach(bs -> alreadyAssigned.add(bs.getTeamId()));
         List<com.seal.hackathon.registration.entity.Team> eligibleTeams = new ArrayList<>();
