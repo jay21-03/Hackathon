@@ -11,6 +11,7 @@ import com.seal.hackathon.authprofile.dto.RegisterRequest;
 import com.seal.hackathon.authprofile.dto.ResetPasswordRequest;
 import com.seal.hackathon.authprofile.dto.SetPasswordRequest;
 import com.seal.hackathon.authprofile.dto.UpdateProfileRequest;
+import com.seal.hackathon.authprofile.dto.UpdateUserApprovalRequest;
 import com.seal.hackathon.authprofile.dto.UserSummaryResponse;
 import com.seal.hackathon.authprofile.service.AuthProfileService;
 import com.seal.hackathon.authprofile.service.PasswordResetService;
@@ -19,6 +20,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -96,5 +98,13 @@ public class AuthProfileController {
             @PathVariable Long userId,
             @Valid @RequestBody AssignRoleRequest request) {
         return ApiResponse.ok(authProfileService.assignRole(userId, request));
+    }
+
+    @PatchMapping("/admin/users/{userId}/approval")
+    @SecurityRequirement(name = "bearerAuth")
+    public ApiResponse<UserSummaryResponse> updateUserApproval(
+            @PathVariable Long userId,
+            @Valid @RequestBody UpdateUserApprovalRequest request) {
+        return ApiResponse.ok(authProfileService.updateUserApproval(userId, request));
     }
 }

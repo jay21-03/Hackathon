@@ -1,8 +1,10 @@
 package com.seal.hackathon.authprofile.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.seal.hackathon.common.enums.StudentType;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.regex.Pattern;
 import lombok.Data;
@@ -18,6 +20,10 @@ public class UpdateProfileRequest {
     @Size(max = 200, message = "fullName must not exceed 200 characters")
     private String fullName;
 
+    @NotNull(message = "studentType must not be null")
+    private StudentType studentType;
+
+    @NotBlank(message = "studentId must not be blank")
     @Size(max = 100, message = "studentId must not exceed 100 characters")
     private String studentId;
 
@@ -28,6 +34,15 @@ public class UpdateProfileRequest {
     private String avatarUrl;
 
     private String githubUsername;
+
+    @AssertTrue(message = "UNIVERSITY_REQUIRED_FOR_EXTERNAL")
+    @JsonIgnore
+    public boolean isUniversityValidForStudentType() {
+        if (studentType != StudentType.EXTERNAL) {
+            return true;
+        }
+        return StringUtils.hasText(university);
+    }
 
     @AssertTrue(message = "USERNAME_INVALID")
     @JsonIgnore

@@ -7,7 +7,9 @@ import com.seal.hackathon.authprofile.dto.LoginRequest;
 import com.seal.hackathon.authprofile.dto.RegisterRequest;
 import com.seal.hackathon.authprofile.dto.SetPasswordRequest;
 import com.seal.hackathon.authprofile.dto.UpdateProfileRequest;
+import com.seal.hackathon.authprofile.dto.UpdateUserApprovalRequest;
 import com.seal.hackathon.authprofile.dto.UserSummaryResponse;
+import com.seal.hackathon.common.enums.StudentType;
 import com.seal.hackathon.authprofile.security.AuthCredentialPolicy;
 import com.seal.hackathon.authprofile.security.EmailDomainPolicy;
 import com.seal.hackathon.authprofile.entity.User;
@@ -98,12 +100,30 @@ public class AuthProfileService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS");
         }
 
+        StudentType studentType = request.getStudentType();
+        if (studentType == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "studentType must not be null");
+        }
+        String fullName = normalizeTextRequired(request.getFullName(), "fullName must not be blank");
+        String studentId = normalizeTextRequired(request.getStudentId(), "studentId must not be blank");
+        String university = resolveUniversityForStudentType(studentType, request.getUniversity());
+        String githubUsername = normalizeTextRequired(request.getGithubUsername(), "githubUsername must not be blank");
+        AuthCredentialPolicy.assertUsername(githubUsername);
+
+        UserStatus initialStatus = isBootstrapOrganizerEmail(email)
+                ? UserStatus.ACTIVE
+                : UserStatus.PENDING_APPROVAL;
+
         OffsetDateTime now = OffsetDateTime.now();
         User user = userRepository.save(User.builder()
                 .email(email)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .fullName(displayNameFromEmail(email))
-                .status(UserStatus.ACTIVE)
+                .fullName(fullName)
+                .studentType(studentType)
+                .studentId(studentId)
+                .university(university)
+                .githubUsername(githubUsername)
+                .status(initialStatus)
                 .profileCompleted(true)
                 .createdAt(now)
                 .updatedAt(now)
@@ -162,6 +182,7 @@ public class AuthProfileService {
         if (user.getStatus() == UserStatus.DISABLED) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is disabled");
         }
+        syncProfileCompleted(user);
         userRepository.flush();
         try {
             notificationService.backfillUserIdOnLogin(user.getId(), user.getEmail());
@@ -169,6 +190,7 @@ public class AuthProfileService {
             log.warn("Notification backfill skipped on login for userId={}: {}", user.getId(), ex.getMessage());
         }
         ensureBootstrapOrganizerRole(user);
+        ensureBootstrapOrganizerApproved(user);
         Set<String> roles = loadRoles(user.getId());
         String accessToken = jwtService.generateToken(user, roles);
         return AuthResponse.builder()
@@ -198,15 +220,21 @@ public class AuthProfileService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is disabled");
         }
 
+        StudentType studentType = request.getStudentType();
+        if (studentType == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "studentType must not be null");
+        }
         user.setFullName(normalizeTextRequired(request.getFullName(), "fullName must not be blank"));
-        user.setStudentId(normalizeTextNullable(request.getStudentId()));
-        user.setUniversity(normalizeTextNullable(request.getUniversity()));
+        user.setStudentType(studentType);
+        user.setStudentId(normalizeTextRequired(request.getStudentId(), "studentId must not be blank"));
+        user.setUniversity(resolveUniversityForStudentType(studentType, request.getUniversity()));
         user.setAvatarUrl(normalizeTextNullable(request.getAvatarUrl()));
         if (StringUtils.hasText(request.getGithubUsername())) {
             AuthCredentialPolicy.assertUsername(request.getGithubUsername());
         }
         user.setGithubUsername(normalizeTextNullable(request.getGithubUsername()));
         user.setUpdatedAt(OffsetDateTime.now());
+        syncProfileCompleted(user);
         userRepository.save(user);
 
         Set<String> roles = loadRoles(user.getId());
@@ -236,14 +264,7 @@ public class AuthProfileService {
                 ? userRepository.searchByKeyword(normalizedQuery, pageRequest)
                 : userRepository.findAll(pageRequest);
         List<UserSummaryResponse> items = userPage.getContent().stream()
-                .map(user -> UserSummaryResponse.builder()
-                        .id(user.getId())
-                        .email(user.getEmail())
-                        .fullName(user.getFullName())
-                        .status(user.getStatus())
-                        .roles(loadRoles(user.getId()))
-                        .createdAt(user.getCreatedAt())
-                        .build())
+                .map(this::toUserSummaryResponse)
                 .toList();
         return PagedResult.<UserSummaryResponse>builder()
                 .items(items)
@@ -276,14 +297,35 @@ public class AuthProfileService {
             userRoleRepository.save(userRole);
         }
 
-        return UserSummaryResponse.builder()
-                .id(user.getId())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .status(user.getStatus())
-                .roles(loadRoles(user.getId()))
-                .createdAt(user.getCreatedAt())
-                .build();
+        if (user.getStatus() == UserStatus.PENDING_APPROVAL) {
+            user.setStatus(UserStatus.ACTIVE);
+            user.setUpdatedAt(OffsetDateTime.now());
+            userRepository.save(user);
+        }
+
+        return toUserSummaryResponse(user);
+    }
+
+    @Transactional
+    public UserSummaryResponse updateUserApproval(Long userId, UpdateUserApprovalRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (request.getAction() == UpdateUserApprovalRequest.ApprovalAction.APPROVE) {
+            if (user.getStatus() != UserStatus.PENDING_APPROVAL) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "USER_NOT_PENDING_APPROVAL");
+            }
+            user.setStatus(UserStatus.ACTIVE);
+        } else {
+            if (user.getStatus() == UserStatus.DISABLED) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "USER_ALREADY_DISABLED");
+            }
+            user.setStatus(UserStatus.DISABLED);
+        }
+
+        user.setUpdatedAt(OffsetDateTime.now());
+        userRepository.save(user);
+        return toUserSummaryResponse(user);
     }
 
     private User findOrCreateGoogleUser(VerifiedGoogleUser verifiedUser) {
@@ -314,8 +356,8 @@ public class AuthProfileService {
                     .googleSub(verifiedUser.getGoogleSub())
                     .fullName(verifiedUser.getFullName())
                     .avatarUrl(verifiedUser.getAvatarUrl())
-                    .status(UserStatus.ACTIVE)
-                    .profileCompleted(true)
+                    .status(UserStatus.PENDING_APPROVAL)
+                    .profileCompleted(false)
                     .createdAt(now)
                     .updatedAt(now)
                     .build();
@@ -388,6 +430,7 @@ public class AuthProfileService {
                 .username(user.getUsername())
                 .githubUsername(user.getGithubUsername())
                 .fullName(user.getFullName())
+                .studentType(user.getStudentType())
                 .studentId(user.getStudentId())
                 .university(user.getUniversity())
                 .avatarUrl(user.getAvatarUrl())
@@ -398,12 +441,65 @@ public class AuthProfileService {
                 .build();
     }
 
-    private String displayNameFromEmail(String email) {
-        int at = email.indexOf('@');
-        if (at > 0) {
-            return email.substring(0, at);
+    private UserSummaryResponse toUserSummaryResponse(User user) {
+        return UserSummaryResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .studentType(user.getStudentType())
+                .studentId(user.getStudentId())
+                .university(user.getUniversity())
+                .status(user.getStatus())
+                .roles(loadRoles(user.getId()))
+                .createdAt(user.getCreatedAt())
+                .build();
+    }
+
+    private boolean isBootstrapOrganizerEmail(String email) {
+        return bootstrapOrganizerEmail != null
+                && bootstrapOrganizerEmail.equals(normalizeEmailNullable(email));
+    }
+
+    private void ensureBootstrapOrganizerApproved(User user) {
+        if (!isBootstrapOrganizerEmail(user.getEmail())) {
+            return;
         }
-        return email;
+        if (user.getStatus() == UserStatus.PENDING_APPROVAL) {
+            user.setStatus(UserStatus.ACTIVE);
+            user.setUpdatedAt(OffsetDateTime.now());
+            userRepository.save(user);
+        }
+    }
+
+    private String resolveUniversityForStudentType(StudentType studentType, String universityRaw) {
+        if (studentType == StudentType.FPT) {
+            String normalized = normalizeTextNullable(universityRaw);
+            return normalized != null ? normalized : "FPT University";
+        }
+        return normalizeTextRequired(universityRaw, "university must not be blank");
+    }
+
+    private boolean isProfileComplete(User user) {
+        if (!StringUtils.hasText(user.getFullName())
+                || !StringUtils.hasText(user.getStudentId())
+                || !StringUtils.hasText(user.getGithubUsername())
+                || user.getStudentType() == null) {
+            return false;
+        }
+        if (user.getStudentType() == StudentType.EXTERNAL) {
+            return StringUtils.hasText(user.getUniversity());
+        }
+        return true;
+    }
+
+    private void syncProfileCompleted(User user) {
+        boolean complete = isProfileComplete(user);
+        Boolean current = user.getProfileCompleted();
+        if (current == null || current != complete) {
+            user.setProfileCompleted(complete);
+            user.setUpdatedAt(OffsetDateTime.now());
+            userRepository.save(user);
+        }
     }
 
     private String normalizeEmailNullable(String email) {

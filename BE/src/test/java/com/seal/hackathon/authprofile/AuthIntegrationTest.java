@@ -66,7 +66,7 @@ class AuthIntegrationTest {
         String password = "SecurePass123!";
 
         String registerBody = """
-                {"email":"%s","password":"%s"}
+                {"email":"%s","password":"%s","studentType":"EXTERNAL","fullName":"Nguyen Van A","studentId":"SE123456","university":"SEAL University","githubUsername":"seal-student"}
                 """.formatted(email, password);
 
         MvcResult registerResult = mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/auth/register")
@@ -84,7 +84,14 @@ class AuthIntegrationTest {
         mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/me")
                         .header("Authorization", "Bearer " + registerToken))
                 .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data.email").value(email));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.email").value(email))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.fullName").value("Nguyen Van A"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.studentId").value("SE123456"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.university").value("SEAL University"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.githubUsername").value("seal-student"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.profileCompleted").value(true))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.studentType").value("EXTERNAL"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.status").value("PENDING_APPROVAL"));
 
         String loginBody = """
                 {"email":"%s","password":"%s"}

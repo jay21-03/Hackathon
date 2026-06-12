@@ -13,6 +13,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.seal.hackathon.common.enums.StudentType;
 import com.seal.hackathon.common.enums.UserStatus;
 
 @Data
@@ -41,6 +42,9 @@ public class User {
     private Boolean profileCompleted = true;
     private String studentId;
     private String university;
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private StudentType studentType;
     private String avatarUrl;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)

@@ -1,5 +1,6 @@
 package com.seal.hackathon.authprofile.dto;
 
+import com.seal.hackathon.common.enums.StudentType;
 import com.seal.hackathon.common.enums.UserStatus;
 import java.util.Set;
 import lombok.Builder;
@@ -15,6 +16,7 @@ public class CurrentUserResponse {
     private String fullName;
     private Boolean profileCompleted;
     private Boolean hasPassword;
+    private StudentType studentType;
     private String studentId;
     private String university;
     private String avatarUrl;

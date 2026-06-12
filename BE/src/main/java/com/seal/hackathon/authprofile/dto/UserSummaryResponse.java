@@ -1,5 +1,6 @@
 package com.seal.hackathon.authprofile.dto;
 
+import com.seal.hackathon.common.enums.StudentType;
 import com.seal.hackathon.common.enums.UserStatus;
 import java.time.OffsetDateTime;
 import java.util.Set;
@@ -12,6 +13,9 @@ public class UserSummaryResponse {
     private Long id;
     private String email;
     private String fullName;
+    private StudentType studentType;
+    private String studentId;
+    private String university;
     private UserStatus status;
     private Set<String> roles;
     private OffsetDateTime createdAt;
