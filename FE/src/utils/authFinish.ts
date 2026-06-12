@@ -34,12 +34,29 @@ export async function finishAuthSession(result: AuthResponse, options?: { from?:
   const me = await fetchCurrentUser();
 
   const role: UserRole = resolveRoleFromApiRoles(me.roles);
+  const profileCompleted = me.profileCompleted !== false;
   setAuthSession({
     role,
     email: me.email,
-    name: me.fullName || me.email
+    name: me.fullName || me.email,
+    profileCompleted
   });
   setAuthenticated(true);
+
+  if (!profileCompleted) {
+    const from = options?.from ? `?from=${encodeURIComponent(options.from)}` : "";
+    window.location.href = `/login/complete-profile${from}`;
+    return;
+  }
+
+  const staffRoles = (me.roles ?? []).map((role) => role.toUpperCase());
+  const isStaff = staffRoles.some((role) =>
+    role === "ORGANIZER" || role === "MENTOR" || role === "JUDGE"
+  );
+  if (!isStaff && me.status === "PENDING_APPROVAL") {
+    window.location.href = "/login/pending-approval";
+    return;
+  }
 
   if (options?.from) {
     window.location.href = options.from;

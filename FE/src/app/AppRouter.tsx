@@ -46,6 +46,14 @@ const ResetPasswordPage = lazyPage(
   () => import("../pages/auth/ResetPasswordPage"),
   "ResetPasswordPage"
 );
+const CompleteProfilePage = lazyPage(
+  () => import("../pages/auth/CompleteProfilePage"),
+  "CompleteProfilePage"
+);
+const PendingApprovalPage = lazyPage(
+  () => import("../pages/auth/PendingApprovalPage"),
+  "PendingApprovalPage"
+);
 const EventDetailPage = lazyPage(() => import("../pages/events/EventDetailPage"), "EventDetailPage");
 const EventsDiscoveryPage = lazyPage(() => import("../pages/events/EventsDiscoveryPage"), "EventsDiscoveryPage");
 const ResultsPortalPage = lazyPage(() => import("../pages/public/ResultsPortalPage"), "ResultsPortalPage");
@@ -205,6 +213,8 @@ export function AppRouter() {
         <Route path="signup" element={routeElement(<SignupPage />)} />
         <Route path="forgot-password" element={routeElement(<ForgotPasswordPage />)} />
         <Route path="reset-password" element={routeElement(<ResetPasswordPage />)} />
+        <Route path="complete-profile" element={routeElement(<CompleteProfilePage />)} />
+        <Route path="pending-approval" element={routeElement(<PendingApprovalPage />)} />
       </Route>
 
       <Route path="/" element={<Navigate to="/events" replace />} />
@@ -216,12 +226,7 @@ export function AppRouter() {
           path="events/:eventId/results"
           element={gatedRankingRoute("/events", <ResultsPortalPage />)}
         />
-      </Route>
-
-      <Route element={<RoleGuard allow={["participant", "organizer", "mentor", "judge"]} />}>
-        <Route element={<ParticipantAwareShell />}>
-          <Route path="events/:eventId" element={routeElement(<EventDetailPage />)} />
-        </Route>
+        <Route path="events/:eventId" element={routeElement(<EventDetailPage />)} />
       </Route>
 
       <Route element={<RoleGuard allow={["participant", "organizer", "mentor", "judge"]} />}>

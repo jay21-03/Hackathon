@@ -8,6 +8,8 @@ import {
   SESSION_CHANGE_EVENT,
   type UserRole
 } from "../../auth/authSession";
+import { AccountApprovalGate } from "./AccountApprovalGate";
+import { ProfileCompletionGate } from "./ProfileCompletionGate";
 
 interface RoleGuardProps {
   allow: UserRole[];
@@ -56,5 +58,9 @@ export function RoleGuard({ allow, children }: RoleGuardProps) {
     );
   }
 
-  return children ?? <Outlet />;
+  return (
+    <ProfileCompletionGate>
+      <AccountApprovalGate>{children ?? <Outlet />}</AccountApprovalGate>
+    </ProfileCompletionGate>
+  );
 }

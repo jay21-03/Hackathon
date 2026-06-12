@@ -114,10 +114,61 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Mật khẩu là bắt buộc.")
 });
 
-export const signupSchema = z.object({
-  email: z.string().trim().min(1, "Email là bắt buộc.").email("Email chưa đúng định dạng."),
-  password: passwordPolicySchema
+const requiredGithubUsernameSchema = z
+  .string()
+  .trim()
+  .min(1, "GitHub username là bắt buộc.")
+  .refine((value) => {
+    if (value.length < 3 || value.length > 39) return false;
+    return /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/.test(value);
+  }, "GitHub username phải từ 3 đến 39 ký tự (chữ, số, dấu gạch ngang).");
+
+export const studentTypeSchema = z.enum(["FPT", "EXTERNAL"], {
+  message: "Chọn loại sinh viên."
 });
+
+const profileStudentFieldsSchema = z.object({
+  studentType: studentTypeSchema,
+  fullName: z
+    .string()
+    .trim()
+    .min(2, "Họ và tên cần ít nhất 2 ký tự.")
+    .max(200, "Họ tên tối đa 200 ký tự."),
+  studentId: z
+    .string()
+    .trim()
+    .min(1, "MSSV là bắt buộc.")
+    .max(100, "MSSV tối đa 100 ký tự."),
+  university: z.string().trim().max(200, "Tên trường tối đa 200 ký tự.").optional(),
+  githubUsername: requiredGithubUsernameSchema
+});
+
+function applyStudentTypeRules<T extends z.ZodTypeAny>(schema: T) {
+  return schema.superRefine((data, ctx) => {
+    const value = data as { studentType?: string; university?: string };
+    if (value.studentType === "EXTERNAL" && !value.university?.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Trường là bắt buộc với sinh viên ngoài trường.",
+        path: ["university"]
+      });
+    }
+  });
+}
+
+export const profileCompletionSchema = applyStudentTypeRules(profileStudentFieldsSchema);
+
+export const signupSchema = z
+  .object({
+    email: z.string().trim().min(1, "Email là bắt buộc.").email("Email chưa đúng định dạng."),
+    password: passwordPolicySchema,
+    confirmPassword: z.string().min(1, "Xác nhận mật khẩu là bắt buộc.")
+  })
+  .merge(profileCompletionSchema)
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Mật khẩu xác nhận không khớp.",
+    path: ["confirmPassword"]
+  });
 
 export const forgotPasswordSchema = z.object({
   email: z.string().trim().min(1, "Email là bắt buộc.").email("Email chưa đúng định dạng.")
@@ -222,16 +273,23 @@ const githubUsernameSchema = z
   }, "GitHub username phải từ 3 đến 39 ký tự (chữ, số, dấu gạch ngang).");
 
 /** Hồ sơ chỉnh sửa — email read-only, không gửi lên API. */
-export const profileUpdateSchema = z.object({
-  fullName: z
-    .string()
-    .trim()
-    .min(2, "Họ và tên cần ít nhất 2 ký tự.")
-    .max(200, "Họ tên tối đa 200 ký tự."),
-  studentId: z.string().trim().max(100, "MSSV tối đa 100 ký tự.").optional(),
-  university: z.string().trim().max(200, "Tên trường tối đa 200 ký tự.").optional(),
-  githubUsername: githubUsernameSchema
-});
+export const profileUpdateSchema = applyStudentTypeRules(
+  z.object({
+    studentType: studentTypeSchema,
+    fullName: z
+      .string()
+      .trim()
+      .min(2, "Họ và tên cần ít nhất 2 ký tự.")
+      .max(200, "Họ tên tối đa 200 ký tự."),
+    studentId: z
+      .string()
+      .trim()
+      .min(1, "MSSV là bắt buộc.")
+      .max(100, "MSSV tối đa 100 ký tự."),
+    university: z.string().trim().max(200, "Tên trường tối đa 200 ký tự.").optional(),
+    githubUsername: githubUsernameSchema
+  })
+);
 
 /** @deprecated Dùng profileUpdateSchema cho form lưu hồ sơ. */
 export const profileSchema = profileUpdateSchema.extend({

@@ -7,6 +7,7 @@ export interface CurrentUserResponse {
   email: string;
   username?: string | null;
   fullName: string;
+  studentType?: "FPT" | "EXTERNAL" | null;
   studentId?: string;
   university?: string;
   avatarUrl?: string;
@@ -26,8 +27,9 @@ export async function fetchMyProfile() {
 }
 
 export async function updateMyProfile(payload: {
+  studentType: "FPT" | "EXTERNAL";
   fullName: string;
-  studentId?: string;
+  studentId: string;
   university?: string;
   avatarUrl?: string;
   githubUsername?: string;

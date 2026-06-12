@@ -8,6 +8,7 @@ export interface AuthSession {
   role: UserRole;
   email: string;
   name: string;
+  profileCompleted?: boolean;
 }
 
 const storageKey = "seal.auth.session";
@@ -44,11 +45,17 @@ export function setAuthenticated(value: boolean) {
   window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
 }
 
-export function setAuthSession(input: { role: UserRole; email: string; name: string }) {
+export function setAuthSession(input: {
+  role: UserRole;
+  email: string;
+  name: string;
+  profileCompleted?: boolean;
+}) {
   const next: AuthSession = {
     role: input.role,
     email: input.email,
-    name: input.name
+    name: input.name,
+    profileCompleted: input.profileCompleted
   };
   window.localStorage.setItem(storageKey, JSON.stringify(next));
   window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));

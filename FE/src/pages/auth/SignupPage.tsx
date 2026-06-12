@@ -8,6 +8,10 @@ import {
   AuthFormShell,
   authInputClassName
 } from "../../components/auth/AuthFormShell";
+import {
+  StudentTypeFields,
+  type StudentTypeValue
+} from "../../components/auth/StudentTypeFields";
 import { Button } from "../../components/ui/Button";
 import { signupSchema } from "../../domain/schemas";
 import { googleLogin, registerAccount } from "../../services/authService";
@@ -18,8 +22,14 @@ import { zodFieldErrors } from "../../utils/zodFieldErrors";
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
 
 export function SignupPage() {
+  const [studentType, setStudentType] = useState<StudentTypeValue>("FPT");
+  const [fullName, setFullName] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [university, setUniversity] = useState("");
+  const [githubUsername, setGithubUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -40,7 +50,16 @@ export function SignupPage() {
   async function handleSignup(event: React.FormEvent) {
     event.preventDefault();
     setAuthError(null);
-    const parsed = signupSchema.safeParse({ email, password });
+    const parsed = signupSchema.safeParse({
+      studentType,
+      fullName,
+      studentId,
+      university: university || undefined,
+      githubUsername,
+      email,
+      password,
+      confirmPassword
+    });
     if (!parsed.success) {
       setFieldErrors(zodFieldErrors(parsed.error));
       return;
@@ -48,7 +67,11 @@ export function SignupPage() {
     setFieldErrors({});
     setLoading(true);
     try {
-      const result = await registerAccount(parsed.data);
+      const { confirmPassword: _ignored, ...payload } = parsed.data;
+      const result = await registerAccount({
+        ...payload,
+        university: payload.university || undefined
+      });
       await finishAuthSession(result);
     } catch (error) {
       applyAuthFormErrors(error, setFieldErrors);
@@ -88,6 +111,22 @@ export function SignupPage() {
       {googleClientId ? <AuthDivider /> : null}
 
       <form className="flex flex-col gap-md" onSubmit={(e) => void handleSignup(e)}>
+        <StudentTypeFields
+          studentType={studentType}
+          onStudentTypeChange={setStudentType}
+          fullName={fullName}
+          onFullNameChange={setFullName}
+          studentId={studentId}
+          onStudentIdChange={setStudentId}
+          university={university}
+          onUniversityChange={setUniversity}
+          githubUsername={githubUsername}
+          onGithubUsernameChange={setGithubUsername}
+          fieldErrors={fieldErrors}
+          onClearError={(key) => setFieldErrors((prev) => ({ ...prev, [key]: "" }))}
+          disabled={loading}
+        />
+
         <AuthFieldLabel label="Email" required>
           <input
             type="email"
@@ -105,6 +144,7 @@ export function SignupPage() {
             <span className="font-body-sm text-error">{fieldErrors.email}</span>
           ) : null}
         </AuthFieldLabel>
+
         <AuthFieldLabel
           label="Mật khẩu"
           required
@@ -126,13 +166,32 @@ export function SignupPage() {
             <span className="font-body-sm text-error">{fieldErrors.password}</span>
           ) : null}
         </AuthFieldLabel>
+
+        <AuthFieldLabel label="Xác nhận mật khẩu" required>
+          <input
+            type="password"
+            className={authInputClassName(fieldErrors.confirmPassword ? "border-error" : "")}
+            value={confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, confirmPassword: "" }));
+            }}
+            placeholder="Nhập lại mật khẩu"
+            autoComplete="new-password"
+            disabled={loading}
+          />
+          {fieldErrors.confirmPassword ? (
+            <span className="font-body-sm text-error">{fieldErrors.confirmPassword}</span>
+          ) : null}
+        </AuthFieldLabel>
+
         <Button type="submit" loading={loading} className="w-full justify-center">
           Tạo tài khoản
         </Button>
       </form>
 
       <p className="font-body-sm text-on-surface-variant">
-        Bằng việc tạo tài khoản, bạn đồng ý sử dụng hệ thống theo quy định của ban tổ chức cuộc thi.
+        Sau đăng ký, ban tổ chức sẽ duyệt tài khoản trước khi bạn tham gia cuộc thi.
       </p>
     </AuthFormShell>
   );
