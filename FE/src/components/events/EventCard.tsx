@@ -100,15 +100,27 @@ export function EventCard({ event, action, team, highlight }: EventCardProps) {
           <p className="min-h-[2.5rem] font-label-sm normal-case text-on-surface-variant line-clamp-2">
             {action.hint}
           </p>
-          <Link
-            to={action.to}
-            onClick={handleClick}
-            state={action.to === "/login" ? { from: `/events/${event.id}` } : undefined}
-            className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-4 font-label-md text-on-primary transition-colors hover:opacity-90"
-          >
-            <Icon name={action.icon} className="text-[18px]" />
-            {action.label}
-          </Link>
+          <div className="flex flex-col gap-xs">
+            <Link
+              to={action.to}
+              onClick={handleClick}
+              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-4 font-label-md text-on-primary transition-colors hover:opacity-90"
+            >
+              <Icon name={action.icon} className="text-[18px]" />
+              {action.label}
+            </Link>
+            {action.secondary ? (
+              <Link
+                to={action.secondary.to}
+                state={{ from: `/events/${event.id}` }}
+                onClick={handleClick}
+                className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-outline-variant px-4 font-label-md text-on-surface transition-colors hover:bg-surface-container-high"
+              >
+                <Icon name={action.secondary.icon} className="text-[18px]" />
+                {action.secondary.label}
+              </Link>
+            ) : null}
+          </div>
         </div>
       </div>
     </article>

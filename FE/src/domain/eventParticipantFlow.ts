@@ -15,6 +15,11 @@ export type EventCardAction = {
   to: string;
   icon: string;
   hint: string;
+  secondary?: {
+    label: string;
+    to: string;
+    icon: string;
+  };
 };
 
 export function isEventRegistrationOpen(event: EventListItem) {
@@ -60,10 +65,15 @@ export function resolveEventCardAction(input: {
 
   if (!authenticated) {
     return {
-      label: "Đăng nhập",
-      to: "/login",
-      icon: "account_circle",
-      hint: "Đăng nhập để đăng ký hoặc vào khu vực thi"
+      label: "Xem chi tiết",
+      to: detailTo,
+      icon: "arrow_forward",
+      hint: "Xem thông tin công khai — đăng nhập khi muốn đăng ký tham gia",
+      secondary: {
+        label: "Đăng nhập",
+        to: "/login",
+        icon: "account_circle"
+      }
     };
   }
 

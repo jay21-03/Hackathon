@@ -592,7 +592,9 @@ export async function mockCoreApis(page: Page) {
           boardId: 1,
           assigneeId: 1,
           createdAt: "2026-06-01T08:00:00+07:00",
-          createdBy: 1
+          createdBy: 1,
+          academicTermId: 1,
+          academicTermStatus: "ACTIVE"
         }
       ])
     );

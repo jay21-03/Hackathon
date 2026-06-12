@@ -124,7 +124,9 @@ export function EventDetailPage() {
             <p className="font-body-md text-on-surface-variant mt-xs">
               {team
                 ? `Bạn đã có đội trong cuộc thi này: ${team.name} (${getStatusLabel(team.status)}).`
-                : "Mỗi cuộc thi một đội riêng — bạn vẫn có thể đăng ký các cuộc thi khác nếu chưa có đội ở đó."}
+                : authenticated
+                  ? "Mỗi cuộc thi một đội riêng — bạn có thể xem thông tin các cuộc thi khác và đăng ký nếu chưa có đội."
+                  : "Thông tin công khai — không cần tham gia cuộc thi để xem. Đăng nhập khi muốn đăng ký đội."}
             </p>
           </div>
           <div className="flex flex-col items-end gap-1">
@@ -172,6 +174,15 @@ export function EventDetailPage() {
         ) : null}
 
         <div className="flex flex-wrap gap-sm pt-md border-t border-outline-variant/30">
+          {enableRanking ? (
+            <Link
+              to={`/events/${event.id}/results`}
+              className="inline-flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-container-high"
+            >
+              <Icon name="leaderboard" className="text-[18px]" />
+              Xem kết quả
+            </Link>
+          ) : null}
           {!authenticated ? (
             <Link
               to="/login"
@@ -212,15 +223,6 @@ export function EventDetailPage() {
               Vào {roleLabel}
             </Link>
           )}
-          {enableRanking ? (
-            <Link
-              to={`/events/${event.id}/results`}
-              className="inline-flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-container-high"
-            >
-              <Icon name="leaderboard" className="text-[18px]" />
-              Xem kết quả
-            </Link>
-          ) : null}
         </div>
       </article>
 

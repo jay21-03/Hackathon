@@ -48,7 +48,7 @@ export function EventsDiscoveryPage() {
         description={
           authenticated
             ? "Chọn cuộc thi, xem chi tiết rồi đăng ký đội — mỗi cuộc thi một đội."
-            : "Xem thời gian đăng ký và đăng nhập để tham gia."
+            : "Xem thông tin và kết quả công bố — đăng nhập khi muốn đăng ký tham gia."
         }
       />
 

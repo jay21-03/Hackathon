@@ -3,7 +3,7 @@ import { useToast } from "../../components/feedback/ToastProvider";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { getAuthSession } from "../../auth/authSession";
+import { getAuthSession, setAuthSession } from "../../auth/authSession";
 import { enableGithubProvisioning } from "../../config/features";
 import { passwordPolicySchema, profileUpdateSchema } from "../../domain/schemas";
 import { applyApiFormErrors } from "../../utils/apiError";
@@ -14,6 +14,7 @@ import { applyAuthFormErrors, mapAuthErrorMessage } from "../../utils/authErrors
 export function ProfilePage() {
   const { notify } = useToast();
   const role = getAuthSession().role;
+  const [studentType, setStudentType] = useState<"FPT" | "EXTERNAL">("FPT");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [hasPassword, setHasPassword] = useState<boolean | null>(null);
@@ -34,6 +35,7 @@ export function ProfilePage() {
     fetchMyProfile()
       .then((result) => {
         if (!active) return;
+        setStudentType(result.studentType === "EXTERNAL" ? "EXTERNAL" : "FPT");
         setFullName(result.fullName ?? "");
         setEmail(result.email ?? "");
         setHasPassword(result.hasPassword === true);
@@ -90,7 +92,13 @@ export function ProfilePage() {
   }
 
   async function saveProfile() {
-    const parsed = profileUpdateSchema.safeParse({ fullName, studentId, university, githubUsername });
+    const parsed = profileUpdateSchema.safeParse({
+      studentType,
+      fullName,
+      studentId,
+      university: university || undefined,
+      githubUsername
+    });
     if (!parsed.success) {
       const first = parsed.error.issues[0];
       const key = first?.path[0];
@@ -105,15 +113,22 @@ export function ProfilePage() {
     setSaving(true);
     try {
       const result = await updateMyProfile({
-        fullName,
-        studentId: studentId || undefined,
-        university: university || undefined,
-        githubUsername: githubUsername.trim() || undefined
+        studentType: parsed.data.studentType,
+        fullName: parsed.data.fullName,
+        studentId: parsed.data.studentId,
+        university: parsed.data.university || undefined,
+        githubUsername: parsed.data.githubUsername?.trim() || undefined
       });
       setFullName(result.fullName ?? fullName);
       setStudentId(result.studentId ?? studentId);
       setUniversity(result.university ?? university);
       setGithubUsername(result.githubUsername ?? githubUsername);
+      const session = getAuthSession();
+      setAuthSession({
+        ...session,
+        name: result.fullName || session.name,
+        profileCompleted: result.profileCompleted !== false
+      });
       notify("Đã lưu hồ sơ ca nhan.", "success");
     } catch (error) {
       applyApiFormErrors(error, setFieldErrors);
@@ -134,6 +149,31 @@ export function ProfilePage() {
       <section className="grid gap-md lg:grid-cols-[1fr_320px]">
         <form className="rounded-xl border border-outline-variant bg-surface-container p-lg" onSubmit={(event) => event.preventDefault()}>
           <div className="grid gap-md md:grid-cols-2">
+            <label className="grid gap-xs font-label-md text-on-surface md:col-span-2">
+              Loai sinh vien
+              <div className="flex flex-wrap gap-md font-body-md">
+                <label className="flex items-center gap-xs">
+                  <input
+                    type="radio"
+                    name="studentType"
+                    checked={studentType === "FPT"}
+                    disabled={loading}
+                    onChange={() => setStudentType("FPT")}
+                  />
+                  Sinh vien FPT
+                </label>
+                <label className="flex items-center gap-xs">
+                  <input
+                    type="radio"
+                    name="studentType"
+                    checked={studentType === "EXTERNAL"}
+                    disabled={loading}
+                    onChange={() => setStudentType("EXTERNAL")}
+                  />
+                  Sinh vien ngoai truong
+                </label>
+              </div>
+            </label>
             <label className="grid gap-xs font-label-md text-on-surface">
               Ho va ten
               <input
@@ -192,15 +232,34 @@ export function ProfilePage() {
                 disabled={loading}
               />
             </label>
-            <label className="grid gap-xs font-label-md text-on-surface">
-              Truong
-              <input
-                className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
-                value={university}
-                onChange={(event) => setUniversity(event.target.value)}
-                disabled={loading}
-              />
-            </label>
+            {studentType === "EXTERNAL" ? (
+              <label className="grid gap-xs font-label-md text-on-surface">
+                Truong
+                <input
+                  className={`rounded-lg border bg-surface-container-high px-3 py-2 font-body-md text-on-surface ${fieldErrors.university ? "border-error" : "border-outline-variant"}`}
+                  value={university}
+                  onChange={(event) => {
+                    setUniversity(event.target.value);
+                    setFieldErrors((prev) => ({ ...prev, university: "" }));
+                  }}
+                  disabled={loading}
+                />
+                {fieldErrors.university ? (
+                  <span className="font-body-sm text-error">{fieldErrors.university}</span>
+                ) : null}
+              </label>
+            ) : (
+              <label className="grid gap-xs font-label-md text-on-surface">
+                Truong
+                <input
+                  className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
+                  value={university}
+                  onChange={(event) => setUniversity(event.target.value)}
+                  placeholder="FPT University"
+                  disabled={loading}
+                />
+              </label>
+            )}
           </div>
           {formError && <p className="mt-md font-body-sm text-error">{formError}</p>}
           <Button

@@ -1,6 +1,8 @@
 import { apiClient } from "./apiClient";
 import type { ApiResponse } from "../types/api";
 
+export type AcademicTermStatus = "ACTIVE" | "ARCHIVED";
+
 export type JudgeBoardReadiness =
   | "NO_PROBLEM"
   | "WAITING_PROBLEM_RELEASE"
@@ -20,6 +22,8 @@ export interface AssignmentResponse {
   roundName?: string | null;
   eventId?: number | null;
   eventName?: string | null;
+  academicTermId?: number | null;
+  academicTermStatus?: AcademicTermStatus | null;
   assigneeId: number;
   createdAt: string;
   createdBy: number;
