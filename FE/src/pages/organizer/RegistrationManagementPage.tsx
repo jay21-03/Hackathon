@@ -93,13 +93,15 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
 
   const filtered = useMemo(
     () =>
-      registrations.filter((registration) => {
-        const matchFilter = filter === "ALL" || registration.status === filter;
-        const matchSearch = [registration.name, registration.status, registration.members?.map((item) => item.email).join(" ")]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(search.trim().toLowerCase()));
-        return matchFilter && matchSearch;
-      }),
+      registrations
+        .filter((registration) => {
+          const matchFilter = filter === "ALL" || registration.status === filter;
+          const matchSearch = [registration.name, registration.status, registration.members?.map((item) => item.email).join(" ")]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(search.trim().toLowerCase()));
+          return matchFilter && matchSearch;
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, "vi") || a.id - b.id),
     [filter, registrations, search]
   );
 

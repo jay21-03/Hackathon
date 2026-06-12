@@ -137,7 +137,13 @@ const organizerErrorMap: Record<string, string> = {
   "level must be EXCELLENT, GOOD, SATISFACTORY, or UNSATISFACTORY":
     "Mức mô tả không hợp lệ.",
   "items must not exceed 100 entries": "Tối đa 100 lời mời nhân sự trong một lần.",
-  "eventId must be greater than 0": "Chọn cuộc thi hợp lệ."
+  "eventId must be greater than 0": "Chọn cuộc thi hợp lệ.",
+  ACADEMIC_TERM_ACTIVE_EXISTS:
+    "Đã có học kỳ đang hoạt động. Lưu trữ kỳ hiện tại trước khi tạo hoặc kích hoạt kỳ mới.",
+  ACADEMIC_TERM_CODE_EXISTS: "Mã học kỳ đã tồn tại.",
+  ACADEMIC_TERM_YEAR_TYPE_EXISTS: "Đã có học kỳ cùng loại và năm.",
+  ACADEMIC_TERM_ARCHIVED: "Học kỳ đã lưu trữ — không thể dùng cho thao tác mới.",
+  ACADEMIC_TERM_NOT_FOUND: "Không tìm thấy học kỳ."
 };
 
 /** Alias của `resolveApiError` — giữ tương thích import cũ. */

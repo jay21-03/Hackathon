@@ -5,12 +5,12 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { enableStaffInvitations } from "../../config/features";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
-import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
 import { useEventTeams } from "../../hooks/useEventTeams";
 import { useTeamsHubProgress } from "../../hooks/useTeamsHubProgress";
 import { InvitationManagementPage } from "./InvitationManagementPage";
 import { RegistrationManagementPage } from "./RegistrationManagementPage";
-import { type HubEmbedProps } from "../../utils/hubEmbedUtils";
+import { handleEmbeddedNextStep, type HubEmbedProps } from "../../utils/hubEmbedUtils";
+import { macroPathToWizardStep } from "./eventWizardUtils";
 import {
   normalizeTeamsHubStep,
   resolveTeamsHubStep,
@@ -19,10 +19,6 @@ import {
 
 export function TeamsHubPage({ embedded = false, onWizardStep }: HubEmbedProps = {}) {
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const { steps: setupSteps, loading: setupLoading } = useEventSetupProgress(
-    eventId,
-    embedded ? "/organizer/events/wizard" : "/organizer/teams-hub"
-  );
   const { teams, loading: teamsLoading } = useEventTeams(eventId, { size: 500 });
 
   const confirmedTeams = useMemo(
@@ -56,7 +52,7 @@ export function TeamsHubPage({ embedded = false, onWizardStep }: HubEmbedProps =
     if (hash) setActiveStep(normalizeTeamsHubStep(hash));
   }, []);
 
-  if (eventLoading || setupLoading || teamsLoading) {
+  if (eventLoading || teamsLoading) {
     return <ModuleSkeleton rows={5} variant="table" />;
   }
 
@@ -71,27 +67,31 @@ export function TeamsHubPage({ embedded = false, onWizardStep }: HubEmbedProps =
         />
       ) : null}
 
-      {!embedded ? (
-        <WorkflowSteps
-          title="Quy trình thiết lập"
-          description="Cùng thứ tự với sidebar."
-          steps={setupSteps}
-          activeHref="/organizer/teams-hub"
-        />
-      ) : null}
-
       <WorkflowSteps
         title="Các bước trên trang này"
         description="Chọn một bước — mỗi lần chỉ hiện nội dung bước đó."
         activeHref={currentStep}
-        onStepSelect={(href) => goToStep(href)}
-        steps={microSteps.map((step) => ({
-          label: step.label,
-          detail: step.detail,
-          href: step.anchor,
-          to: step.to,
-          state: step.state
-        }))}
+        onStepSelect={(href) => handleEmbeddedNextStep(href, embedded, onWizardStep, goToStep)}
+        steps={microSteps.map((step) => {
+          if (embedded && step.to) {
+            const wizardHref = macroPathToWizardStep(step.to);
+            if (wizardHref) {
+              return {
+                label: step.label,
+                detail: step.detail,
+                href: wizardHref,
+                state: step.state
+              };
+            }
+          }
+          return {
+            label: step.label,
+            detail: step.detail,
+            href: step.anchor,
+            to: step.to,
+            state: step.state
+          };
+        })}
       />
 
       {currentStep === "#teams-step-registrations" ? <RegistrationManagementPage embedded /> : null}

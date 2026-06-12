@@ -33,7 +33,9 @@ const registrationErrorMap: Record<string, string> = {
     "Quy mô đội do hệ thống quản lý — không gửi minTeamSize/maxTeamSize.",
   "code must not exceed 50 characters": "Mã tiêu chí tối đa 50 ký tự.",
   "name must not exceed 200 characters": "Tên tối đa 200 ký tự.",
-  "members must not exceed 50 items": "Tối đa 50 lời mời trong một lần."
+  "members must not exceed 50 items": "Tối đa 50 lời mời trong một lần.",
+  ACCOUNT_PENDING_APPROVAL:
+    "Tài khoản chưa được ban tổ chức duyệt. Vui lòng chờ phê duyệt trước khi đăng ký đội."
 };
 
 function mapRegistrationFieldKey(key: string): string {

@@ -6,6 +6,9 @@ export interface UserSummaryResponse {
   id: number;
   email: string;
   fullName: string;
+  studentType?: "FPT" | "EXTERNAL" | null;
+  studentId?: string | null;
+  university?: string | null;
   status: string;
   roles: string[];
   createdAt: string;
@@ -39,6 +42,20 @@ export async function fetchAdminUsers(params?: { page?: number; size?: number; q
       totalPages: 0
     }
   );
+}
+
+export async function updateUserApproval(
+  userId: number,
+  action: "APPROVE" | "REJECT"
+) {
+  const { data } = await apiClient.patch<ApiResponse<UserSummaryResponse>>(
+    `/v1/admin/users/${userId}/approval`,
+    { action }
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Cập nhật duyệt tài khoản thất bại");
+  }
+  return data.data;
 }
 
 export async function assignUserRole(userId: number, role: "ORGANIZER" | "MENTOR" | "JUDGE") {

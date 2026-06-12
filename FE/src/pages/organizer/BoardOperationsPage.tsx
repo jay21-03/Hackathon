@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BoardProblemSection } from "../../components/organizer/board-operations/BoardProblemSection";
 import { BoardStaffSection } from "../../components/organizer/board-operations/BoardStaffSection";
+import { BoardTeamAssignmentSection } from "../../components/organizer/board-operations/BoardTeamAssignmentSection";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -10,9 +11,9 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { problemFormSchemaForRound } from "../../domain/schemas";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useBoardManagement } from "../../hooks/useBoardManagement";
 import { useBoardOperations } from "../../hooks/useBoardOperations";
 import { useBoardOperationsProgress } from "../../hooks/useBoardOperationsProgress";
-import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
 import {
   assignJudge,
   assignMentor,
@@ -24,7 +25,8 @@ import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { createIdempotencyKey } from "../../utils/idempotency";
 import { zodFirstError } from "../../utils/formValidation";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
-import { type HubEmbedProps } from "../../utils/hubEmbedUtils";
+import { handleEmbeddedNextStep, type HubEmbedProps } from "../../utils/hubEmbedUtils";
+import { macroPathToWizardStep } from "./eventWizardUtils";
 import {
   normalizeBoardOpsStep,
   resolveBoardOpsStep,
@@ -36,10 +38,6 @@ import {
 export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbedProps = {}) {
   const { notify } = useToast();
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const { steps: setupSteps } = useEventSetupProgress(
-    eventId,
-    embedded ? "/organizer/events/wizard" : "/organizer/board-ops"
-  );
   const {
     rounds,
     selectedRoundId,
@@ -72,8 +70,29 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
   const [judgePick, setJudgePick] = useState("");
   const [problemFieldErrors, setProblemFieldErrors] = useState<Record<string, string>>({});
 
+  const teamMgmt = useBoardManagement(eventId);
+
+  useEffect(() => {
+    if (selectedRoundId != null) teamMgmt.setSelectedRoundId(selectedRoundId);
+  }, [selectedRoundId, teamMgmt.setSelectedRoundId]);
+
+  const slotsCount = useMemo(
+    () => teamMgmt.boards.reduce((sum, item) => sum + item.slots.length, 0),
+    [teamMgmt.boards]
+  );
+  const assignedCount = useMemo(
+    () =>
+      teamMgmt.boards.reduce(
+        (sum, item) => sum + item.slots.filter((slot) => slot.teamId).length,
+        0
+      ),
+    [teamMgmt.boards]
+  );
+
   const { microSteps } = useBoardOperationsProgress({
     boardsCount: boards.length,
+    slotsCount,
+    assignedCount,
     hasProblem: Boolean(problem),
     mentorCount: boardMentors.length,
     judgeCount: boardJudges.length
@@ -156,11 +175,7 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
         await createProblem(boardId, payload, createIdempotencyKey(`create-problem-${boardId}`));
       }
       await invalidate();
-      notify(
-        problem ? "Đã cập nhật đề thi." : "Đã tạo đề thi — tiếp theo: gán mentor.",
-        "success"
-      );
-      if (!problem) goToStep("#ops-step-mentor");
+      notify(problem ? "Đã cập nhật đề thi." : "Đã tạo đề thi.", "success");
     } catch (err) {
       applyApiFormErrors(err, setProblemFieldErrors);
       notify(resolveApiError(err, "Không lưu được đề thi."), "danger");
@@ -217,6 +232,7 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
       await invalidateAssignments();
       setJudgePick("");
       notify("Đã gán giám khảo.", "success");
+      if (!problem) goToStep("#ops-step-problem");
     } catch (err) {
       notify(resolveApiError(err, "Gán giám khảo thất bại."), "danger");
     } finally {
@@ -272,17 +288,8 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
         <PageHeader
           eyebrow="Vận hành thi"
           title="Vận hành bảng"
-          description="Đề thi, mentor và giám khảo theo từng bảng — một luồng liền mạch."
+          description="Gán đội, mentor, giám khảo và đề thi theo từng bảng — một luồng liền mạch."
           actions={<OrganizerContextBar />}
-        />
-      ) : null}
-
-      {!embedded ? (
-        <WorkflowSteps
-          title="Quy trình thiết lập"
-          description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
-          steps={setupSteps}
-          activeHref="/organizer/board-ops"
         />
       ) : null}
 
@@ -290,14 +297,27 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
         title="Các bước trên trang này"
         description="Chọn một bước — mỗi lần chỉ hiện form của bước đó."
         activeHref={currentStep}
-        onStepSelect={(href) => goToStep(href)}
-        steps={microSteps.map((step) => ({
-          label: step.label,
-          detail: step.detail,
-          href: step.anchor,
-          to: step.to,
-          state: step.state
-        }))}
+        onStepSelect={(href) => handleEmbeddedNextStep(href, embedded, onWizardStep, goToStep)}
+        steps={microSteps.map((step) => {
+          if (embedded && step.to) {
+            const wizardHref = macroPathToWizardStep(step.to);
+            if (wizardHref) {
+              return {
+                label: step.label,
+                detail: step.detail,
+                href: wizardHref,
+                state: step.state
+              };
+            }
+          }
+          return {
+            label: step.label,
+            detail: step.detail,
+            href: step.anchor,
+            to: step.to,
+            state: step.state
+          };
+        })}
       />
 
       {error ? (
@@ -310,7 +330,7 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
         <EmptyState
           icon="grid_view"
           title="Chưa có bảng thi"
-          description="Tạo vòng, bảng và gán đội trong mục Bảng thi trước."
+          description="Tạo vòng, bảng và vị trí trong mục Bảng thi trước."
           action={
             <ButtonLink to="/organizer/boards" icon={null}>
               Đi tới Bảng thi
@@ -319,7 +339,104 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
         />
       ) : null}
 
+      {boards.length > 0 && currentStep === "#ops-step-teams" ? (
+        selectedRoundId ? (
+          <>
+          {rounds.length > 0 ? (
+            <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
+              <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+                Vòng thi
+                <select
+                  className="min-w-[12rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+                  value={selectedRoundId ?? ""}
+                  onChange={(e) => setSelectedRoundId(Number(e.target.value))}
+                >
+                  {rounds.map((round) => (
+                    <option key={round.id} value={round.id}>
+                      {round.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </section>
+          ) : null}
+          <BoardTeamAssignmentSection
+            eventId={eventId!}
+            selectedRoundId={selectedRoundId}
+            onAssigned={() => void teamMgmt.invalidate()}
+          />
+          </>
+        ) : null
+      ) : null}
+
+      {boards.length > 0 && currentStep === "#ops-step-mentor" ? (
+        !assignedCount ? (
+          <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+            <p className="font-body-md text-on-surface-variant">
+              Hoàn thành bước «Gán đội» trước khi gán mentor.
+            </p>
+          </div>
+        ) : (
+          <BoardStaffSection
+            mode="mentor"
+            rounds={rounds}
+            boards={boards}
+            selectedRoundId={selectedRoundId}
+            boardId={boardId}
+            selectedBoard={selectedBoard}
+            selectedRound={selectedRound}
+            assigned={boardMentors}
+            staffPool={mentors}
+            userNameById={userNameById}
+            pickValue={mentorPick}
+            busy={staffBusy}
+            onRoundChange={setSelectedRoundId}
+            onBoardChange={setBoardId}
+            onPickChange={setMentorPick}
+            onAssign={() => void handleAssignMentor()}
+            onRemove={(id) => void handleRemoveMentor(id)}
+          />
+        )
+      ) : null}
+
+      {boards.length > 0 && currentStep === "#ops-step-judge" ? (
+        boardMentors.length === 0 ? (
+          <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+            <p className="font-body-md text-on-surface-variant">
+              Hoàn thành bước «Mentor» trước khi gán giám khảo.
+            </p>
+          </div>
+        ) : (
+          <BoardStaffSection
+            mode="judge"
+            rounds={rounds}
+            boards={boards}
+            selectedRoundId={selectedRoundId}
+            boardId={boardId}
+            selectedBoard={selectedBoard}
+            selectedRound={selectedRound}
+            assigned={boardJudges}
+            staffPool={judges}
+            userNameById={userNameById}
+            pickValue={judgePick}
+            busy={staffBusy}
+            onRoundChange={setSelectedRoundId}
+            onBoardChange={setBoardId}
+            onPickChange={setJudgePick}
+            onAssign={() => void handleAssignJudge()}
+            onRemove={(id) => void handleRemoveJudge(id)}
+          />
+        )
+      ) : null}
+
       {boards.length > 0 && currentStep === "#ops-step-problem" ? (
+        boardJudges.length === 0 ? (
+          <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+            <p className="font-body-md text-on-surface-variant">
+              Hoàn thành bước «Giám khảo» trước khi cấu hình đề thi.
+            </p>
+          </div>
+        ) : (
         <BoardProblemSection
           eventId={eventId}
           rounds={rounds}
@@ -355,65 +472,6 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
           onSave={() => void handleSaveProblem()}
           onDelete={() => void handleDeleteProblem()}
         />
-      ) : null}
-
-      {boards.length > 0 && currentStep === "#ops-step-mentor" ? (
-        !problem ? (
-          <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-            <p className="font-body-md text-on-surface-variant">
-              Hoàn thành bước «Đề thi» trước khi gán mentor.
-            </p>
-          </div>
-        ) : (
-          <BoardStaffSection
-            mode="mentor"
-            rounds={rounds}
-            boards={boards}
-            selectedRoundId={selectedRoundId}
-            boardId={boardId}
-            selectedBoard={selectedBoard}
-            selectedRound={selectedRound}
-            assigned={boardMentors}
-            staffPool={mentors}
-            userNameById={userNameById}
-            pickValue={mentorPick}
-            busy={staffBusy}
-            onRoundChange={setSelectedRoundId}
-            onBoardChange={setBoardId}
-            onPickChange={setMentorPick}
-            onAssign={() => void handleAssignMentor()}
-            onRemove={(id) => void handleRemoveMentor(id)}
-          />
-        )
-      ) : null}
-
-      {boards.length > 0 && currentStep === "#ops-step-judge" ? (
-        !problem ? (
-          <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-            <p className="font-body-md text-on-surface-variant">
-              Hoàn thành bước «Đề thi» trước khi gán giám khảo.
-            </p>
-          </div>
-        ) : (
-          <BoardStaffSection
-            mode="judge"
-            rounds={rounds}
-            boards={boards}
-            selectedRoundId={selectedRoundId}
-            boardId={boardId}
-            selectedBoard={selectedBoard}
-            selectedRound={selectedRound}
-            assigned={boardJudges}
-            staffPool={judges}
-            userNameById={userNameById}
-            pickValue={judgePick}
-            busy={staffBusy}
-            onRoundChange={setSelectedRoundId}
-            onBoardChange={setBoardId}
-            onPickChange={setJudgePick}
-            onAssign={() => void handleAssignJudge()}
-            onRemove={(id) => void handleRemoveJudge(id)}
-          />
         )
       ) : null}
 

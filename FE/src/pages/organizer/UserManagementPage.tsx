@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
@@ -15,7 +15,7 @@ import {
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { useUserManagement } from "../../hooks/useUserManagement";
 import { assignRoleSchema } from "../../domain/schemas";
-import { assignUserRole } from "../../services/userService";
+import { assignUserRole, updateUserApproval } from "../../services/userService";
 import { resolveApiError } from "../../utils/apiError";
 
 export function UserManagementPage() {
@@ -23,8 +23,10 @@ export function UserManagementPage() {
   const [density, setDensity] = useState<TableDensity>("comfortable");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING_APPROVAL">("ALL");
   const [listPage, setListPage] = useState(0);
   const [assigningId, setAssigningId] = useState<number | null>(null);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
   const pageSize = 25;
   const { users, total, totalPages, loading, error, invalidate } = useUserManagement(
     listPage,
@@ -32,6 +34,11 @@ export function UserManagementPage() {
     debouncedSearch
   );
   const cell = getDensityCellClass(density);
+
+  const filteredUsers = useMemo(() => {
+    if (statusFilter === "ALL") return users;
+    return users.filter((user) => user.status === statusFilter);
+  }, [users, statusFilter]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -59,6 +66,19 @@ export function UserManagementPage() {
     }
   }
 
+  async function handleApproval(userId: number, action: "APPROVE" | "REJECT") {
+    setApprovingId(userId);
+    try {
+      await updateUserApproval(userId, action);
+      await invalidate();
+      notify(action === "APPROVE" ? "Đã duyệt tài khoản." : "Đã từ chối tài khoản.", "success");
+    } catch (err) {
+      notify(resolveApiError(err, "Cập nhật duyệt tài khoản thất bại."), "danger");
+    } finally {
+      setApprovingId(null);
+    }
+  }
+
   if (loading) return <ModuleSkeleton rows={5} variant="table" />;
 
   return (
@@ -66,7 +86,7 @@ export function UserManagementPage() {
       <PageHeader
         eyebrow="Quản trị"
         title="Người dùng hệ thống"
-        description="Gán vai trò ban tổ chức, mentor hoặc giám khảo cho tài khoản đã đăng nhập."
+        description="Duyệt tài khoản thí sinh và gán vai trò ban tổ chức, mentor hoặc giám khảo."
       />
 
       {error ? (
@@ -79,14 +99,37 @@ export function UserManagementPage() {
         <TableToolbar
           searchValue={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Tìm toàn hệ thống theo tên, email, username…"
-          actions={<TableDensityToggle value={density} onChange={setDensity} />}
+          searchPlaceholder="Tìm theo tên, email, MSSV…"
+          actions={
+            <div className="flex flex-wrap items-center gap-sm">
+              <select
+                className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-sm"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as "ALL" | "PENDING_APPROVAL")}
+              >
+                <option value="ALL">Tất cả trạng thái</option>
+                <option value="PENDING_APPROVAL">Chờ duyệt</option>
+              </select>
+              <TableDensityToggle value={density} onChange={setDensity} />
+            </div>
+          }
         />
-        <DataTable headers={["Họ tên", "Email", "Vai trò", "Trạng thái", "Gán vai trò"]}>
-          {users.map((user) => (
+        <DataTable
+          headers={["Họ tên", "Email", "Loại SV", "MSSV", "Trường", "Vai trò", "Trạng thái", "Thao tác"]}
+        >
+          {filteredUsers.map((user) => (
             <tr key={user.id} className="font-body-sm text-on-surface">
               <td className={cell}>{user.fullName}</td>
               <td className={`${cell} break-all`}>{user.email}</td>
+              <td className={cell}>
+                {user.studentType === "FPT"
+                  ? "FPT"
+                  : user.studentType === "EXTERNAL"
+                    ? "Ngoài trường"
+                    : "—"}
+              </td>
+              <td className={cell}>{user.studentId ?? "—"}</td>
+              <td className={cell}>{user.university ?? "—"}</td>
               <td className={cell}>
                 {user.roles
                   .map((role) =>
@@ -106,42 +149,65 @@ export function UserManagementPage() {
                 <Badge tone={getStatusTone(user.status)}>{getStatusLabel(user.status)}</Badge>
               </td>
               <td className={cell}>
-                <div className="flex flex-wrap gap-1">
-                  {(
-                    [
-                      ["MENTOR", "Mentor"],
-                      ["JUDGE", "Giám khảo"],
-                      ["ORGANIZER", "Ban tổ chức"]
-                    ] as const
-                  ).map(([role, label]) => {
-                    const disabled = assigningId === user.id || user.roles.includes(role);
-                    if (role === "ORGANIZER" && !disabled) {
-                      return (
-                        <ConfirmAction
-                          key={role}
-                          title="Gán quyền ban tổ chức?"
-                          message={`${user.fullName || user.email} sẽ có quyền quản trị cuộc thi và dữ liệu nhạy cảm.`}
-                          confirmLabel="Gán quyền"
-                          onConfirm={() => void handleAssignRole(user.id, role)}
-                        >
-                          <Button size="sm" variant="ghost">
-                            {label}
-                          </Button>
-                        </ConfirmAction>
-                      );
-                    }
-                    return (
+                <div className="flex flex-col gap-1">
+                  {user.status === "PENDING_APPROVAL" ? (
+                    <div className="flex flex-wrap gap-1">
                       <Button
-                        key={role}
                         size="sm"
-                        variant="ghost"
-                        disabled={disabled}
-                        onClick={() => void handleAssignRole(user.id, role)}
+                        disabled={approvingId === user.id}
+                        onClick={() => void handleApproval(user.id, "APPROVE")}
                       >
-                        {label}
+                        Duyệt
                       </Button>
-                    );
-                  })}
+                      <ConfirmAction
+                        title="Từ chối tài khoản?"
+                        message={`${user.fullName || user.email} sẽ bị vô hiệu hóa và không tham gia được.`}
+                        confirmLabel="Từ chối"
+                        onConfirm={() => void handleApproval(user.id, "REJECT")}
+                      >
+                        <Button size="sm" variant="ghost" disabled={approvingId === user.id}>
+                          Từ chối
+                        </Button>
+                      </ConfirmAction>
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap gap-1">
+                    {(
+                      [
+                        ["MENTOR", "Mentor"],
+                        ["JUDGE", "Giám khảo"],
+                        ["ORGANIZER", "Ban tổ chức"]
+                      ] as const
+                    ).map(([role, label]) => {
+                      const disabled = assigningId === user.id || user.roles.includes(role);
+                      if (role === "ORGANIZER" && !disabled) {
+                        return (
+                          <ConfirmAction
+                            key={role}
+                            title="Gán quyền ban tổ chức?"
+                            message={`${user.fullName || user.email} sẽ có quyền quản trị cuộc thi và dữ liệu nhạy cảm.`}
+                            confirmLabel="Gán quyền"
+                            onConfirm={() => void handleAssignRole(user.id, role)}
+                          >
+                            <Button size="sm" variant="ghost">
+                              {label}
+                            </Button>
+                          </ConfirmAction>
+                        );
+                      }
+                      return (
+                        <Button
+                          key={role}
+                          size="sm"
+                          variant="ghost"
+                          disabled={disabled}
+                          onClick={() => void handleAssignRole(user.id, role)}
+                        >
+                          {label}
+                        </Button>
+                      );
+                    })}
+                  </div>
                 </div>
               </td>
             </tr>
