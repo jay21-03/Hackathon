@@ -9,9 +9,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface TeamRepository extends JpaRepository<Team, Long> {
+	List<Team> findByEventId(Long eventId);
+
 	List<Team> findByEventIdOrderByNameAscIdAsc(Long eventId);
 
 	Page<Team> findByEventId(Long eventId, Pageable pageable);
+
+	List<Team> findByEventIdAndStatus(Long eventId, TeamStatus status);
 
 	List<Team> findByEventIdAndStatusOrderByNameAscIdAsc(Long eventId, TeamStatus status);
 

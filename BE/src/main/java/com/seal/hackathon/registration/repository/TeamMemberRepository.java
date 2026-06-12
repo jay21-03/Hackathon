@@ -13,6 +13,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
+	List<TeamMember> findByTeamId(Long teamId);
+
 	List<TeamMember> findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(Long teamId);
 
 	List<TeamMember> findByUserId(Long userId);
