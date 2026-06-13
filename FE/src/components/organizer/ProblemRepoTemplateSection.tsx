@@ -89,7 +89,7 @@ export function ProblemRepoTemplateSection({ problemId, problemTitle }: Props) {
         <div>
           <h2 className="font-title-md text-on-surface">Mẫu repository GitHub</h2>
           <p className="mt-xs font-body-sm text-on-surface-variant">
-            Cho đề «{problemTitle}» — provision tự động khi đến thời gian mở đề.
+            Cho đề «{problemTitle}» — hệ thống tự cấp repo khi đến thời gian mở đề.
           </p>
         </div>
         <ButtonLink to="/organizer/artifacts-hub#artifacts-step-repositories" variant="secondary">
@@ -107,7 +107,7 @@ export function ProblemRepoTemplateSection({ problemId, problemTitle }: Props) {
       ) : (
         <div className="mt-md grid gap-md md:grid-cols-2">
           <label className="flex flex-col gap-xs">
-            <span className="font-label-sm normal-case text-on-surface-variant">Template owner</span>
+            <span className="font-label-sm normal-case text-on-surface-variant">Org / user GitHub (mẫu)</span>
             <input
               className={`form-input${fieldErrors.templateOwner ? " border-error" : ""}`}
               value={templateOwner}
@@ -122,7 +122,7 @@ export function ProblemRepoTemplateSection({ problemId, problemTitle }: Props) {
             ) : null}
           </label>
           <label className="flex flex-col gap-xs">
-            <span className="font-label-sm normal-case text-on-surface-variant">Template repo</span>
+            <span className="font-label-sm normal-case text-on-surface-variant">Tên repo mẫu</span>
             <input
               className={`form-input${fieldErrors.templateRepo ? " border-error" : ""}`}
               value={templateRepo}
@@ -152,7 +152,7 @@ export function ProblemRepoTemplateSection({ problemId, problemTitle }: Props) {
           </label>
           <label className="flex items-center gap-sm pt-6 font-body-sm text-on-surface">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-            Bật provision cho đề này
+            Bật tự động cấp repository cho đề này
           </label>
         </div>
       )}

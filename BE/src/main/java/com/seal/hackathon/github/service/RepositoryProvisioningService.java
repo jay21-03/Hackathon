@@ -56,6 +56,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -63,6 +64,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RepositoryProvisioningService {
@@ -145,11 +147,11 @@ public class RepositoryProvisioningService {
     public ProvisionProblemRepositoriesResponse provisionForProblem(Long problemId, boolean force, Long currentUserId) {
         ProblemScope scope = loadProblemScope(problemId);
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(scope.round().getEventId());
-        return provisionForProblemInternal(problemId, force, currentUserId);
+        return provisionForProblemInternal(problemId, force, currentUserId, false);
     }
 
     private ProvisionProblemRepositoriesResponse provisionForProblemInternal(
-            Long problemId, boolean force, Long currentUserId) {
+            Long problemId, boolean force, Long currentUserId, boolean retryFailed) {
         ProblemScope scope = loadProblemScope(problemId);
         ProblemRepositoryTemplate template = templateRepository.findByProblemId(problemId)
                 .filter(item -> Boolean.TRUE.equals(item.getEnabled()))
@@ -170,6 +172,18 @@ public class RepositoryProvisioningService {
                     .findByTeamIdAndProblemId(team.getId(), problemId)
                     .orElse(null);
             if (existing != null) {
+                if (retryFailed && shouldRetryProvision(existing)) {
+                    ProvisionOutcome outcome = provisionRepository(existing, team, template, scope, now);
+                    responses.add(toRepositoryResponse(outcome.repository(), true));
+                    if (outcome.created()) {
+                        created++;
+                    } else if (outcome.failed()) {
+                        failed++;
+                    } else {
+                        skipped++;
+                    }
+                    continue;
+                }
                 responses.add(toRepositoryResponse(existing, true));
                 skipped++;
                 continue;
@@ -253,17 +267,92 @@ public class RepositoryProvisioningService {
     @Transactional
     public int provisionDueRepositories() {
         OffsetDateTime now = OffsetDateTime.now();
+        ensureDefaultTemplatesForReleasedProblems(now);
         int createdTotal = 0;
+        int processedProblems = 0;
         for (ProblemRepositoryTemplate template : templateRepository.findByEnabledTrue()) {
             Problem problem = problemRepository.findById(template.getProblemId()).orElse(null);
             if (problem == null || problem.getReleaseAt() == null || now.isBefore(problem.getReleaseAt())) {
                 continue;
             }
-            ProvisionProblemRepositoriesResponse result = provisionForProblemInternal(
-                    problem.getId(), false, null);
-            createdTotal += result.getCreatedCount();
+            processedProblems++;
+            try {
+                ProvisionProblemRepositoriesResponse result = provisionForProblemInternal(
+                        problem.getId(), false, null, true);
+                createdTotal += result.getCreatedCount();
+                log.info(
+                        "GitHub auto-provision problemId={} title='{}': created={}, failed={}, skipped={}, eligible={}",
+                        problem.getId(),
+                        problem.getTitle(),
+                        result.getCreatedCount(),
+                        result.getFailedCount(),
+                        result.getSkippedCount(),
+                        result.getTotalTeams());
+            } catch (RuntimeException ex) {
+                log.warn(
+                        "GitHub auto-provision skipped problemId={}: {}",
+                        template.getProblemId(),
+                        ex.getMessage());
+            }
+        }
+        if (processedProblems == 0) {
+            log.debug(
+                    "GitHub auto-provision: no released problems with enabled template at {}",
+                    now);
         }
         return createdTotal;
+    }
+
+    /** Scheduler: tạo mẫu repo mặc định khi đề đã mở — BTC chưa cần mở trang Repository. */
+    private void ensureDefaultTemplatesForReleasedProblems(OffsetDateTime now) {
+        if (!hasDefaultTemplateConfig()) {
+            return;
+        }
+        for (Problem problem : problemRepository.findAll()) {
+            if (problem.getReleaseAt() == null || now.isBefore(problem.getReleaseAt())) {
+                continue;
+            }
+            if (templateRepository.findByProblemId(problem.getId()).isPresent()) {
+                continue;
+            }
+            try {
+                persistDefaultTemplate(problem.getId(), now);
+                log.info(
+                        "GitHub auto-provision: created default repo template for problemId={} title='{}'",
+                        problem.getId(),
+                        problem.getTitle());
+            } catch (RuntimeException ex) {
+                log.warn(
+                        "GitHub auto-provision: could not create template for problemId={}: {}",
+                        problem.getId(),
+                        ex.getMessage());
+            }
+        }
+    }
+
+    private void persistDefaultTemplate(Long problemId, OffsetDateTime now) {
+        SaveRepoTemplateRequest request = defaultTemplateRequest();
+        ProblemRepositoryTemplate template = ProblemRepositoryTemplate.builder()
+                .problemId(problemId)
+                .createdAt(now)
+                .build();
+        template.setTemplateOwner(normalizeRequired(request.getTemplateOwner(), "templateOwner must not be blank"));
+        template.setTemplateRepo(normalizeRequired(request.getTemplateRepo(), "templateRepo must not be blank"));
+        template.setDefaultBranch(StringUtils.hasText(request.getDefaultBranch())
+                ? request.getDefaultBranch().trim()
+                : defaultBranch());
+        template.setEnabled(request.getEnabled() == null || request.getEnabled());
+        template.setUpdatedAt(now);
+        templateRepository.save(template);
+    }
+
+    private boolean hasDefaultTemplateConfig() {
+        return StringUtils.hasText(resolveConfiguredTemplateOwner())
+                && StringUtils.hasText(configuredTemplateRepo);
+    }
+
+    private boolean shouldRetryProvision(TeamRepository repository) {
+        return repository.getProvisionStatus() != RepositoryProvisionStatus.CREATED;
     }
 
     @Transactional

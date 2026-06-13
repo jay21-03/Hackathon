@@ -102,7 +102,7 @@ export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedPro
         <PageHeader
           eyebrow="Vận hành thi"
           title="Bài nộp & repository"
-          description="Tiêu chí chấm, provision GitHub và theo dõi nộp bài — một luồng liền mạch sau vận hành bảng."
+          description="Tiêu chí chấm, cấp repository GitHub và theo dõi nộp bài — một luồng liền mạch sau vận hành bảng."
           actions={<OrganizerContextBar />}
         />
       ) : null}

@@ -116,7 +116,7 @@ export function JudgeRepositoriesPanel({ roundId, boardId }: JudgeRepositoriesPa
               <th className="px-sm py-2 font-label-sm text-on-surface-variant">Đội</th>
               <th className="px-sm py-2 font-label-sm text-on-surface-variant">Đề</th>
               <th className="px-sm py-2 font-label-sm text-on-surface-variant">Truy cập</th>
-              <th className="px-sm py-2 font-label-sm text-on-surface-variant">Provision</th>
+              <th className="px-sm py-2 font-label-sm text-on-surface-variant">Cấp repo</th>
               <th className="px-sm py-2 font-label-sm text-on-surface-variant">GitHub</th>
             </tr>
           </thead>

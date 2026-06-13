@@ -41,7 +41,7 @@ const blockReasonLabels: Record<string, string> = {
   TEAM_NOT_CONFIRMED: "Đội chưa được xác nhận.",
   NOT_ASSIGNED: "Chưa được phân bảng.",
   NO_PROBLEM: "Ban tổ chức chưa cấu hình đề cho bảng của bạn.",
-  NOT_RELEASED: "Đề chưa mở — repository sẽ được cấp khi ban tổ chức provision.",
+  NOT_RELEASED: "Đề chưa mở — repository sẽ được cấp khi ban tổ chức mở đề.",
   PROBLEM_CLOSED: "Hết giờ làm bài — kiểm tra trạng thái push bên dưới.",
   PROBLEM_UNAVAILABLE: "Chưa thể nộp bài trong thời điểm hiện tại.",
   SUBMISSION_DEADLINE_PASSED: "Đã qua hạn nộp bài.",
@@ -88,7 +88,7 @@ function pushGuidance(repo: TeamRepositoryResponse) {
     return "Ban tổ chức sẽ tạo repository khi bắt đầu vòng thi.";
   }
   if (repo.provisionStatus === "FAILED") {
-    return "Tạo repository thất bại — liên hệ ban tổ chức để provision lại.";
+    return "Tạo repository thất bại — liên hệ ban tổ chức để cấp lại.";
   }
   if (repo.accessStatus === "OPEN") {
     return "Clone repository và push code trước hạn đóng đề — hệ thống tự chốt nộp khi hết giờ.";
@@ -440,7 +440,7 @@ export function SubmissionPage() {
             <h2 className="font-title-sm text-on-surface">Tổng quan bài nộp</h2>
             <p className="mt-xs font-body-sm text-on-surface-variant">
               Ban tổ chức cấp repository GitHub khi mở đề. Bạn push code trong thời gian mở — hệ thống tự chốt
-              «đã nộp» khi hết giờ đóng đề (closeAt), không cần bấm nút xác nhận.
+              «đã nộp» khi hết giờ đóng đề, không cần bấm nút xác nhận.
             </p>
             <dl className="mt-md grid gap-md sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border border-outline-variant/60 bg-surface px-3 py-2">
@@ -505,7 +505,7 @@ export function SubmissionPage() {
                 <EmptyState
                   icon="hourglass_empty"
                   title="Chưa cấp repo vòng này"
-                  description="Đội đã vào vòng mới — chờ ban tổ chức provision repository cho vòng chung kết."
+                  description="Đội đã vào vòng mới — chờ ban tổ chức cấp repository cho vòng chung kết."
                 />
               </div>
             ) : (

@@ -3,6 +3,7 @@ import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
 import type { BoardRanking, PublicEventResults } from "../../services/rankingApi";
+import { formatBoardRankingLabel } from "../../utils/boardLabels";
 import { sortBoardRankings } from "../../utils/sortContestData";
 
 interface EventResultsViewProps {
@@ -164,18 +165,24 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
       </div>
 
       <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
-        <FilterPills
-          label="Vòng"
-          value={roundKeySelected}
-          onChange={setRoundKeySelected}
-          options={roundGroups.map((group) => ({
-            value: group.key,
-            label: group.roundName
-          }))}
-        />
+        {roundGroups.length === 1 ? (
+          <p className="font-label-sm text-on-surface-variant">
+            Vòng: <span className="text-on-surface">{roundGroups[0]!.roundName}</span>
+          </p>
+        ) : (
+          <FilterPills
+            label="Vòng"
+            value={roundKeySelected}
+            onChange={setRoundKeySelected}
+            options={roundGroups.map((group) => ({
+              value: group.key,
+              label: group.roundName
+            }))}
+          />
+        )}
 
         <FilterPills
-          label="Bảng"
+          label={`Bảng${activeRound ? ` · ${activeRound.roundName}` : ""}`}
           value={boardIdSelected ?? boardsInRound[0]?.boardId ?? 0}
           onChange={(id) => setBoardIdSelected(id)}
           options={boardsInRound.map((board) => ({
@@ -186,7 +193,7 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
 
         {participantView && myBoard && activeBoard?.boardId !== myBoard.boardId ? (
           <Button type="button" variant="secondary" size="sm" onClick={jumpToMyBoard}>
-            Xem bảng của tôi ({myBoard.boardName})
+            Xem bảng của tôi ({formatBoardRankingLabel(myBoard)})
           </Button>
         ) : null}
       </section>
@@ -195,10 +202,8 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
         <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
           <div className="flex flex-wrap items-center justify-between gap-sm border-b border-outline-variant px-md py-sm">
             <div>
-              <h2 className="font-headline-sm text-on-surface">{activeBoard.boardName}</h2>
-              <p className="font-body-sm text-on-surface-variant">
-                {activeBoard.roundName ?? activeRound?.roundName ?? "—"} · {activeBoard.entries.length} đội
-              </p>
+              <h2 className="font-headline-sm text-on-surface">{formatBoardRankingLabel(activeBoard)}</h2>
+              <p className="font-body-sm text-on-surface-variant">{activeBoard.entries.length} đội</p>
             </div>
           </div>
           <div className="overflow-x-auto">

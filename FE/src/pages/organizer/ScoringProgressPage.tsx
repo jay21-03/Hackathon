@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
@@ -17,7 +17,7 @@ import { useScoreProgress } from "../../hooks/useScoreProgress";
 import { queryKeys } from "../../lib/queryKeys";
 import { sendScoringReminder, type JudgeSheetStatusDto } from "../../services/scoringApi";
 import { resolveApiError } from "../../utils/apiError";
-import { resolveDefaultBoardId } from "../../utils/pickActiveRound";
+import { resolveDefaultBoardId, resolveDefaultRoundId } from "../../utils/pickActiveRound";
 
 function cellTone(status: string): string {
   if (status === "SUBMITTED") return "bg-success-container text-on-success-container";
@@ -51,13 +51,22 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
   const deepLinkEventApplied = useRef(false);
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, boards, loading: boardsLoading, error: boardsError } = useEventBoards(eventId);
+  const [roundId, setRoundId] = useState<number | null>(null);
   const [boardId, setBoardId] = useState<number | null>(() => {
     if (!boardIdParam) return null;
     const parsed = Number(boardIdParam);
     return Number.isFinite(parsed) ? parsed : null;
   });
   const [reminding, setReminding] = useState(false);
-  const { progress, loading: progressLoading, error: progressError } = useScoreProgress(boardId);
+
+  const activeRoundId = resolveDefaultRoundId(rounds, roundId);
+  const boardsInRound = useMemo(
+    () => (activeRoundId != null ? boards.filter((b) => b.roundId === activeRoundId) : []),
+    [boards, activeRoundId]
+  );
+  const activeBoardId = resolveDefaultBoardId(boardsInRound, rounds, boardId);
+
+  const { progress, loading: progressLoading, error: progressError } = useScoreProgress(activeBoardId);
 
   useEffect(() => {
     if (!eventIdParam || deepLinkEventApplied.current || !events.length) return;
@@ -70,27 +79,36 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
   }, [eventIdParam, events, setEventId]);
 
   useEffect(() => {
+    setRoundId((prev) => resolveDefaultRoundId(rounds, prev));
+  }, [rounds]);
+
+  useEffect(() => {
     const urlBoardId = boardIdParam ? Number(boardIdParam) : null;
     if (urlBoardId && boards.some((board) => board.id === urlBoardId)) {
+      const matched = boards.find((board) => board.id === urlBoardId);
+      if (matched) setRoundId(matched.roundId);
       setBoardId(urlBoardId);
       return;
     }
-    setBoardId((prev) => resolveDefaultBoardId(boards, rounds, prev));
-  }, [boards, boardIdParam, rounds]);
+    setBoardId((prev) => {
+      if (prev && boardsInRound.some((b) => b.id === prev)) return prev;
+      return resolveDefaultBoardId(boardsInRound, rounds, null);
+    });
+  }, [boards, boardIdParam, boardsInRound, rounds]);
 
   useEffect(() => {
-    if (!eventId || !boardId) return;
+    if (!eventId || !activeBoardId) return;
     const next = new URLSearchParams();
     next.set("eventId", String(eventId));
-    next.set("boardId", String(boardId));
+    next.set("boardId", String(activeBoardId));
     setSearchParams(next, { replace: true });
-  }, [eventId, boardId, setSearchParams]);
+  }, [eventId, activeBoardId, setSearchParams]);
 
   async function handleRemindScoring() {
-    if (!boardId) return;
+    if (!activeBoardId) return;
     setReminding(true);
     try {
-      await sendScoringReminder(boardId);
+      await sendScoringReminder(activeBoardId);
       await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
       notify("Đã gửi thông báo nhắc chấm cho giám khảo.", "success");
     } catch (err) {
@@ -103,7 +121,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
     }
   }
 
-  const roundNameById = Object.fromEntries(rounds.map((r) => [r.id, r.name]));
+
   const judgeNameById = Object.fromEntries(
     (progress?.judges ?? []).map((j) => [j.judgeId, j.fullName])
   );
@@ -126,7 +144,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                   <Button
                     variant="secondary"
                     icon={<Icon name="notifications_active" />}
-                    disabled={reminding || !boardId}
+                    disabled={reminding || !activeBoardId}
                     onClick={() => void handleRemindScoring()}
                   >
                     {reminding ? "Đang gửi…" : "Nhắc chấm"}
@@ -150,22 +168,38 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
 
       <section
         className={`grid gap-md rounded-xl border border-outline-variant bg-surface-container p-md ${
-          embedded ? "sm:grid-cols-[minmax(12rem,1fr)]" : "sm:grid-cols-[auto_minmax(12rem,1fr)]"
+          embedded ? "sm:grid-cols-2" : "sm:grid-cols-[auto_minmax(12rem,1fr)_minmax(12rem,1fr)]"
         } items-end`}
       >
         {!embedded ? <OrganizerContextBar /> : null}
         <label className="flex min-w-0 flex-col gap-1 font-label-sm text-on-surface-variant">
+          Vòng
+          <select
+            className="w-full min-w-0 rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+            value={activeRoundId ?? ""}
+            onChange={(e) => setRoundId(e.target.value ? Number(e.target.value) : null)}
+            disabled={!rounds.length}
+          >
+            {rounds.length === 0 ? <option value="">Chưa có vòng</option> : null}
+            {rounds.map((round) => (
+              <option key={round.id} value={round.id}>
+                {round.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex min-w-0 flex-col gap-1 font-label-sm text-on-surface-variant">
           Bảng thi
           <select
             className="w-full min-w-0 rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
-            value={boardId ?? ""}
+            value={activeBoardId ?? ""}
             onChange={(e) => setBoardId(e.target.value ? Number(e.target.value) : null)}
-            disabled={!boards.length}
+            disabled={!boardsInRound.length}
           >
-            {boards.length === 0 ? <option value="">Chưa có bảng</option> : null}
-            {boards.map((board) => (
+            {boardsInRound.length === 0 ? <option value="">Chưa có bảng trong vòng này</option> : null}
+            {boardsInRound.map((board) => (
               <option key={board.id} value={board.id}>
-                {board.name} ({roundNameById[board.roundId] ?? `Vòng ${board.roundId}`})
+                {board.name}
               </option>
             ))}
           </select>
@@ -180,7 +214,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
 
       {loading ? (
         <ModuleSkeleton rows={5} />
-      ) : !boardId ? (
+      ) : !activeBoardId ? (
         <p className="font-body-sm text-on-surface-variant">Tạo bảng thi trước khi theo dõi tiến độ.</p>
       ) : progress ? (
         <>

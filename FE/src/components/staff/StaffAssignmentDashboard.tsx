@@ -8,6 +8,7 @@ import { StatCard } from "../ui/StatCard";
 import { JudgeAssignmentsTable } from "../judge/JudgeAssignmentsTable";
 import type { AssignmentResponse } from "../../services/assignmentService";
 import { resolveApiError } from "../../utils/apiError";
+import { formatBoardAssignmentShortLabel } from "../../utils/judgeAssignmentUtils";
 
 interface StaffAssignmentDashboardProps {
   eyebrow: string;
@@ -71,7 +72,7 @@ export function StaffAssignmentDashboard({
     for (const item of allAssignments) {
       if (eventFilter !== "" && item.eventId !== eventFilter) continue;
       if (roundFilter !== "" && item.roundId !== roundFilter) continue;
-      map.set(item.boardId, item.boardName ?? `Bảng #${item.boardId}`);
+      map.set(item.boardId, formatBoardAssignmentShortLabel(item));
     }
     return [...map.entries()].map(([id, name]) => ({ id, name }));
   }, [allAssignments, eventFilter, roundFilter]);

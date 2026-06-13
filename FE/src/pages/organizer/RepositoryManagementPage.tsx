@@ -197,11 +197,11 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
       const result = await provisionProblemRepositories(problemId, force);
       await invalidateRepos();
       notify(
-        `Provision xong: ${result.createdCount} tạo mới, ${result.skippedCount} bỏ qua, ${result.failedCount} lỗi.`,
+        `Đã cấp repo: ${result.createdCount} tạo mới, ${result.skippedCount} bỏ qua, ${result.failedCount} lỗi.`,
         result.failedCount > 0 ? "warning" : "success"
       );
     } catch (err) {
-      notify(resolveApiError(err, "Provision thất bại."), "danger");
+      notify(resolveApiError(err, "Cấp repository thất bại."), "danger");
     } finally {
       setProvisioning(false);
     }
@@ -218,7 +218,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
         result.failedCount > 0 ? "warning" : "success"
       );
     } catch (err) {
-      notify(resolveApiError(err, "Khóa repository thất bại — đề phải qua giờ đóng (closeAt)."), "danger");
+      notify(resolveApiError(err, "Khóa repository thất bại — đề phải qua giờ đóng."), "danger");
     } finally {
       setLocking(false);
     }
@@ -245,7 +245,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
     try {
       await retryTeamRepository(repositoryId);
       await invalidateRepos();
-      notify("Đã thử lại provision.", "success");
+      notify("Đã thử lại cấp repository.", "success");
     } catch (err) {
       notify(resolveApiError(err, "Thử lại thất bại."), "danger");
     } finally {
@@ -283,7 +283,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
         <PageHeader
           eyebrow="GitHub"
           title="Repository đội thi"
-          description="Cấu hình mẫu repo theo đề, provision khi mở đề, khóa push khi hết giờ đề (closeAt)."
+          description="Cấu hình mẫu repo theo đề, tự cấp khi mở đề và khóa push khi hết giờ đóng đề."
           actions={<OrganizerContextBar />}
         />
       ) : null}
@@ -297,7 +297,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
       ) : (
         <section className="grid gap-lg lg:grid-cols-[1fr_320px]">
           <div className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
-            {rounds.length > 1 ? (
+            {rounds.length > 0 ? (
               <label className="flex flex-col gap-xs">
                 <span className="font-label-sm normal-case text-on-surface-variant">Vòng thi</span>
                 <select
@@ -346,7 +346,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
 
                 <div className="grid gap-md md:grid-cols-2">
                   <label className="flex flex-col gap-xs">
-                    <span className="font-label-sm normal-case text-on-surface-variant">Template owner</span>
+                    <span className="font-label-sm normal-case text-on-surface-variant">Org / user GitHub (mẫu)</span>
                     <input
                       className="form-input"
                       placeholder="my-org"
@@ -355,7 +355,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
                     />
                   </label>
                   <label className="flex flex-col gap-xs">
-                    <span className="font-label-sm normal-case text-on-surface-variant">Template repo</span>
+                    <span className="font-label-sm normal-case text-on-surface-variant">Tên repo mẫu</span>
                     <input
                       className="form-input"
                       placeholder="hackathon-starter"
@@ -380,7 +380,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
                       checked={templateEnabled}
                       onChange={(e) => setTemplateEnabled(e.target.checked)}
                     />
-                    Bật provision tự động cho đề này
+                    Bật tự động cấp repository cho đề này
                   </label>
                 </div>
 
@@ -395,29 +395,29 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
                     {savingTemplate ? "Đang lưu" : templateMissing ? "Tạo mẫu" : "Cập nhật mẫu"}
                   </Button>
                   <ConfirmAction
-                    title="Provision repository?"
+                    title="Cấp repository cho các đội?"
                     message="Tạo repo riêng cho mỗi đội đã xác nhận trên bảng này. Thành viên cần có GitHub username trong hồ sơ."
-                    confirmLabel="Provision"
+                    confirmLabel="Cấp repo"
                     onConfirm={() => void handleProvision(false)}
                   >
                     <Button type="button" variant="secondary" disabled={provisioning || !templateEnabled}>
-                      {provisioning ? "Đang provision" : "Provision ngay"}
+                      {provisioning ? "Đang cấp repo…" : "Cấp repo ngay"}
                     </Button>
                   </ConfirmAction>
                   <ConfirmAction
-                    title="Provision bắt buộc?"
-                    message="Bỏ qua kiểm tra thời gian mở đề — chỉ dùng khi test hoặc provision thủ công."
-                    confirmLabel="Force provision"
+                    title="Cấp repo bỏ qua giờ mở đề?"
+                    message="Chỉ dùng khi test hoặc cấp thủ công trước giờ mở đề."
+                    confirmLabel="Cấp bắt buộc"
                     onConfirm={() => void handleProvision(true)}
                   >
                     <Button type="button" variant="secondary" disabled={provisioning}>
-                      Force
+                      Cấp bắt buộc
                     </Button>
                   </ConfirmAction>
                   <ConfirmAction
-                    title="Cấp quyền read cho giám khảo?"
-                    message="Add GitHub username của giám khảo được phân công vào từng repo trong vòng với quyền pull/read. Giám khảo cần có GitHub username trong hồ sơ."
-                    confirmLabel="Grant judge access"
+                    title="Cấp quyền xem repo cho giám khảo?"
+                    message="Thêm giám khảo được phân công vào repo với quyền chỉ đọc. Giám khảo cần có GitHub username trong hồ sơ."
+                    confirmLabel="Cấp quyền"
                     onConfirm={() => void handleGrantJudgeAccess()}
                   >
                     <Button
@@ -430,7 +430,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
                   </ConfirmAction>
                   <ConfirmAction
                     title="Khóa push sau khi đề đóng?"
-                    message="Hạ quyền collaborator xuống pull và đánh dấu CLOSED. Chỉ thực hiện khi đã qua giờ đóng đề (closeAt)."
+                    message="Thu quyền ghi (push) trên GitHub và đánh dấu repo đã khóa. Chỉ thực hiện khi đã qua giờ đóng đề."
                     confirmLabel="Khóa push"
                     onConfirm={() => void handleLockProblem()}
                   >
@@ -464,7 +464,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
               </div>
             </dl>
             <p className="mt-md font-body-sm text-on-surface-variant">
-              Scheduler backend tự provision khi đến releaseAt và khóa khi round.endAt qua.
+              Hệ thống tự cấp repository khi đến giờ mở đề và khóa quyền push khi hết giờ đóng đề.
             </p>
           </aside>
         </section>
@@ -504,7 +504,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
                 <tr className="border-b border-outline-variant text-on-surface-variant">
                   <th className="py-2 pr-3">Đội</th>
                   <th className="py-2 pr-3">Repo</th>
-                  <th className="py-2 pr-3">Provision</th>
+                  <th className="py-2 pr-3">Cấp repo</th>
                   <th className="py-2 pr-3">Truy cập</th>
                   <th className="py-2 pr-3">Lần push cuối</th>
                   <th className="py-2 pr-3">Lỗi</th>

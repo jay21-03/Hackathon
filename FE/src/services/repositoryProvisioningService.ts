@@ -129,7 +129,7 @@ export async function provisionProblemRepositories(problemId: number, force = fa
     { params: { force } }
   );
   if (!data.data) {
-    throw new Error(data.message || "Không provision được repository.");
+    throw new Error(data.message || "Không cấp được repository.");
   }
   return data.data;
 }
@@ -160,7 +160,7 @@ export async function retryTeamRepository(repositoryId: number) {
     `/v1/admin/team-repositories/${repositoryId}/retry`
   );
   if (!data.data) {
-    throw new Error(data.message || "Thử lại provision thất bại.");
+    throw new Error(data.message || "Thử lại cấp repository thất bại.");
   }
   return data.data;
 }

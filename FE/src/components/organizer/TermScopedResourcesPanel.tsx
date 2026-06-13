@@ -11,6 +11,10 @@ import {
   type TermScopedTab
 } from "../../pages/organizer/termHubUtils";
 import {
+  PROVISION_STATUS_LABELS,
+  type RepositoryProvisionStatus
+} from "../../services/repositoryProvisioningService";
+import {
   fetchTermEvents,
   fetchTermJudges,
   fetchTermMentors,
@@ -293,7 +297,13 @@ function TermScopedListItems({
         {repos.items.map((repo) => (
           <li key={repo.id} className="flex justify-between gap-sm border-b border-outline-variant py-xs">
             <span className="truncate">Đội #{repo.teamId}</span>
-            <span className="truncate text-on-surface-variant">{repo.repositoryUrl ?? repo.provisionStatus}</span>
+            <span className="truncate text-on-surface-variant">
+              {repo.repositoryUrl ??
+                (repo.provisionStatus
+                  ? (PROVISION_STATUS_LABELS[repo.provisionStatus as RepositoryProvisionStatus] ??
+                    repo.provisionStatus)
+                  : "Chưa có repo")}
+            </span>
           </li>
         ))}
       </ul>

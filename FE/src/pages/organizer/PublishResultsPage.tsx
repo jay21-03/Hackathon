@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
@@ -25,6 +25,8 @@ import { createIdempotencyKey } from "../../utils/idempotency";
 import { invalidateAfterPublish } from "../../lib/invalidateRankingQueries";
 import { resolveApiError } from "../../utils/apiError";
 import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
+import { sortBoardRankings } from "../../utils/sortContestData";
+import { groupBoardRankingsByRound } from "../../utils/boardLabels";
 
 export function PublishResultsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
@@ -48,6 +50,15 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
     queryFn: () => fetchPublishReadiness(eventId!),
     enabled: Boolean(eventId)
   });
+
+  const boards = rankingsQuery.data?.boards ?? [];
+  const sortedBoards = useMemo(() => sortBoardRankings(boards), [boards]);
+  const boardsByRound = useMemo(() => groupBoardRankingsByRound(sortedBoards), [sortedBoards]);
+  const draftBoards = useMemo(
+    () => boards.filter((b) => !b.published && b.teamCount > 0),
+    [boards]
+  );
+  const publishedBoards = useMemo(() => boards.filter((b) => b.published), [boards]);
 
   async function invalidateRankings() {
     await invalidateAfterPublish(queryClient, eventId);
@@ -164,11 +175,6 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
     );
   }
 
-  const data = rankingsQuery.data;
-  const boards = data?.boards ?? [];
-  const draftBoards = boards.filter((b) => !b.published && b.teamCount > 0);
-  const publishedBoards = boards.filter((b) => b.published);
-
   return (
     <div className="space-y-lg">
       {!embedded ? (
@@ -238,8 +244,11 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
             </div>
           </section>
 
-          <section className="space-y-md">
-            {boards.map((board) => (
+          <section className="space-y-lg">
+            {boardsByRound.map((group) => (
+              <div key={group.key} className="space-y-md">
+                <h2 className="font-headline-sm text-on-surface">{group.roundName}</h2>
+                {group.boards.map((board) => (
               <details
                 key={board.boardId}
                 className="rounded-xl border border-outline-variant bg-surface-container px-md py-sm"
@@ -247,10 +256,7 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
               >
                 <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-md py-xs [&::-webkit-details-marker]:hidden">
                   <div>
-                    <p className="font-label-md text-on-surface">
-                      {board.boardName}
-                      {board.roundName ? ` · ${board.roundName}` : ""}
-                    </p>
+                    <p className="font-label-md text-on-surface">{board.boardName}</p>
                     <p className="font-body-sm text-on-surface-variant">{board.teamCount} đội xếp hạng</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-sm">
@@ -298,6 +304,8 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
                   </div>
                 ) : null}
               </details>
+                ))}
+              </div>
             ))}
           </section>
 

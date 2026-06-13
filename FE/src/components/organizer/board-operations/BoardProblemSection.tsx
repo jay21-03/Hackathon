@@ -70,7 +70,7 @@ export function BoardProblemSection({
     <div className="space-y-lg">
       <section className="grid gap-lg xl:grid-cols-[1fr_320px]">
         <form className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
-          {rounds.length > 1 ? (
+          {rounds.length > 0 ? (
             <label className="flex flex-col gap-xs">
               <span className="font-label-sm normal-case text-on-surface-variant">Vòng thi</span>
               <select

@@ -218,8 +218,8 @@ export function ProfilePage() {
                 ) : null}
                 <span className="font-body-sm text-on-surface-variant">
                   {role === "judge"
-                    ? "Cần để BTC cấp quyền xem (pull) repository GitHub của đội khi chấm điểm."
-                    : "Cần để hệ thống cấp quyền push vào repository đội khi provision GitHub."}
+                    ? "Cần để BTC cấp quyền xem repository GitHub của đội khi chấm điểm."
+                    : "Cần để hệ thống cấp quyền ghi (push) vào repository đội khi mở đề."}
                 </span>
               </label>
             ) : null}

@@ -54,8 +54,8 @@ export function useArtifactsHubProgress({
         label: "Repository GitHub",
         detail: hasProblem
           ? repoProvisionedCount > 0
-            ? `${repoProvisionedCount} repo đã provision`
-            : "Cấu hình mẫu & provision theo đề"
+            ? `${repoProvisionedCount} repo đã cấp`
+            : "Cấu hình mẫu & cấp repo theo đề"
           : "Cần gán đề trước",
         state: repoState,
         anchor: "#artifacts-step-repositories"
@@ -100,21 +100,21 @@ export function useArtifactsHubProgress({
     } else if (!hasRubric) {
       nextAction = {
         title: "Bước tiếp: Tiêu chí chấm",
-        description: "Thiết lập rubric trước khi provision GitHub và theo dõi nộp bài.",
+        description: "Thiết lập rubric trước khi cấp repository GitHub và theo dõi nộp bài.",
         href: "#artifacts-step-rubric",
         cta: "Đi tới rubric"
       };
     } else if (showRepositories && repoFailedCount > 0) {
       nextAction = {
-        title: "Repository lỗi provision",
+        title: "Repository cấp thất bại",
         description: `${repoFailedCount} repo cần thử lại hoặc kiểm tra mẫu.`,
         href: "#artifacts-step-repositories",
         cta: "Mở Repository GitHub"
       };
     } else if (showRepositories && hasProblem && repoProvisionedCount === 0) {
       nextAction = {
-        title: "Bước tiếp: Provision repository",
-        description: "Cấu hình mẫu repo và provision cho các đội trên bảng.",
+        title: "Bước tiếp: Cấp repository",
+        description: "Cấu hình mẫu repo và cấp cho các đội trên bảng.",
         href: "#artifacts-step-repositories",
         cta: "Cấu hình GitHub"
       };
@@ -135,7 +135,7 @@ export function useArtifactsHubProgress({
     } else {
       nextAction = {
         title: "Quản lý repository",
-        description: "Theo dõi trạng thái provision và khóa repo sau vòng.",
+        description: "Theo dõi trạng thái cấp repo và khóa repo sau vòng.",
         href: "#artifacts-step-repositories",
         cta: "Mở Repository"
       };

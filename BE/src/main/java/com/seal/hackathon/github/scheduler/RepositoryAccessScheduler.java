@@ -17,17 +17,17 @@ public class RepositoryAccessScheduler {
     private final RepositoryProvisioningService repositoryProvisioningService;
     private final SubmissionService submissionService;
 
-    @Scheduled(fixedDelayString = "${app.github.scheduler-poll-ms:180000}")
+    @Scheduled(
+            initialDelayString = "${app.github.scheduler-initial-delay-ms:60000}",
+            fixedDelayString = "${app.github.scheduler-poll-ms:180000}")
     public void runRepositoryLifecycle() {
         int provisioned = repositoryProvisioningService.provisionDueRepositories();
         int lockedProblems = repositoryProvisioningService.closeRepositoriesForClosedProblems();
         int finalized = submissionService.finalizeSubmissionsForClosedProblems();
-        if (provisioned > 0 || lockedProblems > 0 || finalized > 0) {
-            log.info(
-                    "GitHub repo scheduler: provisionedTeams={}, lockedByProblem={}, finalizedSubmissions={}",
-                    provisioned,
-                    lockedProblems,
-                    finalized);
-        }
+        log.info(
+                "GitHub repo scheduler tick: provisionedTeams={}, lockedByProblem={}, finalizedSubmissions={}",
+                provisioned,
+                lockedProblems,
+                finalized);
     }
 }

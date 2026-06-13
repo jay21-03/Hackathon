@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
@@ -13,7 +13,6 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useEventBoards } from "../../hooks/useEventBoards";
-import { useEventRounds } from "../../hooks/useEventRounds";
 import { useScoreProgress } from "../../hooks/useScoreProgress";
 import { queryKeys } from "../../lib/queryKeys";
 import {
@@ -23,6 +22,9 @@ import {
   type BoardRanking
 } from "../../services/rankingApi";
 import { resolveApiError } from "../../utils/apiError";
+import {
+  formatBoardRankingLabel
+} from "../../utils/boardLabels";
 import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 import { resolveDefaultBoardId, resolveDefaultRoundId } from "../../utils/pickActiveRound";
 
@@ -30,22 +32,29 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const { rounds, loading: roundsLoading } = useEventRounds(eventId);
-  const { boards, loading: boardsLoading } = useEventBoards(eventId);
+  const { rounds, boards, loading: boardsLoading } = useEventBoards(eventId);
   const [boardId, setBoardId] = useState<number | null>(null);
   const [roundId, setRoundId] = useState<number | null>(null);
   const [calculating, setCalculating] = useState(false);
   const autoCalculatedBoards = useRef(new Set<number>());
 
-  const activeBoardId = resolveDefaultBoardId(boards, rounds, boardId);
+  const activeRoundId = resolveDefaultRoundId(rounds, roundId);
+  const boardsInRound = useMemo(
+    () => (activeRoundId != null ? boards.filter((b) => b.roundId === activeRoundId) : []),
+    [boards, activeRoundId]
+  );
+  const activeBoardId = resolveDefaultBoardId(boardsInRound, rounds, boardId);
 
   useEffect(() => {
     setRoundId((prev) => resolveDefaultRoundId(rounds, prev));
   }, [rounds]);
 
   useEffect(() => {
-    setBoardId((prev) => resolveDefaultBoardId(boards, rounds, prev));
-  }, [boards, rounds]);
+    setBoardId((prev) => {
+      if (prev && boardsInRound.some((b) => b.id === prev)) return prev;
+      return resolveDefaultBoardId(boardsInRound, rounds, null);
+    });
+  }, [boardsInRound, rounds]);
 
   const rankingQuery = useQuery({
     queryKey: queryKeys.rankings.board(activeBoardId),
@@ -123,7 +132,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
   ]);
 
   async function handleCalculateRound(force = false) {
-    const targetRound = resolveDefaultRoundId(rounds, roundId);
+    const targetRound = activeRoundId;
     if (!targetRound) return;
     setCalculating(true);
     try {
@@ -144,7 +153,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
     }
   }
 
-  if (eventLoading || roundsLoading || boardsLoading) {
+  if (eventLoading || boardsLoading) {
     return <ModuleSkeleton rows={6} variant="table" />;
   }
 
@@ -215,29 +224,32 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
           </div>
         ) : null}
         <label className="flex min-w-0 flex-col gap-1 font-label-sm text-on-surface-variant">
-          Bảng
+          Vòng
           <select
             className="w-full min-w-0 rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
-            value={activeBoardId ?? ""}
-            onChange={(e) => setBoardId(e.target.value ? Number(e.target.value) : null)}
+            value={activeRoundId ?? ""}
+            onChange={(e) => setRoundId(e.target.value ? Number(e.target.value) : null)}
+            disabled={!rounds.length}
           >
-            {boards.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
+            {rounds.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
               </option>
             ))}
           </select>
         </label>
         <label className="flex min-w-0 flex-col gap-1 font-label-sm text-on-surface-variant">
-          Vòng (tính hàng loạt)
+          Bảng
           <select
             className="w-full min-w-0 rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
-            value={resolveDefaultRoundId(rounds, roundId) ?? ""}
-            onChange={(e) => setRoundId(e.target.value ? Number(e.target.value) : null)}
+            value={activeBoardId ?? ""}
+            onChange={(e) => setBoardId(e.target.value ? Number(e.target.value) : null)}
+            disabled={!boardsInRound.length}
           >
-            {rounds.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
+            {boardsInRound.length === 0 ? <option value="">Chưa có bảng trong vòng này</option> : null}
+            {boardsInRound.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
               </option>
             ))}
           </select>
@@ -337,8 +349,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
         <>
           <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
             <div className="border-b border-outline-variant px-md py-sm font-label-sm text-on-surface-variant">
-              {ranking.boardName}
-              {ranking.roundName ? ` · ${ranking.roundName}` : ""}
+              {formatBoardRankingLabel(ranking)}
               {ranking.calculatedAt ? (
                 <span className="ml-2">
                   Tính lúc {new Date(ranking.calculatedAt).toLocaleString("vi-VN")}

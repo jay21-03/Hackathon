@@ -147,7 +147,7 @@ export function JudgeTeamScoringModal({
                       Truy cập: {ACCESS_STATUS_LABELS[repository.accessStatus]}
                     </Badge>
                     <Badge tone={provisionStatusTone(repository.provisionStatus)}>
-                      Provision: {PROVISION_STATUS_LABELS[repository.provisionStatus]}
+                      Cấp repo: {PROVISION_STATUS_LABELS[repository.provisionStatus]}
                     </Badge>
                   </div>
                 ) : (

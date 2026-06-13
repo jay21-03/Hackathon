@@ -72,6 +72,7 @@ app:
     template-owner: ${GITHUB_TEMPLATE_OWNER:}
     template-repo: ${GITHUB_TEMPLATE_REPO:}
     scheduler-enabled: ${GITHUB_SCHEDULER_ENABLED:false}
+    scheduler-initial-delay-ms: ${GITHUB_SCHEDULER_INITIAL_DELAY_MS:60000}
     scheduler-poll-ms: ${GITHUB_SCHEDULER_POLL_MS:180000}
     webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
   file-storage-path: ${FILE_STORAGE_PATH:./storage}
