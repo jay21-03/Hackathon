@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { isAuthenticated } from "../../auth/authSession";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
@@ -43,6 +44,16 @@ export function ResultsPortalPage({ participantView }: ResultsPortalPageProps) {
     enabled: Boolean(eventId) && !Number.isNaN(eventId!)
   });
 
+  const roundNameById = useMemo(() => {
+    const fromBoards: Record<number, string> = {};
+    for (const board of resultsQuery.data?.boards ?? []) {
+      if (board.roundId != null && board.roundName) {
+        fromBoards[board.roundId] = board.roundName;
+      }
+    }
+    return fromBoards;
+  }, [resultsQuery.data?.boards]);
+
   if (!eventId || Number.isNaN(eventId)) {
     return <p className="p-page font-body-sm text-error">Thiếu mã cuộc thi.</p>;
   }
@@ -84,6 +95,7 @@ export function ResultsPortalPage({ participantView }: ResultsPortalPageProps) {
         <EventAwardsView
           awards={awardsQuery.data}
           highlightTeamId={team?.id ?? null}
+          roundNameById={roundNameById}
         />
       ) : null}
 

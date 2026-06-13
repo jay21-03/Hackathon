@@ -13,6 +13,7 @@ import { useMyTeam } from "../../hooks/useMyTeam";
 import { useParticipantTeamGuard } from "../../hooks/useParticipantTeamGuard";
 import { ParticipantTeamBlocked } from "../../components/participant/ParticipantTeamBlocked";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
+import { formatBoardWithRoundLabel } from "../../utils/boardLabels";
 
 const reasonMessages: Record<string, string> = {
   NO_TEAM: "Bạn chưa đăng ký đội cho cuộc thi này.",
@@ -129,7 +130,8 @@ export function AssignedBoardPage() {
         <div className="border-b border-outline-variant px-md py-md">
           <h2 className="font-headline-sm text-on-surface">Đội cùng bảng</h2>
           <p className="font-body-sm text-on-surface-variant">
-            {peers.length} đội đã được gán vào bảng {board.boardName}.
+            {peers.length} đội đã được gán vào{" "}
+            {formatBoardWithRoundLabel(board.boardName ?? "Bảng", board.roundName)}.
           </p>
         </div>
         <DataTable headers={["Đội", "Vị trí"]}>

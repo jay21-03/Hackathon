@@ -13,6 +13,8 @@ public class StaffInvitationResponse {
     private Long id;
     private Long boardId;
     private String boardName;
+    private Long roundId;
+    private String roundName;
     private Long eventId;
     private String eventName;
     private String email;

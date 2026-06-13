@@ -11,6 +11,7 @@ interface SubmissionDetailModalProps {
   open: boolean;
   loading?: boolean;
   detail: AdminTeamSubmissionResponse | null;
+  boardLabel?: string | null;
   onClose: () => void;
 }
 
@@ -39,10 +40,12 @@ export function SubmissionDetailModal({
   open,
   loading = false,
   detail,
+  boardLabel,
   onClose
 }: SubmissionDetailModalProps) {
-  const boardLabel =
-    detail?.boardName ?? (detail?.boardId != null ? `Bảng #${detail.boardId}` : "—");
+  const displayBoardLabel =
+    boardLabel ??
+    (detail?.boardName ?? (detail?.boardId != null ? `Bảng #${detail.boardId}` : "—"));
 
   return (
     <Modal
@@ -57,8 +60,8 @@ export function SubmissionDetailModal({
         <div className="space-y-lg">
           <dl className="rounded-xl border border-outline-variant bg-surface-container-low px-md">
             <InfoRow label="Đội">{detail.teamName}</InfoRow>
-            <InfoRow label="Bảng">
-              {boardLabel}
+            <InfoRow label="Vòng · Bảng">
+              {displayBoardLabel}
               {detail.slotNumber != null ? (
                 <span className="text-on-surface-variant"> · Vị trí #{detail.slotNumber}</span>
               ) : null}

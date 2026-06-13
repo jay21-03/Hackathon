@@ -18,6 +18,7 @@ import {
 } from "../../services/staffInvitationService";
 import { getApiErrorMessage } from "../../utils/apiError";
 import { decodeInvitationTokenParam } from "../../utils/invitationToken";
+import { formatBoardWithRoundLabel } from "../../utils/boardLabels";
 
 export type StaffInvitationAction = "accept" | "decline";
 
@@ -90,14 +91,21 @@ export function StaffInvitationActionPage({ action }: StaffInvitationActionPageP
         ? getRoleHome("mentor")
         : getRoleHome("participant");
 
+  const boardLabel = result
+    ? formatBoardWithRoundLabel(
+        result.boardName ?? (result.boardId != null ? `Bảng #${result.boardId}` : "Bảng"),
+        result.roundName
+      )
+    : null;
+
   return (
     <div className="mx-auto max-w-md space-y-lg p-page">
       <PageHeader
         eyebrow="Lời mời mentor / giám khảo"
         title={isAccept ? "Xác nhận tham gia" : "Từ chối lời mời"}
         description={
-          result
-            ? `Bạn đã được gán vào bảng ${result.boardName ?? result.boardId} (${result.role === "JUDGE" ? "Giám khảo" : "Mentor"}).`
+          result && boardLabel
+            ? `Bạn đã được gán vào ${boardLabel} (${result.role === "JUDGE" ? "Giám khảo" : "Mentor"}).`
             : error ?? (isAccept ? "Hoàn tất." : "Đã ghi nhận từ chối.")
         }
       />

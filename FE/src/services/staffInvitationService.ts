@@ -22,6 +22,10 @@ export interface StaffInvitationResponse {
 
   boardName?: string | null;
 
+  roundId?: number | null;
+
+  roundName?: string | null;
+
   eventId?: number | null;
 
   eventName?: string | null;

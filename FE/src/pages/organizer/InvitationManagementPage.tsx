@@ -34,6 +34,7 @@ import { bulkStaffEmailsSchema, emailTemplateSchema, staffInviteSchema } from ".
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
 import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
+import { buildRoundNameById, formatBoardLabelById } from "../../utils/boardLabels";
 import { createIdempotencyKey } from "../../utils/idempotency";
 import {
   fetchEmailTemplate,
@@ -91,6 +92,7 @@ export function InvitationManagementPage({
     () => (activeStaffRoundId != null ? boards.filter((b) => b.roundId === activeStaffRoundId) : []),
     [boards, activeStaffRoundId]
   );
+  const roundNameById = useMemo(() => buildRoundNameById(rounds), [rounds]);
   const [staffRole, setStaffRole] = useState<StaffRole | "">("");
   const [staffStatus, setStaffStatus] = useState<StaffInvitationStatus>("INVITED");
   const [staffEmailFilter, setStaffEmailFilter] = useState("");
@@ -509,7 +511,7 @@ export function InvitationManagementPage({
               rows={staffItems.map((row) => ({
                 key: row.id,
                 email: row.email,
-                context: `${row.boardName ?? `Bảng #${row.boardId}`} · ${row.role === "JUDGE" ? "Giám khảo" : "Mentor"}`,
+                context: `${formatBoardLabelById(row.boardId, row.boardName, boards, roundNameById)} · ${row.role === "JUDGE" ? "Giám khảo" : "Mentor"}`,
                 status: row.status,
                 sentAt: row.invitedAt,
                 expiresAt: row.inviteExpiresAt,

@@ -353,7 +353,7 @@ export function JudgeScoringPage() {
 
       <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
         <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
-          Bảng được phân công
+          Vòng · Bảng
           <select
             className="min-w-[12rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
             value={boardId ?? ""}

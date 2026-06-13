@@ -79,7 +79,7 @@ export function ParticipantProblemPanel() {
           <div>
             <h3 className="font-headline-sm text-on-surface">{problem.title}</h3>
             <p className="font-body-sm text-on-surface-variant">
-              {[board.boardName, event?.name].filter(Boolean).join(" · ")}
+              {[board.roundName, board.boardName, event?.name].filter(Boolean).join(" · ")}
             </p>
           </div>
           <Badge tone="success">Đã mở đề</Badge>

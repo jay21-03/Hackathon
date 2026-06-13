@@ -83,7 +83,7 @@ export function ParticipantOverviewPage() {
           label="Bảng thi"
           value={
             hasBoard
-              ? `${board?.boardName ?? "—"} · #${board?.slotNumber ?? "—"}`
+              ? `${[board?.roundName, board?.boardName].filter(Boolean).join(" · ")} · #${board?.slotNumber ?? "—"}`
               : "Chưa gán"
           }
           helper={

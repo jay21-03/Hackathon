@@ -409,6 +409,11 @@ public class StaffInvitationService {
     private StaffInvitationResponse toResponse(
             StaffInvitation invitation, Board board, Long eventId, EmailTrackingSummary tracking) {
         String boardName = board == null ? null : board.getName();
+        Long roundId = board == null ? null : board.getRoundId();
+        String roundName = null;
+        if (roundId != null) {
+            roundName = roundRepository.findById(roundId).map(Round::getName).orElse(null);
+        }
         String eventName = null;
         if (eventId != null) {
             Event event = eventRepository.findById(eventId).orElse(null);
@@ -418,6 +423,8 @@ public class StaffInvitationService {
                 .id(invitation.getId())
                 .boardId(invitation.getBoardId())
                 .boardName(boardName)
+                .roundId(roundId)
+                .roundName(roundName)
                 .eventId(eventId)
                 .eventName(eventName)
                 .email(invitation.getEmail())

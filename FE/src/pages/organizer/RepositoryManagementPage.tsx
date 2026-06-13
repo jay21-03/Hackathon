@@ -38,7 +38,13 @@ import { GITHUB_REPO_TEMPLATE_DEFAULTS } from "../../config/githubRepoDefaults";
 import { repoTemplateSchema } from "../../domain/schemas";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
-import { resolveDefaultBoardId, resolveDefaultRoundId } from "../../utils/pickActiveRound";
+import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
+import {
+  buildRoundNameById,
+  formatBoardResponseLabel,
+  formatRepositoryBoardLabel
+} from "../../utils/boardLabels";
+import { resolveRoundDisplayName } from "../../utils/awardLabels";
 
 function isNotFoundError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
@@ -71,6 +77,8 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
   });
 
   const rounds = useMemo(() => (roundsQuery.data ?? []) as RoundResponse[], [roundsQuery.data]);
+  const activeRoundId = resolveDefaultRoundId(rounds, selectedRoundId);
+  const roundNameById = useMemo(() => buildRoundNameById(rounds), [rounds]);
 
   useEffect(() => {
     if (rounds.length === 0) {
@@ -87,18 +95,19 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
   });
 
   const boards = useMemo(() => boardsQuery.data ?? [], [boardsQuery.data]);
+  const configBoardId = boardId ?? boards[0]?.id ?? null;
 
   useEffect(() => {
-    setBoardId((prev) => resolveDefaultBoardId(boards, rounds, prev));
-  }, [boards, rounds]);
+    setBoardId((prev) => (prev && boards.some((b) => b.id === prev) ? prev : null));
+  }, [boards, activeRoundId]);
 
   const problemQuery = useQuery({
-    queryKey: [...queryKeys.boards.all, "repo-problem", boardId],
+    queryKey: [...queryKeys.boards.all, "repo-problem", configBoardId],
     queryFn: async () => {
-      const list = await fetchBoardProblems(boardId!);
+      const list = await fetchBoardProblems(configBoardId!);
       return (list[0] ?? null) as ProblemResponse | null;
     },
-    enabled: Boolean(boardId)
+    enabled: Boolean(configBoardId)
   });
 
   const problem = problemQuery.data ?? null;
@@ -139,11 +148,12 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
   const filteredRepos = useMemo(() => {
     const rows = (reposQuery.data ?? []) as TeamRepositoryResponse[];
     return rows.filter((row) => {
+      if (activeRoundId && row.roundId && row.roundId !== activeRoundId) return false;
       if (boardId && row.boardId && row.boardId !== boardId) return false;
       if (statusFilter === "ALL") return true;
       return row.accessStatus === statusFilter;
     });
-  }, [reposQuery.data, boardId, statusFilter]);
+  }, [reposQuery.data, boardId, activeRoundId, statusFilter]);
 
   const stats = useMemo(() => {
     const rows = filteredRepos;
@@ -257,7 +267,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
     eventLoading ||
     roundsQuery.isLoading ||
     boardsQuery.isLoading ||
-    (Boolean(boardId) && problemQuery.isLoading);
+    (Boolean(configBoardId) && problemQuery.isLoading);
 
   if (loading) {
     return <ModuleSkeleton rows={6} />;
@@ -319,15 +329,35 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
               <select
                 className="form-input"
                 value={boardId ?? ""}
-                onChange={(e) => setBoardId(Number(e.target.value))}
+                onChange={(e) => setBoardId(e.target.value ? Number(e.target.value) : null)}
               >
+                <option value="">Tất cả bảng vòng này</option>
                 {boards.map((board) => (
                   <option key={board.id} value={board.id}>
-                    {board.name}
+                    {formatBoardResponseLabel(board, roundNameById)}
                   </option>
                 ))}
               </select>
             </label>
+
+            {!boardId && configBoardId ? (
+              <p className="font-body-sm text-on-surface-variant">
+                Cấu hình mẫu đang dùng bảng{" "}
+                <strong className="text-on-surface">
+                  {formatBoardResponseLabel(
+                    boards.find((item) => item.id === configBoardId) ?? {
+                      id: configBoardId,
+                      name: `Bảng #${configBoardId}`,
+                      roundId: activeRoundId ?? 0,
+                      boardOrder: 0,
+                      status: "ACTIVE"
+                    },
+                    roundNameById
+                  )}
+                </strong>
+                . Chọn một bảng cụ thể để cấu hình mẫu cho bảng đó.
+              </p>
+            ) : null}
 
             {!problem ? (
               <p className="font-body-sm text-on-surface-variant">
@@ -472,7 +502,22 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
 
       <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
         <div className="flex flex-wrap items-center justify-between gap-md">
-          <h2 className="font-title-md text-on-surface">Danh sách repository</h2>
+          <div>
+            <h2 className="font-title-md text-on-surface">Danh sách repository</h2>
+            <p className="mt-xs font-body-sm text-on-surface-variant">
+              Phạm vi:{" "}
+              <strong className="text-on-surface">
+                {boardId
+                  ? (() => {
+                      const board = boards.find((item) => item.id === boardId);
+                      return board
+                        ? formatBoardResponseLabel(board, roundNameById)
+                        : `Bảng #${boardId}`;
+                    })()
+                  : resolveRoundDisplayName(activeRoundId, roundNameById)}
+              </strong>
+            </p>
+          </div>
           <select
             className="form-input w-auto"
             value={statusFilter}
@@ -503,6 +548,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
               <thead>
                 <tr className="border-b border-outline-variant text-on-surface-variant">
                   <th className="py-2 pr-3">Đội</th>
+                  {!boardId ? <th className="py-2 pr-3">Vòng · Bảng</th> : null}
                   <th className="py-2 pr-3">Repo</th>
                   <th className="py-2 pr-3">Cấp repo</th>
                   <th className="py-2 pr-3">Truy cập</th>
@@ -515,6 +561,11 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
                 {filteredRepos.map((row) => (
                   <tr key={row.id} className="border-b border-outline-variant/60">
                     <td className="py-3 pr-3 text-on-surface">{row.teamName ?? `Đội #${row.teamId}`}</td>
+                    {!boardId ? (
+                      <td className="py-3 pr-3 text-on-surface-variant">
+                        {formatRepositoryBoardLabel(row, boards, roundNameById)}
+                      </td>
+                    ) : null}
                     <td className="py-3 pr-3">
                       {row.repositoryUrl ? (
                         <a

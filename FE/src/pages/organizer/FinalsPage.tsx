@@ -19,6 +19,7 @@ import {
 } from "../../services/advancementApi";
 import { advancementExecuteSchema } from "../../domain/schemas";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
+import { formatBoardWithRoundLabel } from "../../utils/boardLabels";
 
 function formatScore(score: number) {
   return Number.isInteger(score) ? String(score) : score.toFixed(2);
@@ -38,6 +39,10 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
 
   const fromId = fromRoundId === "" ? null : fromRoundId;
   const toId = toRoundId === "" ? null : toRoundId;
+  const fromRoundName = useMemo(
+    () => rounds.find((round) => round.id === fromId)?.name ?? null,
+    [rounds, fromId]
+  );
 
   const previewQuery = useQuery({
     queryKey: [...queryKeys.rankings.all, "advance-preview", eventId, fromId, toId, topN],
@@ -236,7 +241,7 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                       <th className="px-md py-sm text-center">Chọn</th>
                       <th className="px-md py-sm">Hạng</th>
                       <th className="px-md py-sm">Đội</th>
-                      <th className="px-md py-sm">Bảng</th>
+                      <th className="px-md py-sm">Vòng · Bảng</th>
                       <th className="px-md py-sm text-right">Điểm TB</th>
                     </tr>
                   </thead>
@@ -267,7 +272,9 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                               </Badge>
                             ) : null}
                           </td>
-                          <td className="px-md py-sm">{team.fromBoardName}</td>
+                          <td className="px-md py-sm">
+                            {formatBoardWithRoundLabel(team.fromBoardName, fromRoundName)}
+                          </td>
                           <td className="px-md py-sm text-right tabular-nums">
                             {formatScore(team.averageScore)}
                           </td>

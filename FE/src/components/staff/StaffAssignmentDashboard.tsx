@@ -202,11 +202,8 @@ export function StaffAssignmentDashboard({
               key={item.id}
               className="rounded-xl border border-outline-variant bg-surface-container p-md space-y-sm"
             >
-              <h3 className="font-headline-sm text-on-surface">{item.boardName ?? `Bảng #${item.boardId}`}</h3>
-              <p className="font-body-sm text-on-surface-variant">
-                {item.eventName ?? "Cuộc thi"}
-                {item.roundName ? ` · ${item.roundName}` : ""}
-              </p>
+              <h3 className="font-headline-sm text-on-surface">{formatBoardAssignmentShortLabel(item)}</h3>
+              <p className="font-body-sm text-on-surface-variant">{item.eventName ?? "Cuộc thi"}</p>
               {scorePath ? (
                 <ButtonLink to={scorePath(item.boardId)} variant="primary" size="sm">
                   Mở phiếu chấm

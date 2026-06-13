@@ -26,7 +26,7 @@ import { invalidateAfterPublish } from "../../lib/invalidateRankingQueries";
 import { resolveApiError } from "../../utils/apiError";
 import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 import { sortBoardRankings } from "../../utils/sortContestData";
-import { groupBoardRankingsByRound } from "../../utils/boardLabels";
+import { formatBoardRankingLabel, groupBoardRankingsByRound } from "../../utils/boardLabels";
 
 export function PublishResultsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
@@ -54,6 +54,10 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
   const boards = rankingsQuery.data?.boards ?? [];
   const sortedBoards = useMemo(() => sortBoardRankings(boards), [boards]);
   const boardsByRound = useMemo(() => groupBoardRankingsByRound(sortedBoards), [sortedBoards]);
+  const boardLabelById = useMemo(
+    () => Object.fromEntries(sortedBoards.map((board) => [board.boardId, formatBoardRankingLabel(board)])),
+    [sortedBoards]
+  );
   const draftBoards = useMemo(
     () => boards.filter((b) => !b.published && b.teamCount > 0),
     [boards]
@@ -83,7 +87,7 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
     const messages = [
       ...readiness.blockers,
       ...readiness.boards.flatMap((board) =>
-        board.blockers.map((blocker) => `${board.boardName}: ${blocker}`)
+        board.blockers.map((blocker) => `${boardLabelById[board.boardId] ?? board.boardName}: ${blocker}`)
       )
     ];
     notify(messages.length ? messages.join(" · ") : "Chưa đủ điều kiện công bố.", "warning");
@@ -210,7 +214,7 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
             {readinessQuery.data.boards.flatMap((board) =>
               board.blockers.map((blocker) => (
                 <li key={`${board.boardId}-${blocker}`}>
-                  {board.boardName}: {blocker}
+                  {boardLabelById[board.boardId] ?? board.boardName}: {blocker}
                 </li>
               ))
             )}

@@ -18,6 +18,7 @@ import {
 } from "../../services/submissionApi";
 import { formatRepositoryTimestamp } from "../../services/repositoryProvisioningService";
 import { resolveApiError } from "../../utils/apiError";
+import { buildRoundNameById, formatBoardLabelById } from "../../utils/boardLabels";
 import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
 
 type StatusFilter = "ALL" | "SUBMITTED" | "DRAFT" | "NONE";
@@ -53,6 +54,7 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
   const [detail, setDetail] = useState<AdminTeamSubmissionResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const activeRoundId = resolveDefaultRoundId(rounds, roundId);
+  const roundNameById = useMemo(() => buildRoundNameById(rounds), [rounds]);
 
   const boardsInRound = useMemo(
     () => (activeRoundId != null ? boards.filter((b) => b.roundId === activeRoundId) : []),
@@ -256,7 +258,7 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
               <thead className="table-header-bg">
                 <tr className="font-label-sm text-on-surface-variant">
                   <th className="px-md py-sm">Đội</th>
-                  <th className="px-md py-sm">Bảng</th>
+                  <th className="px-md py-sm">Vòng · Bảng</th>
                   <th className="px-md py-sm">Trạng thái</th>
                   <th className="px-md py-sm">Repository</th>
                   <th className="px-md py-sm">Nộp lúc</th>
@@ -269,7 +271,7 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
                   <tr key={row.teamId} className="font-body-sm text-on-surface">
                     <td className="px-md py-md font-label-md">{row.teamName}</td>
                     <td className="px-md py-md">
-                      {row.boardName ?? (row.boardId ? `Bảng #${row.boardId}` : "—")}
+                      {formatBoardLabelById(row.boardId, row.boardName, boards, roundNameById)}
                       {row.slotNumber != null ? (
                         <span className="ml-1 text-on-surface-variant">· Vị trí #{row.slotNumber}</span>
                       ) : null}
@@ -340,6 +342,11 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
         open={detailTeamId != null}
         loading={detailLoading}
         detail={detail}
+        boardLabel={
+          detail
+            ? formatBoardLabelById(detail.boardId, detail.boardName, boards, roundNameById)
+            : null
+        }
         onClose={closeDetail}
       />
     </div>

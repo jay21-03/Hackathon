@@ -26,6 +26,33 @@ export function formatBoardRankingLabel(board: Pick<BoardRanking, "boardName" | 
   return formatBoardWithRoundLabel(board.boardName, board.roundName);
 }
 
+export function formatBoardLabelById(
+  boardId: number | null | undefined,
+  boardName: string | null | undefined,
+  boards: Pick<BoardResponse, "id" | "name" | "roundId">[],
+  roundNameById: Record<number, string>
+): string {
+  if (boardId == null && !boardName) return "—";
+  const board = boardId != null ? boards.find((item) => item.id === boardId) : undefined;
+  const name = boardName ?? board?.name ?? (boardId != null ? `Bảng #${boardId}` : "Bảng");
+  const roundName = board?.roundId != null ? roundNameById[board.roundId] : undefined;
+  return formatBoardWithRoundLabel(name, roundName);
+}
+
+export function formatRepositoryBoardLabel(
+  row: { boardId?: number | null; roundId?: number | null; roundName?: string | null },
+  boards: Pick<BoardResponse, "id" | "name" | "roundId">[],
+  roundNameById: Record<number, string>
+): string {
+  const board = row.boardId != null ? boards.find((item) => item.id === row.boardId) : undefined;
+  const roundName =
+    row.roundName ??
+    (row.roundId != null ? roundNameById[row.roundId] : undefined) ??
+    (board?.roundId != null ? roundNameById[board.roundId] : undefined);
+  const boardName = board?.name ?? (row.boardId != null ? `Bảng #${row.boardId}` : "—");
+  return formatBoardWithRoundLabel(boardName, roundName);
+}
+
 export interface BoardRankingRoundGroup {
   key: string;
   roundId: number | null;

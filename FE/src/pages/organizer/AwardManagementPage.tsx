@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
@@ -10,6 +10,7 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useEventBoards } from "../../hooks/useEventBoards";
 import { useEventTeams } from "../../hooks/useEventTeams";
 import { queryKeys } from "../../lib/queryKeys";
 import {
@@ -28,7 +29,14 @@ import {
   type CreateAwardCategoryPayload
 } from "../../services/awardApi";
 import { fetchEventRankings } from "../../services/rankingApi";
+import {
+  groupAwardCategoriesByRound,
+  resolveRoundDisplayName,
+  type AwardRankingRow
+} from "../../utils/awardLabels";
+import { buildRoundNameById, formatBoardRankingLabel, groupBoardRankingsByRound } from "../../utils/boardLabels";
 import { resolveApiError } from "../../utils/apiError";
+import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
 import { sortByName } from "../../utils/sortContestData";
 
 function formatScore(score: number) {
@@ -47,8 +55,11 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { rounds, boards, loading: boardsLoading } = useEventBoards(eventId);
   const { teams, loading: teamsLoading } = useEventTeams(eventId, { size: 200 });
   const [busy, setBusy] = useState(false);
+  const [roundId, setRoundId] = useState<number | null>(null);
+  const [boardId, setBoardId] = useState<number | null>(null);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
   const [categoryForm, setCategoryForm] = useState<CreateAwardCategoryPayload>(EMPTY_CATEGORY_FORM);
@@ -67,25 +78,60 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
     enabled: Boolean(eventId)
   });
 
-  const rankedTeams = useMemo(() => {
-    const boards = rankingsQuery.data?.boards ?? [];
-    const map = new Map<number, { teamId: number; teamName: string; rank: number; score: number; boardName: string }>();
-    for (const board of boards) {
+  const activeRoundId = resolveDefaultRoundId(rounds, roundId);
+  const roundNameById = useMemo(() => buildRoundNameById(rounds), [rounds]);
+  const boardsInRound = useMemo(
+    () => (activeRoundId != null ? boards.filter((b) => b.roundId === activeRoundId) : []),
+    [boards, activeRoundId]
+  );
+
+  useEffect(() => {
+    setRoundId((prev) => resolveDefaultRoundId(rounds, prev));
+  }, [rounds]);
+
+  useEffect(() => {
+    setBoardId((prev) => (prev && boardsInRound.some((b) => b.id === prev) ? prev : null));
+  }, [boardsInRound, activeRoundId]);
+
+  const rankingBoards = useMemo(() => {
+    const allBoards = rankingsQuery.data?.boards ?? [];
+    let filtered = activeRoundId != null ? allBoards.filter((b) => b.roundId === activeRoundId) : allBoards;
+    if (boardId != null) {
+      filtered = filtered.filter((b) => b.boardId === boardId);
+    }
+    return filtered.filter((b) => b.entries.length > 0);
+  }, [rankingsQuery.data, activeRoundId, boardId]);
+
+  const rankingBoardsByRound = useMemo(
+    () => groupBoardRankingsByRound(rankingBoards),
+    [rankingBoards]
+  );
+
+  const rankingRows = useMemo((): AwardRankingRow[] => {
+    const rows: AwardRankingRow[] = [];
+    for (const board of rankingBoards) {
+      const roundName =
+        board.roundName ?? (board.roundId != null ? roundNameById[board.roundId] : null) ?? "Vòng";
       for (const entry of board.entries) {
-        const existing = map.get(entry.teamId);
-        if (!existing || entry.rank < existing.rank || (entry.rank === existing.rank && entry.averageScore > existing.score)) {
-          map.set(entry.teamId, {
-            teamId: entry.teamId,
-            teamName: entry.teamName,
-            rank: entry.rank,
-            score: entry.averageScore,
-            boardName: board.boardName
-          });
-        }
+        rows.push({
+          teamId: entry.teamId,
+          teamName: entry.teamName,
+          rank: entry.rank,
+          score: entry.averageScore,
+          boardId: board.boardId,
+          boardName: board.boardName,
+          roundId: board.roundId ?? null,
+          roundName
+        });
       }
     }
-    return Array.from(map.values()).sort((a, b) => a.rank - b.rank || b.score - a.score);
-  }, [rankingsQuery.data]);
+    return rows.sort(
+      (a, b) =>
+        a.boardName.localeCompare(b.boardName, "vi") ||
+        a.rank - b.rank ||
+        b.score - a.score
+    );
+  }, [rankingBoards, roundNameById]);
 
   const categories = useMemo(
     () =>
@@ -94,13 +140,20 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
       ),
     [awardsQuery.data?.categories]
   );
+  const categoryGroups = useMemo(
+    () => groupAwardCategoriesByRound(categories, roundNameById),
+    [categories, roundNameById]
+  );
   const sortedTeams = useMemo(() => sortByName(teams), [teams]);
   const anyPublished = awardsQuery.data?.published ?? false;
   const hasRankCategories = categories.some((c) => c.awardType === "RANK");
 
   function openCreateCategoryModal() {
     setEditingCategoryId(null);
-    setCategoryForm(EMPTY_CATEGORY_FORM);
+    setCategoryForm({
+      ...EMPTY_CATEGORY_FORM,
+      roundId: activeRoundId ?? undefined
+    });
     setCategoryModalOpen(true);
   }
 
@@ -115,6 +168,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
       maxWinners: category.maxWinners,
       prizeValue: category.prizeValue ?? "",
       sortOrder: category.sortOrder,
+      roundId: category.roundId ?? undefined,
       isActive: category.isActive
     });
     setCategoryModalOpen(true);
@@ -195,7 +249,8 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
     try {
       await assignTeamAward(eventId, {
         awardCategoryId: assignCategoryId,
-        teamId: assignTeamId
+        teamId: assignTeamId,
+        roundId: activeRoundId ?? undefined
       });
       await invalidateAwards();
       setAssignTeamId("");
@@ -224,7 +279,10 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
     if (!eventId) return;
     setBusy(true);
     try {
-      const result = await suggestAwardsFromRanking(eventId);
+      const result = await suggestAwardsFromRanking(eventId, {
+        roundId: activeRoundId ?? undefined,
+        boardId: boardId ?? undefined
+      });
       await invalidateAwards();
       notify(result.message, result.created > 0 ? "success" : "neutral");
     } catch (err) {
@@ -262,7 +320,17 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
     }
   }
 
-  const loading = eventLoading || awardsQuery.isLoading || teamsLoading;
+  const loading = eventLoading || awardsQuery.isLoading || teamsLoading || boardsLoading;
+  const activeRoundName = resolveRoundDisplayName(activeRoundId, roundNameById);
+  const scopeHint =
+    boardId != null
+      ? formatBoardRankingLabel(
+          rankingBoards.find((b) => b.boardId === boardId) ?? {
+            boardName: boardsInRound.find((b) => b.id === boardId)?.name ?? "Bảng",
+            roundName: activeRoundName
+          }
+        )
+      : activeRoundName;
 
   return (
     <div className="space-y-lg">
@@ -288,8 +356,8 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
             <Button variant="secondary" size="sm" disabled={busy} onClick={() => void handleSeedDefaults()}>
               Khởi tạo giải mặc định
             </Button>
-            <Button variant="secondary" size="sm" disabled={busy || !hasRankCategories} onClick={() => void handleSuggestFromRanking()}>
-              Gợi ý Nhất/Nhì/Ba từ BXH
+            <Button variant="secondary" size="sm" disabled={busy || !hasRankCategories || rankingRows.length === 0} onClick={() => void handleSuggestFromRanking()}>
+              Gợi ý Nhất/Nhì/Ba ({scopeHint})
             </Button>
             <Button size="sm" disabled={busy} onClick={openCreateCategoryModal}>
               Thêm loại giải
@@ -321,46 +389,126 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
 
           <div className="grid gap-lg lg:grid-cols-2">
             <section className="rounded-xl border border-outline-variant p-lg space-y-md">
-              <h2 className="font-headline-sm">BXH / danh sách đội</h2>
+              <div className="flex flex-wrap items-end justify-between gap-md">
+                <h2 className="font-headline-sm">BXH tham khảo</h2>
+                <div className="flex flex-wrap gap-sm">
+                  <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+                    Vòng
+                    <select
+                      className="min-w-[10rem] rounded-lg border border-outline-variant p-sm font-body-sm"
+                      value={activeRoundId ?? ""}
+                      onChange={(e) => setRoundId(e.target.value ? Number(e.target.value) : null)}
+                      disabled={!rounds.length}
+                    >
+                      {rounds.map((round) => (
+                        <option key={round.id} value={round.id}>
+                          {round.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+                    Bảng
+                    <select
+                      className="min-w-[10rem] rounded-lg border border-outline-variant p-sm font-body-sm"
+                      value={boardId ?? ""}
+                      onChange={(e) => setBoardId(e.target.value ? Number(e.target.value) : null)}
+                      disabled={!boardsInRound.length}
+                    >
+                      <option value="">Tất cả bảng vòng này</option>
+                      {boardsInRound.map((board) => (
+                        <option key={board.id} value={board.id}>
+                          {board.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <p className="font-body-sm text-on-surface-variant">
+                Đang xem BXH của <strong className="text-on-surface">{scopeHint}</strong>. Gợi ý giải và tham
+                chiếu hạng theo phạm vi vòng/bảng đã chọn — không gộp chéo vòng loại và chung kết.
+              </p>
               {rankingsQuery.isLoading ? (
                 <ModuleSkeleton rows={4} />
-              ) : rankedTeams.length > 0 ? (
-                <div className="overflow-x-auto rounded-lg border border-outline-variant">
-                  <table className="min-w-full text-left font-body-sm">
-                    <thead className="table-header-bg font-label-sm text-on-surface-variant">
-                      <tr>
-                        <th className="px-md py-sm">Hạng</th>
-                        <th className="px-md py-sm">Đội</th>
-                        <th className="px-md py-sm">Bảng</th>
-                        <th className="px-md py-sm text-right">Điểm</th>
-                      </tr>
-                    </thead>
-                    <tbody className="table-divider">
-                      {rankedTeams.map((team) => (
-                        <tr key={team.teamId}>
-                          <td className="px-md py-sm tabular-nums">{team.rank}</td>
-                          <td className="px-md py-sm">{team.teamName}</td>
-                          <td className="px-md py-sm">{team.boardName}</td>
-                          <td className="px-md py-sm text-right tabular-nums">{formatScore(team.score)}</td>
+              ) : rankingRows.length > 0 ? (
+                boardId != null ? (
+                  <div className="overflow-x-auto rounded-lg border border-outline-variant">
+                    <table className="min-w-full text-left font-body-sm">
+                      <thead className="table-header-bg font-label-sm text-on-surface-variant">
+                        <tr>
+                          <th className="px-md py-sm">Hạng</th>
+                          <th className="px-md py-sm">Đội</th>
+                          <th className="px-md py-sm text-right">Điểm</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : teams.length > 0 ? (
-                <ul className="space-y-xs font-body-sm max-h-80 overflow-y-auto">
-                  {sortedTeams.map((team) => (
-                    <li key={team.id} className="rounded-lg border border-outline-variant px-md py-sm">
-                      {team.name}
-                    </li>
-                  ))}
-                </ul>
+                      </thead>
+                      <tbody className="table-divider">
+                        {rankingRows.map((team) => (
+                          <tr key={`${team.boardId}-${team.teamId}`}>
+                            <td className="px-md py-sm tabular-nums">{team.rank}</td>
+                            <td className="px-md py-sm">{team.teamName}</td>
+                            <td className="px-md py-sm text-right tabular-nums">{formatScore(team.score)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="space-y-md">
+                    {rankingBoardsByRound.map((group) =>
+                      group.boards.map((board) => (
+                        <div key={board.boardId} className="overflow-x-auto rounded-lg border border-outline-variant">
+                          <div className="border-b border-outline-variant bg-surface-container-low px-md py-sm font-label-sm text-on-surface">
+                            {formatBoardRankingLabel(board)} · {board.entries.length} đội
+                          </div>
+                          <table className="min-w-full text-left font-body-sm">
+                            <thead className="table-header-bg font-label-sm text-on-surface-variant">
+                              <tr>
+                                <th className="px-md py-sm">Hạng</th>
+                                <th className="px-md py-sm">Đội</th>
+                                <th className="px-md py-sm text-right">Điểm</th>
+                              </tr>
+                            </thead>
+                            <tbody className="table-divider">
+                              {board.entries.map((entry) => (
+                                <tr key={entry.teamId}>
+                                  <td className="px-md py-sm tabular-nums">{entry.rank}</td>
+                                  <td className="px-md py-sm">{entry.teamName}</td>
+                                  <td className="px-md py-sm text-right tabular-nums">
+                                    {formatScore(entry.averageScore)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )
               ) : (
-                <EmptyState
-                  icon="groups"
-                  title="Chưa có đội"
-                  description="Đội đăng ký hoặc BXH sẽ hiện ở đây để tham khảo khi trao giải."
-                />
+                <>
+                  <EmptyState
+                    icon="leaderboard"
+                    title="Chưa có BXH trong phạm vi này"
+                    description="Tính và công bố xếp hạng cho vòng/bảng đang chọn trước khi gợi ý giải theo hạng."
+                  />
+                  {teams.length > 0 ? (
+                    <ul className="space-y-xs font-body-sm max-h-80 overflow-y-auto">
+                      {sortedTeams.map((team) => (
+                        <li key={team.id} className="rounded-lg border border-outline-variant px-md py-sm">
+                          {team.name}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <EmptyState
+                      icon="groups"
+                      title="Chưa có đội"
+                      description="Đội đăng ký sẽ hiện ở đây để gán giải thủ công."
+                    />
+                  )}
+                </>
               )}
 
               <div className="rounded-lg border border-dashed border-outline-variant p-md space-y-sm">
@@ -406,76 +554,86 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                   description='Nhấn "Khởi tạo giải mặc định" hoặc "Thêm loại giải".'
                 />
               ) : (
-                <ul className="space-y-md">
-                  {categories.map((category) => (
-                    <li key={category.id} className="rounded-lg border border-outline-variant p-md space-y-sm">
-                      <div className="flex flex-wrap items-start justify-between gap-sm">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-sm">
-                            <h3 className="font-label-lg">{category.name}</h3>
-                            <Badge tone={category.awardType === "RANK" ? "active" : "neutral"}>
-                              {category.awardType === "RANK" ? "Hạng" : "Tùy chọn"}
-                            </Badge>
-                          </div>
-                          {category.description ? (
-                            <p className="font-body-sm text-on-surface-variant mt-xs">{category.description}</p>
-                          ) : null}
-                          <p className="font-body-sm text-on-surface-variant mt-xs">
-                            Tối đa {category.maxWinners} đội · đã gán {category.winnerCount}
-                            {category.rankOrder ? ` · hạng BXH ${category.rankOrder}` : ""}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-sm">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() => openEditCategoryModal(category)}
-                          >
-                            Sửa
-                          </Button>
-                          <ConfirmAction
-                            title="Xóa loại giải"
-                            message={`Xóa "${category.name}" và mọi đội đã gán?`}
-                            confirmLabel="Xóa"
-                            onConfirm={() => void handleDeleteCategory(category)}
-                          >
-                            <Button variant="secondary" size="sm" disabled={busy}>
-                              Xóa
-                            </Button>
-                          </ConfirmAction>
-                        </div>
-                      </div>
-                      {category.winners.length > 0 ? (
-                        <ul className="space-y-xs font-body-sm">
-                          {category.winners.map((winner) => (
-                            <li
-                              key={winner.id}
-                              className="flex flex-wrap items-center justify-between gap-sm rounded-md bg-surface-container-low px-sm py-xs"
-                            >
-                              <span>
-                                {winner.teamName}
-                                {winner.note ? (
-                                  <span className="text-on-surface-variant"> — {winner.note}</span>
+                <div className="space-y-lg">
+                  {categoryGroups.map((group) => (
+                    <div key={group.key} className="space-y-md">
+                      <h3 className="font-label-md text-on-surface-variant">{group.roundName}</h3>
+                      <ul className="space-y-md">
+                        {group.categories.map((category) => (
+                          <li key={category.id} className="rounded-lg border border-outline-variant p-md space-y-sm">
+                            <div className="flex flex-wrap items-start justify-between gap-sm">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-sm">
+                                  <h4 className="font-label-lg">{category.name}</h4>
+                                  <Badge tone={category.awardType === "RANK" ? "active" : "neutral"}>
+                                    {category.awardType === "RANK" ? "Hạng" : "Tùy chọn"}
+                                  </Badge>
+                                </div>
+                                {category.description ? (
+                                  <p className="font-body-sm text-on-surface-variant mt-xs">{category.description}</p>
                                 ) : null}
-                              </span>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                disabled={busy}
-                                onClick={() => void handleRemoveAward(winner.id)}
-                              >
-                                Gỡ
-                              </Button>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="font-body-sm text-on-surface-variant">Chưa gán đội.</p>
-                      )}
-                    </li>
+                                <p className="font-body-sm text-on-surface-variant mt-xs">
+                                  Tối đa {category.maxWinners} đội · đã gán {category.winnerCount}
+                                  {category.rankOrder ? ` · hạng BXH ${category.rankOrder}` : ""}
+                                  {category.roundId != null
+                                    ? ` · ${resolveRoundDisplayName(category.roundId, roundNameById)}`
+                                    : ""}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-sm">
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={busy}
+                                  onClick={() => openEditCategoryModal(category)}
+                                >
+                                  Sửa
+                                </Button>
+                                <ConfirmAction
+                                  title="Xóa loại giải"
+                                  message={`Xóa "${category.name}" và mọi đội đã gán?`}
+                                  confirmLabel="Xóa"
+                                  onConfirm={() => void handleDeleteCategory(category)}
+                                >
+                                  <Button variant="secondary" size="sm" disabled={busy}>
+                                    Xóa
+                                  </Button>
+                                </ConfirmAction>
+                              </div>
+                            </div>
+                            {category.winners.length > 0 ? (
+                              <ul className="space-y-xs font-body-sm">
+                                {category.winners.map((winner) => (
+                                  <li
+                                    key={winner.id}
+                                    className="flex flex-wrap items-center justify-between gap-sm rounded-md bg-surface-container-low px-sm py-xs"
+                                  >
+                                    <span>
+                                      {winner.teamName}
+                                      {winner.note ? (
+                                        <span className="text-on-surface-variant"> — {winner.note}</span>
+                                      ) : null}
+                                    </span>
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
+                                      disabled={busy}
+                                      onClick={() => void handleRemoveAward(winner.id)}
+                                    >
+                                      Gỡ
+                                    </Button>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="font-body-sm text-on-surface-variant">Chưa gán đội.</p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
             </section>
           </div>
@@ -512,6 +670,26 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
               value={categoryForm.description ?? ""}
               onChange={(e) => setCategoryForm((f) => ({ ...f, description: e.target.value }))}
             />
+          </label>
+          <label className="block space-y-xs">
+            Vòng áp dụng
+            <select
+              className="w-full rounded-lg border border-outline-variant p-sm"
+              value={categoryForm.roundId ?? ""}
+              onChange={(e) =>
+                setCategoryForm((f) => ({
+                  ...f,
+                  roundId: e.target.value ? Number(e.target.value) : undefined
+                }))
+              }
+            >
+              <option value="">Toàn cuộc thi</option>
+              {rounds.map((round) => (
+                <option key={round.id} value={round.id}>
+                  {round.name}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block space-y-xs">
             Loại
