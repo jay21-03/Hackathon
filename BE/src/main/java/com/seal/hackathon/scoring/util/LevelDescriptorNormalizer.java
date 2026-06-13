@@ -37,7 +37,9 @@ public final class LevelDescriptorNormalizer {
         String label = StringUtils.hasText(source.getLabel()) ? source.getLabel().trim() : fallback.getLabel();
         BigDecimal minScore = source.getMinScore() != null ? source.getMinScore() : fallback.getMinScore();
         BigDecimal maxScore = source.getMaxScore() != null ? source.getMaxScore() : fallback.getMaxScore();
-        String description = source.getDescription() != null ? source.getDescription() : fallback.getDescription();
+        String description = StringUtils.hasText(source.getDescription())
+                ? source.getDescription().trim()
+                : fallback.getDescription();
         return LevelDescriptorDto.builder()
                 .level(level)
                 .label(label)
@@ -65,19 +67,40 @@ public final class LevelDescriptorNormalizer {
 
     private static List<LevelDescriptorDto> defaultDescriptors() {
         return List.of(
-                descriptor("EXCELLENT", "Xuất sắc", "9", "10"),
-                descriptor("GOOD", "Tốt", "7", "8.9"),
-                descriptor("SATISFACTORY", "Đạt", "5", "6.9"),
-                descriptor("UNSATISFACTORY", "Chưa đạt", "0", "4.9"));
+                descriptor(
+                        "EXCELLENT",
+                        "Xuất sắc",
+                        "9",
+                        "10",
+                        "Vượt mong đợi so với yêu cầu của tiêu chí."),
+                descriptor(
+                        "GOOD",
+                        "Tốt",
+                        "7",
+                        "8.9",
+                        "Đáp ứng tốt hầu hết yêu cầu, chỉ còn điểm cần cải thiện nhỏ."),
+                descriptor(
+                        "SATISFACTORY",
+                        "Đạt",
+                        "5",
+                        "6.9",
+                        "Đáp ứng một phần yêu cầu, còn thiếu sót rõ ràng."),
+                descriptor(
+                        "UNSATISFACTORY",
+                        "Chưa đạt",
+                        "0",
+                        "4.9",
+                        "Chưa đáp ứng yêu cầu tối thiểu của tiêu chí."));
     }
 
-    private static LevelDescriptorDto descriptor(String level, String label, String min, String max) {
+    private static LevelDescriptorDto descriptor(
+            String level, String label, String min, String max, String description) {
         return LevelDescriptorDto.builder()
                 .level(level)
                 .label(label)
                 .minScore(new BigDecimal(min))
                 .maxScore(new BigDecimal(max))
-                .description("")
+                .description(description)
                 .build();
     }
 

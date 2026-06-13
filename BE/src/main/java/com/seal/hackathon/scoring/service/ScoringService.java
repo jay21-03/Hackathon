@@ -29,6 +29,7 @@ import com.seal.hackathon.scoring.dto.CriteriaResponse;
 import com.seal.hackathon.scoring.dto.JudgeBriefDto;
 import com.seal.hackathon.scoring.dto.JudgeProgressDto;
 import com.seal.hackathon.scoring.dto.JudgeSheetStatusDto;
+import com.seal.hackathon.scoring.util.HackathonRubricDefaults;
 import com.seal.hackathon.scoring.util.LevelDescriptorNormalizer;
 import com.seal.hackathon.scoring.dto.MatrixRowInput;
 import com.seal.hackathon.scoring.dto.MatrixSummaryDto;
@@ -711,12 +712,13 @@ public class ScoringService {
         item.setMinScore(entity.getMinScore());
         item.setMaxScore(entity.getMaxScore());
         item.setSortOrder(entity.getSortOrder());
-        item.setLevelDescriptors(entity.getLevelDescriptors());
+        item.setLevelDescriptors(LevelDescriptorNormalizer.normalize(entity.getLevelDescriptors()));
+        HackathonRubricDefaults.enrichBlankDescriptions(item);
         return item;
     }
 
     private CriteriaResponse toCriteriaResponse(ScoreCriteria entity) {
-        return CriteriaResponse.builder()
+        CriteriaResponse response = CriteriaResponse.builder()
                 .id(entity.getId())
                 .code(entity.getCode())
                 .name(entity.getName())
@@ -725,8 +727,16 @@ public class ScoringService {
                 .maxScore(entity.getMaxScore())
                 .description(entity.getDescription())
                 .sortOrder(entity.getSortOrder())
-                .levelDescriptors(entity.getLevelDescriptors())
+                .levelDescriptors(LevelDescriptorNormalizer.normalize(entity.getLevelDescriptors()))
                 .build();
+        CriteriaRequestItem enrichSource = new CriteriaRequestItem();
+        enrichSource.setCode(response.getCode());
+        enrichSource.setDescription(response.getDescription());
+        enrichSource.setLevelDescriptors(response.getLevelDescriptors());
+        HackathonRubricDefaults.enrichBlankDescriptions(enrichSource);
+        response.setDescription(enrichSource.getDescription());
+        response.setLevelDescriptors(enrichSource.getLevelDescriptors());
+        return response;
     }
 
     private BoardContext loadBoardContext(Long boardId) {

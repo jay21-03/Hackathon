@@ -10,6 +10,7 @@ import com.seal.hackathon.scoring.entity.CriteriaTemplate;
 import com.seal.hackathon.scoring.entity.CriteriaTemplateItem;
 import com.seal.hackathon.scoring.repository.CriteriaTemplateItemRepository;
 import com.seal.hackathon.scoring.repository.CriteriaTemplateRepository;
+import com.seal.hackathon.scoring.util.HackathonRubricDefaults;
 import com.seal.hackathon.scoring.util.LevelDescriptorNormalizer;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -164,6 +165,7 @@ public class CriteriaTemplateService {
         dto.setMaxScore(item.getMaxScore());
         dto.setSortOrder(item.getSortOrder());
         dto.setLevelDescriptors(LevelDescriptorNormalizer.normalize(item.getLevelDescriptors()));
+        HackathonRubricDefaults.enrichBlankDescriptions(dto);
         return dto;
     }
 

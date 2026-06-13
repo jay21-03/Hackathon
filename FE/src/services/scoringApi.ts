@@ -182,10 +182,34 @@ export interface ScoreProgressResponse {
 }
 
 export const DEFAULT_LEVEL_DESCRIPTORS: LevelDescriptor[] = [
-  { level: "EXCELLENT", label: "Xuất sắc", minScore: 9, maxScore: 10, description: "" },
-  { level: "GOOD", label: "Tốt", minScore: 7, maxScore: 8.9, description: "" },
-  { level: "SATISFACTORY", label: "Đạt", minScore: 5, maxScore: 6.9, description: "" },
-  { level: "UNSATISFACTORY", label: "Chưa đạt", minScore: 0, maxScore: 4.9, description: "" }
+  {
+    level: "EXCELLENT",
+    label: "Xuất sắc",
+    minScore: 9,
+    maxScore: 10,
+    description: "Vượt mong đợi so với yêu cầu của tiêu chí."
+  },
+  {
+    level: "GOOD",
+    label: "Tốt",
+    minScore: 7,
+    maxScore: 8.9,
+    description: "Đáp ứng tốt hầu hết yêu cầu, chỉ còn điểm cần cải thiện nhỏ."
+  },
+  {
+    level: "SATISFACTORY",
+    label: "Đạt",
+    minScore: 5,
+    maxScore: 6.9,
+    description: "Đáp ứng một phần yêu cầu, còn thiếu sót rõ ràng."
+  },
+  {
+    level: "UNSATISFACTORY",
+    label: "Chưa đạt",
+    minScore: 0,
+    maxScore: 4.9,
+    description: "Chưa đáp ứng yêu cầu tối thiểu của tiêu chí."
+  }
 ];
 
 const VALID_LEVEL_CODES = new Set(["EXCELLENT", "GOOD", "SATISFACTORY", "UNSATISFACTORY"]);
@@ -212,7 +236,7 @@ export function normalizeLevelDescriptors(input?: Partial<LevelDescriptor>[]): L
       label: source.label?.trim() || fallback.label,
       minScore: Number(source.minScore ?? fallback.minScore),
       maxScore: Number(source.maxScore ?? fallback.maxScore),
-      description: source.description ?? fallback.description ?? ""
+      description: source.description?.trim() || fallback.description || ""
     };
   });
 }
@@ -229,6 +253,67 @@ export function deriveCriteriaScoreRange(levelDescriptors: LevelDescriptor[]): {
   };
 }
 
+const HACKATHON_RUBRIC_DEFAULTS: Record<
+  string,
+  { description: string; levelDescriptions: Record<string, string> }
+> = {
+  R1_01: {
+    description:
+      "Đánh giá mức độ hoàn thiện chức năng, độ ổn định và khả năng xử lý các luồng nghiệp vụ chính của sản phẩm.",
+    levelDescriptions: {
+      EXCELLENT:
+        "Hoàn thiện cao, ít lỗi, xử lý tốt các trường hợp ngoại lệ và luồng phức tạp.",
+      GOOD: "Hầu hết chức năng ổn định, đáp ứng đúng yêu cầu đề bài.",
+      SATISFACTORY: "Một số chức năng chính hoạt động nhưng còn lỗi hoặc thiếu xử lý edge case.",
+      UNSATISFACTORY:
+        "Sản phẩm không chạy được hoặc thiếu phần lớn chức năng bắt buộc theo đề bài."
+    }
+  },
+  R1_02: {
+    description:
+      "Đánh giá cách team tích hợp và khai thác AI/ML trong giải pháp (mục đích, độ phù hợp, hiệu quả thực tế).",
+    levelDescriptions: {
+      EXCELLENT: "AI được thiết kế tốt, tạo giá trị rõ rệt và được demo thuyết phục.",
+      GOOD: "AI được áp dụng hợp lý, hỗ trợ rõ ràng cho chức năng cốt lõi.",
+      SATISFACTORY: "Có dùng AI cơ bản nhưng chưa rõ giá trị hoặc chưa ổn định trong demo.",
+      UNSATISFACTORY: "Không có tích hợp AI hoặc chỉ mang tính hình thức, không gắn với bài toán."
+    }
+  },
+  R1_03: {
+    description:
+      "Đánh giá kiến trúc, phân tách module, chất lượng mã nguồn và khả năng bảo trì/mở rộng.",
+    levelDescriptions: {
+      EXCELLENT: "Thiết kế chuyên nghiệp, dễ mở rộng, tuân thủ best practice tốt.",
+      GOOD: "Kiến trúc rõ ràng, mã dễ theo dõi, phù hợp quy mô dự án.",
+      SATISFACTORY: "Có cấu trúc cơ bản nhưng còn coupling cao hoặc thiếu nhất quán.",
+      UNSATISFACTORY: "Cấu trúc lộn xộn, khó đọc hoặc không có ranh giới module rõ ràng."
+    }
+  },
+  R1_04: {
+    description:
+      "Đánh giá khả năng trình bày, demo trực tiếp và trả lời câu hỏi của ban giám khảo.",
+    levelDescriptions: {
+      EXCELLENT:
+        "Thuyết trình thuyết phục, demo ấn tượng, phản hồi câu hỏi sâu và chính xác.",
+      GOOD: "Demo ổn định, trình bày mạch lạc, trả lời được phần lớn câu hỏi.",
+      SATISFACTORY: "Trình bày được ý chính nhưng demo chưa mượt hoặc thiếu rõ ràng.",
+      UNSATISFACTORY: "Không trình bày được luồng chính hoặc demo thất bại."
+    }
+  },
+  R1_05: {
+    description:
+      "Đánh giá phối hợp nhóm, phân công công việc và tinh thần hợp tác trong quá trình làm bài.",
+    levelDescriptions: {
+      EXCELLENT:
+        "Teamwork xuất sắc, phối hợp nhịp nhàng và thể hiện tinh thần hợp tác chuyên nghiệp.",
+      GOOD: "Phối hợp tốt, mỗi thành viên đóng góp rõ vai trò trong demo.",
+      SATISFACTORY: "Có phân công cơ bản nhưng chưa thể hiện teamwork nhất quán.",
+      UNSATISFACTORY:
+        "Thiếu phối hợp rõ rệt; thành viên không đóng góp hoặc mâu thuẫn trong trình bày."
+    }
+  }
+};
+
 const HACKATHON_CRITERIA_TEMPLATE: Array<{ code: string; name: string; weight: number }> = [
   { code: "R1_01", name: "Tính đúng đắn & Hoàn thiện chức năng", weight: 30 },
   { code: "R1_02", name: "Ứng dụng AI trong giải pháp", weight: 25 },
@@ -236,6 +321,25 @@ const HACKATHON_CRITERIA_TEMPLATE: Array<{ code: string; name: string; weight: n
   { code: "R1_04", name: "Thuyết trình & Demo", weight: 20 },
   { code: "R1_05", name: "Teamwork & Tinh thần làm việc", weight: 10 }
 ];
+
+/** Bổ sung mô tả mặc định cho mã tiêu chí R1_xx khi đang trống. */
+export function enrichHackathonRubricCriteria(item: CriteriaRequestItem): CriteriaRequestItem {
+  const defaults = HACKATHON_RUBRIC_DEFAULTS[item.code];
+  if (!defaults) return item;
+  const levelDescriptors = item.levelDescriptors.map((level) => ({
+    ...level,
+    description:
+      level.description?.trim() ||
+      defaults.levelDescriptions[level.level] ||
+      level.description ||
+      ""
+  }));
+  return {
+    ...item,
+    description: item.description?.trim() || defaults.description,
+    levelDescriptors
+  };
+}
 
 export function createEmptyCriteria(index: number): CriteriaRequestItem {
   const n = String(index + 1).padStart(2, "0");
@@ -257,7 +361,7 @@ export function createDefaultHackathonRubric(): CriteriaRequestItem[] {
   return HACKATHON_CRITERIA_TEMPLATE.map((item, index) => {
     const levels = DEFAULT_LEVEL_DESCRIPTORS.map((d) => ({ ...d }));
     const { minScore, maxScore } = deriveCriteriaScoreRange(levels);
-    return {
+    return enrichHackathonRubricCriteria({
       code: item.code,
       name: item.name,
       weight: item.weight,
@@ -266,7 +370,7 @@ export function createDefaultHackathonRubric(): CriteriaRequestItem[] {
       description: "",
       sortOrder: index + 1,
       levelDescriptors: levels
-    };
+    });
   });
 }
 

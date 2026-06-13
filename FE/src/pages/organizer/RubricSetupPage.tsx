@@ -19,6 +19,7 @@ import {
   createDefaultHackathonRubric,
   createEmptyCriteria,
   deriveCriteriaScoreRange,
+  enrichHackathonRubricCriteria,
   normalizeLevelDescriptors,
   saveRubric,
   type CriteriaRequestItem,
@@ -36,11 +37,14 @@ import {
 function toFormCriteria(items: CriteriaRequestItem[]): CriteriaRequestItem[] {
   return items.map((c, i) => {
     const levelDescriptors = normalizeLevelDescriptors(c.levelDescriptors);
-    return {
+    const enriched = enrichHackathonRubricCriteria({
       ...c,
       sortOrder: c.sortOrder ?? i + 1,
-      levelDescriptors,
-      ...deriveCriteriaScoreRange(levelDescriptors)
+      levelDescriptors
+    });
+    return {
+      ...enriched,
+      ...deriveCriteriaScoreRange(enriched.levelDescriptors)
     };
   });
 }
@@ -363,7 +367,10 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
                         if (activeRoundId) {
                           await invalidateAfterRubricMutation(queryClient, activeRoundId);
                         }
-                        notify("Đã sao chép rubric từ vòng nguồn.", "success");
+                        notify(
+                          "Đã sao chép rubric từ vòng nguồn (gồm mô tả đã lưu).",
+                          "success"
+                        );
                       } catch (err) {
                         notify(resolveApiError(err, "Sao chép rubric thất bại."), "danger");
                       } finally {
