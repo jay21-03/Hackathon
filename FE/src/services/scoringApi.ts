@@ -188,6 +188,35 @@ export const DEFAULT_LEVEL_DESCRIPTORS: LevelDescriptor[] = [
   { level: "UNSATISFACTORY", label: "Chưa đạt", minScore: 0, maxScore: 4.9, description: "" }
 ];
 
+const VALID_LEVEL_CODES = new Set(["EXCELLENT", "GOOD", "SATISFACTORY", "UNSATISFACTORY"]);
+
+/** Chuẩn hóa mức chấm — BE yêu cầu level = EXCELLENT|GOOD|SATISFACTORY|UNSATISFACTORY. */
+export function normalizeLevelDescriptors(input?: Partial<LevelDescriptor>[]): LevelDescriptor[] {
+  const defaults = DEFAULT_LEVEL_DESCRIPTORS.map((d) => ({ ...d }));
+  if (!input?.length) return defaults;
+  return defaults.map((fallback, index) => {
+    const source = input[index] ?? {};
+    const rawLevel = String(source.level ?? "").trim().toUpperCase();
+    let level = fallback.level;
+    if (VALID_LEVEL_CODES.has(rawLevel)) {
+      level = rawLevel;
+    } else if (rawLevel === "1" || rawLevel === "4") {
+      level = "EXCELLENT";
+    } else if (rawLevel === "2") {
+      level = "GOOD";
+    } else if (rawLevel === "3") {
+      level = "SATISFACTORY";
+    }
+    return {
+      level,
+      label: source.label?.trim() || fallback.label,
+      minScore: Number(source.minScore ?? fallback.minScore),
+      maxScore: Number(source.maxScore ?? fallback.maxScore),
+      description: source.description ?? fallback.description ?? ""
+    };
+  });
+}
+
 export function deriveCriteriaScoreRange(levelDescriptors: LevelDescriptor[]): {
   minScore: number;
   maxScore: number;

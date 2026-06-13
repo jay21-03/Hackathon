@@ -345,8 +345,15 @@ export interface RubricCriteriaInput {
   weight: number;
   minScore: number;
   maxScore: number;
-  levelDescriptors: Array<{ label: string; minScore: number; maxScore: number }>;
+  levelDescriptors: Array<{
+    level?: string;
+    label: string;
+    minScore: number;
+    maxScore: number;
+  }>;
 }
+
+const VALID_RUBRIC_LEVELS = new Set(["EXCELLENT", "GOOD", "SATISFACTORY", "UNSATISFACTORY"]);
 
 /** Validate rubric trước khi lưu — mirror ScoringService.validateRubricRequest. */
 export function validateRubricCriteria(criteria: RubricCriteriaInput[]): string | null {
@@ -368,14 +375,18 @@ export function validateRubricCriteria(criteria: RubricCriteriaInput[]): string 
     codes.add(code);
     names.add(name);
     const weight = Number(item.weight);
-    if (Number.isNaN(weight) || weight < 0 || weight > 100) {
-      return `${label}: trọng số phải từ 0 đến 100.`;
+    if (Number.isNaN(weight) || weight <= 0 || weight > 100) {
+      return `${label}: trọng số phải lớn hơn 0 và tối đa 100.`;
     }
     weightSum += weight;
     if (!item.levelDescriptors || item.levelDescriptors.length !== 4) {
       return `${label}: cần đúng 4 mức mô tả.`;
     }
     for (const level of item.levelDescriptors) {
+      const levelCode = level.level?.trim().toUpperCase() ?? "";
+      if (!VALID_RUBRIC_LEVELS.has(levelCode)) {
+        return `${label}: mức mô tả không hợp lệ (cần EXCELLENT, GOOD, SATISFACTORY hoặc UNSATISFACTORY).`;
+      }
       if (!level.label?.trim()) {
         return `${label}: nhãn mức điểm không được trống.`;
       }

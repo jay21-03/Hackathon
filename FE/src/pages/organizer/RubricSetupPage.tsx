@@ -19,6 +19,7 @@ import {
   createDefaultHackathonRubric,
   createEmptyCriteria,
   deriveCriteriaScoreRange,
+  normalizeLevelDescriptors,
   saveRubric,
   type CriteriaRequestItem,
   type LevelDescriptor
@@ -33,13 +34,15 @@ import {
 } from "../../services/criteriaTemplateApi";
 
 function toFormCriteria(items: CriteriaRequestItem[]): CriteriaRequestItem[] {
-  return items.map((c, i) => ({
-    ...c,
-    sortOrder: c.sortOrder ?? i + 1,
-    levelDescriptors: c.levelDescriptors?.length === 4
-      ? c.levelDescriptors
-      : createEmptyCriteria(i).levelDescriptors
-  }));
+  return items.map((c, i) => {
+    const levelDescriptors = normalizeLevelDescriptors(c.levelDescriptors);
+    return {
+      ...c,
+      sortOrder: c.sortOrder ?? i + 1,
+      levelDescriptors,
+      ...deriveCriteriaScoreRange(levelDescriptors)
+    };
+  });
 }
 
 function rubricToForm(criteria: CriteriaRequestItem[] | undefined): CriteriaRequestItem[] {
@@ -139,11 +142,12 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
           weight: Number(c.weight),
           minScore: range.minScore,
           maxScore: range.maxScore,
-          levelDescriptors: c.levelDescriptors.map((level) => ({
-            label: level.label,
-            minScore: Number(level.minScore),
-            maxScore: Number(level.maxScore)
-          }))
+            levelDescriptors: normalizeLevelDescriptors(c.levelDescriptors).map((level) => ({
+              label: level.label,
+              minScore: Number(level.minScore),
+              maxScore: Number(level.maxScore),
+              level: level.level
+            }))
         };
       })
     );
@@ -163,7 +167,7 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
             weight: Number(c.weight),
             minScore: range.minScore,
             maxScore: range.maxScore,
-            levelDescriptors: c.levelDescriptors.map((l) => ({
+            levelDescriptors: normalizeLevelDescriptors(c.levelDescriptors).map((l) => ({
               ...l,
               minScore: Number(l.minScore),
               maxScore: Number(l.maxScore)

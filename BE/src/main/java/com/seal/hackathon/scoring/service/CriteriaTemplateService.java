@@ -10,6 +10,7 @@ import com.seal.hackathon.scoring.entity.CriteriaTemplate;
 import com.seal.hackathon.scoring.entity.CriteriaTemplateItem;
 import com.seal.hackathon.scoring.repository.CriteriaTemplateItemRepository;
 import com.seal.hackathon.scoring.repository.CriteriaTemplateRepository;
+import com.seal.hackathon.scoring.util.LevelDescriptorNormalizer;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
@@ -132,7 +133,7 @@ public class CriteriaTemplateService {
                     .minScore(item.getMinScore())
                     .maxScore(item.getMaxScore())
                     .sortOrder(sortOrder)
-                    .levelDescriptors(item.getLevelDescriptors())
+                    .levelDescriptors(LevelDescriptorNormalizer.normalize(item.getLevelDescriptors()))
                     .build());
         }
     }
@@ -162,7 +163,7 @@ public class CriteriaTemplateService {
         dto.setMinScore(item.getMinScore());
         dto.setMaxScore(item.getMaxScore());
         dto.setSortOrder(item.getSortOrder());
-        dto.setLevelDescriptors(item.getLevelDescriptors());
+        dto.setLevelDescriptors(LevelDescriptorNormalizer.normalize(item.getLevelDescriptors()));
         return dto;
     }
 

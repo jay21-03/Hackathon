@@ -77,6 +77,7 @@ const organizerErrorMap: Record<string, string> = {
   RUBRIC_LOCKED: "Tiêu chí chấm đã khóa — có phiếu chấm đã nộp, không thể sửa.",
   RUBRIC_NOT_CONFIGURED: "Chưa cấu hình tiêu chí chấm cho vòng này.",
   INVALID_WEIGHT_SUM: "Tổng trọng số phải bằng 100%.",
+  INVALID_WEIGHT: "Trọng số phải lớn hơn 0.",
   DUPLICATE_CRITERIA: "Mã hoặc tên tiêu chí bị trùng trong vòng.",
   INVALID_LEVEL_DESCRIPTORS: "Mỗi tiêu chí cần đúng 4 mức mô tả.",
   SCORE_OUT_OF_RANGE: "Điểm nằm ngoài thang cho phép.",

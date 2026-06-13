@@ -29,7 +29,7 @@ import com.seal.hackathon.scoring.dto.CriteriaResponse;
 import com.seal.hackathon.scoring.dto.JudgeBriefDto;
 import com.seal.hackathon.scoring.dto.JudgeProgressDto;
 import com.seal.hackathon.scoring.dto.JudgeSheetStatusDto;
-import com.seal.hackathon.scoring.dto.LevelDescriptorDto;
+import com.seal.hackathon.scoring.util.LevelDescriptorNormalizer;
 import com.seal.hackathon.scoring.dto.MatrixRowInput;
 import com.seal.hackathon.scoring.dto.MatrixSummaryDto;
 import com.seal.hackathon.scoring.dto.MatrixTeamRowResponse;
@@ -128,6 +128,7 @@ public class ScoringService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "RUBRIC_LOCKED");
         }
 
+        normalizeRubricLevelDescriptors(request);
         validateRubricRequest(request);
 
         if (!request.isReplaceExisting()
@@ -588,7 +589,13 @@ public class ScoringService {
         entity.setMinScore(item.getMinScore());
         entity.setMaxScore(item.getMaxScore());
         entity.setSortOrder(sortOrder);
-        entity.setLevelDescriptors(item.getLevelDescriptors());
+        entity.setLevelDescriptors(LevelDescriptorNormalizer.normalize(item.getLevelDescriptors()));
+    }
+
+    private void normalizeRubricLevelDescriptors(SaveRubricRequest request) {
+        for (CriteriaRequestItem item : request.getCriteria()) {
+            item.setLevelDescriptors(LevelDescriptorNormalizer.normalize(item.getLevelDescriptors()));
+        }
     }
 
     private void validateRubricRequest(SaveRubricRequest request) {
