@@ -417,6 +417,10 @@ public class RepositoryProvisioningService {
                 continue;
             }
             try {
+                githubRepositoryClient.protectBranchFromPush(
+                        repository.getGithubOwner(),
+                        repository.getGithubRepoName(),
+                        resolveRepositoryBranch(repository));
                 for (String username : loadConfirmedGithubUsernames(repository.getTeamId())) {
                     githubRepositoryClient.updateCollaboratorPermission(
                             repository.getGithubOwner(),
@@ -442,6 +446,7 @@ public class RepositoryProvisioningService {
 
     private void closeExpiredRepositoriesForTeam(Long teamId) {
         OffsetDateTime now = OffsetDateTime.now();
+        Set<Long> roundsToGrant = new LinkedHashSet<>();
         for (TeamRepository repository : teamRepositoryEntityRepository.findAllByTeamId(teamId)) {
             if (repository.getAccessStatus() != RepositoryAccessStatus.OPEN || repository.getProblemId() == null) {
                 continue;
@@ -450,7 +455,15 @@ public class RepositoryProvisioningService {
             if (problem == null || problem.getCloseAt() == null || now.isBefore(problem.getCloseAt())) {
                 continue;
             }
-            lockOpenRepositories(List.of(repository), now);
+            int locked = lockOpenRepositories(List.of(repository), now).locked();
+            if (locked > 0) {
+                boardRepository.findById(problem.getBoardId())
+                        .map(Board::getRoundId)
+                        .ifPresent(roundsToGrant::add);
+            }
+        }
+        for (Long roundId : roundsToGrant) {
+            grantJudgeAccessForRoundInternal(roundId);
         }
     }
 
@@ -1024,6 +1037,17 @@ public class RepositoryProvisioningService {
         } catch (GitHubClientException ex) {
             return null;
         }
+    }
+
+    private String resolveRepositoryBranch(TeamRepository repository) {
+        if (repository != null && repository.getProblemId() != null) {
+            return templateRepository.findByProblemId(repository.getProblemId())
+                    .map(ProblemRepositoryTemplate::getDefaultBranch)
+                    .filter(StringUtils::hasText)
+                    .map(String::trim)
+                    .orElse(defaultBranch());
+        }
+        return defaultBranch();
     }
 
     private boolean isReadAccessPermission(String permission) {

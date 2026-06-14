@@ -92,6 +92,37 @@ public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
     }
 
     @Override
+    public void protectBranchFromPush(String owner, String repo, String branch) {
+        String resolvedBranch = StringUtils.hasText(branch) ? branch.trim() : "main";
+        Map<String, Object> pullRequestReviews = new LinkedHashMap<>();
+        pullRequestReviews.put("dismiss_stale_reviews", false);
+        pullRequestReviews.put("require_code_owner_reviews", false);
+        pullRequestReviews.put("required_approving_review_count", 1);
+        pullRequestReviews.put("require_last_push_approval", false);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("required_status_checks", null);
+        body.put("enforce_admins", true);
+        body.put("required_pull_request_reviews", pullRequestReviews);
+        body.put("restrictions", null);
+        body.put("required_linear_history", false);
+        body.put("allow_force_pushes", false);
+        body.put("allow_deletions", false);
+        body.put("block_creations", false);
+        body.put("required_conversation_resolution", false);
+        body.put("lock_branch", true);
+        body.put("allow_fork_syncing", false);
+
+        execute(() -> restClient.put()
+                .uri("/repos/{owner}/{repo}/branches/{branch}/protection", owner, repo, resolvedBranch)
+                .headers(this::authorize)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .toBodilessEntity());
+    }
+
+    @Override
     public Optional<String> getCollaboratorPermission(String owner, String repo, String username) {
         try {
             Map<String, Object> response = execute(() -> restClient.get()

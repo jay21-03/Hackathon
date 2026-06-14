@@ -14,6 +14,8 @@ public interface GitHubRepositoryClient {
 
     void updateCollaboratorPermission(String owner, String repo, String username, String permission);
 
+    void protectBranchFromPush(String owner, String repo, String branch);
+
     Optional<GitHubRepositoryInfo> getRepository(String owner, String repo);
 
     /** Returns collaborator permission (e.g. pull, push) if the user has access. */

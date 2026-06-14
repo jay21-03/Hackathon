@@ -375,6 +375,9 @@ class RepositoryProvisioningIntegrationTest {
         assertThat(fakeGitHubRepositoryClient.collaboratorPermission(
                         "seal-org", repoName(team.getId(), releasedProblem.getId()), "seal-participant"))
                 .isEqualTo("pull");
+        assertThat(fakeGitHubRepositoryClient.isBranchProtected(
+                        "seal-org", repoName(team.getId(), releasedProblem.getId()), "main"))
+                .isTrue();
 
         var teamRepo = teamRepositoryEntityRepository.findAllByTeamId(team.getId()).getFirst();
         assertThat(repoCommitRepository.findTopByTeamRepositoryIdOrderByCommittedAtDescIdDesc(teamRepo.getId()))
@@ -400,6 +403,9 @@ class RepositoryProvisioningIntegrationTest {
 
         assertThat(fakeGitHubRepositoryClient.collaboratorPermission("seal-org", repoName(team.getId(), releasedProblem.getId()), "seal-participant"))
                 .isEqualTo("pull");
+        assertThat(fakeGitHubRepositoryClient.isBranchProtected(
+                        "seal-org", repoName(team.getId(), releasedProblem.getId()), "main"))
+                .isTrue();
 
         var teamRepo = teamRepositoryEntityRepository.findAllByTeamId(team.getId()).getFirst();
         assertThat(repoCommitRepository.findTopByTeamRepositoryIdOrderByCommittedAtDescIdDesc(teamRepo.getId()))

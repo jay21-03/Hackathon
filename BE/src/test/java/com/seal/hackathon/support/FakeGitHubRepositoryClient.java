@@ -15,6 +15,7 @@ public class FakeGitHubRepositoryClient implements GitHubRepositoryClient {
     private final Map<String, GitHubRepositoryInfo> repositories = new ConcurrentHashMap<>();
     private final Map<String, String> collaboratorPermissions = new ConcurrentHashMap<>();
     private final Map<String, GitHubCommitInfo> latestCommits = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> protectedBranches = new ConcurrentHashMap<>();
 
     @Override
     public GitHubRepositoryInfo createRepoFromTemplate(
@@ -62,6 +63,12 @@ public class FakeGitHubRepositoryClient implements GitHubRepositoryClient {
     }
 
     @Override
+    public void protectBranchFromPush(String owner, String repo, String branch) {
+        String resolvedBranch = branch == null || branch.isBlank() ? "main" : branch.trim();
+        protectedBranches.put(branchKey(owner, repo, resolvedBranch), true);
+    }
+
+    @Override
     public Optional<GitHubRepositoryInfo> getRepository(String owner, String repo) {
         return Optional.ofNullable(repositories.get(repoKey(owner, repo)));
     }
@@ -86,6 +93,11 @@ public class FakeGitHubRepositoryClient implements GitHubRepositoryClient {
         return collaboratorPermissions.get(collaboratorKey(owner, repo, username));
     }
 
+    public boolean isBranchProtected(String owner, String repo, String branch) {
+        String resolvedBranch = branch == null || branch.isBlank() ? "main" : branch.trim();
+        return Boolean.TRUE.equals(protectedBranches.get(branchKey(owner, repo, resolvedBranch)));
+    }
+
     private String repoKey(String owner, String repo) {
         return owner + "/" + repo;
     }
@@ -95,6 +107,10 @@ public class FakeGitHubRepositoryClient implements GitHubRepositoryClient {
     }
 
     private String commitKey(String owner, String repo, String branch) {
+        return owner + "/" + repo + "#" + branch;
+    }
+
+    private String branchKey(String owner, String repo, String branch) {
         return owner + "/" + repo + "#" + branch;
     }
 }
