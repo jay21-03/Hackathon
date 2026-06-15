@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
@@ -14,12 +15,14 @@ import {
 import type { JudgeRepositoryResponse } from "../../services/judgeRepositoryService";
 import type { CriteriaResponse, MatrixTeamRowResponse } from "../../services/scoringApi";
 import { useToast } from "../feedback/ToastProvider";
+import { enableAiReview } from "../../config/features";
 
 type CellKey = `${number}-${number}`;
 
 interface JudgeTeamScoringModalProps {
   open: boolean;
   team: MatrixTeamRowResponse | null;
+  boardId?: number | null;
   criteria: CriteriaResponse[];
   cells: Record<CellKey, string>;
   feedback: string;
@@ -51,6 +54,7 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 export function JudgeTeamScoringModal({
   open,
   team,
+  boardId,
   criteria,
   cells,
   feedback,
@@ -189,6 +193,20 @@ export function JudgeTeamScoringModal({
                     Copy clone URL
                   </Button>
                 ) : null}
+              </div>
+            ) : null}
+            {enableAiReview && repository?.provisionStatus === "CREATED" ? (
+              <div className="border-t border-outline-variant/60 pt-md">
+                <Link
+                  to={`/judge/ai-review?${new URLSearchParams({
+                    ...(boardId != null ? { boardId: String(boardId) } : {}),
+                    teamId: String(team.teamId)
+                  }).toString()}`}
+                  className="inline-flex items-center gap-1 font-label-sm text-primary hover:underline"
+                >
+                  <Icon name="psychology" className="text-[18px]" />
+                  Xem rubric AI (R1/R2)
+                </Link>
               </div>
             ) : null}
           </section>

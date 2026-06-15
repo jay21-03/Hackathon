@@ -440,6 +440,7 @@ export function JudgeScoringPage() {
           <JudgeTeamScoringModal
             open={scoringTeamId != null}
             team={scoringTeam}
+            boardId={boardId}
             criteria={matrix.criteria}
             cells={cells}
             feedback={scoringTeam ? (feedbackByTeam[scoringTeam.teamId] ?? "") : ""}

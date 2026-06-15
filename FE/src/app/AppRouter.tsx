@@ -14,6 +14,7 @@ import {
   enableAcademicTerms,
   enableAnnouncements,
   enableGithubProvisioning,
+  enableAiReview,
   enableNotifications,
   enablePhase7,
   enableRanking,
@@ -71,7 +72,15 @@ const JudgeNotificationsPage = lazyPage(
   () => import("../pages/judge/JudgeNotificationsPage"),
   "JudgeNotificationsPage"
 );
+const JudgeAiReviewPage = lazyPage(
+  () => import("../pages/judge/JudgeAiReviewPage"),
+  "JudgeAiReviewPage"
+);
 const MentorDashboardPage = lazyPage(() => import("../pages/mentor/MentorDashboardPage"), "MentorDashboardPage");
+const MentorAiReviewPage = lazyPage(
+  () => import("../pages/mentor/MentorAiReviewPage"),
+  "MentorAiReviewPage"
+);
 const AnnouncementPage = lazyPage(() => import("../pages/organizer/AnnouncementPage"), "AnnouncementPage");
 const AssignmentManagementPage = lazyPage(() => import("../pages/organizer/AssignmentManagementPage"), "AssignmentManagementPage");
 const BoardManagementPage = lazyPage(() => import("../pages/organizer/BoardManagementPage"), "BoardManagementPage");
@@ -115,6 +124,10 @@ const ParticipantOverviewPage = lazyPage(() => import("../pages/participant/Part
 const ProfilePage = lazyPage(() => import("../pages/participant/ProfilePage"), "ProfilePage");
 const ProblemPage = lazyPage(() => import("../pages/participant/ProblemPage"), "ProblemPage");
 const SubmissionPage = lazyPage(() => import("../pages/participant/SubmissionPage"), "SubmissionPage");
+const ParticipantAiReviewPage = lazyPage(
+  () => import("../pages/participant/ParticipantAiReviewPage"),
+  "ParticipantAiReviewPage"
+);
 const TeamOverviewPage = lazyPage(() => import("../pages/participant/TeamOverviewPage"), "TeamOverviewPage");
 const NotificationsPage = lazyPage(
   () => import("../pages/participant/NotificationsPage"),
@@ -165,6 +178,14 @@ function gatedArtifactsHubRoute(redirectTo: string, component: ReactNode) {
       enabled={enableSubmissions || enableGithubProvisioning}
       redirectTo={redirectTo}
     >
+      {component}
+    </FeatureRouteGate>
+  );
+}
+
+function gatedAiReviewRoute(redirectTo: string, component: ReactNode) {
+  return routeElement(
+    <FeatureRouteGate enabled={enableAiReview} redirectTo={redirectTo}>
       {component}
     </FeatureRouteGate>
   );
@@ -270,6 +291,7 @@ export function AppRouter() {
             <Route path="problem" element={routeElement(<ProblemPage />)} />
             <Route path="countdown" element={<Navigate to="/me/problem" replace />} />
             <Route path="submission" element={gatedSubmissionRoute("/me", <SubmissionPage />)} />
+            <Route path="ai-review" element={gatedAiReviewRoute("/me", <ParticipantAiReviewPage />)} />
             <Route
               path="results"
               element={gatedRankingRoute("/me", <ResultsPortalPage participantView />)}
@@ -383,6 +405,7 @@ export function AppRouter() {
         >
           <Route path="dashboard" element={routeElement(<JudgeDashboardPage />)} />
           <Route path="scoring" element={gatedScoringRoute("/judge/dashboard", <JudgeScoringPage />)} />
+          <Route path="ai-review" element={gatedAiReviewRoute("/judge/dashboard", <JudgeAiReviewPage />)} />
           <Route
             path="notifications"
             element={gatedNotificationRoute("/judge/dashboard", <JudgeNotificationsPage />)}
@@ -397,6 +420,7 @@ export function AppRouter() {
           element={<WorkspaceShell navItems={mentorNav} title="Mentor" subtitle="Theo dõi đội phụ trách" />}
         >
           <Route path="dashboard" element={routeElement(<MentorDashboardPage />)} />
+          <Route path="ai-review" element={gatedAiReviewRoute("/mentor/dashboard", <MentorAiReviewPage />)} />
           <Route path="profile" element={routeElement(<ProfilePage />)} />
         </Route>
       </Route>

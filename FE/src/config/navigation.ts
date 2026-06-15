@@ -1,5 +1,6 @@
 import {
   enableAcademicTerms,
+  enableAiReview,
   enableAnnouncements,
   enableGithubProvisioning,
   enableNotifications,
@@ -120,12 +121,14 @@ export const organizerNav: NavItem[] = [
 export const judgeNav: NavItem[] = [
   { to: "/judge/dashboard", label: "Đội được chấm", icon: "assignment", group: "Chấm điểm" },
   { to: "/judge/scoring", label: "Phiếu chấm", icon: "gavel", group: "Chấm điểm" },
+  { to: "/judge/ai-review", label: "Đánh giá AI", icon: "psychology", group: "Chấm điểm", hidden: !enableAiReview },
   { to: "/judge/notifications", label: "Thông báo", icon: "notifications", group: "Tài khoản" },
   { to: "/judge/profile", label: "Hồ sơ", icon: "person", group: "Tài khoản" }
 ];
 
 export const mentorNav: NavItem[] = [
   { to: "/mentor/dashboard", label: "Đội phụ trách", icon: "groups", group: "Theo dõi" },
+  { to: "/mentor/ai-review", label: "Đánh giá AI", icon: "psychology", group: "Theo dõi", hidden: !enableAiReview },
   { to: "/mentor/profile", label: "Hồ sơ", icon: "person", group: "Tài khoản" }
 ];
 
@@ -136,6 +139,7 @@ export const participantWorkspaceNav: NavItem[] = [
   { to: "/me/board", label: "Bảng thi", icon: "grid_view", group: "Thi" },
   { to: "/me/problem", label: "Đề thi", icon: "code", group: "Thi" },
   { to: "/me/submission", label: "Bài nộp", icon: "upload", group: "Thi" },
+  { to: "/me/ai-review", label: "Đánh giá AI", icon: "psychology", group: "Tham khảo", hidden: !enableAiReview },
   { to: "/me/results", label: "Kết quả", icon: "leaderboard", group: "Kết quả" },
   { to: "/profile", label: "Hồ sơ", icon: "person", group: "Tài khoản" },
   { to: "/me/notifications", label: "Thông báo", icon: "notifications", group: "Tài khoản" }

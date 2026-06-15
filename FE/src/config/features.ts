@@ -26,6 +26,9 @@ export const enableStaffInvitations = import.meta.env.VITE_ENABLE_STAFF_INVITATI
 export const enableGithubProvisioning =
   import.meta.env.VITE_ENABLE_GITHUB_PROVISIONING === "true";
 
+/** Đánh giá AI repository — bật bằng VITE_ENABLE_AI_REVIEW=true */
+export const enableAiReview = import.meta.env.VITE_ENABLE_AI_REVIEW === "true";
+
 /** Quản lý học kỳ — tắt bằng VITE_ENABLE_ACADEMIC_TERMS=false */
 export const enableAcademicTerms = import.meta.env.VITE_ENABLE_ACADEMIC_TERMS !== "false";
 

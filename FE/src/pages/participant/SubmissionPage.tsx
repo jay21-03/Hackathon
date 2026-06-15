@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
@@ -15,7 +16,7 @@ import { useMySubmission } from "../../hooks/useMySubmission";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { useParticipantTeamGuard } from "../../hooks/useParticipantTeamGuard";
 import { ParticipantTeamBlocked } from "../../components/participant/ParticipantTeamBlocked";
-import { enableGithubProvisioning } from "../../config/features";
+import { enableGithubProvisioning, enableAiReview } from "../../config/features";
 import { queryKeys } from "../../lib/queryKeys";
 import {
   ACCESS_STATUS_LABELS,
@@ -441,6 +442,15 @@ export function SubmissionPage() {
             <p className="mt-xs font-body-sm text-on-surface-variant">
               Ban tổ chức cấp repository GitHub khi mở đề. Bạn push code trong thời gian mở — hệ thống tự chốt
               «đã nộp» khi hết giờ đóng đề, không cần bấm nút xác nhận.
+              {enableAiReview ? (
+                <>
+                  {" "}
+                  <Link to="/me/ai-review" className="text-primary underline-offset-2 hover:underline">
+                    Xem đánh giá AI
+                  </Link>{" "}
+                  (tham khảo, cập nhật ~5 phút/lần).
+                </>
+              ) : null}
             </p>
             <dl className="mt-md grid gap-md sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border border-outline-variant/60 bg-surface px-3 py-2">
