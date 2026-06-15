@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { getAuthSession, isAuthenticated, setAuthSession } from "../../auth/authSession";
 import { fetchCurrentUser } from "../../services/userService";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
+import { isStaffInvitationActionPath } from "../../utils/staffInvitationPaths";
 
 function isStaffRole(roles: string[] | undefined): boolean {
   const normalized = (roles ?? []).map((role) => role.toUpperCase());
@@ -57,7 +58,7 @@ export function AccountApprovalGate({ children }: AccountApprovalGateProps) {
     return <ModuleSkeleton rows={4} />;
   }
 
-  if (pending) {
+  if (pending && !isStaffInvitationActionPath(location.pathname)) {
     return (
       <Navigate
         to="/login/pending-approval"

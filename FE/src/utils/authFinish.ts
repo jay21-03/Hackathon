@@ -11,6 +11,7 @@ import { fetchPublicEvents } from "../services/eventsApi";
 import { fetchMyTeams } from "../services/registrationService";
 import { fetchCurrentUser } from "../services/userService";
 import { setStoredActiveEventId } from "../hooks/useActiveEvent";
+import { isStaffInvitationActionPath } from "./staffInvitationPaths";
 
 async function resolveParticipantHome(): Promise<string> {
   try {
@@ -53,7 +54,8 @@ export async function finishAuthSession(result: AuthResponse, options?: { from?:
   const isStaff = staffRoles.some((role) =>
     role === "ORGANIZER" || role === "MENTOR" || role === "JUDGE"
   );
-  if (!isStaff && me.status === "PENDING_APPROVAL") {
+  const returningToStaffInvite = isStaffInvitationActionPath(options?.from);
+  if (!isStaff && me.status === "PENDING_APPROVAL" && !returningToStaffInvite) {
     window.location.href = "/login/pending-approval";
     return;
   }

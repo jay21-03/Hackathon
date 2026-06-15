@@ -27,6 +27,7 @@ import { fetchPublicEvents } from "../../services/eventsApi";
 import { fetchMyTeams } from "../../services/registrationService";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
+import { isStaffInvitationActionPath } from "../../utils/staffInvitationPaths";
 
 async function resolveParticipantHome(): Promise<string> {
   try {
@@ -153,7 +154,7 @@ export function CompleteProfilePage() {
         profileCompleted: updated.profileCompleted !== false
       });
 
-      if (updated.status === "PENDING_APPROVAL") {
+      if (updated.status === "PENDING_APPROVAL" && !isStaffInvitationActionPath(redirectTarget)) {
         window.location.href = "/login/pending-approval";
         return;
       }
