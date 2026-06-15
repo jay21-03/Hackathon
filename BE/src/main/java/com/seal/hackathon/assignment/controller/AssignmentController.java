@@ -73,5 +73,10 @@ public class AssignmentController {
     public ApiResponse<List<AssignmentResponse>> myJudgeAssignments() {
         return ApiResponse.ok(boardAssignmentService.listJudgeAssignmentsForCurrentUser());
     }
+
+    @GetMapping("/judges/boards/{boardId}/teams")
+    public ApiResponse<List<BoardTeamResponse>> judgeBoardTeams(@PathVariable Long boardId) {
+        return ApiResponse.ok(boardAssignmentService.listTeamsForJudge(boardId));
+    }
 }
 

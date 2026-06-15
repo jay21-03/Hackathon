@@ -87,7 +87,7 @@ public class ContestManagementService {
 
     private final AuditLogWriter auditLogWriter;
 
-    private static final int FIXED_MIN_TEAM_SIZE = 1;
+    private static final int FIXED_MIN_TEAM_SIZE = 3;
     private static final int FIXED_MAX_TEAM_SIZE = 5;
 
     private final EventRepository eventRepository;

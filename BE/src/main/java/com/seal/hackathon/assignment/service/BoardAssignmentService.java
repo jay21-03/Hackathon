@@ -141,14 +141,18 @@ public class BoardAssignmentService {
     }
 
     @Transactional(readOnly = true)
-    public List<BoardTeamResponse> listTeamsForMentor(Long boardId) {
+    public List<BoardTeamResponse> listTeamsForJudge(Long boardId) {
         CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
         if (principal == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
         }
-        if (!mentorAssignmentRepository.existsByBoardIdAndMentorId(boardId, principal.getUserId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "MENTOR_NOT_ASSIGNED");
+        if (!judgeAssignmentRepository.existsByBoardIdAndJudgeId(boardId, principal.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "JUDGE_NOT_ASSIGNED");
         }
+        return listTeamsOnBoard(boardId);
+    }
+
+    private List<BoardTeamResponse> listTeamsOnBoard(Long boardId) {
         return boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(boardId).stream()
                 .filter(slot -> slot.getTeamId() != null)
                 .map(slot -> {
@@ -162,6 +166,18 @@ public class BoardAssignmentService {
                             .build();
                 })
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<BoardTeamResponse> listTeamsForMentor(Long boardId) {
+        CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
+        if (principal == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+        }
+        if (!mentorAssignmentRepository.existsByBoardIdAndMentorId(boardId, principal.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "MENTOR_NOT_ASSIGNED");
+        }
+        return listTeamsOnBoard(boardId);
     }
 
     @Transactional
