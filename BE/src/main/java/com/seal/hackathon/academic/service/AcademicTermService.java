@@ -215,6 +215,30 @@ public class AcademicTermService {
     }
 
     @Transactional(readOnly = true)
+    public TermScopedListResponse<UserSummaryResponse> listMentorCandidatesByTerm(
+            Long termId, Integer page, Integer size) {
+        organizerAuthorizationService.requireOrganizer();
+        AcademicTerm term = getTermEntity(termId);
+        List<UserSummaryResponse> all = academicTermQueryRepository.findMentorCandidateIdsByTermId(termId).stream()
+                .map(this::toUserSummary)
+                .sorted(Comparator.comparing(UserSummaryResponse::getFullName, Comparator.nullsLast(String::compareTo)))
+                .toList();
+        return buildScopedList(term, all, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public TermScopedListResponse<UserSummaryResponse> listJudgeCandidatesByTerm(
+            Long termId, Integer page, Integer size) {
+        organizerAuthorizationService.requireOrganizer();
+        AcademicTerm term = getTermEntity(termId);
+        List<UserSummaryResponse> all = academicTermQueryRepository.findJudgeCandidateIdsByTermId(termId).stream()
+                .map(this::toUserSummary)
+                .sorted(Comparator.comparing(UserSummaryResponse::getFullName, Comparator.nullsLast(String::compareTo)))
+                .toList();
+        return buildScopedList(term, all, page, size);
+    }
+
+    @Transactional(readOnly = true)
     public TermScopedListResponse<TermRankingResponse> listRankingsByTerm(
             Long termId, Integer page, Integer size) {
         organizerAuthorizationService.requireOrganizer();

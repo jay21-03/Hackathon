@@ -99,6 +99,22 @@ public class AdminAcademicTermController {
         return ApiResponse.ok(academicTermService.listJudgesByTerm(termId, page, size));
     }
 
+    @GetMapping("/{termId}/mentors/candidates")
+    public ApiResponse<TermScopedListResponse<UserSummaryResponse>> listMentorCandidates(
+            @PathVariable Long termId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.ok(academicTermService.listMentorCandidatesByTerm(termId, page, size));
+    }
+
+    @GetMapping("/{termId}/judges/candidates")
+    public ApiResponse<TermScopedListResponse<UserSummaryResponse>> listJudgeCandidates(
+            @PathVariable Long termId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.ok(academicTermService.listJudgeCandidatesByTerm(termId, page, size));
+    }
+
     @GetMapping("/{termId}/ranking")
     public ApiResponse<TermScopedListResponse<TermRankingResponse>> listRankings(
             @PathVariable Long termId,

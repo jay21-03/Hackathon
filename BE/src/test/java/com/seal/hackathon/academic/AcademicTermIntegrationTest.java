@@ -443,5 +443,12 @@ class AcademicTermIntegrationTest {
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.totalElements").value(1))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].email").value("judge-term@example.com"));
+
+        mockMvc.perform(MockMvcRequestBuilders.get(
+                        "/api/v1/admin/academic-terms/" + springTerm.getId() + "/judges/candidates")
+                        .header("Authorization", "Bearer " + organizerJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.totalElements").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].email").value("judge-term@example.com"));
     }
 }

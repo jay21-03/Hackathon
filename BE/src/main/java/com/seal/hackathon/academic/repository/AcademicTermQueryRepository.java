@@ -53,6 +53,52 @@ public interface AcademicTermQueryRepository extends JpaRepository<Team, Long> {
             """, nativeQuery = true)
     List<Long> findJudgeIdsByTermId(@Param("termId") Long termId);
 
+    @Query(value = """
+            SELECT DISTINCT combined.user_id FROM (
+                SELECT ma.mentor_id AS user_id
+                FROM mentor_assignments ma
+                JOIN boards b ON b.id = ma.board_id
+                JOIN rounds r ON r.id = b.round_id
+                JOIN events e ON e.id = r.event_id
+                WHERE e.academic_term_id = :termId
+                UNION
+                SELECT u.id AS user_id
+                FROM staff_invitations si
+                JOIN boards b ON b.id = si.board_id
+                JOIN rounds r ON r.id = b.round_id
+                JOIN events e ON e.id = r.event_id
+                JOIN users u ON LOWER(u.email) = LOWER(si.email)
+                WHERE e.academic_term_id = :termId
+                  AND si.role = 'MENTOR'
+                  AND si.status IN ('INVITED', 'ACCEPTED')
+            ) combined
+            ORDER BY combined.user_id
+            """, nativeQuery = true)
+    List<Long> findMentorCandidateIdsByTermId(@Param("termId") Long termId);
+
+    @Query(value = """
+            SELECT DISTINCT combined.user_id FROM (
+                SELECT ja.judge_id AS user_id
+                FROM judge_assignments ja
+                JOIN boards b ON b.id = ja.board_id
+                JOIN rounds r ON r.id = b.round_id
+                JOIN events e ON e.id = r.event_id
+                WHERE e.academic_term_id = :termId
+                UNION
+                SELECT u.id AS user_id
+                FROM staff_invitations si
+                JOIN boards b ON b.id = si.board_id
+                JOIN rounds r ON r.id = b.round_id
+                JOIN events e ON e.id = r.event_id
+                JOIN users u ON LOWER(u.email) = LOWER(si.email)
+                WHERE e.academic_term_id = :termId
+                  AND si.role = 'JUDGE'
+                  AND si.status IN ('INVITED', 'ACCEPTED')
+            ) combined
+            ORDER BY combined.user_id
+            """, nativeQuery = true)
+    List<Long> findJudgeCandidateIdsByTermId(@Param("termId") Long termId);
+
     @Query("""
             SELECT rr FROM RankingResult rr
             JOIN Board b ON b.id = rr.boardId
