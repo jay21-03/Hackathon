@@ -75,6 +75,9 @@ app:
     scheduler-initial-delay-ms: ${GITHUB_SCHEDULER_INITIAL_DELAY_MS:60000}
     scheduler-poll-ms: ${GITHUB_SCHEDULER_POLL_MS:180000}
     webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
+    # Public URL GitHub calls on push. Falls back to MAIL_API_BASE_URL + /api/v1/webhooks/github.
+    webhook-url: ${GITHUB_WEBHOOK_URL:}
+    webhook-auto-register: ${GITHUB_WEBHOOK_AUTO_REGISTER:true}
   file-storage-path: ${FILE_STORAGE_PATH:./storage}
   mail:
     enabled: ${MAIL_ENABLED:false}
@@ -86,3 +89,16 @@ app:
     reminder-enabled: ${INVITATION_REMINDER_ENABLED:true}
     reminder-hours-before-expiry: ${INVITATION_REMINDER_HOURS:24}
     reminder-poll-ms: ${INVITATION_REMINDER_POLL_MS:3600000}
+  ai:
+    review:
+      scheduler-enabled: ${AI_REVIEW_SCHEDULER_ENABLED:false}
+      interval-minutes: ${AI_REVIEW_INTERVAL_MINUTES:5}
+      initial-delay-ms: ${AI_REVIEW_INITIAL_DELAY_MS:120000}
+      poll-ms: ${AI_REVIEW_POLL_MS:300000}
+      api-key: ${AI_API_KEY:}
+      model: ${AI_REVIEW_MODEL:gemini-2.0-flash}
+      github-issues-enabled: ${AI_REVIEW_GITHUB_ISSUES_ENABLED:true}
+      webhook-enabled: ${AI_REVIEW_WEBHOOK_ENABLED:true}
+      webhook-debounce-ms: ${AI_REVIEW_WEBHOOK_DEBOUNCE_MS:60000}
+      notifications-enabled: ${AI_REVIEW_NOTIFICATIONS_ENABLED:true}
+      manual-cooldown-seconds: ${AI_REVIEW_MANUAL_COOLDOWN_SECONDS:30}

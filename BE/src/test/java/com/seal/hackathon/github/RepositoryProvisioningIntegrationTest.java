@@ -86,6 +86,8 @@ class RepositoryProvisioningIntegrationTest {
         registry.add("app.github.default-branch", () -> "main");
         registry.add("app.github.pat", () -> "test-pat-token");
         registry.add("app.github.scheduler-enabled", () -> "false");
+        registry.add("app.github.webhook-secret", () -> "test-github-webhook-secret");
+        registry.add("app.github.webhook-url", () -> "https://api.example.com/api/v1/webhooks/github");
     }
 
     @TestConfiguration
@@ -308,6 +310,11 @@ class RepositoryProvisioningIntegrationTest {
 
         assertThat(fakeGitHubRepositoryClient.collaboratorPermission("seal-org", repoName(team.getId(), releasedProblem.getId()), "seal-participant"))
                 .isEqualTo("push");
+        assertThat(fakeGitHubRepositoryClient.hasPushWebhook(
+                        "seal-org",
+                        repoName(team.getId(), releasedProblem.getId()),
+                        "https://api.example.com/api/v1/webhooks/github"))
+                .isTrue();
     }
 
     @Test

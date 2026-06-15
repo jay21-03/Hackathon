@@ -3,6 +3,7 @@ package com.seal.hackathon.github.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -171,6 +172,180 @@ public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
     }
 
     @Override
+    public List<GitHubCommitInfo> listCommitsSince(
+            String owner, String repo, String branch, OffsetDateTime since, int perPage) {
+        int limit = Math.min(Math.max(perPage, 1), 100);
+        try {
+            List<Map<String, Object>> response = execute(() -> restClient.get()
+                    .uri(uriBuilder -> {
+                        var builder = uriBuilder
+                                .path("/repos/{owner}/{repo}/commits")
+                                .queryParam("sha", branch)
+                                .queryParam("per_page", limit);
+                        if (since != null) {
+                            builder.queryParam("since", since.toString());
+                        }
+                        return builder.build(owner, repo);
+                    })
+                    .headers(this::authorize)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {
+                    }));
+            if (response == null || response.isEmpty()) {
+                return List.of();
+            }
+            return response.stream().map(this::toCommitInfo).toList();
+        } catch (GitHubClientException ex) {
+            if (ex.getStatusCode() == 404 || ex.getStatusCode() == 409) {
+                return List.of();
+            }
+            throw ex;
+        }
+    }
+
+    @Override
+    public Optional<GitHubCommitDetail> getCommitDetail(String owner, String repo, String sha) {
+        try {
+            Map<String, Object> response = execute(() -> restClient.get()
+                    .uri("/repos/{owner}/{repo}/commits/{sha}", owner, repo, sha)
+                    .headers(headers -> {
+                        authorize(headers);
+                        headers.set("Accept", "application/vnd.github+json");
+                    })
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {
+                    }));
+            return Optional.of(toCommitDetail(response));
+        } catch (GitHubClientException ex) {
+            if (ex.getStatusCode() == 404) {
+                return Optional.empty();
+            }
+            throw ex;
+        }
+    }
+
+    @Override
+    public void ensurePushWebhook(String owner, String repo, String payloadUrl, String secret) {
+        String normalizedUrl = normalizeWebhookUrl(payloadUrl);
+        if (!StringUtils.hasText(normalizedUrl) || !StringUtils.hasText(secret)) {
+            throw new IllegalArgumentException("Webhook payload URL and secret are required");
+        }
+        if (hasPushWebhook(owner, repo, normalizedUrl)) {
+            return;
+        }
+
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("url", normalizedUrl);
+        config.put("content_type", "json");
+        config.put("secret", secret.trim());
+        config.put("insecure_ssl", "0");
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("name", "web");
+        body.put("active", true);
+        body.put("events", List.of("push"));
+        body.put("config", config);
+
+        execute(() -> restClient.post()
+                .uri("/repos/{owner}/{repo}/hooks", owner, repo)
+                .headers(this::authorize)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .toBodilessEntity());
+    }
+
+    private boolean hasPushWebhook(String owner, String repo, String payloadUrl) {
+        List<Map<String, Object>> hooks = execute(() -> restClient.get()
+                .uri("/repos/{owner}/{repo}/hooks", owner, repo)
+                .headers(this::authorize)
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {
+                }));
+        if (hooks == null || hooks.isEmpty()) {
+            return false;
+        }
+        for (Map<String, Object> hook : hooks) {
+            if (!hookEventsIncludePush(hook)) {
+                continue;
+            }
+            String existingUrl = webhookConfigUrl(hook);
+            if (urlsMatch(existingUrl, payloadUrl)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean hookEventsIncludePush(Map<String, Object> hook) {
+        Object events = hook.get("events");
+        if (!(events instanceof List<?> eventList)) {
+            return false;
+        }
+        return eventList.stream().anyMatch(event -> "push".equalsIgnoreCase(String.valueOf(event)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private String webhookConfigUrl(Map<String, Object> hook) {
+        Object config = hook.get("config");
+        if (!(config instanceof Map<?, ?> rawConfig)) {
+            return null;
+        }
+        return asString(((Map<String, Object>) rawConfig).get("url"));
+    }
+
+    private String normalizeWebhookUrl(String payloadUrl) {
+        if (!StringUtils.hasText(payloadUrl)) {
+            return null;
+        }
+        String trimmed = payloadUrl.trim();
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
+    }
+
+    private boolean urlsMatch(String left, String right) {
+        String normalizedLeft = normalizeWebhookUrl(left);
+        String normalizedRight = normalizeWebhookUrl(right);
+        if (!StringUtils.hasText(normalizedLeft) || !StringUtils.hasText(normalizedRight)) {
+            return false;
+        }
+        return normalizedLeft.equalsIgnoreCase(normalizedRight);
+    }
+
+    @Override
+    public GitHubIssueInfo createIssue(String owner, String repo, String title, String bodyMarkdown) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("title", title);
+        body.put("body", bodyMarkdown);
+        Map<String, Object> response = execute(() -> restClient.post()
+                .uri("/repos/{owner}/{repo}/issues", owner, repo)
+                .headers(this::authorize)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {
+                }));
+        return toIssueInfo(response);
+    }
+
+    private GitHubIssueInfo toIssueInfo(Map<String, Object> response) {
+        if (response == null) {
+            throw new GitHubClientException(502, "GitHub issue response was empty", null);
+        }
+        Object number = response.get("number");
+        Object htmlUrl = response.get("html_url");
+        Object title = response.get("title");
+        return GitHubIssueInfo.builder()
+                .number(number instanceof Number num ? num.longValue() : null)
+                .htmlUrl(htmlUrl instanceof String url ? url : null)
+                .title(title instanceof String text ? text : null)
+                .build();
+    }
+
+    @Override
     public Optional<GitHubRepositoryInfo> getRepository(String owner, String repo) {
         try {
             Map<String, Object> response = execute(() -> restClient.get()
@@ -225,6 +400,59 @@ public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
                 .committedAt(parseOffsetDateTime(asString(author.get("date"))))
                 .htmlUrl(asString(response.get("html_url")))
                 .build();
+    }
+
+    @SuppressWarnings("unchecked")
+    private GitHubCommitDetail toCommitDetail(Map<String, Object> response) {
+        if (response == null) {
+            throw new GitHubClientException(502, "GitHub API returned an empty commit response");
+        }
+        Map<String, Object> commit = response.get("commit") instanceof Map<?, ?> rawCommit
+                ? (Map<String, Object>) rawCommit
+                : Map.of();
+        Map<String, Object> author = commit.get("author") instanceof Map<?, ?> rawAuthor
+                ? (Map<String, Object>) rawAuthor
+                : Map.of();
+        Map<String, Object> stats = response.get("stats") instanceof Map<?, ?> rawStats
+                ? (Map<String, Object>) rawStats
+                : Map.of();
+
+        List<GitHubCommitDetail.GitHubCommitFileChange> files = new ArrayList<>();
+        Object rawFiles = response.get("files");
+        if (rawFiles instanceof List<?> fileList) {
+            for (Object item : fileList) {
+                if (!(item instanceof Map<?, ?> rawFile)) {
+                    continue;
+                }
+                Map<String, Object> file = (Map<String, Object>) rawFile;
+                files.add(GitHubCommitDetail.GitHubCommitFileChange.builder()
+                        .filename(asString(file.get("filename")))
+                        .status(asString(file.get("status")))
+                        .additions(asInt(file.get("additions")))
+                        .deletions(asInt(file.get("deletions")))
+                        .patch(asString(file.get("patch")))
+                        .build());
+            }
+        }
+
+        return GitHubCommitDetail.builder()
+                .sha(asString(response.get("sha")))
+                .message(asString(commit.get("message")))
+                .authorName(asString(author.get("name")))
+                .authorEmail(asString(author.get("email")))
+                .committedAt(parseOffsetDateTime(asString(author.get("date"))))
+                .htmlUrl(asString(response.get("html_url")))
+                .additions(asInt(stats.get("additions")))
+                .deletions(asInt(stats.get("deletions")))
+                .files(files)
+                .build();
+    }
+
+    private int asInt(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        return 0;
     }
 
     private OffsetDateTime parseOffsetDateTime(String value) {

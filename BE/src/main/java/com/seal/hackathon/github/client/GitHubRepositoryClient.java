@@ -1,5 +1,7 @@
 package com.seal.hackathon.github.client;
 
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface GitHubRepositoryClient {
@@ -23,4 +25,20 @@ public interface GitHubRepositoryClient {
 
     /** Latest commit on the given branch (empty repository returns empty). */
     Optional<GitHubCommitInfo> getLatestCommit(String owner, String repo, String branch);
+
+    /** Commits on a branch since the given time (newest first, capped by perPage). */
+    List<GitHubCommitInfo> listCommitsSince(
+            String owner, String repo, String branch, OffsetDateTime since, int perPage);
+
+    /** Full commit payload including per-file patches when GitHub returns them. */
+    Optional<GitHubCommitDetail> getCommitDetail(String owner, String repo, String sha);
+
+    /** Creates a repository issue (requires token with issues write permission). */
+    GitHubIssueInfo createIssue(String owner, String repo, String title, String bodyMarkdown);
+
+    /**
+     * Ensures a push webhook exists for the repository (idempotent).
+     * Requires admin access on the repository and {@code admin:repo_hook} on the token.
+     */
+    void ensurePushWebhook(String owner, String repo, String payloadUrl, String secret);
 }

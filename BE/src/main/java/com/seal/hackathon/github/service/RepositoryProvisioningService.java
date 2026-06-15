@@ -69,7 +69,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class RepositoryProvisioningService {
 
-    private static final int DEFAULT_REVIEW_INTERVAL_MINUTES = 30;
+    private static final int DEFAULT_REVIEW_INTERVAL_MINUTES = 5;
 
     private final ProblemRepositoryTemplateRepository templateRepository;
     private final TeamRepositoryEntityRepository teamRepositoryEntityRepository;
@@ -100,6 +100,21 @@ public class RepositoryProvisioningService {
 
     @Value("${app.github.default-branch:main}")
     private String configuredDefaultBranch;
+
+    @Value("${app.github.webhook-url:}")
+    private String configuredWebhookUrl;
+
+    @Value("${app.mail.api-base-url:http://localhost:8085}")
+    private String mailApiBaseUrl;
+
+    @Value("${app.github.webhook-secret:}")
+    private String webhookSecret;
+
+    @Value("${app.github.webhook-auto-register:true}")
+    private boolean webhookAutoRegister;
+
+    @Value("${app.ai.review.webhook-enabled:true}")
+    private boolean webhookReviewEnabled;
 
     @Transactional
     public RepoTemplateResponse saveProblemTemplate(
@@ -787,12 +802,14 @@ public class RepositoryProvisioningService {
             for (String username : usernames) {
                 githubRepositoryClient.addCollaborator(githubOrg.trim(), repoName, username, "push");
             }
+            registerPushWebhookIfConfigured(githubOrg.trim(), repoName);
             repository.setGithubRepoId(githubRepository.getId());
             repository.setRepositoryUrl(githubRepository.getHtmlUrl());
             repository.setProvisionStatus(RepositoryProvisionStatus.CREATED);
             repository.setAccessStatus(RepositoryAccessStatus.OPEN);
             repository.setProvisionedAt(now);
             repository.setOpenedAt(now);
+            repository.setNextReviewAt(now);
             repository.setStatus(SubmissionStatus.DRAFT);
             repository.setSubmittedAt(null);
             repository.setLastError(null);
@@ -1126,6 +1143,54 @@ public class RepositoryProvisioningService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
         }
         return value.trim();
+    }
+
+    private void registerPushWebhookIfConfigured(String owner, String repo) {
+        if (!webhookAutoRegister || !webhookReviewEnabled) {
+            return;
+        }
+        String payloadUrl = resolveWebhookPayloadUrl();
+        if (!StringUtils.hasText(payloadUrl) || !StringUtils.hasText(webhookSecret)) {
+            log.debug(
+                    "Skipping GitHub push webhook for {}/{}: configure GITHUB_WEBHOOK_SECRET and GITHUB_WEBHOOK_URL (or MAIL_API_BASE_URL)",
+                    owner,
+                    repo);
+            return;
+        }
+        try {
+            githubRepositoryClient.ensurePushWebhook(owner, repo, payloadUrl, webhookSecret.trim());
+            log.info("Ensured GitHub push webhook for {}/{} -> {}", owner, repo, payloadUrl);
+        } catch (GitHubClientException ex) {
+            log.warn(
+                    "Failed to register GitHub push webhook for {}/{}: {}",
+                    owner,
+                    repo,
+                    sanitizeError(ex.getMessage()));
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "Failed to register GitHub push webhook for {}/{}: {}",
+                    owner,
+                    repo,
+                    sanitizeError(ex.getMessage()));
+        }
+    }
+
+    private String resolveWebhookPayloadUrl() {
+        if (StringUtils.hasText(configuredWebhookUrl)) {
+            return stripTrailingSlash(configuredWebhookUrl.trim());
+        }
+        if (!StringUtils.hasText(mailApiBaseUrl)) {
+            return null;
+        }
+        return stripTrailingSlash(mailApiBaseUrl.trim()) + "/api/v1/webhooks/github";
+    }
+
+    private String stripTrailingSlash(String value) {
+        String trimmed = value;
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
     private String sanitizeError(String value) {

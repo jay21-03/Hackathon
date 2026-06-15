@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.aireview.entity.TeamRepository;
 import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
+import com.seal.hackathon.aireview.service.AiReviewAsyncTrigger;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -26,10 +27,14 @@ public class GitHubWebhookService {
 
     private final GitHubWebhookSignatureVerifier signatureVerifier;
     private final TeamRepositoryEntityRepository teamRepositoryEntityRepository;
+    private final AiReviewAsyncTrigger aiReviewAsyncTrigger;
     private final ObjectMapper objectMapper;
 
     @Value("${app.github.webhook-secret:}")
     private String webhookSecret;
+
+    @Value("${app.ai.review.webhook-enabled:true}")
+    private boolean webhookReviewEnabled;
 
     @Transactional
     public void handleWebhook(String eventType, String payload, String signatureHeader) {
@@ -73,8 +78,16 @@ public class GitHubWebhookService {
         for (TeamRepository repositoryEntity : repositories) {
             repositoryEntity.setLastPushAt(pushedAt);
             repositoryEntity.setUpdatedAt(now);
+            if (webhookReviewEnabled) {
+                repositoryEntity.setNextReviewAt(now);
+            }
         }
         teamRepositoryEntityRepository.saveAll(repositories);
+        if (webhookReviewEnabled) {
+            for (TeamRepository repositoryEntity : repositories) {
+                aiReviewAsyncTrigger.scheduleAfterPush(repositoryEntity.getId());
+            }
+        }
         log.info(
                 "Recorded GitHub push at {} for {}/{} ({} repo record(s))",
                 pushedAt,

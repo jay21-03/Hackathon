@@ -2,13 +2,28 @@ package com.seal.hackathon.aireview.repository;
 
 import com.seal.hackathon.aireview.entity.TeamRepository;
 import com.seal.hackathon.common.enums.RepositoryAccessStatus;
-import java.time.LocalDateTime;
+import com.seal.hackathon.common.enums.RepositoryProvisionStatus;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface TeamRepositoryEntityRepository extends JpaRepository<TeamRepository, Long> {
-    List<TeamRepository> findByNextReviewAtLessThanEqual(LocalDateTime now);
+    @Deprecated
+    List<TeamRepository> findByNextReviewAtLessThanEqual(java.time.LocalDateTime now);
+
+    @Query("""
+            SELECT tr FROM TeamRepository tr
+            WHERE tr.provisionStatus = :provisionStatus
+              AND tr.githubOwner IS NOT NULL
+              AND tr.githubRepoName IS NOT NULL
+              AND (tr.nextReviewAt IS NULL OR tr.nextReviewAt <= :now)
+            """)
+    List<TeamRepository> findDueForAiReview(
+            @Param("now") OffsetDateTime now,
+            @Param("provisionStatus") RepositoryProvisionStatus provisionStatus);
 
     Optional<TeamRepository> findFirstByTeamIdAndProblemIdIsNullOrderByUpdatedAtDesc(Long teamId);
 
