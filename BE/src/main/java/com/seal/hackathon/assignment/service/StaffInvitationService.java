@@ -21,6 +21,7 @@ import com.seal.hackathon.common.security.InvitationTokenCrypto;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.enums.StaffInvitationStatus;
 import com.seal.hackathon.common.enums.SystemRole;
+import com.seal.hackathon.common.enums.UserStatus;
 import com.seal.hackathon.common.exception.BusinessException;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.Event;
@@ -234,6 +235,7 @@ public class StaffInvitationService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "STAFF_INVITE_EMAIL_MISMATCH");
         }
 
+        activateInvitedStaffUser(user, invitation.getRole());
         ensureUserRole(user.getId(), invitation.getRole());
         boardAssignmentService.completeStaffAssignment(
                 invitation.getBoardId(), user.getId(), invitation.getRole(), invitation.getCreatedBy());
@@ -356,6 +358,17 @@ public class StaffInvitationService {
                 tokenSecret, parts.boardId(), parts.invitationId(), parts.nonce(), parts.rawToken());
         if (!expectedHash.equals(invitation.getInviteTokenHash())) {
             throw new BusinessException("Invalid invitation token");
+        }
+    }
+
+    private void activateInvitedStaffUser(User user, SystemRole role) {
+        if (role != SystemRole.MENTOR && role != SystemRole.JUDGE) {
+            return;
+        }
+        if (user.getStatus() == UserStatus.PENDING_APPROVAL) {
+            user.setStatus(UserStatus.ACTIVE);
+            user.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+            userRepository.save(user);
         }
     }
 
