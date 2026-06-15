@@ -12,15 +12,23 @@ import {
   type BoardResponse,
   type RoundResponse
 } from "../services/contestApi";
-import { fetchAdminUsers, type UserSummaryResponse } from "../services/userService";
+import { type UserSummaryResponse } from "../services/userService";
 import { resolveApiError } from "../utils/apiError";
+import { useTermStaffPool } from "./useTermStaffPool";
 
 type BoardAssignments = {
   mentors: AssignmentResponse[];
   judges: AssignmentResponse[];
 };
 
-export function useAssignmentManagement(eventId: number | null) {
+type UseAssignmentManagementOptions = {
+  academicTermId?: number | null;
+};
+
+export function useAssignmentManagement(
+  eventId: number | null,
+  options?: UseAssignmentManagementOptions
+) {
   const queryClient = useQueryClient();
 
   const roundsQuery = useQuery({
@@ -42,12 +50,6 @@ export function useAssignmentManagement(eventId: number | null) {
     enabled: Boolean(eventId) && Boolean(roundsQuery.data)
   });
 
-  const usersQuery = useQuery({
-    queryKey: [...queryKeys.assignments.all, "users"],
-    queryFn: () => fetchAdminUsers({ page: 0, size: 500 }),
-    enabled: Boolean(eventId)
-  });
-
   const boardIds = (boardsQuery.data ?? []).map((board) => board.id);
 
   const assignmentsQuery = useQuery({
@@ -67,26 +69,42 @@ export function useAssignmentManagement(eventId: number | null) {
     enabled: boardIds.length > 0
   });
 
-  const userItems = usersQuery.data?.items ?? [];
-  const mentors = useMemo(
-    () => userItems.filter((user: UserSummaryResponse) => user.roles.includes("MENTOR")),
-    [userItems]
+  const byBoard = assignmentsQuery.data ?? {};
+  const allAssignedMentorIds = useMemo(
+    () =>
+      Object.values(byBoard).flatMap((entry) => entry.mentors.map((row) => row.assigneeId)),
+    [byBoard]
   );
-  const judges = useMemo(
-    () => userItems.filter((user: UserSummaryResponse) => user.roles.includes("JUDGE")),
-    [userItems]
+  const allAssignedJudgeIds = useMemo(
+    () =>
+      Object.values(byBoard).flatMap((entry) => entry.judges.map((row) => row.assigneeId)),
+    [byBoard]
   );
+
+  const staffPool = useTermStaffPool({
+    academicTermId: options?.academicTermId,
+    enabled: Boolean(eventId),
+    assignedMentorIds: allAssignedMentorIds,
+    assignedJudgeIds: allAssignedJudgeIds
+  });
+
+  const mentors = staffPool.mentors;
+  const judges = staffPool.judges;
 
   async function invalidate() {
     await queryClient.invalidateQueries({ queryKey: queryKeys.assignments.all });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.academicTerms.all });
   }
 
   const loading =
-    roundsQuery.isLoading || boardsQuery.isLoading || usersQuery.isLoading || assignmentsQuery.isLoading;
+    roundsQuery.isLoading ||
+    boardsQuery.isLoading ||
+    staffPool.loading ||
+    assignmentsQuery.isLoading;
   const error =
-    roundsQuery.error || boardsQuery.error || usersQuery.error || assignmentsQuery.error
+    roundsQuery.error || boardsQuery.error || staffPool.error || assignmentsQuery.error
       ? resolveApiError(
-          roundsQuery.error ?? boardsQuery.error ?? usersQuery.error ?? assignmentsQuery.error,
+          roundsQuery.error ?? boardsQuery.error ?? staffPool.error ?? assignmentsQuery.error,
           "Không tải được phân công."
         )
       : null;
@@ -94,10 +112,11 @@ export function useAssignmentManagement(eventId: number | null) {
   return {
     rounds: (roundsQuery.data ?? []) as RoundResponse[],
     boards: boardsQuery.data ?? [],
-    users: usersQuery.data?.items ?? ([] as UserSummaryResponse[]),
-    byBoard: assignmentsQuery.data ?? {},
+    users: [...mentors, ...judges] as UserSummaryResponse[],
+    byBoard,
     mentors,
     judges,
+    staffPoolTermScoped: staffPool.termScoped,
     loading,
     error,
     invalidate

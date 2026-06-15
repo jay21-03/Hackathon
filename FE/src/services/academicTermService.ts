@@ -212,3 +212,19 @@ export function fetchTermJudges(termId: number, page?: number, size?: number) {
     size
   );
 }
+
+export function fetchTermMentorCandidates(termId: number, page?: number, size?: number) {
+  return fetchTermScopedList<TermUserSummary>(
+    `/v1/admin/academic-terms/${termId}/mentors/candidates`,
+    page,
+    size
+  );
+}
+
+export function fetchTermJudgeCandidates(termId: number, page?: number, size?: number) {
+  return fetchTermScopedList<TermUserSummary>(
+    `/v1/admin/academic-terms/${termId}/judges/candidates`,
+    page,
+    size
+  );
+}

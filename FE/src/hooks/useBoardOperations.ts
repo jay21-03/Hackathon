@@ -6,21 +6,23 @@ import {
   fetchBoardMentors,
   type AssignmentResponse
 } from "../services/assignmentService";
-import { fetchAdminUsers, type UserSummaryResponse } from "../services/userService";
+import { type UserSummaryResponse } from "../services/userService";
 import { resolveApiError } from "../utils/apiError";
 import { useProblemManagement } from "./useProblemManagement";
+import { useTermStaffPool } from "./useTermStaffPool";
+
+type UseBoardOperationsOptions = {
+  academicTermId?: number | null;
+};
 
 /** State + loaders cho hub Vận hành bảng (đề + mentor/GK theo bảng đang chọn). */
-export function useBoardOperations(eventId: number | null) {
+export function useBoardOperations(
+  eventId: number | null,
+  options?: UseBoardOperationsOptions
+) {
   const queryClient = useQueryClient();
   const problemState = useProblemManagement(eventId);
   const { boardId } = problemState;
-
-  const usersQuery = useQuery({
-    queryKey: [...queryKeys.assignments.all, "board-ops-users"],
-    queryFn: () => fetchAdminUsers({ page: 0, size: 500 }),
-    enabled: Boolean(eventId)
-  });
 
   const boardAssignmentsQuery = useQuery({
     queryKey: [...queryKeys.assignments.all, "board-ops", boardId],
@@ -34,21 +36,35 @@ export function useBoardOperations(eventId: number | null) {
     enabled: Boolean(boardId)
   });
 
-  const userItems = usersQuery.data?.items ?? [];
-  const mentors = useMemo(
-    () => userItems.filter((user: UserSummaryResponse) => user.roles.includes("MENTOR")),
-    [userItems]
-  );
-  const judges = useMemo(
-    () => userItems.filter((user: UserSummaryResponse) => user.roles.includes("JUDGE")),
-    [userItems]
-  );
-
   const boardMentors = boardAssignmentsQuery.data?.mentors ?? [];
   const boardJudges = boardAssignmentsQuery.data?.judges ?? [];
 
+  const staffPool = useTermStaffPool({
+    academicTermId: options?.academicTermId,
+    enabled: Boolean(eventId),
+    assignedMentorIds: boardMentors.map((row) => row.assigneeId),
+    assignedJudgeIds: boardJudges.map((row) => row.assigneeId)
+  });
+
+  const mentors = staffPool.mentors;
+  const judges = staffPool.judges;
+
+  const userNameById = useMemo(() => {
+    const names = new Map<number, string>();
+    for (const user of [...mentors, ...judges] as UserSummaryResponse[]) {
+      names.set(user.id, user.fullName);
+    }
+    for (const row of [...boardMentors, ...boardJudges]) {
+      if (!names.has(row.assigneeId)) {
+        names.set(row.assigneeId, `User #${row.assigneeId}`);
+      }
+    }
+    return Object.fromEntries(names);
+  }, [boardJudges, boardMentors, judges, mentors]);
+
   const invalidateAssignments = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.assignments.all });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.academicTerms.all });
   }, [queryClient]);
 
   const invalidateAll = useCallback(async () => {
@@ -58,10 +74,10 @@ export function useBoardOperations(eventId: number | null) {
 
   const loading =
     problemState.loading ||
-    usersQuery.isLoading ||
+    staffPool.loading ||
     (Boolean(boardId) && boardAssignmentsQuery.isLoading);
 
-  const assignmentError = usersQuery.error || boardAssignmentsQuery.error;
+  const assignmentError = staffPool.error || boardAssignmentsQuery.error;
   const error =
     problemState.error ??
     (assignmentError
@@ -74,6 +90,8 @@ export function useBoardOperations(eventId: number | null) {
     judges,
     boardMentors,
     boardJudges,
+    staffPoolTermScoped: staffPool.termScoped,
+    userNameById,
     loading,
     error,
     invalidate: invalidateAll,

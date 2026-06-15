@@ -103,3 +103,10 @@ export async function fetchMentorBoardTeams(boardId: number) {
   );
   return data.data ?? [];
 }
+
+export async function fetchJudgeBoardTeams(boardId: number) {
+  const { data } = await apiClient.get<ApiResponse<MentorBoardTeam[]>>(
+    `/v1/judges/boards/${boardId}/teams`
+  );
+  return data.data ?? [];
+}

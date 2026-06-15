@@ -18,6 +18,7 @@ interface BoardStaffSectionProps {
   userNameById: Record<number, string>;
   pickValue: string;
   busy: boolean;
+  staffPoolScope?: string | null;
   onRoundChange: (roundId: number) => void;
   onBoardChange: (boardId: number) => void;
   onPickChange: (value: string) => void;
@@ -42,6 +43,7 @@ export function BoardStaffSection({
   userNameById,
   pickValue,
   busy,
+  staffPoolScope,
   onRoundChange,
   onBoardChange,
   onPickChange,
@@ -102,7 +104,14 @@ export function BoardStaffSection({
       ) : null}
 
       <div className="space-y-sm">
-        <p className="font-label-md text-on-surface">{title}</p>
+        <div className="flex flex-wrap items-center justify-between gap-sm">
+          <p className="font-label-md text-on-surface">{title}</p>
+          {staffPoolScope ? (
+            <span className="font-label-sm text-on-surface-variant">
+              Lọc theo học kỳ: {staffPoolScope}
+            </span>
+          ) : null}
+        </div>
         <p className="font-body-sm text-on-surface-variant">
           {roleLabel} được gán theo bảng — đổi bảng ở trên để phân công bảng khác.
         </p>
@@ -147,7 +156,9 @@ export function BoardStaffSection({
         </div>
         {staffPool.length === 0 ? (
           <p className="font-body-sm text-on-surface-variant">
-            Chưa có tài khoản {roleLabel.toLowerCase()} — tạo hoặc gán vai trò trong mục Người dùng.
+            {staffPoolScope
+              ? `Chưa có ${roleLabel.toLowerCase()} trong học kỳ ${staffPoolScope}. Mời qua mục Lời mời hoặc gán sau khi họ chấp nhận lời mời.`
+              : `Chưa có tài khoản ${roleLabel.toLowerCase()} — tạo hoặc gán vai trò trong mục Người dùng.`}
           </p>
         ) : null}
       </div>

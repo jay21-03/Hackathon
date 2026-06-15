@@ -11,6 +11,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { problemFormSchemaForRound } from "../../domain/schemas";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useActiveTerm } from "../../hooks/useActiveTerm";
 import { useBoardManagement } from "../../hooks/useBoardManagement";
 import { useBoardOperations } from "../../hooks/useBoardOperations";
 import { useBoardOperationsProgress } from "../../hooks/useBoardOperationsProgress";
@@ -37,7 +38,10 @@ import {
 
 export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbedProps = {}) {
   const { notify } = useToast();
-  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { eventId, event, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { termId: activeTermId, term: activeTerm } = useActiveTerm();
+  const staffTermId = event?.academicTermId ?? activeTermId;
+  const staffTermLabel = event?.academicTermName ?? event?.academicTermCode ?? activeTerm?.name ?? activeTerm?.code ?? null;
   const {
     rounds,
     selectedRoundId,
@@ -50,11 +54,13 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
     judges,
     boardMentors,
     boardJudges,
+    userNameById,
+    staffPoolTermScoped,
     loading,
     error,
     invalidate,
     invalidateAssignments
-  } = useBoardOperations(eventId);
+  } = useBoardOperations(eventId, { academicTermId: staffTermId });
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -135,10 +141,11 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
     [boards, boardId]
   );
 
-  const userNameById = useMemo(
+  const userNameByIdLegacy = useMemo(
     () => Object.fromEntries([...mentors, ...judges].map((user) => [user.id, user.fullName])),
     [judges, mentors]
   );
+  const resolvedUserNameById = Object.keys(userNameById).length ? userNameById : userNameByIdLegacy;
 
   async function handleSaveProblem() {
     if (!boardId) return;
@@ -387,7 +394,8 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
             selectedRound={selectedRound}
             assigned={boardMentors}
             staffPool={mentors}
-            userNameById={userNameById}
+            userNameById={resolvedUserNameById}
+            staffPoolScope={staffPoolTermScoped ? staffTermLabel : null}
             pickValue={mentorPick}
             busy={staffBusy}
             onRoundChange={setSelectedRoundId}
@@ -417,7 +425,8 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
             selectedRound={selectedRound}
             assigned={boardJudges}
             staffPool={judges}
-            userNameById={userNameById}
+            userNameById={resolvedUserNameById}
+            staffPoolScope={staffPoolTermScoped ? staffTermLabel : null}
             pickValue={judgePick}
             busy={staffBusy}
             onRoundChange={setSelectedRoundId}
