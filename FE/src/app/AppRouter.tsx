@@ -111,6 +111,10 @@ const RepositoryManagementPage = lazyPage(
   () => import("../pages/organizer/RepositoryManagementPage"),
   "RepositoryManagementPage"
 );
+const AiReviewManagementPage = lazyPage(
+  () => import("../pages/organizer/AiReviewManagementPage"),
+  "AiReviewManagementPage"
+);
 const ArtifactsHubPage = lazyPage(
   () => import("../pages/organizer/ArtifactsHubPage"),
   "ArtifactsHubPage"
@@ -345,6 +349,10 @@ export function AppRouter() {
           <Route
             path="repositories"
             element={<Navigate to="/organizer/artifacts-hub#artifacts-step-repositories" replace />}
+          />
+          <Route
+            path="ai-reviews"
+            element={gatedAiReviewRoute("/organizer/dashboard", <AiReviewManagementPage />)}
           />
           <Route path="boards" element={routeElement(<BoardManagementPage />)} />
           <Route path="assignments" element={routeElement(<AssignmentManagementPage />)} />

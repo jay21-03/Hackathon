@@ -112,6 +112,13 @@ export const organizerNav: NavItem[] = [
     group: "Vận hành thi",
     hidden: !enableSubmissions && !enableGithubProvisioning
   },
+  {
+    to: "/organizer/ai-reviews",
+    label: "Đánh giá AI",
+    icon: "psychology",
+    group: "Vận hành thi",
+    hidden: !enableAiReview
+  },
   { to: "/organizer/results-hub", label: "Kết quả", icon: "leaderboard", group: "Chấm & kết quả" },
   { to: "/organizer/users", label: "Người dùng", icon: "manage_accounts", group: "Quản trị" },
   { to: "/organizer/announcements", label: "Thông báo chung", icon: "notifications_active", group: "Truyền thông" },

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
@@ -35,6 +36,7 @@ import {
 } from "../../services/repositoryProvisioningService";
 import { grantRoundJudgeAccess } from "../../services/judgeRepositoryService";
 import { GITHUB_REPO_TEMPLATE_DEFAULTS } from "../../config/githubRepoDefaults";
+import { enableAiReview } from "../../config/features";
 import { repoTemplateSchema } from "../../domain/schemas";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
@@ -554,6 +556,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
                   <th className="py-2 pr-3">Truy cập</th>
                   <th className="py-2 pr-3">Lần push cuối</th>
                   <th className="py-2 pr-3">Lỗi</th>
+                  {enableAiReview ? <th className="py-2 pr-3">AI Review</th> : null}
                   <th className="py-2">Thao tác</th>
                 </tr>
               </thead>
@@ -596,6 +599,20 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
                     <td className="max-w-[200px] truncate py-3 pr-3 text-error" title={row.lastError ?? ""}>
                       {row.lastError ?? "—"}
                     </td>
+                    {enableAiReview ? (
+                      <td className="py-3 pr-3">
+                        {row.provisionStatus === "CREATED" ? (
+                          <Link
+                            to={`/organizer/ai-reviews?teamId=${row.teamId}`}
+                            className="font-body-sm text-primary underline-offset-2 hover:underline"
+                          >
+                            Rubric
+                          </Link>
+                        ) : (
+                          <span className="text-on-surface-variant">—</span>
+                        )}
+                      </td>
+                    ) : null}
                     <td className="py-3">
                       {row.provisionStatus === "FAILED" || row.accessStatus === "FAILED" ? (
                         <Button

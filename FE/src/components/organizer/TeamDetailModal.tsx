@@ -1,6 +1,8 @@
+import { Link } from "react-router-dom";
 import { Badge } from "../ui/Badge";
 import { Modal } from "../ui/Modal";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
+import { enableAiReview } from "../../config/features";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import type { TeamDetailResponse } from "../../services/registrationService";
 
@@ -54,6 +56,17 @@ export function TeamDetailModal({
               </span>
             ) : null}
           </div>
+
+          {enableAiReview && team ? (
+            <p className="font-body-sm">
+              <Link
+                to={`/organizer/ai-reviews?teamId=${team.id}`}
+                className="text-primary underline-offset-2 hover:underline"
+              >
+                Xem đánh giá AI & rubric R1/R2
+              </Link>
+            </p>
+          ) : null}
 
           {(team.members ?? []).length === 0 ? (
             <p className="font-body-sm text-on-surface-variant">Đội chưa có thành viên.</p>
