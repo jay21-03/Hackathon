@@ -6,6 +6,7 @@ import com.seal.hackathon.academic.service.AcademicTermService;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
+import com.seal.hackathon.common.util.PageRequestUtils;
 import com.seal.hackathon.common.html.ProblemHtmlSanitizer;
 import com.seal.hackathon.common.storage.FileStorageService;
 import com.seal.hackathon.common.util.ContestTimelineValidation;
@@ -87,7 +88,7 @@ public class ContestManagementService {
 
     private final AuditLogWriter auditLogWriter;
 
-    private static final int FIXED_MIN_TEAM_SIZE = 3;
+    private static final int FIXED_MIN_TEAM_SIZE = 1;
     private static final int FIXED_MAX_TEAM_SIZE = 5;
 
     private final EventRepository eventRepository;
@@ -106,6 +107,7 @@ public class ContestManagementService {
     private final AcademicTermRepository academicTermRepository;
     private final FileStorageService fileStorageService;
     private final ProblemHtmlSanitizer problemHtmlSanitizer;
+    private final EventLifecycleService eventLifecycleService;
 
     @Transactional
     public EventResponse createEvent(CreateEventRequest request) {
@@ -212,19 +214,7 @@ public class ContestManagementService {
 
     @Transactional
     public EventResponse openEventRegistration(Long eventId) {
-        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
-        if (event.getStatus() == EventStatus.CANCELLED || event.getStatus() == EventStatus.COMPLETED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot open registration for this event status");
-        }
-        OffsetDateTime now = OffsetDateTime.now();
-        if (event.getRegistrationEndAt() != null && now.isAfter(event.getRegistrationEndAt())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Registration end date has passed");
-        }
-        event.setStatus(EventStatus.REGISTRATION_OPEN);
-        event.setUpdatedAt(now);
-        return toEventResponse(eventRepository.save(event));
+        return eventLifecycleService.openRegistration(eventId);
     }
 
     @Transactional(readOnly = true)
@@ -359,8 +349,8 @@ public class ContestManagementService {
     public com.seal.hackathon.common.response.PagedResult<BoardResponse> listBoardsByRoundPaged(
             Long roundId, int page, int size) {
         organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
-        int resolvedSize = Math.min(Math.max(size, 1), 200);
-        int resolvedPage = Math.max(page, 0);
+        int resolvedSize = PageRequestUtils.resolveSize(size);
+        int resolvedPage = PageRequestUtils.resolvePage(page);
         org.springframework.data.domain.PageRequest pageable = org.springframework.data.domain.PageRequest.of(
                 resolvedPage,
                 resolvedSize,
@@ -500,6 +490,7 @@ public class ContestManagementService {
         }
 
         Round round = getRoundEntity(roundId);
+        eventLifecycleService.assertEventAllowsBoardAssignment(requireEventEntity(round.getEventId()));
         com.seal.hackathon.registration.entity.Team teamEntity =
             teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
@@ -566,6 +557,8 @@ public class ContestManagementService {
     @Transactional
     public AssignResponse unassignTeamFromSlot(Long roundId, Long slotId) {
         organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
+        Round round = getRoundEntity(roundId);
+        eventLifecycleService.assertEventAllowsBoardAssignment(requireEventEntity(round.getEventId()));
         BoardSlot slot = getBoardSlotEntity(slotId);
         if (!slot.getRoundId().equals(roundId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slot does not belong to round");
@@ -626,6 +619,8 @@ public class ContestManagementService {
     @Transactional
     public MoveResponse moveTeamBetweenSlots(Long roundId, Long fromSlotId, Long toSlotId) {
         organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
+        Round round = getRoundEntity(roundId);
+        eventLifecycleService.assertEventAllowsBoardAssignment(requireEventEntity(round.getEventId()));
         if (fromSlotId == null || toSlotId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fromSlotId and toSlotId must not be null");
         }
@@ -698,6 +693,8 @@ public class ContestManagementService {
     @Transactional
     public SwapResponse swapSlots(Long roundId, Long slotAId, Long slotBId) {
         organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
+        Round round = getRoundEntity(roundId);
+        eventLifecycleService.assertEventAllowsBoardAssignment(requireEventEntity(round.getEventId()));
         if (slotAId == null || slotBId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slotAId and slotBId must not be null");
         }
@@ -763,6 +760,7 @@ public class ContestManagementService {
         organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
         Round round = getRoundEntity(roundId);
         assertRoundAllowsAssignment(round);
+        eventLifecycleService.assertEventAllowsBoardAssignment(requireEventEntity(round.getEventId()));
 
         // fetch confirmed teams for the event and exclude already assigned in this round
         List<com.seal.hackathon.registration.entity.Team> confirmedTeams = teamRepository.findByEventIdAndStatusOrderByNameAscIdAsc(
@@ -1466,6 +1464,11 @@ public class ContestManagementService {
     private Board getBoardEntity(Long boardId) {
         return boardRepository.findById(boardId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+    }
+
+    private Event requireEventEntity(Long eventId) {
+        return eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
     }
 
     private BoardSlot getBoardSlotEntity(Long slotId) {

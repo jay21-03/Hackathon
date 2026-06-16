@@ -22,6 +22,7 @@ import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.common.idempotency.IdempotencyExecutor;
 import com.seal.hackathon.contest.service.ContestManagementService;
 import com.seal.hackathon.contest.service.ContestStructureDeletionService;
+import com.seal.hackathon.contest.service.EventLifecycleService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -53,6 +54,7 @@ public class AdminContestController {
 
     private final ContestManagementService contestManagementService;
     private final ContestStructureDeletionService contestStructureDeletionService;
+    private final EventLifecycleService eventLifecycleService;
     private final IdempotencyExecutor idempotencyExecutor;
     private final CurrentUserProvider currentUserProvider;
 
@@ -75,7 +77,27 @@ public class AdminContestController {
 
     @PostMapping("/events/{eventId}/open-registration")
     public ApiResponse<EventResponse> openEventRegistration(@PathVariable Long eventId) {
-        return ApiResponse.ok(contestManagementService.openEventRegistration(eventId));
+        return ApiResponse.ok(eventLifecycleService.openRegistration(eventId));
+    }
+
+    @PostMapping("/events/{eventId}/close-registration")
+    public ApiResponse<EventResponse> closeEventRegistration(@PathVariable Long eventId) {
+        return ApiResponse.ok(eventLifecycleService.closeRegistration(eventId));
+    }
+
+    @PostMapping("/events/{eventId}/start-competition")
+    public ApiResponse<EventResponse> startCompetition(@PathVariable Long eventId) {
+        return ApiResponse.ok(eventLifecycleService.startCompetition(eventId));
+    }
+
+    @PostMapping("/events/{eventId}/complete-competition")
+    public ApiResponse<EventResponse> completeCompetition(@PathVariable Long eventId) {
+        return ApiResponse.ok(eventLifecycleService.completeCompetition(eventId));
+    }
+
+    @PostMapping("/events/{eventId}/cancel")
+    public ApiResponse<EventResponse> cancelEvent(@PathVariable Long eventId) {
+        return ApiResponse.ok(eventLifecycleService.cancelEvent(eventId));
     }
 
     @GetMapping("/events/{eventId}/rounds")

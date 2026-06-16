@@ -102,3 +102,12 @@ app:
       webhook-debounce-ms: ${AI_REVIEW_WEBHOOK_DEBOUNCE_MS:60000}
       notifications-enabled: ${AI_REVIEW_NOTIFICATIONS_ENABLED:true}
       manual-cooldown-seconds: ${AI_REVIEW_MANUAL_COOLDOWN_SECONDS:30}
+  event:
+    lifecycle:
+      scheduler-enabled: ${EVENT_LIFECYCLE_SCHEDULER_ENABLED:true}
+      scheduler-initial-delay-ms: ${EVENT_LIFECYCLE_SCHEDULER_INITIAL_DELAY_MS:60000}
+      scheduler-poll-ms: ${EVENT_LIFECYCLE_SCHEDULER_POLL_MS:60000}
+      auto-open-registration: ${EVENT_LIFECYCLE_AUTO_OPEN:true}
+      auto-close-registration: ${EVENT_LIFECYCLE_AUTO_CLOSE:true}
+      auto-start-competition: ${EVENT_LIFECYCLE_AUTO_START:true}
+      auto-complete-competition: ${EVENT_LIFECYCLE_AUTO_COMPLETE:true}

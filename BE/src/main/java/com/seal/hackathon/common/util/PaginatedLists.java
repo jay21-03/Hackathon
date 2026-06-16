@@ -11,8 +11,8 @@ public final class PaginatedLists {
         if (page == null && size == null) {
             return all;
         }
-        int resolvedPage = page != null ? Math.max(page, 0) : 0;
-        int resolvedSize = size != null ? Math.max(size, 1) : 50;
+        int resolvedPage = page != null ? PageRequestUtils.resolvePage(page) : 0;
+        int resolvedSize = size != null ? PageRequestUtils.resolveSize(size, 500) : 50;
         int start = resolvedPage * resolvedSize;
         if (start >= all.size()) {
             return List.of();
