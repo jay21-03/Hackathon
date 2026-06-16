@@ -1,18 +1,12 @@
-export type TeamsHubStep =
-  | "#teams-step-registrations"
-  | "#teams-step-invitations-members"
-  | "#teams-step-invitations-staff"
-  | "#teams-step-invitations-templates";
+export type TeamsHubStep = "#teams-step-registrations" | "#teams-step-invitations-members";
 
 const LEGACY_HASH: Record<string, TeamsHubStep> = {
   "#teams-step-registrations": "#teams-step-registrations",
   "#registrations": "#teams-step-registrations",
   "#teams-step-invitations": "#teams-step-invitations-members",
   "#teams-step-invitations-members": "#teams-step-invitations-members",
-  "#teams-step-invitations-staff": "#teams-step-invitations-staff",
-  "#teams-step-invitations-templates": "#teams-step-invitations-templates"
+  "#teams-step-invitations-templates": "#teams-step-invitations-members"
 };
-
 export function normalizeTeamsHubStep(anchor: string): TeamsHubStep {
   return LEGACY_HASH[anchor] ?? "#teams-step-registrations";
 }

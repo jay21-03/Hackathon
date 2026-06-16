@@ -1,11 +1,10 @@
-import { useMemo, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
-import { enableStaffInvitations } from "../../config/features";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
-import { useEventTeams } from "../../hooks/useEventTeams";
+import { useEventTeamSummary } from "../../hooks/useEventTeamSummary";
 import { useTeamsHubProgress } from "../../hooks/useTeamsHubProgress";
 import { InvitationManagementPage } from "./InvitationManagementPage";
 import { RegistrationManagementPage } from "./RegistrationManagementPage";
@@ -19,22 +18,12 @@ import {
 
 export function TeamsHubPage({ embedded = false, onWizardStep }: HubEmbedProps = {}) {
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const { teams, loading: teamsLoading } = useEventTeams(eventId, { size: 500 });
+  const { summary, loading: summaryLoading } = useEventTeamSummary(eventId);
 
-  const confirmedTeams = useMemo(
-    () => teams.filter((team) => team.status === "CONFIRMED").length,
-    [teams]
-  );
-  const pendingTeams = useMemo(
-    () => teams.filter((team) => team.status === "PENDING").length,
-    [teams]
-  );
+  const confirmedTeams = summary?.confirmedCount ?? 0;
+  const pendingTeams = summary?.pendingCount ?? 0;
 
-  const { microSteps } = useTeamsHubProgress({
-    confirmedTeams,
-    pendingTeams,
-    showStaffInvitations: enableStaffInvitations
-  });
+  const { microSteps } = useTeamsHubProgress({ confirmedTeams, pendingTeams });
 
   const [activeStep, setActiveStep] = useState<TeamsHubStep | null>(null);
   const currentStep = activeStep ?? resolveTeamsHubStep(microSteps);
@@ -49,10 +38,14 @@ export function TeamsHubPage({ embedded = false, onWizardStep }: HubEmbedProps =
 
   useEffect(() => {
     const hash = window.location.hash;
+    if (hash === "#teams-step-invitations-staff") {
+      window.location.replace("/organizer/staff#staff-step-invitations");
+      return;
+    }
     if (hash) setActiveStep(normalizeTeamsHubStep(hash));
   }, []);
 
-  if (eventLoading || teamsLoading) {
+  if (eventLoading || summaryLoading) {
     return <ModuleSkeleton rows={5} variant="table" />;
   }
 
@@ -62,7 +55,7 @@ export function TeamsHubPage({ embedded = false, onWizardStep }: HubEmbedProps =
         <PageHeader
           eyebrow="Thiết lập"
           title="Đội & lời mời"
-          description="Duyệt đăng ký, theo dõi lời mời thành viên và staff — một luồng liền mạch."
+          description="Duyệt đăng ký đội và theo dõi lời mời thành viên — mời GK/mentor tại trang Giám khảo & mentor."
           actions={<OrganizerContextBar />}
         />
       ) : null}
@@ -97,12 +90,6 @@ export function TeamsHubPage({ embedded = false, onWizardStep }: HubEmbedProps =
       {currentStep === "#teams-step-registrations" ? <RegistrationManagementPage embedded /> : null}
       {currentStep === "#teams-step-invitations-members" ? (
         <InvitationManagementPage embedded forcedTab="members" />
-      ) : null}
-      {currentStep === "#teams-step-invitations-staff" && enableStaffInvitations ? (
-        <InvitationManagementPage embedded forcedTab="staff" />
-      ) : null}
-      {currentStep === "#teams-step-invitations-templates" ? (
-        <InvitationManagementPage embedded forcedTab="templates" />
       ) : null}
     </div>
   );

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { PagedResult } from "../../types/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ReasonConfirmAction } from "../../components/feedback/ReasonConfirmAction";
@@ -15,10 +15,11 @@ import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
 import { useEventTeams } from "../../hooks/useEventTeams";
+import { useEventTeamSummary } from "../../hooks/useEventTeamSummary";
 import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
 import { queryKeys } from "../../lib/queryKeys";
 import { fetchEventDetail } from "../../services/eventsApi";
-import { getStatusLabel, getStatusTone } from "../../domain/status";
+import { getStatusLabel, getStatusTone, getTeamRegistrationStatusLabel, getTeamRegistrationStatusTone } from "../../domain/status";
 import {
   fetchTeam,
   updateTeamStatus,
@@ -43,6 +44,9 @@ function summarizeAuditDetail(raw: string) {
     if (typeof parsed.teamStatus === "string") {
       return `Trạng thái mới: ${getStatusLabel(parsed.teamStatus)}`;
     }
+    if (typeof parsed.eventStatus === "string") {
+      return `Trạng thái cuộc thi: ${getStatusLabel(parsed.eventStatus)}`;
+    }
     if (typeof parsed.boardId === "number" && typeof parsed.teamCount === "number") {
       return `Bảng #${parsed.boardId} · ${parsed.teamCount} đội`;
     }
@@ -64,9 +68,24 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
     embedded ? "/organizer/teams-hub" : "/organizer/registrations"
   );
   const [listPage, setListPage] = useState(0);
+  const [filter, setFilter] = useState<Filter>("ALL");
+  const [search, setSearch] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchDebounced(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setListPage(0);
+  }, [filter, searchDebounced, eventId]);
+
   const { teams: registrations, loading, error, total, totalPages } = useEventTeams(eventId, {
     page: listPage,
-    size: 50
+    size: 50,
+    status: filter,
+    q: searchDebounced
   });
 
   const detailQuery = useQuery({
@@ -75,9 +94,13 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
     enabled: Boolean(eventId)
   });
   const quota = detailQuery.data?.maxTeams ?? 0;
+  const maxTeamSize = detailQuery.data?.maxTeamSize ?? 5;
+  const { summary: teamSummary, loading: summaryLoading } = useEventTeamSummary(eventId);
+  const confirmedTotal = teamSummary?.confirmedCount ?? 0;
+  const pendingTotal = teamSummary?.pendingCount ?? 0;
+  const awaitingApprovalTotal = teamSummary?.awaitingApprovalCount ?? 0;
+  const waitlistTotal = teamSummary?.waitlistCount ?? 0;
 
-  const [filter, setFilter] = useState<Filter>("ALL");
-  const [search, setSearch] = useState("");
   const [detailTeam, setDetailTeam] = useState<TeamDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -91,18 +114,9 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
     return team.members?.length ?? 0;
   }
 
-  const filtered = useMemo(
-    () =>
-      registrations
-        .filter((registration) => {
-          const matchFilter = filter === "ALL" || registration.status === filter;
-          const matchSearch = [registration.name, registration.status, registration.members?.map((item) => item.email).join(" ")]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(search.trim().toLowerCase()));
-          return matchFilter && matchSearch;
-        })
-        .sort((a, b) => a.name.localeCompare(b.name, "vi") || a.id - b.id),
-    [filter, registrations, search]
+  const sortedRegistrations = useMemo(
+    () => [...registrations].sort((a, b) => a.name.localeCompare(b.name, "vi") || a.id - b.id),
+    [registrations]
   );
 
   async function openTeamDetail(teamId: number) {
@@ -121,20 +135,18 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
 
   async function updateStatus(id: number | null, status: string, reason?: string) {
     const currentRegistration = id ? registrations.find((registration) => registration.id === id) : undefined;
-    const confirmedCount = registrations.filter((item) => item.status === "CONFIRMED").length;
     if (
       status === "CONFIRMED" &&
       currentRegistration?.status !== "CONFIRMED" &&
-      confirmedCount >= quota
+      confirmedTotal >= quota
     ) {
-      notify("Quota đã đầy. Hãy đưa đội vào danh sách chờ hoặc tăng quota trước khi duyệt.", "warning");
-      return;
+      notify("Quota đã đầy. Hệ thống sẽ chuyển đội vào danh sách chờ khi bạn duyệt.", "warning");
     }
 
     const targetId = id ?? registrations.find((item) => item.status === "PENDING")?.id ?? null;
     if (targetId == null) return;
 
-    const teamsKey = [...queryKeys.teams.byEvent(eventId!), listPage, 50];
+    const teamsKey = [...queryKeys.teams.byEvent(eventId!), listPage, 50, filter, searchDebounced];
     await queryClient.cancelQueries({ queryKey: teamsKey });
     const previous = queryClient.getQueryData<PagedResult<TeamDetailResponse>>(teamsKey);
     if (previous) {
@@ -152,7 +164,12 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
       if (updated && detailTeam?.id === targetId) {
         setDetailTeam(updated);
       }
-      notify(`Đã cập nhật hồ sơ: ${getStatusLabel(status)}.`, "success");
+      const actualStatus = updated?.status ?? status;
+      if (status === "CONFIRMED" && actualStatus === "WAITLIST") {
+        notify("Quota đã đầy — đội được đưa vào danh sách chờ.", "warning");
+      } else {
+        notify(`Đã cập nhật hồ sơ: ${getStatusLabel(actualStatus)}.`, "success");
+      }
     } catch (err) {
       if (previous) {
         queryClient.setQueryData(teamsKey, previous);
@@ -177,11 +194,12 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
     notify("Đã tải file CSV.", "success");
   }
 
-  const confirmed = registrations.filter((item) => item.status === "CONFIRMED").length;
-  const pending = registrations.filter((item) => item.status === "PENDING").length;
-  const waitlist = registrations.filter((item) => item.status === "WAITLIST").length;
+  const confirmed = confirmedTotal;
+  const pending = pendingTotal;
+  const awaitingApproval = awaitingApprovalTotal;
+  const waitlist = waitlistTotal;
 
-  if (loading || eventLoading) return <ModuleSkeleton rows={4} variant="table" />;
+  if (loading || eventLoading || summaryLoading) return <ModuleSkeleton rows={4} variant="table" />;
 
   return (
     <div className="space-y-lg">
@@ -190,7 +208,7 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
           <PageHeader
             eyebrow="Đăng ký đội"
             title="Theo dõi hồ sơ đăng ký"
-            description="Duyệt, từ chối hoặc danh sách chờ. Đội tự chuyển Đã xác nhận khi mọi thành viên xác nhận email — không cần bấm Duyệt."
+            description="Duyệt, từ chối hoặc đưa vào danh sách chờ. Sau khi mọi thành viên xác nhận email, đội ở trạng thái Chờ xác nhận — BTC cần bấm Duyệt để xác nhận tham gia (hoặc Chờ nếu quota đầy)."
             actions={
               <>
                 <OrganizerContextBar />
@@ -222,8 +240,14 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
       ) : null}
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Đã xác nhận" value={confirmed} helper="Được tính vào quota" icon="check_circle" tone="success" />
-        <StatCard label="Chờ xử lý" value={pending} helper="Cần duyệt thủ công" icon="pending_actions" tone="warning" />
+        <StatCard label="Đã duyệt" value={confirmed} helper="Được tính vào quota" icon="check_circle" tone="success" />
+        <StatCard
+          label="Chờ BTC duyệt"
+          value={awaitingApproval}
+          helper={`${pending} đội đang chờ xử lý`}
+          icon="pending_actions"
+          tone="warning"
+        />
         <StatCard label="Danh sách chờ" value={waitlist} helper="Chờ khi quota mở lại" icon="hourglass_top" tone="primary" />
       </section>
 
@@ -257,19 +281,19 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
           }
         />
         <DataTable headers={["Đội thi", "Thành viên", "Cập nhật", "Trạng thái", "Thao tác"]}>
-          {filtered.map((registration) => (
+          {sortedRegistrations.map((registration) => (
             <tr key={registration.id} className={tableRowClass}>
               <td className="px-md py-md">
                 <p className="font-label-md">{registration.name}</p>
                 <p className="text-on-surface-variant">Cuộc thi #{registration.eventId}</p>
               </td>
-              <td className="px-md py-md">{memberCount(registration)}/5</td>
+              <td className="px-md py-md">{memberCount(registration)}/{maxTeamSize}</td>
               <td className="px-md py-md">
                 {registration.confirmedAt ? formatDate(registration.confirmedAt) : "—"}
               </td>
               <td className="px-md py-md">
-                <Badge tone={getStatusTone(registration.status)}>
-                  {getStatusLabel(registration.status)}
+                <Badge tone={getTeamRegistrationStatusTone(registration)}>
+                  {getTeamRegistrationStatusLabel(registration)}
                 </Badge>
               </td>
               <td className={tableActionCellClass}>
@@ -280,7 +304,9 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
                     <Button
                       type="button"
                       variant="ghost"
-                      disabled={registration.status === "CONFIRMED"}
+                      disabled={
+                        registration.status !== "PENDING" || !registration.readyForOrganizerApproval
+                      }
                       onClick={() => updateStatus(registration.id, "CONFIRMED")}
                       data-testid={`approve-registration-${registration.id}`}
                     >

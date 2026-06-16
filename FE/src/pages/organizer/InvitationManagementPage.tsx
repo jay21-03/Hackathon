@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -30,22 +30,14 @@ import {
 } from "../../services/staffInvitationService";
 import type { TeamInvitationStatus } from "../../services/registrationService";
 import { enableStaffInvitations } from "../../config/features";
-import { bulkStaffEmailsSchema, emailTemplateSchema, staffInviteSchema } from "../../domain/schemas";
+import { bulkStaffEmailsSchema, staffInviteSchema } from "../../domain/schemas";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
 import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
 import { buildRoundNameById, formatBoardLabelById } from "../../utils/boardLabels";
 import { createIdempotencyKey } from "../../utils/idempotency";
-import {
-  fetchEmailTemplate,
-  resetEmailTemplate,
-  saveEmailTemplate,
-  TEMPLATE_LABELS,
-  TEMPLATE_VARIABLES,
-  type EmailTemplateKey
-} from "../../services/emailTemplateService";
 
-type Tab = "members" | "staff" | "templates";
+type Tab = "members" | "staff";
 
 const MEMBER_STATUS_TABS: Array<{ id: TeamInvitationStatus; label: string }> = [
   { id: "INVITED", label: "Đang chờ" },
@@ -252,7 +244,7 @@ export function InvitationManagementPage({
     (tab === "members" && teamLoading) ||
     (tab === "staff" && (boardsLoading || staffLoading));
 
-  if (loading && tab !== "templates") {
+  if (loading) {
     return <ModuleSkeleton rows={6} variant="table" />;
   }
 
@@ -294,15 +286,10 @@ export function InvitationManagementPage({
               Mentor / Giám khảo
             </Button>
           ) : null}
-          <Button type="button" variant={tab === "templates" ? "primary" : "ghost"} onClick={() => setTab("templates")}>
-            Mẫu email
-          </Button>
         </div>
       ) : null}
 
-      {tab === "templates" ? (
-        <EmailTemplatesPanel eventId={eventId} />
-      ) : tab === "members" ? (
+      {tab === "members" ? (
         <>
           <div className="flex flex-wrap gap-sm">
             {MEMBER_STATUS_TABS.map((s) => (
@@ -649,135 +636,6 @@ function InvitationTable({
           </div>
         </div>
       ) : null}
-    </section>
-  );
-}
-
-function EmailTemplatesPanel({ eventId }: { eventId: number | null }) {
-  const { notify } = useToast();
-  const [templateKey, setTemplateKey] = useState<EmailTemplateKey>("STAFF_INVITATION");
-  const [subject, setSubject] = useState("");
-  const [bodyHtml, setBodyHtml] = useState("");
-  const [templateFieldErrors, setTemplateFieldErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-
-  const templateQuery = useQuery({
-    queryKey: ["email-templates", eventId, templateKey],
-    queryFn: () => fetchEmailTemplate(eventId!, templateKey),
-    enabled: Boolean(eventId)
-  });
-
-  useEffect(() => {
-    if (templateQuery.data) {
-      setSubject(templateQuery.data.subject);
-      setBodyHtml(templateQuery.data.bodyHtml);
-    }
-  }, [templateQuery.data, templateKey]);
-
-  async function handleSave() {
-    if (!eventId) return;
-    const parsed = emailTemplateSchema.safeParse({ subject, bodyHtml });
-    if (!parsed.success) {
-      setTemplateFieldErrors(zodFieldErrors(parsed.error));
-      notify(parsed.error.issues[0]?.message ?? "Mẫu email chưa hợp lệ.", "warning");
-      return;
-    }
-    setTemplateFieldErrors({});
-    setSaving(true);
-    try {
-      await saveEmailTemplate(eventId, templateKey, parsed.data);
-      await templateQuery.refetch();
-      notify("Đã lưu mẫu email.", "success");
-    } catch (err) {
-      applyApiFormErrors(err, setTemplateFieldErrors);
-      notify(resolveApiError(err, "Không lưu được mẫu email."), "danger");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleReset() {
-    if (!eventId) return;
-    setSaving(true);
-    try {
-      const restored = await resetEmailTemplate(eventId, templateKey);
-      setSubject(restored.subject);
-      setBodyHtml(restored.bodyHtml);
-      await templateQuery.refetch();
-      notify("Đã khôi phục mẫu mặc định.", "success");
-    } catch (err) {
-      notify(resolveApiError(err, "Không khôi phục được."), "danger");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (!eventId) {
-    return <p className="font-body-sm text-on-surface-variant">Chọn sự kiện để chỉnh mẫu email.</p>;
-  }
-
-  if (templateQuery.isLoading) {
-    return <ModuleSkeleton rows={4} />;
-  }
-
-  return (
-    <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
-      <p className="font-body-sm text-on-surface-variant">
-        Tuỳ chỉnh nội dung email theo sự kiện. Biến Thymeleaf: <code>{TEMPLATE_VARIABLES}</code>
-      </p>
-      <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
-        Loại email
-        <select
-          className="max-w-md rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
-          value={templateKey}
-          onChange={(e) => setTemplateKey(e.target.value as EmailTemplateKey)}
-        >
-          {(Object.keys(TEMPLATE_LABELS) as EmailTemplateKey[]).map((key) => (
-            <option key={key} value={key}>
-              {TEMPLATE_LABELS[key]}
-            </option>
-          ))}
-        </select>
-      </label>
-      {templateQuery.data?.customized ? (
-        <Badge tone="active">Đã tuỳ chỉnh cho sự kiện</Badge>
-      ) : (
-        <Badge tone="neutral">Đang dùng mẫu {templateQuery.data?.source ?? "mặc định"}</Badge>
-      )}
-      <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
-        Tiêu đề
-        <input
-          className={`rounded-lg border bg-surface px-3 py-2 font-body-sm ${
-            templateFieldErrors.subject ? "border-error" : "border-outline-variant"
-          }`}
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-        />
-        {templateFieldErrors.subject ? (
-          <span className="font-body-sm text-error">{templateFieldErrors.subject}</span>
-        ) : null}
-      </label>
-      <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
-        Nội dung HTML
-        <textarea
-          className={`min-h-[16rem] font-mono rounded-lg border bg-surface px-3 py-2 font-body-sm ${
-            templateFieldErrors.bodyHtml ? "border-error" : "border-outline-variant"
-          }`}
-          value={bodyHtml}
-          onChange={(e) => setBodyHtml(e.target.value)}
-        />
-        {templateFieldErrors.bodyHtml ? (
-          <span className="font-body-sm text-error">{templateFieldErrors.bodyHtml}</span>
-        ) : null}
-      </label>
-      <div className="flex flex-wrap gap-sm">
-        <Button type="button" loading={saving} onClick={() => void handleSave()}>
-          Lưu mẫu
-        </Button>
-        <Button type="button" variant="ghost" loading={saving} onClick={() => void handleReset()}>
-          Khôi phục mặc định
-        </Button>
-      </div>
     </section>
   );
 }

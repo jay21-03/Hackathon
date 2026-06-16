@@ -200,6 +200,22 @@ export async function createStaffInvitation(
 
 
 
+export async function createStaffInvitationsBulkForEvent(
+  eventId: number,
+  body: { defaultRole: StaffRole; items: Array<{ email: string; role?: StaffRole }> }
+) {
+  const { data } = await apiClient.post<ApiResponse<BulkStaffInvitationResponse>>(
+    `/v1/events/${eventId}/staff-invitations/bulk`,
+    body
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Không gửi được lời mời hàng loạt.");
+  }
+  return data.data;
+}
+
+
+
 export async function createStaffInvitationsBulk(
 
   boardId: number,
