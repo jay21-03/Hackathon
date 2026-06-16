@@ -166,7 +166,7 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
               to={
                 !setupContext.hasBoards
                   ? "/organizer/boards"
-                  : "/organizer/artifacts-hub#artifacts-step-rubric"
+                  : "/organizer/boards#board-step-rubric"
               }
             >
               <Button type="button" variant="ghost">

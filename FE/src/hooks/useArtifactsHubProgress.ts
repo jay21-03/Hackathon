@@ -4,26 +4,24 @@ import type { WorkflowStepState } from "../domain/organizerWorkflow";
 
 interface ArtifactsHubProgressInput {
   hasBoards: boolean;
-  hasRubric: boolean;
+  hasProblem: boolean;
   showSubmissions: boolean;
   showRepositories: boolean;
   submittedCount: number;
   totalTeams: number;
   repoProvisionedCount: number;
   repoFailedCount: number;
-  hasProblem: boolean;
 }
 
 export function useArtifactsHubProgress({
   hasBoards,
-  hasRubric,
+  hasProblem,
   showSubmissions,
   showRepositories,
   submittedCount,
   totalTeams,
   repoProvisionedCount,
-  repoFailedCount,
-  hasProblem
+  repoFailedCount
 }: ArtifactsHubProgressInput) {
   return useMemo(() => {
     const microSteps: Array<{
@@ -32,18 +30,11 @@ export function useArtifactsHubProgress({
       state: WorkflowStepState;
       anchor?: string;
       to?: string;
-    }> = [
-      {
-        label: "Tiêu chí chấm",
-        detail: hasRubric ? "Đã có rubric" : "Cấu hình rubric theo vòng",
-        state: !hasBoards ? "blocked" : hasRubric ? "done" : "active",
-        anchor: "#artifacts-step-rubric"
-      }
-    ];
+    }> = [];
 
     if (showRepositories) {
       const repoState: WorkflowStepState =
-        !hasRubric || !hasProblem
+        !hasBoards || !hasProblem
           ? "blocked"
           : repoFailedCount > 0
             ? "active"
@@ -51,12 +42,12 @@ export function useArtifactsHubProgress({
               ? "done"
               : "active";
       microSteps.push({
-        label: "Repository GitHub",
+        label: "Mã nguồn đội",
         detail: hasProblem
           ? repoProvisionedCount > 0
-            ? `${repoProvisionedCount} repo đã cấp`
-            : "Cấu hình mẫu & cấp repo theo đề"
-          : "Cần gán đề trước",
+            ? `${repoProvisionedCount} mã nguồn đã cấp`
+            : "Cấu hình mẫu & cấp mã nguồn theo đề"
+          : "Cần tạo đề trong Quản lý bảng thi trước",
         state: repoState,
         anchor: "#artifacts-step-repositories"
       });
@@ -70,8 +61,8 @@ export function useArtifactsHubProgress({
         detail:
           totalTeams > 0
             ? `${submittedCount}/${totalTeams} đội đã nộp`
-            : "Theo dõi link repository đội nộp",
-        state: !hasRubric
+            : "Theo dõi bài nộp của các đội",
+        state: !hasBoards
           ? "blocked"
           : !reposReady
             ? "next"
@@ -85,38 +76,38 @@ export function useArtifactsHubProgress({
     microSteps.push({
       label: "Tiếp theo",
       detail: "Chấm điểm & kết quả",
-      state: hasRubric ? "next" : "blocked",
-      to: hasRubric ? "/organizer/results-hub" : undefined
+      state: hasBoards && hasProblem ? "next" : "blocked",
+      to: hasBoards && hasProblem ? "/organizer/results-hub" : undefined
     });
 
     let nextAction: NextStepAction;
     if (!hasBoards) {
       nextAction = {
         title: "Chưa có bảng thi",
-        description: "Hoàn thành Bảng thi và Vận hành bảng trước.",
+        description: "Hoàn thành Quản lý bảng thi trước.",
         to: "/organizer/boards",
-        cta: "Đi tới Bảng thi"
+        cta: "Đi tới Quản lý bảng thi"
       };
-    } else if (!hasRubric) {
+    } else if (!hasProblem) {
       nextAction = {
-        title: "Bước tiếp: Tiêu chí chấm",
-        description: "Thiết lập rubric trước khi cấp repository GitHub và theo dõi nộp bài.",
-        href: "#artifacts-step-rubric",
-        cta: "Đi tới rubric"
+        title: "Chưa có đề thi",
+        description: "Tạo đề trong Quản lý bảng thi trước khi cấp mã nguồn.",
+        to: "/organizer/boards#board-step-problem",
+        cta: "Đi tới đề thi"
       };
     } else if (showRepositories && repoFailedCount > 0) {
       nextAction = {
-        title: "Repository cấp thất bại",
-        description: `${repoFailedCount} repo cần thử lại hoặc kiểm tra mẫu.`,
+        title: "Cấp mã nguồn thất bại",
+        description: `${repoFailedCount} mã nguồn cần thử lại hoặc kiểm tra mẫu.`,
         href: "#artifacts-step-repositories",
-        cta: "Mở Repository GitHub"
+        cta: "Mở cấp mã nguồn"
       };
     } else if (showRepositories && hasProblem && repoProvisionedCount === 0) {
       nextAction = {
-        title: "Bước tiếp: Cấp repository",
-        description: "Cấu hình mẫu repo và cấp cho các đội trên bảng.",
+        title: "Bước tiếp: Cấp mã nguồn",
+        description: "Cấu hình mẫu và cấp mã nguồn cho các đội trên bảng.",
         href: "#artifacts-step-repositories",
-        cta: "Cấu hình GitHub"
+        cta: "Cấu hình mã nguồn"
       };
     } else if (showSubmissions && totalTeams > 0 && submittedCount < totalTeams) {
       nextAction = {
@@ -134,23 +125,22 @@ export function useArtifactsHubProgress({
       };
     } else {
       nextAction = {
-        title: "Quản lý repository",
-        description: "Theo dõi trạng thái cấp repo và khóa repo sau vòng.",
+        title: "Quản lý mã nguồn",
+        description: "Theo dõi trạng thái cấp mã nguồn và khóa sau vòng.",
         href: "#artifacts-step-repositories",
-        cta: "Mở Repository"
+        cta: "Mở mã nguồn đội"
       };
     }
 
     return { microSteps, nextAction };
   }, [
     hasBoards,
-    hasRubric,
+    hasProblem,
     showSubmissions,
     showRepositories,
     submittedCount,
     totalTeams,
     repoProvisionedCount,
-    repoFailedCount,
-    hasProblem
+    repoFailedCount
   ]);
 }

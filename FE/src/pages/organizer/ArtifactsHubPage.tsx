@@ -19,7 +19,6 @@ import {
 import { handleEmbeddedNextStep, type HubEmbedProps } from "../../utils/hubEmbedUtils";
 import { macroPathToWizardStep } from "./eventWizardUtils";
 import { RepositoryManagementPage } from "./RepositoryManagementPage";
-import { RubricSetupPage } from "./RubricSetupPage";
 import { SubmissionManagementPage } from "./SubmissionManagementPage";
 
 export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedProps = {}) {
@@ -61,14 +60,13 @@ export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedPro
 
   const { microSteps } = useArtifactsHubProgress({
     hasBoards: context.hasBoards,
-    hasRubric: context.hasRubric,
+    hasProblem: context.hasProblem,
     showSubmissions: enableSubmissions,
     showRepositories: enableGithubProvisioning,
     submittedCount,
     totalTeams: total,
     repoProvisionedCount,
-    repoFailedCount,
-    hasProblem: context.hasProblem
+    repoFailedCount
   });
 
   const [activeStep, setActiveStep] = useState<ArtifactsHubStep | null>(null);
@@ -101,8 +99,8 @@ export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedPro
       {!embedded ? (
         <PageHeader
           eyebrow="Vận hành thi"
-          title="Bài nộp & repository"
-          description="Tiêu chí chấm, cấp repository GitHub và theo dõi nộp bài — một luồng liền mạch sau vận hành bảng."
+          title="Bài nộp & mã nguồn"
+          description="Cấp mã nguồn và theo dõi nộp bài — sau khi gán đội vào bảng."
           actions={<OrganizerContextBar />}
         />
       ) : null}
@@ -134,7 +132,6 @@ export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedPro
         })}
       />
 
-      {currentStep === "#artifacts-step-rubric" ? <RubricSetupPage embedded /> : null}
       {enableGithubProvisioning && currentStep === "#artifacts-step-repositories" ? (
         <RepositoryManagementPage embedded />
       ) : null}

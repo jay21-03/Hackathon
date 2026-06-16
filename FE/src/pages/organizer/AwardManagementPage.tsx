@@ -35,7 +35,9 @@ import {
   type AwardRankingRow
 } from "../../utils/awardLabels";
 import { buildRoundNameById, formatBoardRankingLabel, groupBoardRankingsByRound } from "../../utils/boardLabels";
+import { awardCategorySchema, assignTeamAwardSchema } from "../../domain/schemas";
 import { resolveApiError } from "../../utils/apiError";
+import { firstZodError } from "../../utils/zodFieldErrors";
 import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
 import { sortByName } from "../../utils/sortContestData";
 
@@ -200,17 +202,23 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
 
   async function handleSaveCategory() {
     if (!eventId) return;
-    if (!categoryForm.name.trim() || !categoryForm.code.trim()) {
-      notify("Nhập tên và mã loại giải.", "warning");
+    const parsed = awardCategorySchema.safeParse({
+      ...categoryForm,
+      description: categoryForm.description?.trim() || undefined,
+      prizeValue: categoryForm.prizeValue?.trim() || undefined
+    });
+    if (!parsed.success) {
+      notify(firstZodError(parsed.error), "warning");
       return;
     }
     setBusy(true);
     try {
+      const payload = parsed.data;
       if (editingCategoryId != null) {
-        await updateAwardCategory(editingCategoryId, categoryForm);
+        await updateAwardCategory(editingCategoryId, payload);
         notify("Đã cập nhật loại giải.", "success");
       } else {
-        await createAwardCategory(eventId, categoryForm);
+        await createAwardCategory(eventId, payload);
         notify("Đã tạo loại giải.", "success");
       }
       await invalidateAwards();
@@ -241,16 +249,22 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
   }
 
   async function handleAssign() {
-    if (!eventId || assignCategoryId === "" || assignTeamId === "") {
-      notify("Chọn loại giải và đội.", "warning");
+    if (!eventId) return;
+    const parsed = assignTeamAwardSchema.safeParse({
+      awardCategoryId: assignCategoryId === "" ? undefined : assignCategoryId,
+      teamId: assignTeamId === "" ? undefined : assignTeamId,
+      roundId: activeRoundId ?? undefined
+    });
+    if (!parsed.success) {
+      notify(firstZodError(parsed.error), "warning");
       return;
     }
     setBusy(true);
     try {
       await assignTeamAward(eventId, {
-        awardCategoryId: assignCategoryId,
-        teamId: assignTeamId,
-        roundId: activeRoundId ?? undefined
+        awardCategoryId: parsed.data.awardCategoryId,
+        teamId: parsed.data.teamId,
+        roundId: parsed.data.roundId
       });
       await invalidateAwards();
       setAssignTeamId("");

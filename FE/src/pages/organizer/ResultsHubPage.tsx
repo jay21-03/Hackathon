@@ -4,7 +4,7 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
-import { enablePhase7 } from "../../config/features";
+import { enablePhase7, enableAwards } from "../../config/features";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useEventBoards } from "../../hooks/useEventBoards";
 import { useEventRounds } from "../../hooks/useEventRounds";
@@ -96,7 +96,7 @@ export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps
   useEffect(() => {
     const hash = window.location.hash;
     if (hash === "#results-step-rubric" || hash === "#rubric") {
-      window.location.replace("/organizer/artifacts-hub#artifacts-step-rubric");
+      window.location.replace("/organizer/boards#board-step-rubric");
       return;
     }
     if (hash) setActiveStep(normalizeResultsHubStep(hash));
@@ -138,7 +138,7 @@ export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps
       {currentStep === "#results-step-ranking" ? <RankingPage embedded /> : null}
       {currentStep === "#results-step-publish" ? <PublishResultsPage embedded /> : null}
       {currentStep === "#results-step-finals" && showFinalsStep ? <FinalsPage embedded /> : null}
-      {currentStep === "#results-step-awards" ? <AwardManagementPage embedded /> : null}
+      {currentStep === "#results-step-awards" && enableAwards ? <AwardManagementPage embedded /> : null}
       {currentStep === "#results-step-export" ? <ExportSuccessPage embedded /> : null}
       </div>
     </div>

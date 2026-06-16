@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { NextStepAction } from "../components/ui/NextStepPanel";
 import type { WorkflowStepState } from "../domain/organizerWorkflow";
+import { enableAwards } from "../config/features";
 
 interface ResultsHubProgressInput {
   hasBoards: boolean;
@@ -60,12 +61,14 @@ export function useResultsHubProgress({
       });
     }
 
-    microSteps.push({
-      label: "Trao giải",
-      detail: awardsPublished ? "Đã công bố giải" : "Gán hạng mục & công bố",
-      state: !hasPublished ? "blocked" : awardsPublished ? "done" : "active",
-      anchor: "#results-step-awards"
-    });
+    if (enableAwards) {
+      microSteps.push({
+        label: "Trao giải",
+        detail: awardsPublished ? "Đã công bố giải" : "Gán hạng mục & công bố",
+        state: !hasPublished ? "blocked" : awardsPublished ? "done" : "active",
+        anchor: "#results-step-awards"
+      });
+    }
 
     microSteps.push({
       label: "Xuất kết quả",
@@ -117,7 +120,7 @@ export function useResultsHubProgress({
         href: "#results-step-finals",
         cta: "Đi tới chung kết"
       };
-    } else if (!awardsPublished) {
+    } else if (enableAwards && !awardsPublished) {
       nextAction = {
         title: "Bước tiếp: Trao giải",
         description: "Tạo hạng mục giải, gán đội và công bố kết quả trao giải.",
@@ -133,7 +136,8 @@ export function useResultsHubProgress({
       };
     }
 
-    const setupComplete = hasPublished && (!showFinalsStep || finalsDone) && awardsPublished;
+    const setupComplete =
+      hasPublished && (!showFinalsStep || finalsDone) && (!enableAwards || awardsPublished);
 
     return { microSteps, nextAction, setupComplete };
   }, [
