@@ -24,6 +24,9 @@ export type WorkflowStatus =
   | "CLOSED"
   | "ENDED"
   | "COMPLETED"
+  | "CANCELLED"
+  | "PROBLEM_RELEASED"
+  | "SCORING"
   | "FAILED";
 
 const statusLabels: Record<WorkflowStatus, string> = {
@@ -50,6 +53,9 @@ const statusLabels: Record<WorkflowStatus, string> = {
   CLOSED: "Đã đóng",
   ENDED: "Đã kết thúc",
   COMPLETED: "Hoàn tất",
+  CANCELLED: "Đã hủy",
+  PROBLEM_RELEASED: "Đã mở đề",
+  SCORING: "Đang chấm điểm",
   FAILED: "Thất bại"
 };
 
@@ -77,6 +83,9 @@ const statusTones: Record<WorkflowStatus, BadgeTone> = {
   CLOSED: "warning",
   ENDED: "warning",
   COMPLETED: "success",
+  CANCELLED: "danger",
+  PROBLEM_RELEASED: "active",
+  SCORING: "warning",
   FAILED: "danger"
 };
 
@@ -100,4 +109,24 @@ export function getStatusLabel(status?: string) {
 export function getStatusTone(status?: string): BadgeTone {
   const normalized = normalizeStatus(status);
   return normalized in statusTones ? statusTones[normalized as WorkflowStatus] : "neutral";
+}
+
+export function getTeamRegistrationStatusLabel(team: {
+  status?: string;
+  readyForOrganizerApproval?: boolean;
+}) {
+  if ((team.status ?? "").toUpperCase() === "PENDING" && team.readyForOrganizerApproval) {
+    return "Chờ BTC duyệt";
+  }
+  return getStatusLabel(team.status);
+}
+
+export function getTeamRegistrationStatusTone(team: {
+  status?: string;
+  readyForOrganizerApproval?: boolean;
+}): BadgeTone {
+  if ((team.status ?? "").toUpperCase() === "PENDING" && team.readyForOrganizerApproval) {
+    return "warning";
+  }
+  return getStatusTone(team.status);
 }

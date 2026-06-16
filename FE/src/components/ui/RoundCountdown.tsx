@@ -1,12 +1,16 @@
 import { Badge } from "./Badge";
 import { ModuleSkeleton } from "./ModuleSkeleton";
 import type { RoundCountdownResponse } from "../../services/contestApi";
+import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 interface RoundCountdownProps {
   roundId: number | null;
   countdown?: RoundCountdownResponse | null;
   loading?: boolean;
   className?: string;
+  /** Trạng thái cấu hình vòng (DRAFT, PROBLEM_RELEASED, …) từ API rounds */
+  phaseStatus?: string | null;
+  phaseName?: string | null;
 }
 
 function formatRemaining(seconds: number) {
@@ -30,19 +34,37 @@ const statusTone: Record<RoundCountdownResponse["status"], "warning" | "success"
   ENDED: "neutral"
 };
 
-export function RoundCountdown({ roundId, countdown, loading, className = "" }: RoundCountdownProps) {
+export function RoundCountdown({
+  roundId,
+  countdown,
+  loading,
+  className = "",
+  phaseStatus,
+  phaseName
+}: RoundCountdownProps) {
   if (!roundId) return null;
   if (loading) return <ModuleSkeleton rows={1} />;
-  if (!countdown) return null;
+  if (!countdown && !phaseStatus) return null;
 
   return (
     <div
       className={`flex flex-wrap items-center gap-sm rounded-xl border border-outline-variant bg-surface-container px-md py-sm ${className}`}
     >
-      <span className="font-label-sm normal-case text-on-surface-variant">Vòng thi</span>
-      <Badge tone={statusTone[countdown.status]}>{statusLabel[countdown.status]}</Badge>
-      {countdown.status === "RUNNING" ? (
-        <span className="font-mono-data text-on-surface">Còn {formatRemaining(countdown.remainingSeconds)}</span>
+      <span className="font-label-sm normal-case text-on-surface-variant">
+        {phaseName ? `Vòng: ${phaseName}` : "Vòng thi"}
+      </span>
+      {phaseStatus ? (
+        <Badge tone={getStatusTone(phaseStatus)}>{getStatusLabel(phaseStatus)}</Badge>
+      ) : null}
+      {countdown ? (
+        <>
+          <Badge tone={statusTone[countdown.status]}>{statusLabel[countdown.status]}</Badge>
+          {countdown.status === "RUNNING" ? (
+            <span className="font-mono-data text-on-surface">
+              Còn {formatRemaining(countdown.remainingSeconds)}
+            </span>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

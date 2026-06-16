@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Badge } from "../ui/Badge";
 import { EmptyState } from "../ui/EmptyState";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
@@ -31,11 +32,16 @@ const reasonLabels: Record<string, string> = {
 
 export function ParticipantProblemPanel() {
   const { event, eventId, loading: eventLoading } = useActiveEvent();
-  const { roundId, countdown, loading: roundLoading } = useEventRound(eventId);
+  const { round, rounds, roundId, countdown, loading: roundLoading } = useEventRound(eventId);
   const { team, loading: teamLoading } = useMyTeam(eventId);
   const { board, loading: boardLoading } = useMyBoard(eventId);
   const { problemState, loading: problemLoading, error, refetch } = useMyProblem(eventId);
   const teamGuard = useParticipantTeamGuard(team);
+  const activeRoundId = board?.roundId ?? roundId ?? null;
+  const activeRound = useMemo(
+    () => (activeRoundId ? rounds.find((item) => item.id === activeRoundId) ?? round : round),
+    [activeRoundId, round, rounds]
+  );
 
   if (eventLoading || teamLoading || boardLoading || problemLoading) {
     return <ModuleSkeleton rows={3} />;
@@ -69,8 +75,6 @@ export function ParticipantProblemPanel() {
     );
   }
 
-  const activeRoundId = board.roundId ?? roundId;
-
   if (problemState?.available && problemState.problem) {
     const problem = problemState.problem;
     return (
@@ -84,7 +88,13 @@ export function ParticipantProblemPanel() {
           </div>
           <Badge tone="success">Đã mở đề</Badge>
         </div>
-        <RoundCountdown roundId={activeRoundId} countdown={countdown} loading={roundLoading} />
+        <RoundCountdown
+          roundId={activeRoundId}
+          countdown={countdown}
+          loading={roundLoading}
+          phaseStatus={activeRound?.status}
+          phaseName={activeRound?.name ?? board.roundName}
+        />
         {problem.closeAt ? (
           <p className="font-body-sm text-on-surface-variant">
             Đóng đề lúc {formatReleaseAt(problem.closeAt)}.
@@ -109,7 +119,13 @@ export function ParticipantProblemPanel() {
 
   return (
     <div className="space-y-md">
-      <RoundCountdown roundId={activeRoundId} countdown={countdown} loading={roundLoading} />
+      <RoundCountdown
+        roundId={activeRoundId}
+        countdown={countdown}
+        loading={roundLoading}
+        phaseStatus={activeRound?.status}
+        phaseName={activeRound?.name ?? board.roundName}
+      />
       <EmptyState icon="lock_clock" title="Đề thi chưa sẵn sàng" description={releaseHint} />
     </div>
   );

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { DataTable } from "../../components/ui/DataTable";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -28,7 +29,11 @@ export function AssignedBoardPage() {
   const { event, eventId, loading: eventLoading } = useActiveEvent();
   const { team, loading: teamLoading } = useMyTeam(eventId);
   const { board, loading: boardLoading, error, refetch } = useMyBoard(eventId);
-  const { roundId, countdown, loading: roundLoading } = useEventRound(eventId);
+  const { round, rounds, roundId, countdown, loading: roundLoading } = useEventRound(eventId);
+  const activeRound = useMemo(
+    () => rounds.find((item) => item.id === (board?.roundId ?? roundId)) ?? round,
+    [board?.roundId, round, roundId, rounds]
+  );
   const teamGuard = useParticipantTeamGuard(team);
 
   if (eventLoading || teamLoading || boardLoading) {
@@ -90,7 +95,13 @@ export function AssignedBoardPage() {
           description={event?.name ?? "Thông tin bảng sẽ hiện khi ban tổ chức gán đội vào bảng."}
           actions={<Badge tone="warning">Chờ phân công bảng</Badge>}
         />
-        <RoundCountdown roundId={roundId} countdown={countdown} loading={roundLoading} />
+        <RoundCountdown
+          roundId={roundId}
+          countdown={countdown}
+          loading={roundLoading}
+          phaseStatus={activeRound?.status}
+          phaseName={activeRound?.name}
+        />
         <EmptyState icon="grid_view" title="Chưa có thông tin bảng" description={hint} />
       </div>
     );
@@ -109,7 +120,13 @@ export function AssignedBoardPage() {
 
       <ParticipantWorkflowBar active="board" />
 
-      <RoundCountdown roundId={board.roundId ?? roundId} countdown={countdown} loading={roundLoading} />
+      <RoundCountdown
+        roundId={board.roundId ?? roundId}
+        countdown={countdown}
+        loading={roundLoading}
+        phaseStatus={activeRound?.status}
+        phaseName={activeRound?.name ?? board.roundName}
+      />
 
       <section className="grid gap-md md:grid-cols-3">
         <div className="rounded-xl border border-outline-variant bg-surface-container p-md">

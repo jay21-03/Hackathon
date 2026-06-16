@@ -1,3 +1,4 @@
+import { RoundCountdown } from "../../components/ui/RoundCountdown";
 import { Badge } from "../../components/ui/Badge";
 import { ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -8,6 +9,7 @@ import { ParticipantDeadlineStrip } from "../../components/participant/Participa
 import { ParticipantWorkflowBar } from "../../components/participant/ParticipantWorkflowBar";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useEventRound } from "../../hooks/useEventRound";
 import { useMyBoard } from "../../hooks/useMyBoard";
 import { useMySubmission } from "../../hooks/useMySubmission";
 import { useMyTeam } from "../../hooks/useMyTeam";
@@ -18,6 +20,7 @@ export function ParticipantOverviewPage() {
   const { eventId, event, loading: eventLoading } = useActiveEvent();
   const { team, loading: teamLoading, error } = useMyTeam(eventId);
   const { board, loading: boardLoading } = useMyBoard(eventId);
+  const { round, roundId, countdown, loading: roundLoading } = useEventRound(eventId);
   const { submission, loading: submissionLoading } = useMySubmission(eventId);
 
   if (eventLoading || teamLoading || boardLoading || submissionLoading) {
@@ -70,6 +73,16 @@ export function ParticipantOverviewPage() {
       />
 
       <ParticipantDeadlineStrip />
+
+      {roundId ? (
+        <RoundCountdown
+          roundId={roundId}
+          countdown={countdown}
+          loading={roundLoading}
+          phaseStatus={round?.status}
+          phaseName={round?.name}
+        />
+      ) : null}
 
       <section className="grid gap-md md:grid-cols-3">
         <StatCard
