@@ -282,7 +282,11 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                             <td key={judge.judgeId} className="px-1 py-1.5 text-center">
                               <span
                                 className={`mx-auto inline-flex h-8 w-[3.25rem] items-center justify-center rounded-md font-label-sm ${cellTone(cell.status)}`}
-                                title={cellTitle(cell, judgeNameById[judge.judgeId] ?? `Giám khảo #${judge.judgeId}`, team.teamName)}
+                                title={cellTitle(
+                                  cell,
+                                  judge.fullName ?? judgeNameById[judge.judgeId] ?? `Giám khảo #${judge.judgeId}`,
+                                  team.teamName
+                                )}
                               >
                                 {cellLabel(cell)}
                               </span>

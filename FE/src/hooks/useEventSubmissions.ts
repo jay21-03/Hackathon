@@ -8,11 +8,14 @@ export function useEventSubmissions(
   boardId?: number | null,
   roundId?: number | null,
   page = 0,
-  size = 50
+  size = 50,
+  options?: { status?: string; q?: string }
 ) {
+  const status = options?.status;
+  const q = options?.q?.trim() || undefined;
   const query = useQuery({
-    queryKey: [...queryKeys.submission.byEvent(eventId, boardId), roundId, page, size],
-    queryFn: () => fetchEventSubmissions(eventId!, { boardId, roundId, page, size }),
+    queryKey: [...queryKeys.submission.byEvent(eventId, boardId), roundId, page, size, status ?? "ALL", q ?? ""],
+    queryFn: () => fetchEventSubmissions(eventId!, { boardId, roundId, page, size, status, q }),
     enabled: Boolean(eventId)
   });
 

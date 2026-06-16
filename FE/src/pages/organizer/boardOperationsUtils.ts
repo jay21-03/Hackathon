@@ -1,16 +1,18 @@
-export type BoardOpsStep =
-  | "#ops-step-teams"
-  | "#ops-step-mentor"
-  | "#ops-step-judge"
-  | "#ops-step-problem";
+export type BoardOpsStep = "#ops-step-teams";
 
 export function normalizeBoardOpsStep(anchor: string): BoardOpsStep {
-  if (anchor === "#ops-step-problems") return "#ops-step-problem";
-  if (anchor === "#ops-step-assignments" || anchor === "#ops-step-mentors") {
-    return "#ops-step-mentor";
+  if (
+    anchor === "#ops-step-problems" ||
+    anchor === "#ops-step-problem" ||
+    anchor === "#ops-step-mentor" ||
+    anchor === "#ops-step-judge" ||
+    anchor === "#ops-step-mentors" ||
+    anchor === "#ops-step-assignments"
+  ) {
+    return "#ops-step-teams";
   }
-  if (anchor === "#ops-step-slots" || anchor === "#ops-step-teams") return "#ops-step-teams";
-  return anchor as BoardOpsStep;
+  if (anchor === "#ops-step-slots") return "#ops-step-teams";
+  return "#ops-step-teams";
 }
 
 export function resolveBoardOpsStep(
@@ -18,8 +20,6 @@ export function resolveBoardOpsStep(
 ): BoardOpsStep {
   const active = microSteps.find((step) => step.state === "active" && step.anchor);
   if (active?.anchor) return normalizeBoardOpsStep(active.anchor);
-  const lastDone = [...microSteps].reverse().find((step) => step.state === "done" && step.anchor);
-  if (lastDone?.anchor) return normalizeBoardOpsStep(lastDone.anchor);
   return "#ops-step-teams";
 }
 

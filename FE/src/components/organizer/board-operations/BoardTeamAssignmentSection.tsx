@@ -36,6 +36,7 @@ export function BoardTeamAssignmentSection({
     boards,
     teams,
     confirmedTeams,
+    confirmedTeamCount,
     teamMap,
     assignedTeamIds,
     slotTeamPick,
@@ -151,7 +152,7 @@ export function BoardTeamAssignmentSection({
       notify("Không còn đội đã xác nhận chưa được gán vị trí.", "warning");
       return;
     }
-    const parsed = randomAssignSchema.safeParse({});
+    const parsed = randomAssignSchema.safeParse({ seed: "demo" });
     if (!parsed.success) {
       notify(zodFirstError(parsed.error), "warning");
       return;
@@ -198,7 +199,7 @@ export function BoardTeamAssignmentSection({
       <BoardSlotsSection
         boards={boards}
         teams={teams}
-        confirmedTeams={confirmedTeams}
+        confirmedTeamCount={confirmedTeamCount}
         teamMap={teamMap}
         teamById={teamById}
         allSlots={allSlots}

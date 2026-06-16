@@ -56,7 +56,14 @@ export interface AdminTeamSubmissionResponse {
 
 export async function fetchEventSubmissions(
   eventId: number,
-  options?: { boardId?: number | null; roundId?: number | null; page?: number; size?: number }
+  options?: {
+    boardId?: number | null;
+    roundId?: number | null;
+    status?: string;
+    q?: string;
+    page?: number;
+    size?: number;
+  }
 ) {
   const { data } = await apiClient.get<ApiResponse<PagedResult<AdminTeamSubmissionResponse>>>(
     `/v1/admin/events/${eventId}/submissions`,
@@ -65,7 +72,9 @@ export async function fetchEventSubmissions(
         page: options?.page ?? 0,
         size: options?.size ?? 50,
         ...(options?.boardId ? { boardId: options.boardId } : {}),
-        ...(options?.roundId ? { roundId: options.roundId } : {})
+        ...(options?.roundId ? { roundId: options.roundId } : {}),
+        ...(options?.status && options.status !== "ALL" ? { status: options.status } : {}),
+        ...(options?.q?.trim() ? { q: options.q.trim() } : {})
       }
     }
   );

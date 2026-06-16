@@ -36,10 +36,6 @@ function statusTone(status: string | null | undefined): "success" | "warning" | 
   return "neutral";
 }
 
-function normalizeStatus(status: string | null | undefined): StatusFilter {
-  if (status === "SUBMITTED" || status === "DRAFT") return status;
-  return "NONE";
-}
 
 export function SubmissionManagementPage({ embedded = false }: { embedded?: boolean }) {
   const { notify } = useToast();
@@ -48,6 +44,8 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
   const [roundId, setRoundId] = useState<number | null>(null);
   const [boardId, setBoardId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [search, setSearch] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("team");
   const [listPage, setListPage] = useState(0);
   const [detailTeamId, setDetailTeamId] = useState<number | null>(null);
@@ -61,12 +59,22 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
     [boards, activeRoundId]
   );
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchDebounced(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setListPage(0);
+  }, [eventId, boardId, activeRoundId, statusFilter, searchDebounced]);
+
   const { submissions, total, totalPages, loading, error } = useEventSubmissions(
     eventId,
     boardId,
     activeRoundId,
     listPage,
-    25
+    25,
+    { status: statusFilter, q: searchDebounced }
   );
 
   useEffect(() => {
@@ -77,23 +85,15 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
     setBoardId((prev) => (prev && boardsInRound.some((b) => b.id === prev) ? prev : null));
   }, [boardsInRound, activeRoundId]);
 
-  useEffect(() => {
-    setListPage(0);
-  }, [eventId, boardId, activeRoundId]);
-
-  const filtered = useMemo(() => {
-    const rows = submissions.filter((row) => {
-      if (statusFilter === "ALL") return true;
-      return normalizeStatus(row.status) === statusFilter;
-    });
-    return [...rows].sort((a, b) => {
+  const sortedSubmissions = useMemo(() => {
+    return [...submissions].sort((a, b) => {
       if (sortKey === "team") return a.teamName.localeCompare(b.teamName, "vi");
       if (sortKey === "status") return statusLabel(a.status).localeCompare(statusLabel(b.status), "vi");
       const at = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
       const bt = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
       return bt - at;
     });
-  }, [submissions, statusFilter, sortKey]);
+  }, [submissions, sortKey]);
 
   const submittedCount = useMemo(
     () => submissions.filter((s) => s.status === "SUBMITTED").length,
@@ -215,6 +215,16 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
           </select>
         </label>
         <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+          Tìm đội / bảng
+          <input
+            type="search"
+            className="min-w-[12rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tên đội hoặc bảng…"
+          />
+        </label>
+        <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
           Sắp xếp
           <select
             className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
@@ -247,7 +257,7 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
 
       {pageLoading ? (
         <ModuleSkeleton rows={5} />
-      ) : filtered.length === 0 ? (
+      ) : sortedSubmissions.length === 0 ? (
         <p className="font-body-sm text-on-surface-variant">
           Không có bài nộp phù hợp bộ lọc — kiểm tra phân bảng hoặc đổi trạng thái lọc.
         </p>
@@ -267,7 +277,7 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
                 </tr>
               </thead>
               <tbody className="table-divider">
-                {filtered.map((row) => (
+                {sortedSubmissions.map((row) => (
                   <tr key={row.teamId} className="font-body-sm text-on-surface">
                     <td className="px-md py-md font-label-md">{row.teamName}</td>
                     <td className="px-md py-md">

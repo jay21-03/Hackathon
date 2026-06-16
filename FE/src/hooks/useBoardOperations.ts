@@ -7,6 +7,7 @@ import {
   type AssignmentResponse
 } from "../services/assignmentService";
 import { type UserSummaryResponse } from "../services/userService";
+import { resolveAssigneeLabel } from "../utils/assigneeLabels";
 import { resolveApiError } from "../utils/apiError";
 import { useProblemManagement } from "./useProblemManagement";
 import { useTermStaffPool } from "./useTermStaffPool";
@@ -56,7 +57,7 @@ export function useBoardOperations(
     }
     for (const row of [...boardMentors, ...boardJudges]) {
       if (!names.has(row.assigneeId)) {
-        names.set(row.assigneeId, `User #${row.assigneeId}`);
+        names.set(row.assigneeId, resolveAssigneeLabel(row));
       }
     }
     return Object.fromEntries(names);

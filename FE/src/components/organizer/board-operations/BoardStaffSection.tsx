@@ -4,6 +4,7 @@ import { getStatusLabel, getStatusTone } from "../../../domain/status";
 import type { AssignmentResponse } from "../../../services/assignmentService";
 import type { BoardResponse, RoundResponse } from "../../../services/contestApi";
 import type { UserSummaryResponse } from "../../../services/userService";
+import { resolveAssigneeLabel } from "../../../utils/assigneeLabels";
 
 interface BoardStaffSectionProps {
   mode: "mentor" | "judge";
@@ -124,7 +125,7 @@ export function BoardStaffSection({
                 key={row.id}
                 className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-high px-sm py-xs font-body-sm"
               >
-                {userNameById[row.assigneeId] ?? `User #${row.assigneeId}`}
+                {resolveAssigneeLabel(row, userNameById)}
                 <button
                   type="button"
                   className="font-label-sm text-error hover:underline"
