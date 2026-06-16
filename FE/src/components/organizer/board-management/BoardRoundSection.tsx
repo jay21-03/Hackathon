@@ -1,6 +1,7 @@
 import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
 import { Icon } from "../../ui/Icon";
+import { getStatusLabel, getStatusTone } from "../../../domain/status";
 import type { RoundResponse } from "../../../services/contestApi";
 import { isRoundRunning } from "../../../utils/pickActiveRound";
 
@@ -81,6 +82,16 @@ export function BoardRoundSection({
                 Vòng hiện tại: {activeRound.name}
                 {isRoundRunning(activeRound) ? " (đang diễn ra)" : ""}
               </Badge>
+            ) : null}
+            {selectedRoundId ? (
+              (() => {
+                const selected = rounds.find((round) => round.id === selectedRoundId);
+                return selected ? (
+                  <Badge tone={getStatusTone(selected.status)}>
+                    Trạng thái vòng: {getStatusLabel(selected.status)}
+                  </Badge>
+                ) : null;
+              })()
             ) : null}
             <Button
               type="button"

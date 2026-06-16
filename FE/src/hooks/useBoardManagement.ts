@@ -9,7 +9,11 @@ import {
   type RoundResponse
 } from "../services/contestApi";
 import { fetchEventDetail } from "../services/eventsApi";
-import { fetchEventTeams, type TeamDetailResponse } from "../services/registrationService";
+import {
+  fetchEventTeamSummary,
+  fetchEventTeams,
+  type TeamDetailResponse
+} from "../services/registrationService";
 import { resolveApiError } from "../utils/apiError";
 import { resolveDefaultRoundId } from "../utils/pickActiveRound";
 
@@ -34,9 +38,18 @@ export function useBoardManagement(eventId: number | null) {
     enabled: Boolean(eventId)
   });
 
+  const teamSummaryQuery = useQuery({
+    queryKey: queryKeys.teams.summary(eventId ?? 0),
+    queryFn: () => fetchEventTeamSummary(eventId!),
+    enabled: Boolean(eventId)
+  });
+
   const teamsQuery = useQuery({
-    queryKey: [...queryKeys.teams.byEvent(eventId ?? 0), "board-mgmt", 500],
-    queryFn: () => fetchEventTeams(eventId!, { size: 500 }),
+    queryKey: [...queryKeys.teams.byEvent(eventId ?? 0), "board-mgmt", "confirmed"],
+    queryFn: async () => {
+      const paged = await fetchEventTeams(eventId!, { status: "CONFIRMED", size: 1000 });
+      return Array.isArray(paged) ? paged : paged.items;
+    },
     enabled: Boolean(eventId)
   });
 
@@ -59,7 +72,7 @@ export function useBoardManagement(eventId: number | null) {
     [roundsQuery.data]
   );
   const boards = useMemo(() => boardDataQuery.data ?? [], [boardDataQuery.data]);
-  const teams = useMemo(() => teamsQuery.data?.items ?? [], [teamsQuery.data]);
+  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
 
   useEffect(() => {
     if (!eventId) {
@@ -106,6 +119,9 @@ export function useBoardManagement(eventId: number | null) {
     () => teams.filter((team) => team.status === "CONFIRMED"),
     [teams]
   );
+
+  const confirmedTeamCount =
+    teamSummaryQuery.data?.confirmedCount ?? confirmedTeams.length;
 
   const assignedTeamIds = useMemo(
     () =>
@@ -159,6 +175,7 @@ export function useBoardManagement(eventId: number | null) {
     eventDetail: eventDetailQuery.data ?? null,
     teamMap,
     confirmedTeams,
+    confirmedTeamCount,
     assignedTeamIds
   };
 }

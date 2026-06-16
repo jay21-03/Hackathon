@@ -1,5 +1,7 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { BoardPrepSections } from "../../components/organizer/board-management/BoardPrepSections";
+import { enableScoring } from "../../config/features";
 import { useBoardManagement } from "../../hooks/useBoardManagement";
 import { BoardListSection } from "../../components/organizer/board-management/BoardListSection";
 import { BoardRoundSection } from "../../components/organizer/board-management/BoardRoundSection";
@@ -19,7 +21,9 @@ import {
   slotNumberSchema
 } from "../../domain/schemas";
 import { useBoardSetupProgress } from "../../hooks/useBoardSetupProgress";
+import { useBoardOperations } from "../../hooks/useBoardOperations";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
+import { useActiveTerm } from "../../hooks/useActiveTerm";
 import { invalidateAfterBoardMutation } from "../../lib/invalidateBoardQueries";
 import { queryKeys } from "../../lib/queryKeys";
 import type { BoardWithSlots } from "./boardManagementUtils";
@@ -41,6 +45,7 @@ import {
   type BoardSlotResponse
 } from "../../services/contestApi";
 import { fetchTeam, type TeamDetailResponse } from "../../services/registrationService";
+import { fetchRubric } from "../../services/scoringApi";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { zodFirstError } from "../../utils/formValidation";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
@@ -57,11 +62,14 @@ import {
   toLocalInput,
   type BoardSetupStep
 } from "./boardManagementUtils";
+import { RubricSetupPage } from "./RubricSetupPage";
 
 export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbedProps = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { eventId, event, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const { termId: activeTermId } = useActiveTerm();
+  const staffTermId = event?.academicTermId ?? activeTermId;
   const {
     rounds,
     selectedRoundId,
@@ -78,8 +86,22 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
     eventDetail,
     teamMap,
     confirmedTeams,
+    confirmedTeamCount,
     assignedTeamIds
   } = useBoardManagement(eventId);
+
+  const boardPrepQuery = useBoardOperations(eventId, { academicTermId: staffTermId });
+  const boardMentors = boardPrepQuery.boardMentors;
+  const boardJudges = boardPrepQuery.boardJudges;
+  const hasProblem = Boolean(boardPrepQuery.problem);
+
+  const rubricQuery = useQuery({
+    queryKey: ["rubric", "board-setup", selectedRoundId],
+    queryFn: () => fetchRubric(selectedRoundId!),
+    enabled: Boolean(selectedRoundId) && enableScoring
+  });
+  const hasRubric = (rubricQuery.data?.criteria?.length ?? 0) > 0;
+
   const [busy, setBusy] = useState(false);
   const [roundFieldErrors, setRoundFieldErrors] = useState<Record<string, string>>({});
   const [createBoardFieldErrors, setCreateBoardFieldErrors] = useState<Record<string, string>>({});
@@ -136,13 +158,32 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
     [boards]
   );
 
-  const { microSteps, stats } = useBoardSetupProgress(rounds.length, boards);
+  const { microSteps, stats } = useBoardSetupProgress({
+    roundsCount: rounds.length,
+    boards,
+    mentorCount: boardMentors.length,
+    judgeCount: boardJudges.length,
+    hasProblem,
+    hasRubric,
+    showRubricStep: enableScoring
+  });
   const [activeStep, setActiveStep] = useState<BoardSetupStep | null>(null);
   const currentStep = activeStep ?? resolveBoardSetupStep(microSteps);
 
   function goToStep(anchor: string) {
-    setActiveStep(normalizeBoardStep(anchor));
+    const step = normalizeBoardStep(anchor);
+    setActiveStep(step);
+    if (!embedded) {
+      window.history.replaceState(null, "", `/organizer/boards${step}`);
+    }
   }
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      setActiveStep(normalizeBoardStep(hash));
+    }
+  }, []);
 
   const selectedRound = useMemo(
     () => rounds.find((round) => round.id === selectedRoundId) ?? null,
@@ -512,7 +553,7 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
       notify("Không còn đội đã xác nhận chưa được gán vị trí.", "warning");
       return;
     }
-    const parsed = randomAssignSchema.safeParse({});
+    const parsed = randomAssignSchema.safeParse({ seed: "demo" });
     if (!parsed.success) {
       notify(zodFirstError(parsed.error), "warning");
       return;
@@ -601,7 +642,7 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
         <PageHeader
           eyebrow="Bảng thi và phân công"
           title="Quản lý bảng thi"
-          description="Vòng → bảng & vị trí — gán đội tại Vận hành bảng khi đã có đội."
+          description="Vòng → bảng & vị trí → mentor/giám khảo → đề & rubric. Chuẩn bị xong trước khi mở đăng ký; gán đội tại Vận hành bảng."
           actions={
             <>
               <ButtonLink to="/organizer/events/basic-info" variant="ghost" icon={<Icon name="settings" />}>
@@ -755,7 +796,7 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
             <BoardSlotsSection
               boards={boards}
               teams={teams}
-              confirmedTeams={confirmedTeams}
+              confirmedTeamCount={confirmedTeamCount}
               teamMap={teamMap}
               teamById={teamById}
               allSlots={allSlots}
@@ -792,6 +833,37 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
               showAssignment={false}
             />
           </div>
+        )
+      ) : null}
+
+      {currentStep === "#board-step-staff" && eventId ? (
+        <BoardPrepSections
+          eventId={eventId}
+          event={event ?? eventDetail}
+          step="#board-step-staff"
+          boardsCount={boards.length}
+        />
+      ) : null}
+
+      {currentStep === "#board-step-problem" && eventId ? (
+        <BoardPrepSections
+          eventId={eventId}
+          event={event ?? eventDetail}
+          step="#board-step-problem"
+          boardsCount={boards.length}
+          onProblemSaved={() => void boardPrepQuery.invalidate()}
+        />
+      ) : null}
+
+      {enableScoring && currentStep === "#board-step-rubric" ? (
+        boards.length === 0 ? (
+          <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+            <p className="font-body-md text-on-surface-variant">
+              Hoàn thành các bước trước (bảng, staff, đề) trước khi cấu hình rubric.
+            </p>
+          </div>
+        ) : (
+          <RubricSetupPage embedded />
         )
       ) : null}
 

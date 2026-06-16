@@ -7,10 +7,25 @@ interface BoardWithSlots {
   slots: BoardSlotResponse[];
 }
 
-export function useBoardSetupProgress(
-  roundsCount: number,
-  boards: BoardWithSlots[]
-) {
+interface BoardSetupProgressInput {
+  roundsCount: number;
+  boards: BoardWithSlots[];
+  mentorCount: number;
+  judgeCount: number;
+  hasProblem: boolean;
+  hasRubric: boolean;
+  showRubricStep: boolean;
+}
+
+export function useBoardSetupProgress({
+  roundsCount,
+  boards,
+  mentorCount,
+  judgeCount,
+  hasProblem,
+  hasRubric,
+  showRubricStep
+}: BoardSetupProgressInput) {
   return useMemo(() => {
     const boardsCount = boards.length;
     const slotsCount = boards.reduce((sum, item) => sum + item.slots.length, 0);
@@ -23,6 +38,10 @@ export function useBoardSetupProgress(
     const hasBoards = boardsCount > 0;
     const hasSlots = slotsCount > 0;
     const structureReady = hasRounds && hasBoards && hasSlots;
+    const hasMentor = mentorCount > 0;
+    const hasJudge = judgeCount > 0;
+    const staffReady = hasMentor && hasJudge;
+    const prepReady = structureReady && staffReady && hasProblem && (!showRubricStep || hasRubric);
 
     const microSteps: Array<{
       label: string;
@@ -48,12 +67,38 @@ export function useBoardSetupProgress(
         anchor: "#board-step-layout"
       },
       {
-        label: "Tiếp theo",
-        detail: "Đội & lời mời",
-        state: structureReady ? "next" : "blocked",
-        to: structureReady ? "/organizer/teams-hub" : undefined
+        label: "Mentor & giám khảo",
+        detail: staffReady
+          ? `${mentorCount} mentor · ${judgeCount} GK`
+          : hasMentor || hasJudge
+            ? "Bổ sung mentor hoặc giám khảo còn thiếu"
+            : "Mời và gán ít nhất một mentor và một giám khảo",
+        state: !structureReady ? "blocked" : staffReady ? "done" : "active",
+        anchor: "#board-step-staff"
+      },
+      {
+        label: "Đề thi",
+        detail: hasProblem ? "Đã có đề trên bảng đang chọn" : "Tạo hoặc cập nhật đề",
+        state: !staffReady ? "blocked" : hasProblem ? "done" : "active",
+        anchor: "#board-step-problem"
       }
     ];
+
+    if (showRubricStep) {
+      microSteps.push({
+        label: "Tiêu chí chấm",
+        detail: hasRubric ? "Đã có rubric" : "Cấu hình rubric theo vòng",
+        state: !hasProblem ? "blocked" : hasRubric ? "done" : "active",
+        anchor: "#board-step-rubric"
+      });
+    }
+
+    microSteps.push({
+      label: "Tiếp theo",
+      detail: "Đội & lời mời",
+      state: prepReady ? "next" : "blocked",
+      to: prepReady ? "/organizer/teams-hub" : undefined
+    });
 
     let nextAction: NextStepAction;
     let completedMacroIndex: number;
@@ -69,15 +114,39 @@ export function useBoardSetupProgress(
     } else if (!structureReady) {
       nextAction = {
         title: "Bước tiếp: Bảng & vị trí",
-        description: "Thêm bảng và vị trí — gán đội sẽ làm ở Vận hành bảng khi đã có đội.",
+        description: "Thêm bảng và vị trí — gán đội sẽ làm sau khi mở đăng ký và có đội xác nhận.",
         href: "#board-step-layout",
         cta: "Đi tới bảng & vị trí"
       };
       completedMacroIndex = 2;
+    } else if (!staffReady) {
+      nextAction = {
+        title: "Bước tiếp: Mentor & giám khảo",
+        description: "Gán mentor và giám khảo cho bảng — chuẩn bị trước khi mở đăng ký.",
+        href: "#board-step-staff",
+        cta: "Đi tới phân công"
+      };
+      completedMacroIndex = 2;
+    } else if (!hasProblem) {
+      nextAction = {
+        title: "Bước tiếp: Cấu hình đề thi",
+        description: "Nhập tên đề, thời gian mở/đóng và lưu cho bảng đang chọn.",
+        href: "#board-step-problem",
+        cta: "Đi tới form đề thi"
+      };
+      completedMacroIndex = 2;
+    } else if (showRubricStep && !hasRubric) {
+      nextAction = {
+        title: "Bước tiếp: Tiêu chí chấm",
+        description: "Thiết lập rubric trước khi mở đăng ký và vận hành cuộc thi.",
+        href: "#board-step-rubric",
+        cta: "Đi tới rubric"
+      };
+      completedMacroIndex = 2;
     } else {
       nextAction = {
-        title: "Hoàn tất khung bảng — sang Đội & lời mời",
-        description: "Theo dõi đăng ký và lời mời trong lúc chờ đủ đội.",
+        title: "Hoàn tất chuẩn bị bảng — sang Đội & lời mời",
+        description: "Khung bảng, staff, đề và rubric đã sẵn sàng — có thể mở đăng ký.",
         to: "/organizer/teams-hub",
         cta: "Đi tới Đội & lời mời"
       };
@@ -88,7 +157,16 @@ export function useBoardSetupProgress(
       microSteps,
       nextAction,
       completedMacroIndex,
-      stats: { roundsCount, boardsCount, slotsCount, assignedCount }
+      stats: { roundsCount, boardsCount, slotsCount, assignedCount },
+      prepReady
     };
-  }, [roundsCount, boards]);
+  }, [
+    boards,
+    hasProblem,
+    hasRubric,
+    judgeCount,
+    mentorCount,
+    roundsCount,
+    showRubricStep
+  ]);
 }

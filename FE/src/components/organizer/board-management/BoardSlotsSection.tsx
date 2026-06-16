@@ -19,7 +19,7 @@ export interface SlotListItem {
 export interface BoardSlotsSectionProps {
   boards: BoardWithSlots[];
   teams: TeamDetailResponse[];
-  confirmedTeams: TeamDetailResponse[];
+  confirmedTeamCount: number;
   teamMap: Record<number, string>;
   teamById: Record<number, TeamDetailResponse>;
   allSlots: SlotListItem[];
@@ -55,7 +55,7 @@ export interface BoardSlotsSectionProps {
 export function BoardSlotsSection({
   boards,
   teams,
-  confirmedTeams,
+  confirmedTeamCount,
   teamMap,
   teamById,
   allSlots,
@@ -113,7 +113,7 @@ export function BoardSlotsSection({
       {showAssignment ? (
         <div className="flex flex-wrap gap-md rounded-lg border border-outline-variant/60 bg-surface-container-low p-md font-body-sm text-on-surface-variant">
           <span>
-            <strong className="text-on-surface">{confirmedTeams.length}</strong> đội đã xác nhận
+            <strong className="text-on-surface">{confirmedTeamCount}</strong> đội đã xác nhận
           </span>
           <span>·</span>
           <span>

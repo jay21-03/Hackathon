@@ -6,7 +6,12 @@ export interface BoardWithSlots {
 }
 import type { TeamDetailResponse } from "../../services/registrationService";
 
-export type BoardSetupStep = "#board-step-round" | "#board-step-layout";
+export type BoardSetupStep =
+  | "#board-step-round"
+  | "#board-step-layout"
+  | "#board-step-staff"
+  | "#board-step-problem"
+  | "#board-step-rubric";
 
 import { toIsoFromLocal, toLocalDateTimeInput } from "../../utils/dateTimeInput";
 
@@ -22,6 +27,15 @@ export function normalizeBoardStep(anchor: string): BoardSetupStep {
     anchor === "#board-step-assign"
   ) {
     return "#board-step-layout";
+  }
+  if (anchor === "#ops-step-mentor" || anchor === "#ops-step-judge" || anchor === "#ops-step-mentors") {
+    return "#board-step-staff";
+  }
+  if (anchor === "#ops-step-problem" || anchor === "#ops-step-problems") {
+    return "#board-step-problem";
+  }
+  if (anchor === "#artifacts-step-rubric") {
+    return "#board-step-rubric";
   }
   return anchor as BoardSetupStep;
 }

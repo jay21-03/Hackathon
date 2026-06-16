@@ -57,6 +57,14 @@ export function BoardListSection({
       <h2 className="font-headline-sm text-on-surface">Thiết lập cấu trúc — Bảng</h2>
       <p className="font-body-sm text-on-surface-variant">
         Vòng đang chọn: <strong>{selectedRound?.name ?? "—"}</strong>
+        {selectedRound ? (
+          <>
+            {" "}
+            <Badge tone={getStatusTone(selectedRound.status)} className="ml-1">
+              {getStatusLabel(selectedRound.status)}
+            </Badge>
+          </>
+        ) : null}
       </p>
       <div className="flex flex-wrap items-end gap-sm rounded-lg border border-outline-variant bg-surface-container-low p-md">
         <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
