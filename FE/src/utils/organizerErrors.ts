@@ -9,6 +9,12 @@ const organizerErrorMap: Record<string, string> = {
   TARGET_NOT_JUDGE: "Người được chọn chưa có vai trò giám khảo.",
   SLOT_OCCUPIED: "Vị trí đã có đội — bật «Ghi đè» hoặc gỡ đội trước.",
   TEAM_NOT_CONFIRMED: "Chỉ gán đội ở trạng thái đã xác nhận.",
+  EVENT_NOT_IN_PROGRESS: "Cuộc thi chưa ở giai đoạn đang diễn ra.",
+  EVENT_REGISTRATION_NOT_CLOSED: "Cần đóng đăng ký trước khi chia bảng.",
+  ROUND_NOT_READY_FOR_RANKING: "Chưa đến lúc tính ranking — đợi đóng đề hoặc kết thúc vòng.",
+  EVENT_NOT_READY_FOR_ADVANCEMENT: "Cuộc thi chưa sẵn sàng để chọn đội vào vòng sau.",
+  "All team members must confirm before organizer approval":
+    "Tất cả thành viên phải xác nhận trước khi BTC duyệt đội.",
   TEAM_ALREADY_ASSIGNED: "Đội đã được gán vào một vị trí khác trong vòng này.",
   TEAM_EVENT_MISMATCH: "Đội không thuộc cuộc thi của vòng đang chọn.",
   ROUND_NOT_PLANNED:
@@ -144,7 +150,24 @@ const organizerErrorMap: Record<string, string> = {
   ACADEMIC_TERM_CODE_EXISTS: "Mã học kỳ đã tồn tại.",
   ACADEMIC_TERM_YEAR_TYPE_EXISTS: "Đã có học kỳ cùng loại và năm.",
   ACADEMIC_TERM_ARCHIVED: "Học kỳ đã lưu trữ — không thể dùng cho thao tác mới.",
-  ACADEMIC_TERM_NOT_FOUND: "Không tìm thấy học kỳ."
+  ACADEMIC_TERM_NOT_FOUND: "Không tìm thấy học kỳ.",
+  "Cannot open registration for this event status":
+    "Không thể mở đăng ký với trạng thái cuộc thi hiện tại.",
+  "Cannot close registration for this event status":
+    "Không thể đóng đăng ký với trạng thái cuộc thi hiện tại.",
+  "Cannot start competition for this event status":
+    "Không thể bắt đầu thi với trạng thái cuộc thi hiện tại.",
+  "Cannot complete competition for this event status":
+    "Không thể kết thúc cuộc thi với trạng thái hiện tại.",
+  "Event is already completed or cancelled": "Cuộc thi đã kết thúc hoặc đã hủy.",
+  "Event must be DRAFT or REGISTRATION_CLOSED to open registration":
+    "Chỉ mở đăng ký khi cuộc thi ở Bản nháp hoặc Đã đóng đăng ký.",
+  "Event must be REGISTRATION_OPEN to close registration":
+    "Chỉ đóng đăng ký khi cuộc thi đang Mở đăng ký.",
+  "Event must be REGISTRATION_CLOSED or REGISTRATION_OPEN to start competition":
+    "Bắt đầu thi khi đã đóng đăng ký hoặc đang mở đăng ký (khẩn cấp).",
+  "Event must be IN_PROGRESS to complete": "Chỉ kết thúc khi cuộc thi đang diễn ra.",
+  USER_NOT_PENDING_APPROVAL: "Tài khoản không ở trạng thái chờ duyệt."
 };
 
 /** Alias của `resolveApiError` — giữ tương thích import cũ. */

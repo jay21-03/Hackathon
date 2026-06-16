@@ -253,15 +253,6 @@ export const submissionFormSchema = z.object({
   repositoryName: z.string().trim().max(255, "Tên repository tối đa 255 ký tự.")
 });
 
-export const emailTemplateSchema = z.object({
-  subject: z.string().trim().min(1, "Tiêu đề email là bắt buộc.").max(255, "Tiêu đề tối đa 255 ký tự."),
-  bodyHtml: z
-    .string()
-    .trim()
-    .min(1, "Nội dung email là bắt buộc.")
-    .max(50000, "Nội dung email quá dài.")
-});
-
 const githubUsernameSchema = z
   .string()
   .trim()
@@ -530,7 +521,7 @@ export function roundFormSchemaForEvent(
   existingRounds: RoundTimelineBounds[] = [],
   excludeRoundId?: number
 ): z.ZodType<RoundFormValues> {
-  let schema: z.ZodType<RoundFormValues> = roundFormBaseSchema;
+  let schema: z.ZodType<RoundFormValues>;
   if (!eventStartDate || !eventEndDate) {
     schema = roundFormBaseSchema;
   } else {
@@ -737,4 +728,44 @@ export const randomAssignSchema = z.object({
   slotIds: z.array(z.number().int().positive()).optional(),
   chunkSize: z.number().int().min(1, "Kích thước lô phải ≥ 1.").optional(),
   seed: z.union([z.number().int(), z.string().trim().max(100)]).optional()
+});
+
+const awardCodeSchema = z
+  .string()
+  .trim()
+  .min(1, "Mã loại giải là bắt buộc.")
+  .max(100, "Mã tối đa 100 ký tự.")
+  .regex(/^[A-Za-z0-9][A-Za-z0-9_\- ]*$/, "Mã chỉ chứa chữ, số, gạch dưới, gạch ngang và khoảng trắng.");
+
+export const awardCategorySchema = z.object({
+  name: z.string().trim().min(1, "Tên loại giải là bắt buộc.").max(255, "Tên tối đa 255 ký tự."),
+  code: awardCodeSchema,
+  description: z.string().trim().max(2000, "Mô tả tối đa 2.000 ký tự.").optional(),
+  awardType: z.enum(["RANK", "CUSTOM"], { message: "Loại giải không hợp lệ." }),
+  rankOrder: z.number().int().positive().optional(),
+  maxWinners: z.number().int().min(1, "Số giải tối đa phải ≥ 1.").default(1),
+  prizeValue: z.string().trim().max(255, "Giá trị giải tối đa 255 ký tự.").optional(),
+  sortOrder: z.number().int().optional(),
+  roundId: z.number().int().positive().optional(),
+  isActive: z.boolean().optional()
+});
+
+export const assignTeamAwardSchema = z.object({
+  awardCategoryId: z.number().int().positive("Chọn loại giải."),
+  teamId: z.number().int().positive("Chọn đội."),
+  roundId: z.number().int().positive().optional()
+});
+
+export const staffCarryoverSchema = z.object({
+  sourceTermId: z.number().int().positive().optional(),
+  defaultRole: z.enum(["MENTOR", "JUDGE"]),
+  items: z
+    .array(
+      z.object({
+        userId: z.number().int().positive(),
+        role: z.enum(["MENTOR", "JUDGE"])
+      })
+    )
+    .min(1, "Chọn ít nhất một giám khảo hoặc mentor.")
+    .max(100, "Tối đa 100 người mỗi lần chuyển.")
 });

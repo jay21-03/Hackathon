@@ -9,3 +9,7 @@ export function zodFieldErrors(error: ZodError): Record<string, string> {
   }
   return out;
 }
+
+export function firstZodError(error: ZodError): string {
+  return error.issues[0]?.message ?? "Dữ liệu không hợp lệ.";
+}

@@ -19,6 +19,7 @@ import {
   enablePhase7,
   enableRanking,
   enableScoring,
+  enableStaffInvitations,
   enableSubmissions
 } from "../config/features";
 import {
@@ -87,6 +88,10 @@ const BoardManagementPage = lazyPage(() => import("../pages/organizer/BoardManag
 const BoardOperationsPage = lazyPage(() => import("../pages/organizer/BoardOperationsPage"), "BoardOperationsPage");
 const ResultsHubPage = lazyPage(() => import("../pages/organizer/ResultsHubPage"), "ResultsHubPage");
 const TeamsHubPage = lazyPage(() => import("../pages/organizer/TeamsHubPage"), "TeamsHubPage");
+const StaffManagementPage = lazyPage(
+  () => import("../pages/organizer/StaffManagementPage"),
+  "StaffManagementPage"
+);
 const EventBasicInfoPage = lazyPage(() => import("../pages/organizer/EventBasicInfoPage"), "EventBasicInfoPage");
 const EventManagementPage = lazyPage(() => import("../pages/organizer/EventManagementPage"), "EventManagementPage");
 const CreateEventPage = lazyPage(() => import("../pages/organizer/CreateEventPage"), "CreateEventPage");
@@ -339,6 +344,20 @@ export function AppRouter() {
           <Route path="events/basic-info" element={routeElement(<EventBasicInfoPage />)} />
           <Route path="teams-hub" element={routeElement(<TeamsHubPage />)} />
           <Route
+            path="staff"
+            element={
+              enableStaffInvitations ? (
+                routeElement(<StaffManagementPage />)
+              ) : (
+                <Navigate to="/organizer/teams-hub" replace />
+              )
+            }
+          />
+          <Route
+            path="teams-hub/staff"
+            element={<Navigate to="/organizer/staff#staff-step-invitations" replace />}
+          />
+          <Route
             path="registrations"
             element={<Navigate to="/organizer/teams-hub#teams-step-registrations" replace />}
           />
@@ -369,7 +388,7 @@ export function AppRouter() {
           />
           <Route
             path="rubric"
-            element={<Navigate to="/organizer/artifacts-hub#artifacts-step-rubric" replace />}
+            element={<Navigate to="/organizer/boards#board-step-rubric" replace />}
           />
           <Route
             path="scoring"

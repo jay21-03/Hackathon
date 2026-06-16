@@ -6,6 +6,8 @@ const auditActionLabels: Record<string, string> = {
   TEAM_REJECTED: "Từ chối hồ sơ đội",
   RANKING_PUBLISHED: "Công bố kết quả bảng",
   EVENT_RANKINGS_PUBLISHED: "Công bố kết quả cuộc thi",
+  EVENT_STATUS_CHANGED: "Đổi trạng thái cuộc thi",
+  WAITLIST_PROMOTED: "Đội được đưa từ danh sách chờ",
   RANKING_CALCULATED: "Tính xếp hạng",
   STAFF_INVITED: "Mời nhân sự",
   ANNOUNCEMENT_SENT: "Gửi thông báo"

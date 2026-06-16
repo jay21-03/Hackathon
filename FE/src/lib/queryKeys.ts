@@ -15,7 +15,8 @@ export const queryKeys = {
   teams: {
     all: ["teams"] as const,
     my: (eventId: number | null) => [...queryKeys.teams.all, "my", eventId] as const,
-    byEvent: (eventId: number) => [...queryKeys.teams.all, "event", eventId] as const
+    byEvent: (eventId: number) => [...queryKeys.teams.all, "event", eventId] as const,
+    summary: (eventId: number) => [...queryKeys.teams.all, "summary", eventId] as const
   },
   rounds: {
     all: ["rounds"] as const,
