@@ -12,6 +12,7 @@ import type { EventListItem } from "../../types/entities";
 import { enableAnnouncements, enableRanking } from "../../config/features";
 import { queryKeys } from "../../lib/queryKeys";
 import { fetchPublishedAnnouncements } from "../../services/announcementService";
+import { looksLikeRichHtml, sanitizeRichHtml } from "../../utils/sanitizeProblemHtml";
 import { rememberActiveEvent } from "../../utils/enterEvent";
 import {
   canRegisterForEvent,
@@ -234,7 +235,14 @@ export function EventDetailPage() {
               <li key={item.id} className="rounded-lg border border-outline-variant/50 bg-surface-container-low p-md">
                 <p className="font-headline-sm text-on-surface">{item.title}</p>
                 <p className="mt-xs font-label-sm text-outline">{formatDateTime(item.publishedAt ?? item.createdAt)}</p>
-                <p className="mt-sm whitespace-pre-wrap font-body-md text-on-surface-variant">{item.content}</p>
+                {looksLikeRichHtml(item.content) ? (
+                  <div
+                    className="problem-content mt-sm font-body-md text-on-surface-variant prose prose-invert max-w-none [&_a]:text-primary"
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(item.content) }}
+                  />
+                ) : (
+                  <p className="mt-sm whitespace-pre-wrap font-body-md text-on-surface-variant">{item.content}</p>
+                )}
               </li>
             ))}
           </ul>

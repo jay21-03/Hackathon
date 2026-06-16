@@ -34,3 +34,10 @@ export function sanitizeProblemHtml(html: string) {
     ALLOWED_ATTR
   });
 }
+
+/** Alias — cùng allowlist với mô tả đề bài / thông báo. */
+export const sanitizeRichHtml = sanitizeProblemHtml;
+
+export function looksLikeRichHtml(content: string) {
+  return /<[a-z][\s\S]*>/i.test(content);
+}
