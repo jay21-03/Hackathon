@@ -154,7 +154,7 @@ export function AiReviewManagementPage() {
       <PageHeader
         eyebrow="Vận hành"
         title="Đánh giá AI"
-        description="Theo dõi rubric R1/R2 và phân tích repository. Chu kỳ tự động: 5 phút."
+        description="Theo dõi tiêu chí kỹ thuật (R1) và demo (R2), phân tích mã nguồn đội. Chu kỳ tự động: 5 phút."
         actions={
           <div className="flex flex-wrap items-center gap-sm">
             <Button
@@ -175,8 +175,8 @@ export function AiReviewManagementPage() {
       {reviews.length === 0 ? (
         <EmptyState
           icon="psychology"
-          title="Chưa có đội có repository"
-          description="Cấp repo GitHub cho đội trước, đặt AI_API_KEY trên backend, rồi bấm «Chạy tất cả đội» hoặc «Chạy lại» từng đội."
+          title="Chưa có đội có mã nguồn"
+          description="Cấp mã nguồn cho đội trước, đảm bảo dịch vụ đánh giá AI đã được bật, rồi bấm «Chạy tất cả đội» hoặc «Chạy lại» từng đội."
         />
       ) : (
         <>

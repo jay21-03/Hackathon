@@ -190,6 +190,19 @@ export async function mockCoreApis(page: Page) {
     }
   });
 
+  await page.route("**/api/v1/events/*/teams/summary**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(route, ok({
+        confirmedCount: 1,
+        pendingCount: 0,
+        awaitingApprovalCount: 0,
+        waitlistCount: 0
+      }));
+      return;
+    }
+    await route.continue();
+  });
+
   await page.route("**/api/v1/events/*/teams**", async (route) => {
     if (route.request().method() === "GET") {
       await json(route, ok({
@@ -591,6 +604,8 @@ export async function mockCoreApis(page: Page) {
           id: 1,
           boardId: 1,
           assigneeId: 1,
+          assigneeName: "Giám khảo Demo",
+          assigneeEmail: "judge@demo.test",
           createdAt: "2026-06-01T08:00:00+07:00",
           createdBy: 1,
           academicTermId: 1,

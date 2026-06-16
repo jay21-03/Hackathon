@@ -5,6 +5,7 @@ export const DEMO_ORGANIZER_EMAIL = "organizer@seal.edu.vn";
 export const DEMO_EVENT_ID = 11;
 export const DEMO_FROM_ROUND_ID = 21;
 export const DEMO_TO_ROUND_ID = 22;
+export const DEMO_PENDING_TEAM_ID = 42;
 
 const API_BASE = process.env.E2E_API_BASE ?? "http://127.0.0.1:8085/api/v1";
 
@@ -71,4 +72,72 @@ export async function fetchAdvancementPreview(
   }
   const body = await response.json();
   return body.data as { candidates: Array<{ teamName: string; teamId: number }> };
+}
+
+export async function closeEventRegistration(
+  request: APIRequestContext,
+  token: string,
+  eventId = DEMO_EVENT_ID
+) {
+  const response = await request.post(`${API_BASE}/admin/events/${eventId}/close-registration`, {
+    headers: authHeaders(token)
+  });
+  if (!response.ok()) {
+    throw new Error(`Close registration failed: ${response.status()} ${await response.text()}`);
+  }
+  const body = await response.json();
+  return body.data as { status?: string };
+}
+
+export async function openEventRegistration(
+  request: APIRequestContext,
+  token: string,
+  eventId = DEMO_EVENT_ID
+) {
+  const response = await request.post(`${API_BASE}/admin/events/${eventId}/open-registration`, {
+    headers: authHeaders(token)
+  });
+  if (!response.ok()) {
+    throw new Error(`Open registration failed: ${response.status()} ${await response.text()}`);
+  }
+  const body = await response.json();
+  return body.data as { status?: string };
+}
+
+export async function patchTeamStatus(
+  request: APIRequestContext,
+  token: string,
+  teamId: number,
+  status: string,
+  reason?: string
+) {
+  const response = await request.patch(`${API_BASE}/teams/${teamId}/status`, {
+    headers: authHeaders(token),
+    data: reason ? { status, reason } : { status }
+  });
+  if (!response.ok()) {
+    throw new Error(`Patch team status failed: ${response.status()} ${await response.text()}`);
+  }
+  const body = await response.json();
+  return body.data as { id: number; status: string };
+}
+
+export async function fetchTeamSummary(
+  request: APIRequestContext,
+  token: string,
+  eventId = DEMO_EVENT_ID
+) {
+  const response = await request.get(`${API_BASE}/events/${eventId}/teams/summary`, {
+    headers: authHeaders(token)
+  });
+  if (!response.ok()) {
+    throw new Error(`Team summary failed: ${response.status()} ${await response.text()}`);
+  }
+  const body = await response.json();
+  return body.data as {
+    confirmedCount: number;
+    pendingCount: number;
+    awaitingApprovalCount: number;
+    waitlistCount: number;
+  };
 }

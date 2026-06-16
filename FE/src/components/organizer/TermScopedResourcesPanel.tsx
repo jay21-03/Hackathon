@@ -316,7 +316,7 @@ function TermScopedListItems({
       {sheets.items.map((sheet) => (
         <li key={sheet.id} className="flex justify-between gap-sm border-b border-outline-variant py-xs">
           <span>
-            Đội #{sheet.teamId} — GK #{sheet.judgeId}
+            {sheet.teamName ?? `Đội #${sheet.teamId}`} — {sheet.judgeName ?? `GK #${sheet.judgeId}`}
           </span>
           <span className="text-on-surface-variant">{sheet.status ?? "—"}</span>
         </li>
