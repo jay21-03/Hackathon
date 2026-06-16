@@ -26,6 +26,7 @@ import com.seal.hackathon.common.enums.SystemRole;
 import com.seal.hackathon.common.response.PagedResult;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import com.seal.hackathon.common.util.PageRequestUtils;
 import org.springframework.data.domain.Sort;
 import com.seal.hackathon.common.enums.UserStatus;
 import java.time.OffsetDateTime;
@@ -255,8 +256,8 @@ public class AuthProfileService {
 
     @Transactional(readOnly = true)
     public PagedResult<UserSummaryResponse> listUsersPaged(int page, int size, String query) {
-        int resolvedSize = Math.min(Math.max(size, 1), 200);
-        int resolvedPage = Math.max(page, 0);
+        int resolvedSize = PageRequestUtils.resolveSize(size);
+        int resolvedPage = PageRequestUtils.resolvePage(page);
         PageRequest pageRequest = PageRequest.of(
                 resolvedPage, resolvedSize, Sort.by(Sort.Direction.DESC, "createdAt"));
         String normalizedQuery = normalizeSearchQuery(query);
@@ -325,6 +326,9 @@ public class AuthProfileService {
 
         user.setUpdatedAt(OffsetDateTime.now());
         userRepository.save(user);
+        if (request.getAction() == UpdateUserApprovalRequest.ApprovalAction.APPROVE) {
+            notificationService.notifyUserAccountApproved(user);
+        }
         return toUserSummaryResponse(user);
     }
 

@@ -1,6 +1,7 @@
 package com.seal.hackathon.common.exception;
 
 import com.seal.hackathon.common.response.ApiResponse;
+import com.seal.hackathon.common.util.DataIntegrityViolationResolver;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -55,13 +56,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<?> handleDataIntegrityViolation(
             DataIntegrityViolationException ex, HttpServletRequest request) {
-        return problemOrApi(HttpStatus.CONFLICT, "DATA_INTEGRITY_VIOLATION", "DATA_INTEGRITY_VIOLATION", request, null);
+        String code = DataIntegrityViolationResolver.resolveMessage(ex);
+        return problemOrApi(HttpStatus.CONFLICT, code, code, request, null);
     }
 
     @ExceptionHandler(PersistenceException.class)
     public ResponseEntity<?> handlePersistenceException(PersistenceException ex, HttpServletRequest request) {
         if (ex.getCause() instanceof org.hibernate.exception.ConstraintViolationException) {
-            return problemOrApi(HttpStatus.CONFLICT, "DATA_INTEGRITY_VIOLATION", "DATA_INTEGRITY_VIOLATION", request, null);
+            String code = DataIntegrityViolationResolver.resolveMessage(
+                    new DataIntegrityViolationException(ex.getMessage(), ex));
+            return problemOrApi(HttpStatus.CONFLICT, code, code, request, null);
         }
         log.error("Persistence failure", ex);
         return problemOrApi(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error", "Internal server error", request, null);
