@@ -56,6 +56,32 @@ export async function openEventRegistration(eventId: string) {
   return data.data;
 }
 
+async function postLifecycleAction(eventId: string, action: string) {
+  const { data } = await apiClient.post<ApiResponse<EventDetail>>(
+    `/v1/admin/events/${eventId}/${action}`
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Không thực hiện được thao tác vòng đời cuộc thi");
+  }
+  return data.data;
+}
+
+export function closeEventRegistration(eventId: string) {
+  return postLifecycleAction(eventId, "close-registration");
+}
+
+export function startCompetition(eventId: string) {
+  return postLifecycleAction(eventId, "start-competition");
+}
+
+export function completeCompetition(eventId: string) {
+  return postLifecycleAction(eventId, "complete-competition");
+}
+
+export function cancelEvent(eventId: string) {
+  return postLifecycleAction(eventId, "cancel");
+}
+
 export interface CreateEventPayload {
   name: string;
   description?: string;

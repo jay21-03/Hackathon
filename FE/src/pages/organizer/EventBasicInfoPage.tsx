@@ -17,10 +17,20 @@ import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
 import { queryKeys } from "../../lib/queryKeys";
 import { Badge } from "../../components/ui/Badge";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
-import { openEventRegistration, updateEvent, type EventDetail } from "../../services/eventsApi";
+import {
+  cancelEvent,
+  closeEventRegistration,
+  completeCompetition,
+  openEventRegistration,
+  startCompetition,
+  updateEvent,
+  type EventDetail
+} from "../../services/eventsApi";
 import { useEventDetail } from "../../hooks/useEventDetail";
 import { canOpenRegistration, isRegistrationOpen } from "../../utils/registrationErrors";
+import { eventLifecycleHint, isTerminalEventStatus, normalizeEventStatus } from "../../utils/eventLifecycle";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
+import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
 import { toIsoFromLocal, toLocalDateInput, toLocalDateTimeInput } from "../../utils/dateTimeInput";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
 import type { HubEmbedProps } from "../../utils/hubEmbedUtils";
@@ -41,7 +51,7 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [opening, setOpening] = useState(false);
+  const [lifecycleLoading, setLifecycleLoading] = useState(false);
   const [academicTermId, setAcademicTermId] = useState<number | "">("");
   const { steps: setupSteps, loading: setupLoading } = useEventSetupProgress(
     eventId,
@@ -69,27 +79,75 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
     if (detailQueryError) setLoadError(detailQueryError);
   }, [detailQueryError]);
 
-  async function openRegistration() {
+  async function refreshEvent(updated: EventDetail | null | undefined) {
+    if (updated) setEvent(updated);
     if (!eventId) return;
+    await invalidateAfterTeamMutation(queryClient);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.events.detail(String(eventId)) });
+    await refetch();
+  }
+
+  async function runLifecycleAction(
+    action: () => Promise<EventDetail>,
+    successMessage: string,
+    errorMessage: string
+  ) {
+    if (!eventId) return;
+    setLifecycleLoading(true);
+    try {
+      const updated = await action();
+      await refreshEvent(updated);
+      notify(successMessage, "success");
+    } catch (err) {
+      notify(mapOrganizerErrorMessage(resolveApiError(err, errorMessage)), "danger");
+    } finally {
+      setLifecycleLoading(false);
+    }
+  }
+
+  async function openRegistration() {
     if (!canOpenRegistration(event?.registrationEndAt)) {
       notify("Đã qua hạn đóng đăng ký — cập nhật thời gian đăng ký trước.", "warning");
       return;
     }
-    setOpening(true);
-    try {
-      const updated = await openEventRegistration(String(eventId));
-      if (updated) {
-        setEvent(updated);
-      }
-      await invalidateAfterTeamMutation(queryClient);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.events.detail(String(eventId)) });
-      await refetch();
-      notify("Đã mở đăng ký cho thí sinh.", "success");
-    } catch (err) {
-      notify(resolveApiError(err, "Không mở được đăng ký."), "danger");
-    } finally {
-      setOpening(false);
-    }
+    await runLifecycleAction(
+      () => openEventRegistration(String(eventId)),
+      "Đã mở đăng ký cho thí sinh.",
+      "Không mở được đăng ký."
+    );
+  }
+
+  async function closeRegistration() {
+    await runLifecycleAction(
+      () => closeEventRegistration(String(eventId!)),
+      "Đã đóng đăng ký.",
+      "Không đóng được đăng ký."
+    );
+  }
+
+  async function beginCompetition() {
+    await runLifecycleAction(
+      () => startCompetition(String(eventId!)),
+      "Cuộc thi đã chuyển sang đang diễn ra.",
+      "Không bắt đầu được cuộc thi."
+    );
+  }
+
+  async function finishCompetition() {
+    await runLifecycleAction(
+      () => completeCompetition(String(eventId!)),
+      "Cuộc thi đã kết thúc.",
+      "Không kết thúc được cuộc thi."
+    );
+  }
+
+  async function cancelCompetition() {
+    if (!window.confirm("Hủy cuộc thi? Thao tác này không thể hoàn tác.")) return;
+    await runLifecycleAction(
+      () => cancelEvent(String(eventId!)),
+      "Đã hủy cuộc thi.",
+      "Không hủy được cuộc thi."
+    );
   }
 
   async function save() {
@@ -135,9 +193,7 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
           updated.registrationEndAt ? toLocalDateTimeInput(updated.registrationEndAt) : ""
         );
       }
-      await invalidateAfterTeamMutation(queryClient);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.events.detail(String(eventId)) });
-      await refetch();
+      await refreshEvent(updated);
       notify("Đã lưu thông tin cuộc thi.", "success");
     } catch (err) {
       applyApiFormErrors(err, setFieldErrors, { maxTeams: "quota" });
@@ -169,6 +225,15 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
     }
     return <ModuleSkeleton rows={5} />;
   }
+
+  const eventStatus = normalizeEventStatus(event.status);
+  const lifecycleHint = eventLifecycleHint(
+    event.status,
+    event.registrationStartAt,
+    event.registrationEndAt,
+    event.startDate,
+    event.endDate
+  );
 
   return (
     <div className="space-y-lg">
@@ -202,19 +267,62 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
         />
       ) : null}
 
-      {!isRegistrationOpen(event.status) ? (
-        <section className="flex flex-col gap-md rounded-xl border border-warning/40 bg-warning-container/30 p-md sm:flex-row sm:items-center sm:justify-between">
-          <p className="font-body-sm text-on-surface">
-            Thí sinh chưa thể đăng ký đội khi cuộc thi ở trạng thái <strong>{getStatusLabel(event.status)}</strong>.
-          </p>
-          <Button
-            variant="secondary"
-            disabled={opening}
-            icon={<Icon name={opening ? "sync" : "how_to_reg"} />}
-            onClick={openRegistration}
-          >
-            {opening ? "Đang mở…" : "Mở đăng ký"}
-          </Button>
+      {!isTerminalEventStatus(event.status) ? (
+        <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
+          <div>
+            <h2 className="font-headline-sm text-on-surface">Vòng đời cuộc thi</h2>
+            <p className="mt-xs font-body-sm text-on-surface-variant">{lifecycleHint}</p>
+          </div>
+          <div className="flex flex-wrap gap-sm">
+            {(eventStatus === "DRAFT" || eventStatus === "REGISTRATION_CLOSED") && !isRegistrationOpen(event.status) ? (
+              <Button
+                variant="secondary"
+                disabled={lifecycleLoading}
+                icon={<Icon name={lifecycleLoading ? "sync" : "how_to_reg"} />}
+                onClick={openRegistration}
+              >
+                Mở đăng ký
+              </Button>
+            ) : null}
+            {eventStatus === "REGISTRATION_OPEN" ? (
+              <Button
+                variant="secondary"
+                disabled={lifecycleLoading}
+                icon={<Icon name={lifecycleLoading ? "sync" : "event_busy"} />}
+                onClick={closeRegistration}
+              >
+                Đóng đăng ký
+              </Button>
+            ) : null}
+            {eventStatus === "REGISTRATION_CLOSED" || eventStatus === "REGISTRATION_OPEN" ? (
+              <Button
+                variant="secondary"
+                disabled={lifecycleLoading}
+                icon={<Icon name={lifecycleLoading ? "sync" : "play_arrow"} />}
+                onClick={beginCompetition}
+              >
+                Bắt đầu thi
+              </Button>
+            ) : null}
+            {eventStatus === "IN_PROGRESS" ? (
+              <Button
+                variant="secondary"
+                disabled={lifecycleLoading}
+                icon={<Icon name={lifecycleLoading ? "sync" : "flag"} />}
+                onClick={finishCompetition}
+              >
+                Kết thúc cuộc thi
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              disabled={lifecycleLoading}
+              icon={<Icon name="cancel" />}
+              onClick={cancelCompetition}
+            >
+              Hủy cuộc thi
+            </Button>
+          </div>
         </section>
       ) : null}
 

@@ -10,7 +10,7 @@ import { RoundCountdown } from "../../components/ui/RoundCountdown";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
 import { useEventRound } from "../../hooks/useEventRound";
-import { useEventTeams } from "../../hooks/useEventTeams";
+import { useEventTeamSummary } from "../../hooks/useEventTeamSummary";
 import { useScoreProgress } from "../../hooks/useScoreProgress";
 import { enableRanking, enableScoring } from "../../config/features";
 import { fetchEventDetail } from "../../services/eventsApi";
@@ -22,7 +22,7 @@ import { queryKeys } from "../../lib/queryKeys";
 export function OrganizerOverviewPage() {
   const { eventId, event, loading, error } = useActiveEvent({ autoSelectFirst: true });
   const { roundId, countdown, loading: roundLoading } = useEventRound(eventId);
-  const { teams, loading: teamsLoading } = useEventTeams(eventId);
+  const { summary: teamSummary } = useEventTeamSummary(eventId);
   const { context: setupContext } = useEventSetupProgress(eventId);
 
   const detailQuery = useQuery({
@@ -59,9 +59,9 @@ export function OrganizerOverviewPage() {
     enableScoring && boardCount > 0 ? firstBoardId : null
   );
 
-  const confirmedTeams = teams.filter((team) => team.status === "CONFIRMED").length;
-  const pendingTeams = teams.filter((team) => team.status === "PENDING").length;
-  const waitlistTeams = teams.filter((team) => team.status === "WAITLIST").length;
+  const confirmedTeams = teamSummary?.confirmedCount ?? 0;
+  const pendingTeams = teamSummary?.pendingCount ?? 0;
+  const waitlistTeams = teamSummary?.waitlistCount ?? 0;
   const quota = detailQuery.data?.maxTeams ?? 0;
 
   const blockers: { text: string; to: string; label: string }[] = [];
@@ -82,14 +82,14 @@ export function OrganizerOverviewPage() {
   if (boardCount > 0 && !setupContext.hasProblem) {
     blockers.push({
       text: "Chưa cấu hình đề thi cho bảng.",
-      to: "/organizer/board-ops",
-      label: "Vận hành bảng"
+      to: "/organizer/boards#board-step-problem",
+      label: "Quản lý bảng thi"
     });
   }
   if (boardCount > 0 && enableScoring && !setupContext.hasRubric) {
     blockers.push({
       text: "Chưa thiết lập tiêu chí chấm.",
-      to: "/organizer/artifacts-hub#artifacts-step-rubric",
+      to: "/organizer/boards#board-step-rubric",
       label: "Tiêu chí chấm"
     });
   }
@@ -101,7 +101,7 @@ export function OrganizerOverviewPage() {
   ) {
     blockers.push({
       text: "Chưa phân công giám khảo cho bảng thi.",
-      to: "/organizer/board-ops#ops-step-judge",
+      to: "/organizer/boards#board-step-staff",
       label: "Phân công GK"
     });
   }
@@ -142,7 +142,7 @@ export function OrganizerOverviewPage() {
     }
   }
 
-  if (loading || teamsLoading || detailQuery.isLoading) {
+  if (loading || detailQuery.isLoading) {
     return <ModuleSkeleton rows={4} />;
   }
 

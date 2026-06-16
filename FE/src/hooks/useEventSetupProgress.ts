@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { enableScoring } from "../config/features";
 import type { OrganizerSetupContext } from "../domain/organizerSetupSteps";
 import { resolveOrganizerSetupSteps } from "../domain/organizerSetupSteps";
 import { queryKeys } from "../lib/queryKeys";
+import { fetchBoardJudges, fetchBoardMentors } from "../services/assignmentService";
 import {
   fetchBoardProblems,
   fetchBoardSlots,
@@ -10,10 +12,10 @@ import {
 } from "../services/contestApi";
 import { fetchRubric } from "../services/scoringApi";
 import { pickActiveRound } from "../utils/pickActiveRound";
-import { useEventTeams } from "./useEventTeams";
+import { useEventTeamSummary } from "./useEventTeamSummary";
 
 export function useEventSetupProgress(eventId: number | null, currentPath?: string) {
-  const { teams, loading: teamsLoading } = useEventTeams(eventId);
+  const { summary, loading: summaryLoading } = useEventTeamSummary(eventId);
 
   const setupQuery = useQuery({
     queryKey: [...queryKeys.rounds.byEvent(eventId), "setup-progress"],
@@ -28,12 +30,18 @@ export function useEventSetupProgress(eventId: number | null, currentPath?: stri
         slotsCount += slots.length;
       }
       let hasProblem = false;
-      let hasRubric = false;
+      let hasRubric = !enableScoring;
+      let hasStaff = false;
       if (boards[0]) {
-        const problems = await fetchBoardProblems(boards[0].id);
+        const [problems, mentors, judges] = await Promise.all([
+          fetchBoardProblems(boards[0].id),
+          fetchBoardMentors(boards[0].id),
+          fetchBoardJudges(boards[0].id)
+        ]);
         hasProblem = problems.length > 0;
+        hasStaff = mentors.length > 0 && judges.length > 0;
       }
-      if (round) {
+      if (round && enableScoring) {
         try {
           const rubric = await fetchRubric(round.id);
           hasRubric = (rubric?.criteria?.length ?? 0) > 0;
@@ -41,22 +49,23 @@ export function useEventSetupProgress(eventId: number | null, currentPath?: stri
           hasRubric = false;
         }
       }
-      return { boardsCount: boards.length, slotsCount, hasProblem, hasRubric };
+      return { boardsCount: boards.length, slotsCount, hasProblem, hasRubric, hasStaff };
     }
   });
 
-  const confirmedCount = teams.filter((team) => team.status === "CONFIRMED").length;
+  const confirmedCount = summary?.confirmedCount ?? 0;
   const ctx: OrganizerSetupContext = {
     hasTeams: confirmedCount > 0,
     hasBoards: (setupQuery.data?.boardsCount ?? 0) > 0,
     hasSlots: (setupQuery.data?.slotsCount ?? 0) > 0,
     hasProblem: setupQuery.data?.hasProblem ?? false,
-    hasRubric: setupQuery.data?.hasRubric ?? false
+    hasRubric: setupQuery.data?.hasRubric ?? !enableScoring,
+    hasStaff: setupQuery.data?.hasStaff ?? false
   };
 
   return {
     steps: resolveOrganizerSetupSteps(ctx, currentPath),
     context: ctx,
-    loading: teamsLoading || setupQuery.isLoading
+    loading: summaryLoading || setupQuery.isLoading
   };
 }
