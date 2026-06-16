@@ -28,6 +28,7 @@ import com.seal.hackathon.submission.dto.SaveSubmissionDraftRequest;
 import com.seal.hackathon.submission.dto.SubmissionResponse;
 import com.seal.hackathon.submission.dto.SubmitSubmissionRequest;
 import com.seal.hackathon.common.response.PagedResult;
+import com.seal.hackathon.common.util.PageRequestUtils;
 import com.seal.hackathon.common.util.RepositoryUrlValidation;
 import com.seal.hackathon.common.util.SubmissionLifecycle;
 import com.seal.hackathon.github.service.RepoCommitService;
@@ -71,10 +72,16 @@ public class SubmissionService {
 
     @Transactional(readOnly = true)
     public PagedResult<AdminTeamSubmissionResponse> listSubmissionsPaged(
-            Long eventId, Long boardId, Long roundId, int page, int size) {
+            Long eventId, Long boardId, Long roundId, String statusFilter, String query, int page, int size) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
-        int resolvedSize = Math.min(Math.max(size, 1), 200);
-        int resolvedPage = Math.max(page, 0);
+        int resolvedSize = PageRequestUtils.resolveSize(size);
+        int resolvedPage = PageRequestUtils.resolvePage(page);
+        if (StringUtils.hasText(statusFilter) || StringUtils.hasText(query)) {
+            List<AdminTeamSubmissionResponse> allRows = collectSubmissionRows(eventId, boardId, roundId);
+            List<AdminTeamSubmissionResponse> filtered = filterSubmissionRows(allRows, statusFilter, query);
+            return paginateSubmissionRows(filtered, resolvedPage, resolvedSize);
+        }
+
         PageRequest pageable = PageRequest.of(
                 resolvedPage, resolvedSize, Sort.by(Sort.Direction.ASC, "teamNumber"));
 
@@ -114,6 +121,110 @@ public class SubmissionService {
                 .size(resolvedSize)
                 .total(slotPage.getTotalElements())
                 .totalPages(slotPage.getTotalPages())
+                .build();
+    }
+
+    private List<AdminTeamSubmissionResponse> collectSubmissionRows(Long eventId, Long boardId, Long roundId) {
+        if (boardId != null) {
+            Board board = boardRepository.findById(boardId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "BOARD_NOT_FOUND"));
+            Round round = roundRepository.findById(board.getRoundId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ROUND_NOT_FOUND"));
+            if (!eventId.equals(round.getEventId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BOARD_EVENT_MISMATCH");
+            }
+            return mapSlotsToSubmissionRows(
+                    boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(boardId).stream()
+                            .filter(slot -> slot.getTeamId() != null)
+                            .toList());
+        }
+        if (roundId != null) {
+            Round round = roundRepository.findById(roundId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ROUND_NOT_FOUND"));
+            if (!eventId.equals(round.getEventId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ROUND_EVENT_MISMATCH");
+            }
+            return mapSlotsToSubmissionRows(
+                    boardSlotRepository.findByRoundId(roundId).stream()
+                            .filter(slot -> slot.getTeamId() != null)
+                            .sorted(Comparator.comparing(
+                                    BoardSlot::getTeamNumber, Comparator.nullsLast(Integer::compareTo)))
+                            .toList());
+        }
+        Map<Long, BoardSlot> slotByTeamId = new LinkedHashMap<>();
+        Map<Long, Board> boardById = new HashMap<>();
+        for (Round round : roundRepository.findByEventId(eventId)) {
+            for (BoardSlot slot : boardSlotRepository.findByRoundId(round.getId())) {
+                if (slot.getTeamId() == null) {
+                    continue;
+                }
+                slotByTeamId.putIfAbsent(slot.getTeamId(), slot);
+                if (slot.getBoardId() != null && !boardById.containsKey(slot.getBoardId())) {
+                    boardRepository.findById(slot.getBoardId()).ifPresent(b -> boardById.put(b.getId(), b));
+                }
+            }
+        }
+        List<BoardSlot> allSlots = slotByTeamId.values().stream()
+                .sorted(Comparator.comparing(
+                        BoardSlot::getTeamNumber, Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+        List<AdminTeamSubmissionResponse> items = new ArrayList<>();
+        for (BoardSlot slot : allSlots) {
+            items.add(toAdminSubmissionRow(slot, boardById.get(slot.getBoardId())));
+        }
+        return items;
+    }
+
+    private List<AdminTeamSubmissionResponse> mapSlotsToSubmissionRows(List<BoardSlot> slots) {
+        Map<Long, Board> boardById = new HashMap<>();
+        List<AdminTeamSubmissionResponse> items = new ArrayList<>();
+        for (BoardSlot slot : slots) {
+            if (slot.getBoardId() != null && !boardById.containsKey(slot.getBoardId())) {
+                boardRepository.findById(slot.getBoardId()).ifPresent(b -> boardById.put(b.getId(), b));
+            }
+            items.add(toAdminSubmissionRow(slot, boardById.get(slot.getBoardId())));
+        }
+        return items;
+    }
+
+    private List<AdminTeamSubmissionResponse> filterSubmissionRows(
+            List<AdminTeamSubmissionResponse> rows, String statusFilter, String query) {
+        String normalizedStatus = StringUtils.hasText(statusFilter) ? statusFilter.trim().toUpperCase() : null;
+        String normalizedQuery = StringUtils.hasText(query) ? query.trim().toLowerCase() : null;
+        return rows.stream()
+                .filter(row -> matchesSubmissionStatus(row, normalizedStatus))
+                .filter(row -> {
+                    if (normalizedQuery == null) {
+                        return true;
+                    }
+                    String teamName = row.getTeamName() != null ? row.getTeamName().toLowerCase() : "";
+                    String boardName = row.getBoardName() != null ? row.getBoardName().toLowerCase() : "";
+                    return teamName.contains(normalizedQuery) || boardName.contains(normalizedQuery);
+                })
+                .toList();
+    }
+
+    private boolean matchesSubmissionStatus(AdminTeamSubmissionResponse row, String normalizedStatus) {
+        if (normalizedStatus == null || "ALL".equals(normalizedStatus)) {
+            return true;
+        }
+        String rowStatus = row.getStatus() != null ? row.getStatus().name() : "NONE";
+        return normalizedStatus.equals(rowStatus);
+    }
+
+    private PagedResult<AdminTeamSubmissionResponse> paginateSubmissionRows(
+            List<AdminTeamSubmissionResponse> rows, int page, int size) {
+        int total = rows.size();
+        int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / size);
+        int fromIndex = Math.min(page * size, total);
+        int toIndex = Math.min(fromIndex + size, total);
+        List<AdminTeamSubmissionResponse> pageItems = rows.subList(fromIndex, toIndex);
+        return PagedResult.<AdminTeamSubmissionResponse>builder()
+                .items(pageItems)
+                .page(page)
+                .size(size)
+                .total(total)
+                .totalPages(totalPages)
                 .build();
     }
 

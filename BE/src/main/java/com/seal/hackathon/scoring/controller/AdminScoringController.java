@@ -75,7 +75,7 @@ public class AdminScoringController {
     public ApiResponse<RubricResponse> applyCriteriaTemplate(
             @PathVariable Long roundId,
             @PathVariable Long templateId,
-            @RequestBody(required = false) ApplyRubricActionRequest request) {
+            @RequestBody(required = false) @Valid ApplyRubricActionRequest request) {
         boolean replaceExisting = request == null || request.isReplaceExisting();
         return ApiResponse.ok(criteriaTemplateService.applyTemplateToRound(roundId, templateId, replaceExisting));
     }
@@ -84,7 +84,7 @@ public class AdminScoringController {
     public ApiResponse<RubricResponse> copyRubricFromRound(
             @PathVariable Long targetRoundId,
             @PathVariable Long sourceRoundId,
-            @RequestBody(required = false) ApplyRubricActionRequest request) {
+            @RequestBody(required = false) @Valid ApplyRubricActionRequest request) {
         boolean replaceExisting = request == null || request.isReplaceExisting();
         return ApiResponse.ok(scoringService.copyRubricFromRound(targetRoundId, sourceRoundId, replaceExisting));
     }

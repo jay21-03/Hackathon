@@ -26,9 +26,11 @@ public class AdminSubmissionController {
             @PathVariable Long eventId,
             @RequestParam(required = false) Long boardId,
             @RequestParam(required = false) Long roundId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
-        return ApiResponse.ok(submissionService.listSubmissionsPaged(eventId, boardId, roundId, page, size));
+        return ApiResponse.ok(submissionService.listSubmissionsPaged(eventId, boardId, roundId, status, q, page, size));
     }
 
     @GetMapping("/teams/{teamId}/submission")

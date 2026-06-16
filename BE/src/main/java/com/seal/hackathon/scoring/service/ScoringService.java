@@ -18,6 +18,7 @@ import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.contest.service.ContestPhaseGuardService;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.assignment.service.BoardScoringReadinessService;
 import com.seal.hackathon.notification.service.NotificationService;
@@ -95,6 +96,7 @@ public class ScoringService {
     private final NotificationService notificationService;
     private final OrganizerAuthorizationService organizerAuthorizationService;
     private final BoardScoringReadinessService boardScoringReadinessService;
+    private final ContestPhaseGuardService contestPhaseGuardService;
 
     @Transactional(readOnly = true)
     public RubricResponse getRubric(Long roundId) {
@@ -752,6 +754,7 @@ public class ScoringService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "BOARD_NOT_FOUND"));
         Round round = roundRepository.findById(board.getRoundId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ROUND_NOT_FOUND"));
+        contestPhaseGuardService.assertEventAllowsJudgeScoring(round.getEventId());
         JudgeAssignment assignment = judgeAssignmentRepository.findByBoardIdAndJudgeId(boardId, judgeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "JUDGE_NOT_ASSIGNED"));
         return new BoardContext(board, round, assignment);
