@@ -138,7 +138,9 @@ export interface TermScoreSheetItem {
   id: number;
   boardId: number;
   teamId: number;
+  teamName?: string | null;
   judgeId: number;
+  judgeName?: string | null;
   status: string | null;
 }
 

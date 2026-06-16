@@ -25,6 +25,8 @@ export interface AssignmentResponse {
   academicTermId?: number | null;
   academicTermStatus?: AcademicTermStatus | null;
   assigneeId: number;
+  assigneeName?: string | null;
+  assigneeEmail?: string | null;
   createdAt: string;
   createdBy: number;
   readiness?: JudgeBoardReadiness | null;
