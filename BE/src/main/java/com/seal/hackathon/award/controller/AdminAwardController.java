@@ -90,7 +90,7 @@ public class AdminAwardController {
     @PostMapping("/api/v1/admin/events/{eventId}/awards/suggest-from-ranking")
     public ApiResponse<SuggestAwardsFromRankingResponse> suggestFromRanking(
             @PathVariable Long eventId,
-            @RequestBody(required = false) SuggestAwardsFromRankingRequest request) {
+            @RequestBody(required = false) @Valid SuggestAwardsFromRankingRequest request) {
         Long userId = currentUserProvider.getCurrentUser().getUserId();
         SuggestAwardsFromRankingRequest body = request != null ? request : new SuggestAwardsFromRankingRequest();
         return ApiResponse.ok(awardService.suggestFromRanking(eventId, body, userId));

@@ -8,6 +8,7 @@ import com.seal.hackathon.contest.entity.Round;
 import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.contest.service.ContestPhaseGuardService;
 import com.seal.hackathon.ranking.dto.AdvancementCandidateDto;
 import com.seal.hackathon.ranking.dto.AdvancementPreviewResponse;
 import com.seal.hackathon.ranking.dto.AdvancementResponse;
@@ -46,10 +47,12 @@ public class AdvancementService {
     private final AdvancementRepository advancementRepository;
     private final TeamRepository teamRepository;
     private final OrganizerAuthorizationService organizerAuthorizationService;
+    private final ContestPhaseGuardService contestPhaseGuardService;
 
     @Transactional(readOnly = true)
     public AdvancementPreviewResponse previewAdvancements(Long eventId, Long fromRoundId, Long toRoundId, int topN) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        contestPhaseGuardService.assertEventAllowsAdvancement(eventId);
         Round fromRound = loadRoundForEvent(fromRoundId, eventId);
         loadRoundForEvent(toRoundId, eventId);
         List<AdvancementCandidateDto> eligibleTeams = collectAllEligibleTeams(fromRound.getId());
@@ -68,6 +71,7 @@ public class AdvancementService {
     public ExecuteAdvancementResponse executeAdvancements(
             Long eventId, ExecuteAdvancementRequest request, Long currentUserId) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        contestPhaseGuardService.assertEventAllowsAdvancement(eventId);
         Round fromRound = loadRoundForEvent(request.getFromRoundId(), eventId);
         Round toRound = loadRoundForEvent(request.getToRoundId(), eventId);
         int topN = Math.max(request.getTopNPerBoard(), 1);

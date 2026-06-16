@@ -125,7 +125,7 @@ class Phase7IntegrationTest {
                 .maxTeams(10)
                 .minTeamSize(1)
                 .maxTeamSize(5)
-                .status(EventStatus.REGISTRATION_OPEN)
+                .status(EventStatus.IN_PROGRESS)
                 .academicTermId(IntegrationTestFixtures.defaultAcademicTermId(academicTermRepository))
                 .createdBy(organizer.getId())
                 .createdAt(OffsetDateTime.now())

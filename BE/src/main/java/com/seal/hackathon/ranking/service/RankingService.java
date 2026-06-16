@@ -16,6 +16,7 @@ import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.registration.service.AuditLogWriter;
+import com.seal.hackathon.contest.service.ContestPhaseGuardService;
 import com.seal.hackathon.ranking.dto.BoardRankingResponse;
 import com.seal.hackathon.ranking.dto.CalculateRankingResponse;
 import com.seal.hackathon.ranking.dto.EventRankingsResponse;
@@ -63,6 +64,7 @@ public class RankingService {
     private final PublishReadinessService publishReadinessService;
     private final CurrentUserProvider currentUserProvider;
     private final AuditLogWriter auditLogWriter;
+    private final ContestPhaseGuardService contestPhaseGuardService;
 
     @Transactional(readOnly = true)
     public BoardRankingResponse getBoardRanking(Long boardId) {
@@ -132,6 +134,7 @@ public class RankingService {
     public BoardRankingResponse calculateBoardRanking(Long boardId, boolean force) {
         organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
         Board board = loadBoard(boardId);
+        contestPhaseGuardService.assertRoundAllowsRankingCalculation(board.getRoundId());
         if (!force && rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(boardId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "RANKING_PUBLISHED");
         }
@@ -144,6 +147,7 @@ public class RankingService {
         Round round = roundRepository.findById(roundId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Round not found"));
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(round.getEventId());
+        contestPhaseGuardService.assertRoundAllowsRankingCalculation(roundId);
         int boardsCalculated = 0;
         int teamsRanked = 0;
         for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(roundId))) {
