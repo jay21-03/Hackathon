@@ -71,6 +71,15 @@ public interface AcademicTermQueryRepository extends JpaRepository<Team, Long> {
                 WHERE e.academic_term_id = :termId
                   AND si.role = 'MENTOR'
                   AND si.status IN ('INVITED', 'ACCEPTED')
+                UNION
+                SELECT u.id AS user_id
+                FROM staff_invitations si
+                JOIN events e ON e.id = si.event_id
+                JOIN users u ON LOWER(u.email) = LOWER(si.email)
+                WHERE e.academic_term_id = :termId
+                  AND si.board_id IS NULL
+                  AND si.role = 'MENTOR'
+                  AND si.status IN ('INVITED', 'ACCEPTED')
             ) combined
             ORDER BY combined.user_id
             """, nativeQuery = true)
@@ -92,6 +101,15 @@ public interface AcademicTermQueryRepository extends JpaRepository<Team, Long> {
                 JOIN events e ON e.id = r.event_id
                 JOIN users u ON LOWER(u.email) = LOWER(si.email)
                 WHERE e.academic_term_id = :termId
+                  AND si.role = 'JUDGE'
+                  AND si.status IN ('INVITED', 'ACCEPTED')
+                UNION
+                SELECT u.id AS user_id
+                FROM staff_invitations si
+                JOIN events e ON e.id = si.event_id
+                JOIN users u ON LOWER(u.email) = LOWER(si.email)
+                WHERE e.academic_term_id = :termId
+                  AND si.board_id IS NULL
                   AND si.role = 'JUDGE'
                   AND si.status IN ('INVITED', 'ACCEPTED')
             ) combined

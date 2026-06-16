@@ -10,7 +10,9 @@ public class TermScoreSheetResponse {
     private Long id;
     private Long boardId;
     private Long teamId;
+    private String teamName;
     private Long judgeId;
+    private String judgeName;
     private String status;
     private OffsetDateTime submittedAt;
     private OffsetDateTime createdAt;

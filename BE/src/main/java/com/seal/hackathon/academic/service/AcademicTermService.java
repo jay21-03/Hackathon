@@ -427,11 +427,25 @@ public class AcademicTermService {
     }
 
     private TermScoreSheetResponse toScoreSheetResponse(ScoreSheet sheet) {
+        String teamName = null;
+        if (sheet.getTeamId() != null) {
+            teamName = teamRepository.findById(sheet.getTeamId())
+                    .map(Team::getName)
+                    .orElse(null);
+        }
+        String judgeName = null;
+        if (sheet.getJudgeId() != null) {
+            judgeName = userRepository.findById(sheet.getJudgeId())
+                    .map(User::getFullName)
+                    .orElse(null);
+        }
         return TermScoreSheetResponse.builder()
                 .id(sheet.getId())
                 .boardId(sheet.getBoardId())
                 .teamId(sheet.getTeamId())
+                .teamName(teamName)
                 .judgeId(sheet.getJudgeId())
+                .judgeName(judgeName)
                 .status(sheet.getStatus() != null ? sheet.getStatus().name() : null)
                 .submittedAt(sheet.getSubmittedAt())
                 .createdAt(sheet.getCreatedAt())
