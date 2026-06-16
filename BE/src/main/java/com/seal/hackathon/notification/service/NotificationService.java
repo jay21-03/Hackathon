@@ -10,6 +10,7 @@ import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.common.enums.AnnouncementAudience;
+import com.seal.hackathon.common.enums.EventStatus;
 import com.seal.hackathon.common.enums.NotificationType;
 import com.seal.hackathon.common.enums.SystemRole;
 import com.seal.hackathon.common.enums.TeamMemberStatus;
@@ -46,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.seal.hackathon.common.util.PageRequestUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -526,6 +528,59 @@ public class NotificationService {
     }
 
     @Transactional
+    public void notifyOrganizerEventStatusChanged(Event event, EventStatus before, EventStatus after) {
+        if (event.getCreatedBy() == null || before == after) {
+            return;
+        }
+        User organizer = userRepository.findById(event.getCreatedBy()).orElse(null);
+        if (organizer == null) {
+            return;
+        }
+        String eventName = event.getName() != null ? event.getName() : "cuộc thi";
+        String title = "Trạng thái cuộc thi đã đổi";
+        String content = eventName + " chuyển từ " + formatEventStatus(before) + " sang " + formatEventStatus(after) + ".";
+        String linkUrl = "/organizer/events/basic-info?eventId=" + event.getId();
+        create(
+                organizer.getId(),
+                organizer.getEmail(),
+                event.getId(),
+                NotificationType.GENERAL,
+                title,
+                content,
+                linkUrl,
+                "event-status:e" + event.getId() + ":" + after.name());
+    }
+
+    @Transactional
+    public void notifyUserAccountApproved(User user) {
+        if (user == null) {
+            return;
+        }
+        String title = "Tài khoản đã được duyệt";
+        String content = "Bạn có thể đăng nhập và sử dụng đầy đủ chức năng hệ thống.";
+        create(
+                user.getId(),
+                user.getEmail(),
+                null,
+                NotificationType.GENERAL,
+                title,
+                content,
+                "/profile",
+                "user-approved:u" + user.getId());
+    }
+
+    private String formatEventStatus(EventStatus status) {
+        return switch (status) {
+            case DRAFT -> "Bản nháp";
+            case REGISTRATION_OPEN -> "Đang mở đăng ký";
+            case REGISTRATION_CLOSED -> "Đã đóng đăng ký";
+            case IN_PROGRESS -> "Đang diễn ra";
+            case COMPLETED -> "Hoàn tất";
+            case CANCELLED -> "Đã hủy";
+        };
+    }
+
+    @Transactional
     public void notifyRankingPublished(Event event, Board board, List<RankingResult> rows) {
         for (RankingResult row : rows) {
             Team team = teamRepository.findById(row.getTeamId()).orElse(null);
@@ -603,7 +658,7 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public NotificationListResponse listForCurrentUser(Integer page, Integer size, NotificationType type) {
         CurrentUserPrincipal user = currentUserProvider.getCurrentUser();
-        int resolvedPage = page == null || page < 0 ? 0 : page;
+        int resolvedPage = page == null || page < 0 ? 0 : PageRequestUtils.resolvePage(page);
         int resolvedSize = resolvePageSize(size);
         Pageable pageable = PageRequest.of(resolvedPage, resolvedSize);
 
@@ -681,7 +736,7 @@ public class NotificationService {
         if (size == null || size <= 0) {
             return DEFAULT_PAGE_SIZE;
         }
-        return Math.min(size, MAX_PAGE_SIZE);
+        return PageRequestUtils.resolveSize(size, MAX_PAGE_SIZE);
     }
 
     private List<Board> boardsForEvent(Long eventId) {

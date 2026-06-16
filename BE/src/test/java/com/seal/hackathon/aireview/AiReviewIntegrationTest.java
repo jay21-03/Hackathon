@@ -236,6 +236,7 @@ class AiReviewIntegrationTest {
 
         teamMemberRepository.save(TeamMember.builder()
                 .teamId(team.getId())
+                .eventId(event.getId())
                 .userId(participant.getId())
                 .email(participant.getEmail())
                 .fullName(participant.getFullName())

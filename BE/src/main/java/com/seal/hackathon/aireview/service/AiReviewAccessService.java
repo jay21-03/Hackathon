@@ -16,6 +16,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * AI review visibility: participants (own team), mentors/judges assigned to the team's board, and organizers.
+ */
 @Service
 @RequiredArgsConstructor
 public class AiReviewAccessService {

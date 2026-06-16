@@ -232,6 +232,14 @@ class FullFlowIntegrationTest {
                         .content("{\"status\": \"CONFIRMED\"}"))
                 .andExpect(MockMvcResultMatchers.status().isOk());
 
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/events/" + event.getId() + "/close-registration")
+                        .header("Authorization", "Bearer " + organizerJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/events/" + event.getId() + "/start-competition")
+                        .header("Authorization", "Bearer " + organizerJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
         String assignKey = UUID.randomUUID().toString();
         mockMvc.perform(MockMvcRequestBuilders.post(
                                 "/api/v1/admin/rounds/" + round.getId() + "/boards/slots/" + slot.getId() + "/assign")
@@ -337,6 +345,14 @@ class FullFlowIntegrationTest {
                         .header("Authorization", "Bearer " + organizerJwt)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\": \"CONFIRMED\"}"))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/events/" + event.getId() + "/close-registration")
+                        .header("Authorization", "Bearer " + organizerJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/events/" + event.getId() + "/start-competition")
+                        .header("Authorization", "Bearer " + organizerJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk());
 
         mockMvc.perform(MockMvcRequestBuilders.post(
@@ -447,6 +463,14 @@ class FullFlowIntegrationTest {
                         .header("Authorization", "Bearer " + organizerJwt)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\": \"CONFIRMED\"}"))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/events/" + event.getId() + "/close-registration")
+                        .header("Authorization", "Bearer " + organizerJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/events/" + event.getId() + "/start-competition")
+                        .header("Authorization", "Bearer " + organizerJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk());
 
         mockMvc.perform(MockMvcRequestBuilders.post(

@@ -2,6 +2,7 @@ package com.seal.hackathon.notification.service;
 
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
+import com.seal.hackathon.common.html.ProblemHtmlSanitizer;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.enums.AnnouncementAudience;
 import com.seal.hackathon.contest.entity.Event;
@@ -28,6 +29,7 @@ public class AnnouncementService {
     private final NotificationService notificationService;
     private final CurrentUserProvider currentUserProvider;
     private final OrganizerAuthorizationService organizerAuthorizationService;
+    private final ProblemHtmlSanitizer htmlSanitizer;
 
     @Transactional
     public AnnouncementResponse create(Long eventId, CreateAnnouncementRequest request) {
@@ -37,10 +39,14 @@ public class AnnouncementService {
         boolean publishNow = request.getPublishNow() == null || Boolean.TRUE.equals(request.getPublishNow());
         AnnouncementAudience audience = request.getAudience() != null ? request.getAudience() : AnnouncementAudience.ALL;
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        String sanitizedContent = htmlSanitizer.sanitize(request.getContent());
+        if (sanitizedContent == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "content must not be blank");
+        }
         Announcement announcement = announcementRepository.save(Announcement.builder()
                 .eventId(eventId)
                 .title(request.getTitle().trim())
-                .content(request.getContent().trim())
+                .content(sanitizedContent)
                 .publishedAt(publishNow ? now : null)
                 .audience(audience)
                 .recipientCount(0)
