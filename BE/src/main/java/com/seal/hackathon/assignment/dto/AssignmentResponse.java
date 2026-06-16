@@ -23,6 +23,8 @@ public class AssignmentResponse {
     private Long academicTermId;
     private AcademicTermStatus academicTermStatus;
     private Long assigneeId; // mentorId or judgeId
+    private String assigneeName;
+    private String assigneeEmail;
     private OffsetDateTime createdAt;
     private Long createdBy;
     private JudgeBoardReadiness readiness;

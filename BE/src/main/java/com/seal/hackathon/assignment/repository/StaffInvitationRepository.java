@@ -42,6 +42,9 @@ public interface StaffInvitationRepository extends JpaRepository<StaffInvitation
 
             Long boardId, String email, SystemRole role, StaffInvitationStatus status);
 
+    Optional<StaffInvitation> findByEventIdAndBoardIdIsNullAndEmailIgnoreCaseAndRoleAndStatus(
+            Long eventId, String email, SystemRole role, StaffInvitationStatus status);
+
 
 
     List<StaffInvitation> findByBoardIdInAndStatusOrderByInvitedAtDesc(
@@ -82,6 +85,22 @@ public interface StaffInvitationRepository extends JpaRepository<StaffInvitation
 
     @Query("""
             SELECT si FROM StaffInvitation si
+            WHERE (
+                si.boardId IN :boardIds
+                OR (si.eventId = :eventId AND si.boardId IS NULL)
+            )
+              AND (:status IS NULL OR si.status = :status)
+              AND (:role IS NULL OR si.role = :role)
+            """)
+    Page<StaffInvitation> findFilteredWithEventScoped(
+            @Param("boardIds") List<Long> boardIds,
+            @Param("eventId") Long eventId,
+            @Param("status") StaffInvitationStatus status,
+            @Param("role") SystemRole role,
+            Pageable pageable);
+
+    @Query("""
+            SELECT si FROM StaffInvitation si
             WHERE si.boardId IN :boardIds
               AND (:status IS NULL OR si.status = :status)
               AND (:role IS NULL OR si.role = :role)
@@ -89,6 +108,52 @@ public interface StaffInvitationRepository extends JpaRepository<StaffInvitation
             """)
     Page<StaffInvitation> findFilteredByEmail(
             @Param("boardIds") List<Long> boardIds,
+            @Param("status") StaffInvitationStatus status,
+            @Param("role") SystemRole role,
+            @Param("email") String email,
+            Pageable pageable);
+
+    @Query("""
+            SELECT si FROM StaffInvitation si
+            WHERE (
+                si.boardId IN :boardIds
+                OR (si.eventId = :eventId AND si.boardId IS NULL)
+            )
+              AND (:status IS NULL OR si.status = :status)
+              AND (:role IS NULL OR si.role = :role)
+              AND LOWER(si.email) LIKE LOWER(CONCAT('%', :email, '%'))
+            """)
+    Page<StaffInvitation> findFilteredWithEventScopedByEmail(
+            @Param("boardIds") List<Long> boardIds,
+            @Param("eventId") Long eventId,
+            @Param("status") StaffInvitationStatus status,
+            @Param("role") SystemRole role,
+            @Param("email") String email,
+            Pageable pageable);
+
+    @Query("""
+            SELECT si FROM StaffInvitation si
+            WHERE si.eventId = :eventId
+              AND si.boardId IS NULL
+              AND (:status IS NULL OR si.status = :status)
+              AND (:role IS NULL OR si.role = :role)
+            """)
+    Page<StaffInvitation> findEventScopedFiltered(
+            @Param("eventId") Long eventId,
+            @Param("status") StaffInvitationStatus status,
+            @Param("role") SystemRole role,
+            Pageable pageable);
+
+    @Query("""
+            SELECT si FROM StaffInvitation si
+            WHERE si.eventId = :eventId
+              AND si.boardId IS NULL
+              AND (:status IS NULL OR si.status = :status)
+              AND (:role IS NULL OR si.role = :role)
+              AND LOWER(si.email) LIKE LOWER(CONCAT('%', :email, '%'))
+            """)
+    Page<StaffInvitation> findEventScopedFilteredByEmail(
+            @Param("eventId") Long eventId,
             @Param("status") StaffInvitationStatus status,
             @Param("role") SystemRole role,
             @Param("email") String email,
@@ -119,6 +184,21 @@ public interface StaffInvitationRepository extends JpaRepository<StaffInvitation
 
             @Param("expiredStatus") StaffInvitationStatus expiredStatus,
 
+            @Param("now") OffsetDateTime now);
+
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE StaffInvitation si SET si.status = :expiredStatus
+            WHERE si.eventId = :eventId
+              AND si.boardId IS NULL
+              AND si.status = :invitedStatus
+              AND si.inviteExpiresAt IS NOT NULL
+              AND si.inviteExpiresAt < :now
+            """)
+    int markEventScopedExpired(
+            @Param("eventId") Long eventId,
+            @Param("invitedStatus") StaffInvitationStatus invitedStatus,
+            @Param("expiredStatus") StaffInvitationStatus expiredStatus,
             @Param("now") OffsetDateTime now);
 
     @Query("""

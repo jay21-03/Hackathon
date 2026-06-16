@@ -80,6 +80,14 @@ public class StaffInvitationController {
         return ApiResponse.ok(staffInvitationService.createBulk(boardId, request));
     }
 
+    @PostMapping("/events/{eventId}/staff-invitations/bulk")
+    @SecurityRequirement(name = "bearerAuth")
+    public ApiResponse<BulkStaffInvitationResponse> createBulkForEvent(
+            @PathVariable Long eventId,
+            @Valid @RequestBody BulkCreateStaffInvitationRequest request) {
+        return ApiResponse.ok(staffInvitationService.createBulkForEvent(eventId, request));
+    }
+
     @PostMapping("/staff-invitations/resend")
     @SecurityRequirement(name = "bearerAuth")
     public ApiResponse<StaffInvitationResponse> resend(@Valid @RequestBody ResendStaffInvitationRequest request) {

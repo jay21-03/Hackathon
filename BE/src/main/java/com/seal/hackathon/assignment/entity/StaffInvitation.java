@@ -29,6 +29,8 @@ public class StaffInvitation {
 
     private Long boardId;
 
+    private Long eventId;
+
     private String email;
 
     @Enumerated(EnumType.STRING)

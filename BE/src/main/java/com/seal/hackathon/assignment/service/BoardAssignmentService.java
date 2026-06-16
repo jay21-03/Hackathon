@@ -8,6 +8,8 @@ import com.seal.hackathon.assignment.entity.JudgeAssignment;
 import com.seal.hackathon.assignment.entity.MentorAssignment;
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.assignment.repository.MentorAssignmentRepository;
+import com.seal.hackathon.authprofile.entity.User;
+import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.authprofile.repository.UserRoleRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
@@ -47,6 +49,7 @@ public class BoardAssignmentService {
     private final RoundRepository roundRepository;
     private final EventRepository eventRepository;
     private final AcademicTermRepository academicTermRepository;
+    private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final CurrentUserProvider currentUserProvider;
     private final OrganizerAuthorizationService organizerAuthorizationService;
@@ -285,7 +288,20 @@ public class BoardAssignmentService {
                 }
             }
         }
+        enrichAssignee(response);
         return response;
+    }
+
+    private void enrichAssignee(AssignmentResponse response) {
+        if (response.getAssigneeId() == null) {
+            return;
+        }
+        User user = userRepository.findById(response.getAssigneeId()).orElse(null);
+        if (user == null) {
+            return;
+        }
+        response.setAssigneeName(user.getFullName());
+        response.setAssigneeEmail(user.getEmail());
     }
 }
 
