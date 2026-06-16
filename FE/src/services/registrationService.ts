@@ -29,20 +29,28 @@ export interface TeamDetailResponse {
   }>;
   confirmedAt?: string | null;
   rejectedReason?: string | null;
+  readyForOrganizerApproval?: boolean;
 }
 
 export async function fetchEventTeams(eventId: number): Promise<TeamDetailResponse[]>;
 export async function fetchEventTeams(
   eventId: number,
-  options: { page?: number; size?: number; status?: string }
+  options: { page?: number; size?: number; status?: string; q?: string }
 ): Promise<PagedResult<TeamDetailResponse>>;
 export async function fetchEventTeams(
   eventId: number,
-  options?: { page?: number; size?: number; status?: string }
+  options?: { page?: number; size?: number; status?: string; q?: string }
 ): Promise<TeamDetailResponse[] | PagedResult<TeamDetailResponse>> {
   const { data } = await apiClient.get<ApiResponse<PagedResult<TeamDetailResponse>>>(
     `/v1/events/${eventId}/teams`,
-    { params: options }
+    {
+      params: {
+        page: options?.page,
+        size: options?.size,
+        status: options?.status && options.status !== "ALL" ? options.status : undefined,
+        q: options?.q?.trim() || undefined
+      }
+    }
   );
   const paged =
     data.data ?? {
@@ -53,6 +61,27 @@ export async function fetchEventTeams(
       totalPages: 0
     };
   return options ? paged : paged.items;
+}
+
+export interface TeamRegistrationSummary {
+  confirmedCount: number;
+  pendingCount: number;
+  awaitingApprovalCount: number;
+  waitlistCount: number;
+}
+
+export async function fetchEventTeamSummary(eventId: number): Promise<TeamRegistrationSummary> {
+  const { data } = await apiClient.get<ApiResponse<TeamRegistrationSummary>>(
+    `/v1/events/${eventId}/teams/summary`
+  );
+  return (
+    data.data ?? {
+      confirmedCount: 0,
+      pendingCount: 0,
+      awaitingApprovalCount: 0,
+      waitlistCount: 0
+    }
+  );
 }
 
 export async function updateTeamStatus(teamId: number, status: string, reason?: string) {

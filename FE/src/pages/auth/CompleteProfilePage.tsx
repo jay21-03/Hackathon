@@ -27,7 +27,7 @@ import { fetchPublicEvents } from "../../services/eventsApi";
 import { fetchMyTeams } from "../../services/registrationService";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
-import { isStaffInvitationActionPath } from "../../utils/staffInvitationPaths";
+import { consumeStaffInvitationReturn, isStaffInvitationActionPath, peekStaffInvitationReturn } from "../../utils/staffInvitationPaths";
 
 async function resolveParticipantHome(): Promise<string> {
   try {
@@ -57,7 +57,7 @@ export function CompleteProfilePage() {
   const [searchParams] = useSearchParams();
   const fromQuery = searchParams.get("from")?.trim() || "";
   const fromState = (location.state as { from?: string } | null)?.from?.trim() || "";
-  const redirectTarget = fromQuery || fromState;
+  const redirectTarget = fromQuery || fromState || peekStaffInvitationReturn() || "";
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -160,6 +160,9 @@ export function CompleteProfilePage() {
       }
 
       const target = redirectTarget || (await resolveHome(role));
+      if (isStaffInvitationActionPath(target)) {
+        consumeStaffInvitationReturn();
+      }
       window.location.href = target;
     } catch (error) {
       applyApiFormErrors(error, setFieldErrors);

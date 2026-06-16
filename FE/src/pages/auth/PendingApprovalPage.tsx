@@ -1,10 +1,18 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { AuthAlert, AuthFormShell } from "../../components/auth/AuthFormShell";
 import { clearAccessToken } from "../../auth/tokenStorage";
 import { setAuthenticated } from "../../auth/authSession";
 import { Button } from "../../components/ui/Button";
+import { isStaffInvitationActionPath } from "../../utils/staffInvitationPaths";
 
 export function PendingApprovalPage() {
+  const location = useLocation();
+  const returnTo = (location.state as { from?: string } | null)?.from?.trim();
+
+  if (returnTo && isStaffInvitationActionPath(returnTo)) {
+    return <Navigate to={returnTo} replace />;
+  }
+
   function handleLogout() {
     setAuthenticated(false);
     clearAccessToken();

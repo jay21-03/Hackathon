@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { GoogleSignInButton } from "../../components/auth/GoogleSignInButton";
 import {
   AuthAlert,
@@ -18,10 +18,17 @@ import { googleLogin, registerAccount } from "../../services/authService";
 import { applyAuthFormErrors, mapAuthErrorMessage } from "../../utils/authErrors";
 import { finishAuthSession } from "../../utils/authFinish";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
+import { isStaffInvitationActionPath } from "../../utils/staffInvitationPaths";
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
 
 export function SignupPage() {
+  const location = useLocation();
+  const authReturnTo =
+    (location.state as { from?: string } | null)?.from?.trim() ||
+    new URLSearchParams(location.search).get("from")?.trim() ||
+    undefined;
+
   const [studentType, setStudentType] = useState<StudentTypeValue>("FPT");
   const [fullName, setFullName] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -39,7 +46,7 @@ export function SignupPage() {
     setLoading(true);
     try {
       const result = await googleLogin(idToken);
-      await finishAuthSession(result);
+      await finishAuthSession(result, authReturnTo ? { from: authReturnTo } : undefined);
     } catch (error) {
       setAuthError(mapAuthErrorMessage(error instanceof Error ? error.message : "Đăng ký thất bại."));
     } finally {
@@ -72,7 +79,7 @@ export function SignupPage() {
         ...payload,
         university: payload.university || undefined
       });
-      await finishAuthSession(result);
+      await finishAuthSession(result, authReturnTo ? { from: authReturnTo } : undefined);
     } catch (error) {
       applyAuthFormErrors(error, setFieldErrors);
       setAuthError(mapAuthErrorMessage(error instanceof Error ? error.message : "Đăng ký thất bại."));
@@ -191,7 +198,9 @@ export function SignupPage() {
       </form>
 
       <p className="font-body-sm text-on-surface-variant">
-        Sau đăng ký, ban tổ chức sẽ duyệt tài khoản trước khi bạn tham gia cuộc thi.
+        {authReturnTo && isStaffInvitationActionPath(authReturnTo)
+          ? "Sau khi tạo tài khoản, bạn sẽ được đưa về trang xác nhận lời mời mentor/giám khảo — không cần chờ ban tổ chức duyệt thí sinh."
+          : "Sau đăng ký, ban tổ chức sẽ duyệt tài khoản trước khi bạn tham gia cuộc thi."}
       </p>
     </AuthFormShell>
   );

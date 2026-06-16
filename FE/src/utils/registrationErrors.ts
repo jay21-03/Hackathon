@@ -3,6 +3,12 @@ import { getApiFieldErrors } from "./apiError";
 const registrationErrorMap: Record<string, string> = {
   "Registration for this event is closed":
     "Cuộc thi chưa mở đăng ký hoặc đã hết hạn đăng ký. Ban tổ chức cần bấm «Mở đăng ký» trước.",
+  TEAM_NAME_DUPLICATE: "Tên đội đã tồn tại trong cuộc thi này.",
+  MEMBER_EMAIL_DUPLICATE: "Email thành viên đã đăng ký trong cuộc thi này.",
+  EMAIL_DUPLICATE: "Email đã được sử dụng.",
+  AWARD_CATEGORY_DUPLICATE: "Mã loại giải đã tồn tại trong cuộc thi này.",
+  GITHUB_USERNAME_DUPLICATE: "GitHub username đã được sử dụng.",
+  DATA_INTEGRITY_VIOLATION: "Dữ liệu trùng hoặc không hợp lệ. Kiểm tra lại thông tin đã nhập.",
   "Team name already exists for this event": "Tên đội đã tồn tại trong cuộc thi này.",
   "User/email already registered in another team for this event":
     "Một email trong danh sách đã thuộc đội khác của cuộc thi này.",
@@ -35,7 +41,9 @@ const registrationErrorMap: Record<string, string> = {
   "name must not exceed 200 characters": "Tên tối đa 200 ký tự.",
   "members must not exceed 50 items": "Tối đa 50 lời mời trong một lần.",
   ACCOUNT_PENDING_APPROVAL:
-    "Tài khoản chưa được ban tổ chức duyệt. Vui lòng chờ phê duyệt trước khi đăng ký đội."
+    "Tài khoản chưa được ban tổ chức duyệt. Vui lòng chờ phê duyệt trước khi đăng ký đội.",
+  "All team members must confirm before organizer approval":
+    "Tất cả thành viên phải xác nhận email trước khi BTC duyệt đội."
 };
 
 function mapRegistrationFieldKey(key: string): string {

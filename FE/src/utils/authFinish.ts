@@ -11,7 +11,11 @@ import { fetchPublicEvents } from "../services/eventsApi";
 import { fetchMyTeams } from "../services/registrationService";
 import { fetchCurrentUser } from "../services/userService";
 import { setStoredActiveEventId } from "../hooks/useActiveEvent";
-import { isStaffInvitationActionPath } from "./staffInvitationPaths";
+import {
+  consumeStaffInvitationReturn,
+  isStaffInvitationActionPath,
+  peekStaffInvitationReturn
+} from "./staffInvitationPaths";
 
 async function resolveParticipantHome(): Promise<string> {
   try {
@@ -44,8 +48,11 @@ export async function finishAuthSession(result: AuthResponse, options?: { from?:
   });
   setAuthenticated(true);
 
+  const returnTo =
+    options?.from ?? peekStaffInvitationReturn() ?? undefined;
+
   if (!profileCompleted) {
-    const from = options?.from ? `?from=${encodeURIComponent(options.from)}` : "";
+    const from = returnTo ? `?from=${encodeURIComponent(returnTo)}` : "";
     window.location.href = `/login/complete-profile${from}`;
     return;
   }
@@ -54,14 +61,15 @@ export async function finishAuthSession(result: AuthResponse, options?: { from?:
   const isStaff = staffRoles.some((role) =>
     role === "ORGANIZER" || role === "MENTOR" || role === "JUDGE"
   );
-  const returningToStaffInvite = isStaffInvitationActionPath(options?.from);
+  const returningToStaffInvite = isStaffInvitationActionPath(returnTo);
   if (!isStaff && me.status === "PENDING_APPROVAL" && !returningToStaffInvite) {
     window.location.href = "/login/pending-approval";
     return;
   }
 
-  if (options?.from) {
-    window.location.href = options.from;
+  if (returnTo) {
+    consumeStaffInvitationReturn();
+    window.location.href = returnTo;
     return;
   }
 

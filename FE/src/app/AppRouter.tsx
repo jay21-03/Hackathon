@@ -254,6 +254,17 @@ export function AppRouter() {
         <Route path="events/:eventId" element={routeElement(<EventDetailPage />)} />
       </Route>
 
+      <Route element={<PublicShell />}>
+        <Route
+          path="staff-invitations/accept"
+          element={routeElement(<StaffInvitationActionPage action="accept" />)}
+        />
+        <Route
+          path="staff-invitations/decline"
+          element={routeElement(<StaffInvitationActionPage action="decline" />)}
+        />
+      </Route>
+
       <Route element={<RoleGuard allow={["participant", "organizer", "mentor", "judge"]} />}>
         <Route element={<PublicShell />}>
           <Route
@@ -263,14 +274,6 @@ export function AppRouter() {
           <Route
             path="team-invitations/decline"
             element={routeElement(<TeamInvitationActionPage action="decline" />)}
-          />
-          <Route
-            path="staff-invitations/accept"
-            element={routeElement(<StaffInvitationActionPage action="accept" />)}
-          />
-          <Route
-            path="staff-invitations/decline"
-            element={routeElement(<StaffInvitationActionPage action="decline" />)}
           />
         </Route>
       </Route>

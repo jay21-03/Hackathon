@@ -45,7 +45,6 @@ export function TeamRegistrationPage() {
   const { team, loading: teamLoading } = useMyTeam(eventId);
   const { event: eventInfo, loading: loadingEvent, error: eventError } = useEventDetail(eventId);
   const [teamName, setTeamName] = useState("");
-  const [track, setTrack] = useState("");
   const [members, setMembers] = useState<MemberFormRow[]>(() =>
     buildInitialMembers(getAuthSession().email)
   );
@@ -245,27 +244,15 @@ export function TeamRegistrationPage() {
             void submitRegistration();
           }}
         >
-          <div className="grid gap-md md:grid-cols-2">
-            <TextField
-              label="Tên đội"
-              required
-              data-testid="team-name"
-              value={teamName}
-              onChange={(event) => setTeamName(event.target.value)}
-              placeholder="Nhập tên đội"
-              error={fieldErrors.teamName}
-            />
-            <label className="flex flex-col gap-xs">
-              <span className="font-label-sm normal-case text-on-surface-variant">Track (tham khảo)</span>
-              <select value={track} onChange={(event) => setTrack(event.target.value)} className="form-input">
-                <option value="">— Chọn track —</option>
-                <option>AI / LLM Tooling</option>
-                <option>Cybersecurity Defense</option>
-                <option>Fintech & DeFi</option>
-                <option>Hardware / IoT Edge</option>
-              </select>
-            </label>
-          </div>
+          <TextField
+            label="Tên đội"
+            required
+            data-testid="team-name"
+            value={teamName}
+            onChange={(event) => setTeamName(event.target.value)}
+            placeholder="Nhập tên đội"
+            error={fieldErrors.teamName}
+          />
 
           <div className="space-y-sm">
             <div className="flex items-center justify-between">

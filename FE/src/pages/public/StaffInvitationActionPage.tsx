@@ -19,6 +19,7 @@ import {
 import { getApiErrorMessage } from "../../utils/apiError";
 import { decodeInvitationTokenParam } from "../../utils/invitationToken";
 import { formatBoardWithRoundLabel } from "../../utils/boardLabels";
+import { consumeStaffInvitationReturn, rememberStaffInvitationReturn } from "../../utils/staffInvitationPaths";
 
 export type StaffInvitationAction = "accept" | "decline";
 
@@ -56,6 +57,7 @@ export function StaffInvitationActionPage({ action }: StaffInvitationActionPageP
           const me = await fetchCurrentUser();
           const role = resolveRoleFromApiRoles(me.roles);
           setAuthSession({ role, email: me.email, name: me.fullName });
+          consumeStaffInvitationReturn();
           notify("Đã chấp nhận lời mời mentor/giám khảo.", "success");
         } else {
           await declineStaffInvitation(token);
@@ -79,6 +81,7 @@ export function StaffInvitationActionPage({ action }: StaffInvitationActionPageP
   }
 
   if (!isAuthenticated()) {
+    rememberStaffInvitationReturn(returnTo);
     return <Navigate to="/login" replace state={{ from: returnTo }} />;
   }
 
@@ -101,7 +104,7 @@ export function StaffInvitationActionPage({ action }: StaffInvitationActionPageP
   return (
     <div className="mx-auto max-w-md space-y-lg p-page">
       <PageHeader
-        eyebrow="Lời mời mentor / giám khảo"
+        eyebrow="Lời mời ban giám khảo / mentor"
         title={isAccept ? "Xác nhận tham gia" : "Từ chối lời mời"}
         description={
           result && boardLabel

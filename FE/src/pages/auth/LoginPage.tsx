@@ -69,7 +69,11 @@ export function LoginPage() {
       footer={
         <>
           Chưa có tài khoản?{" "}
-          <Link to="/login/signup" className="text-primary hover:underline">
+          <Link
+            to="/login/signup"
+            state={from ? { from } : undefined}
+            className="text-primary hover:underline"
+          >
             Tạo tài khoản
           </Link>
         </>
