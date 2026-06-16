@@ -34,7 +34,7 @@ export function AiReviewView({ review, loading = false, detailedRubric = false }
   if (!review) {
     return (
       <p className="font-body-sm text-on-surface-variant">
-        Chưa có đánh giá AI. Hệ thống tự quét repository theo chu kỳ (mặc định 5 phút) sau khi repo được cấp.
+        Chưa có đánh giá AI. Hệ thống tự quét mã nguồn theo chu kỳ (mặc định 5 phút) sau khi mã nguồn được cấp.
       </p>
     );
   }

@@ -163,9 +163,9 @@ export async function fetchTeamAiReviewHistory(teamId: number) {
 }
 
 const AI_FAILURE_REASONS: Record<string, string> = {
-  AI_REVIEW_NOT_CONFIGURED: "Chưa cấu hình AI_API_KEY trên backend.",
-  NO_REVIEWABLE_REPOSITORY: "Đội chưa có repository GitHub đã cấp.",
-  NO_COMMITS_TO_REVIEW: "Repository chưa có commit mới để đánh giá."
+  AI_REVIEW_NOT_CONFIGURED: "Dịch vụ đánh giá AI chưa được bật. Liên hệ ban tổ chức.",
+  NO_REVIEWABLE_REPOSITORY: "Đội chưa được cấp mã nguồn.",
+  NO_COMMITS_TO_REVIEW: "Chưa có thay đổi mới trên mã nguồn để đánh giá."
 };
 
 export function formatAiReviewFailure(summary?: string | null, reason?: string | null) {
@@ -173,17 +173,17 @@ export function formatAiReviewFailure(summary?: string | null, reason?: string |
     return AI_FAILURE_REASONS[reason];
   }
   if (!summary) {
-    return "Đánh giá AI thất bại — xem log backend để biết chi tiết.";
+    return "Đánh giá AI thất bại — thử lại sau hoặc liên hệ ban tổ chức.";
   }
   const lower = summary.toLowerCase();
   if (lower.includes("quota") || lower.includes("429") || lower.includes("resource exhausted")) {
-    return "Hết quota API Gemini — thử lại sau hoặc đổi model.";
+    return "Hệ thống đánh giá AI đang quá tải — thử lại sau.";
   }
   if (lower.includes("json") || lower.includes("parse") || lower.includes("invalid")) {
-    return "Phản hồi LLM không hợp lệ — thử chạy lại hoặc giảm kích thước diff.";
+    return "Kết quả đánh giá không hợp lệ — thử chạy lại.";
   }
   if (lower.includes("timeout") || lower.includes("timed out")) {
-    return "Gọi LLM quá thời gian — repo có thể quá lớn hoặc mạng chậm.";
+    return "Đánh giá AI quá thời gian — mã nguồn có thể quá lớn, thử lại sau.";
   }
   if (summary.startsWith("AI review failed:")) {
     return summary.replace(/^AI review failed:\s*/i, "");
