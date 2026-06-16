@@ -5,6 +5,7 @@ import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.common.response.ApiResponse;
 import com.seal.hackathon.registration.dto.RegisterTeamRequest;
 import com.seal.hackathon.registration.dto.TeamDetailDto;
+import com.seal.hackathon.registration.service.RegistrationRequestValidator;
 import com.seal.hackathon.registration.service.RegistrationService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,11 +27,16 @@ public class RegistrationController {
 
     private final RegistrationService registrationService;
     private final CurrentUserProvider currentUserProvider;
+    private final RegistrationRequestValidator registrationRequestValidator;
 
     @Autowired
-    public RegistrationController(RegistrationService registrationService, CurrentUserProvider currentUserProvider) {
+    public RegistrationController(
+            RegistrationService registrationService,
+            CurrentUserProvider currentUserProvider,
+            RegistrationRequestValidator registrationRequestValidator) {
         this.registrationService = registrationService;
         this.currentUserProvider = currentUserProvider;
+        this.registrationRequestValidator = registrationRequestValidator;
     }
 
     @PostMapping("/{eventId}/teams")
@@ -41,6 +47,7 @@ public class RegistrationController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
         CurrentUserPrincipal currentUser = currentUserProvider.getCurrentUser();
+        registrationRequestValidator.validateForEvent(eventId, request);
         String requestPath = "/api/v1/events/" + eventId + "/teams";
         TeamDetailDto dto = registrationService.registerTeam(
             eventId,

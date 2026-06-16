@@ -103,6 +103,7 @@ public class TeamQueryController {
     public ResponseEntity<ApiResponse<PagedResult<TeamDetailDto>>> getEventTeams(
             @PathVariable Long eventId,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "100") int size) {
         CurrentUserPrincipal currentUser = currentUserProvider.getCurrentUser();
@@ -118,6 +119,17 @@ public class TeamQueryController {
                         org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid team status");
             }
         }
-        return ResponseEntity.ok(ApiResponse.ok(registrationService.getEventTeamsPaged(eventId, teamStatus, page, size)));
+        return ResponseEntity.ok(ApiResponse.ok(registrationService.getEventTeamsPaged(eventId, teamStatus, q, page, size)));
+    }
+
+    @GetMapping("/events/{eventId}/teams/summary")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<ApiResponse<com.seal.hackathon.registration.dto.TeamRegistrationSummaryDto>> getEventTeamRegistrationSummary(
+            @PathVariable Long eventId) {
+        CurrentUserPrincipal currentUser = currentUserProvider.getCurrentUser();
+        if (currentUser == null || currentUser.getRoles() == null || !currentUser.getRoles().contains("ORGANIZER")) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "Forbidden");
+        }
+        return ResponseEntity.ok(ApiResponse.ok(registrationService.getEventTeamRegistrationSummary(eventId)));
     }
 }

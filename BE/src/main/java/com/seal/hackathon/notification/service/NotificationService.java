@@ -155,11 +155,16 @@ public class NotificationService {
         String eventName = event != null ? event.getName() : "cuộc thi";
         String roleLabel = role == SystemRole.JUDGE ? "giám khảo" : "mentor";
         String title = "Lời mời làm " + roleLabel;
-        String content = "Bạn được mời làm " + roleLabel + " cho bảng «" + board.getName() + "» tại "
-                + eventName + ". Kiểm tra email để chấp nhận lời mời.";
-        String linkUrl = role == SystemRole.JUDGE
-                ? "/judge/scoring?boardId=" + board.getId()
-                : "/mentor/dashboard";
+        String content = board != null
+                ? "Bạn được mời làm " + roleLabel + " cho bảng «" + board.getName() + "» tại "
+                        + eventName + ". Kiểm tra email để chấp nhận lời mời."
+                : "Bạn được mời làm " + roleLabel + " cho học kỳ mới tại "
+                        + eventName + ". Kiểm tra email để chấp nhận lời mời.";
+        String linkUrl = board != null
+                ? (role == SystemRole.JUDGE
+                        ? "/judge/scoring?boardId=" + board.getId()
+                        : "/mentor/dashboard")
+                : (role == SystemRole.JUDGE ? "/judge/dashboard" : "/mentor/dashboard");
         User user = userRepository.findByEmail(invitation.getEmail()).orElse(null);
         create(
                 user != null ? user.getId() : null,
@@ -469,6 +474,31 @@ public class NotificationService {
                 linkUrl,
                 "board-ready:j" + judgeId + ":b" + board.getId());
         return created != null;
+    }
+
+    @Transactional
+    public void notifyOrganizerTeamPendingApproval(Team team) {
+        Event event = eventRepository.findById(team.getEventId()).orElse(null);
+        if (event == null || event.getCreatedBy() == null) {
+            return;
+        }
+        User organizer = userRepository.findById(event.getCreatedBy()).orElse(null);
+        if (organizer == null) {
+            return;
+        }
+        String eventName = event.getName() != null ? event.getName() : "cuộc thi";
+        String title = "Đội chờ duyệt";
+        String content = "Đội «" + team.getName() + "» đã xác nhận đủ thành viên và chờ BTC duyệt tại " + eventName + ".";
+        String linkUrl = "/organizer/teams-hub?eventId=" + team.getEventId();
+        create(
+                organizer.getId(),
+                organizer.getEmail(),
+                team.getEventId(),
+                NotificationType.GENERAL,
+                title,
+                content,
+                linkUrl,
+                "team-pending-approval:t" + team.getId());
     }
 
     @Transactional

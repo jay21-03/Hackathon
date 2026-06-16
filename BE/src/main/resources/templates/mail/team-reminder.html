@@ -16,8 +16,10 @@
           </tr>
           <tr>
             <td style="padding:24px 28px;font-size:15px;line-height:1.7;">
-              <p>Lời mời tham gia đội <strong th:text="${teamName}">đội</strong> tại <strong th:text="${eventName}">cuộc thi</strong> sắp hết hạn.</p>
-              <p th:if="${expiresAt != null}">Hạn phản hồi: <strong th:text="${expiresAt}">hạn</strong>.</p>
+              <!-- BTC_EDITABLE_START -->
+              <p style="margin:0 0 12px 0;">Lời mời tham gia đội <strong th:text="${teamName}">đội</strong> tại <strong th:text="${eventName}">cuộc thi</strong> sắp hết hạn.</p>
+              <p style="margin:0 0 12px 0;" th:if="${expiresAt != null}">Hạn phản hồi: <strong th:text="${expiresAt}">hạn</strong>.</p>
+              <!-- BTC_EDITABLE_END -->
             </td>
           </tr>
           <tr>

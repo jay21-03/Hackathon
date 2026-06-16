@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import com.seal.hackathon.common.util.PageRequestUtils;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,8 +37,8 @@ public class TeamInvitationService {
     public PagedResult<TeamInvitationResponse> listInvitations(
             Long eventId, String statusFilter, String email, int page, int size) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
-        int resolvedSize = Math.min(Math.max(size, 1), 200);
-        int resolvedPage = Math.max(page, 0);
+        int resolvedSize = PageRequestUtils.resolveSize(size);
+        int resolvedPage = PageRequestUtils.resolvePage(page);
         String emailFilter = StringUtils.hasText(email) ? email.trim() : "";
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         PageRequest pageable = PageRequest.of(

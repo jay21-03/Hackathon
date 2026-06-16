@@ -10,6 +10,7 @@ import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.exception.BusinessException;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.response.PagedResult;
+import com.seal.hackathon.common.util.PageRequestUtils;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Event;
@@ -79,6 +80,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
     private final OrganizerAuthorizationService organizerAuthorizationService;
+    private final WaitlistPromotionService waitlistPromotionService;
 
     public RegistrationServiceImpl(
             EventRepository eventRepository,
@@ -95,7 +97,8 @@ public class RegistrationServiceImpl implements RegistrationService {
             IdempotencyKeyRepository idempotencyKeyRepository,
             ObjectMapper objectMapper,
             NotificationService notificationService,
-            OrganizerAuthorizationService organizerAuthorizationService) {
+            OrganizerAuthorizationService organizerAuthorizationService,
+            WaitlistPromotionService waitlistPromotionService) {
         this.eventRepository = eventRepository;
         this.roundRepository = roundRepository;
         this.boardRepository = boardRepository;
@@ -111,6 +114,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         this.objectMapper = objectMapper;
         this.notificationService = notificationService;
         this.organizerAuthorizationService = organizerAuthorizationService;
+        this.waitlistPromotionService = waitlistPromotionService;
     }
 
     @Override
@@ -317,6 +321,9 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         switch (status) {
             case CONFIRMED -> {
+                if (!areAllMembersConfirmed(team.getId())) {
+                    throw new BusinessException("All team members must confirm before organizer approval");
+                }
                 Event event = eventRepository.findById(team.getEventId())
                         .orElseThrow(() -> new BusinessException("Event not found"));
                 long confirmedTeams = teamRepository.countByEventIdAndStatus(team.getEventId(), TeamStatus.CONFIRMED);
@@ -367,7 +374,12 @@ public class RegistrationServiceImpl implements RegistrationService {
                 .createdAt(now)
                 .build());
 
-        notificationService.notifyTeamStatusChanged(team, status);
+        notificationService.notifyTeamStatusChanged(team, team.getStatus());
+
+        if (beforeStatus == TeamStatus.CONFIRMED
+                && (team.getStatus() == TeamStatus.REJECTED || team.getStatus() == TeamStatus.DISQUALIFIED)) {
+            waitlistPromotionService.promoteWaitlistIfSlotsAvailable(team.getEventId());
+        }
 
         return loadTeamDetail(team);
     }
@@ -402,17 +414,13 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         List<TeamMember> teamMembers = teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId());
         boolean allConfirmed = teamMembers.stream().allMatch(teamMember -> teamMember.getStatus() == TeamMemberStatus.CONFIRMED);
-        if (allConfirmed) {
-            Event event = eventRepository.findById(team.getEventId())
-                    .orElseThrow(() -> new BusinessException("Event not found"));
-            long confirmedTeams = teamRepository.countByEventIdAndStatus(team.getEventId(), TeamStatus.CONFIRMED);
-            if (confirmedTeams < event.getMaxTeams()) {
-                team.setStatus(TeamStatus.CONFIRMED);
-                team.setConfirmedAt(now);
-                team.setRejectedReason(null);
-            } else {
-                team.setStatus(TeamStatus.WAITLIST);
-            }
+        if (allConfirmed && team.getStatus() == TeamStatus.PENDING) {
+            team.setConfirmedAt(null);
+            team.setRejectedReason(null);
+            notificationService.notifyOrganizerTeamPendingApproval(team);
+        } else if (!allConfirmed) {
+            team.setStatus(TeamStatus.PENDING);
+            team.setConfirmedAt(null);
         }
         team.setUpdatedAt(now);
         teamRepository.save(team);
@@ -729,6 +737,13 @@ public class RegistrationServiceImpl implements RegistrationService {
     }
 
     private void recalculateTeamStatusAfterMemberChange(Team team, OffsetDateTime now) {
+        if (team.getStatus() == TeamStatus.CONFIRMED
+                || team.getStatus() == TeamStatus.WAITLIST
+                || team.getStatus() == TeamStatus.REJECTED
+                || team.getStatus() == TeamStatus.DISQUALIFIED) {
+            return;
+        }
+
         List<TeamMember> members = teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId());
         if (members.isEmpty()) {
             team.setStatus(TeamStatus.PENDING);
@@ -740,24 +755,19 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         boolean allConfirmed = members.stream()
                 .allMatch(existing -> existing.getStatus() == TeamMemberStatus.CONFIRMED);
+        team.setStatus(TeamStatus.PENDING);
+        team.setConfirmedAt(null);
         if (allConfirmed) {
-            Event event = eventRepository.findById(team.getEventId())
-                    .orElseThrow(() -> new BusinessException("Event not found"));
-            long confirmedTeams = teamRepository.countByEventIdAndStatus(team.getEventId(), TeamStatus.CONFIRMED);
-            if (confirmedTeams < event.getMaxTeams()) {
-                team.setStatus(TeamStatus.CONFIRMED);
-                team.setConfirmedAt(now);
-                team.setRejectedReason(null);
-            } else {
-                team.setStatus(TeamStatus.WAITLIST);
-                team.setConfirmedAt(null);
-            }
-        } else {
-            team.setStatus(TeamStatus.PENDING);
-            team.setConfirmedAt(null);
+            notificationService.notifyOrganizerTeamPendingApproval(team);
         }
         team.setUpdatedAt(now);
         teamRepository.save(team);
+    }
+
+    private boolean areAllMembersConfirmed(Long teamId) {
+        List<TeamMember> members = teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(teamId);
+        return !members.isEmpty()
+                && members.stream().allMatch(member -> member.getStatus() == TeamMemberStatus.CONFIRMED);
     }
 
     @Override
@@ -800,18 +810,24 @@ public class RegistrationServiceImpl implements RegistrationService {
 
     @Override
     @Transactional(readOnly = true)
-    public PagedResult<TeamDetailDto> getEventTeamsPaged(Long eventId, TeamStatus status, int page, int size) {
+    public PagedResult<TeamDetailDto> getEventTeamsPaged(Long eventId, TeamStatus status, String query, int page, int size) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
-        int resolvedPage = Math.max(page, 0);
-        int resolvedSize = Math.min(Math.max(size, 1), 200);
+        int resolvedPage = PageRequestUtils.resolvePage(page);
+        int resolvedSize = PageRequestUtils.resolveSize(size);
         org.springframework.data.domain.Sort teamSort = org.springframework.data.domain.Sort.by(
                 org.springframework.data.domain.Sort.Order.asc("name"),
                 org.springframework.data.domain.Sort.Order.asc("id"));
         org.springframework.data.domain.Pageable pageable =
                 org.springframework.data.domain.PageRequest.of(resolvedPage, resolvedSize, teamSort);
-        org.springframework.data.domain.Page<Team> teamPage = status == null
-                ? teamRepository.findByEventId(eventId, pageable)
-                : teamRepository.findByEventIdAndStatus(eventId, status, pageable);
+        String searchPattern = normalizeTeamSearchPattern(query);
+        org.springframework.data.domain.Page<Team> teamPage;
+        if (searchPattern != null) {
+            teamPage = teamRepository.searchEventTeams(eventId, status, searchPattern, pageable);
+        } else if (status == null) {
+            teamPage = teamRepository.findByEventId(eventId, pageable);
+        } else {
+            teamPage = teamRepository.findByEventIdAndStatus(eventId, status, pageable);
+        }
         List<Long> teamIds = teamPage.getContent().stream().map(Team::getId).toList();
         Map<Long, List<TeamMember>> membersByTeamId = teamIds.isEmpty()
                 ? Map.of()
@@ -827,6 +843,24 @@ public class RegistrationServiceImpl implements RegistrationService {
                 .size(resolvedSize)
                 .total(teamPage.getTotalElements())
                 .totalPages(totalPages)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.seal.hackathon.registration.dto.TeamRegistrationSummaryDto getEventTeamRegistrationSummary(Long eventId) {
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        long confirmedCount = teamRepository.countByEventIdAndStatus(eventId, TeamStatus.CONFIRMED);
+        long pendingCount = teamRepository.countByEventIdAndStatus(eventId, TeamStatus.PENDING);
+        long waitlistCount = teamRepository.countByEventIdAndStatus(eventId, TeamStatus.WAITLIST);
+        long awaitingApproval = teamRepository.findByEventIdAndStatus(eventId, TeamStatus.PENDING).stream()
+                .filter(team -> areAllMembersConfirmed(team.getId()))
+                .count();
+        return com.seal.hackathon.registration.dto.TeamRegistrationSummaryDto.builder()
+                .confirmedCount(confirmedCount)
+                .pendingCount(pendingCount)
+                .awaitingApprovalCount(awaitingApproval)
+                .waitlistCount(waitlistCount)
                 .build();
     }
 
@@ -899,6 +933,13 @@ public class RegistrationServiceImpl implements RegistrationService {
         if (memberCount < event.getMinTeamSize() || memberCount > event.getMaxTeamSize()) {
             throw new BusinessException("Team size must be between " + event.getMinTeamSize() + " and " + event.getMaxTeamSize());
         }
+    }
+
+    private String normalizeTeamSearchPattern(String query) {
+        if (query == null || query.isBlank()) {
+            return null;
+        }
+        return "%" + query.trim().toLowerCase() + "%";
     }
 
     private List<MemberRequest> normalizeAndValidateMembers(List<MemberRequest> members, String contactEmail, String contactFullName) {
@@ -1114,6 +1155,8 @@ public class RegistrationServiceImpl implements RegistrationService {
         dto.setStatus(team.getStatus() == null ? null : team.getStatus().name());
         dto.setConfirmedAt(team.getConfirmedAt());
         dto.setRejectedReason(team.getRejectedReason());
+        dto.setReadyForOrganizerApproval(
+                team.getStatus() == TeamStatus.PENDING && areAllMembersConfirmed(team.getId()));
         dto.setMembers(members.stream()
                 .sorted(Comparator
                         .comparing(TeamMember::getContactPerson, Comparator.nullsLast(Boolean::compareTo))

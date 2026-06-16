@@ -7,6 +7,7 @@ import com.seal.hackathon.registration.dto.InviteMemberRequest;
 import com.seal.hackathon.registration.dto.RegisterTeamRequest;
 import com.seal.hackathon.common.response.PagedResult;
 import com.seal.hackathon.registration.dto.TeamDetailDto;
+import com.seal.hackathon.registration.dto.TeamRegistrationSummaryDto;
 import java.util.List;
 
 public interface RegistrationService {
@@ -47,7 +48,9 @@ public interface RegistrationService {
     List<TeamDetailDto> getEventTeams(Long eventId, com.seal.hackathon.common.enums.TeamStatus status);
 
     PagedResult<TeamDetailDto> getEventTeamsPaged(
-            Long eventId, com.seal.hackathon.common.enums.TeamStatus status, int page, int size);
+            Long eventId, com.seal.hackathon.common.enums.TeamStatus status, String query, int page, int size);
+
+    TeamRegistrationSummaryDto getEventTeamRegistrationSummary(Long eventId);
 
     List<AuditLogResponse> getEventAuditLogs(Long eventId, int limit);
 }

@@ -11,6 +11,7 @@ public class TeamDetailDto {
     private List<TeamMemberDto> members;
     private OffsetDateTime confirmedAt;
     private String rejectedReason;
+    private Boolean readyForOrganizerApproval;
 
     public TeamDetailDto() {
     }
@@ -69,5 +70,13 @@ public class TeamDetailDto {
 
     public void setRejectedReason(String rejectedReason) {
         this.rejectedReason = rejectedReason;
+    }
+
+    public Boolean getReadyForOrganizerApproval() {
+        return readyForOrganizerApproval;
+    }
+
+    public void setReadyForOrganizerApproval(Boolean readyForOrganizerApproval) {
+        this.readyForOrganizerApproval = readyForOrganizerApproval;
     }
 }

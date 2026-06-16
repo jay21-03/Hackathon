@@ -225,12 +225,19 @@ class Phase3IntegrationTest {
                         .header("Authorization", "Bearer " + inviteeJwt)
                         .content("{" + "\"token\":\"" + resentInvitation.token() + "\"}"))
                 .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data.status").value(TeamStatus.CONFIRMED.name()));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.status").value(TeamStatus.PENDING.name()));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/team-invitations/confirm")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("Authorization", "Bearer " + inviteeJwt)
                         .content("{" + "\"token\":\"" + resentInvitation.token() + "\"}"))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.status").value(TeamStatus.PENDING.name()));
+
+        mockMvc.perform(MockMvcRequestBuilders.patch("/api/v1/teams/{teamId}/status", teamId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .content("{" + "\"status\":\"CONFIRMED\"}"))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.status").value(TeamStatus.CONFIRMED.name()));
 
