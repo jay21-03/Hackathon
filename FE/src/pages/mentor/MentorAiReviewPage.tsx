@@ -18,7 +18,9 @@ import {
 
   fetchLatestTeamAiReview,
 
-  fetchTeamAiReviewHistory
+  fetchTeamAiReviewHistory,
+
+  type AiReviewResponse
 
 } from "../../services/aiReviewApi";
 
@@ -57,6 +59,7 @@ export function MentorAiReviewPage() {
   const [boardId, setBoardId] = useState<number | "">("");
 
   const [teamId, setTeamId] = useState<number | "">("");
+  const [selectedHistoryReview, setSelectedHistoryReview] = useState<AiReviewResponse | null>(null);
 
 
 
@@ -131,6 +134,13 @@ export function MentorAiReviewPage() {
     enabled: teamId !== ""
 
   });
+
+  useEffect(() => {
+    setSelectedHistoryReview(null);
+  }, [teamId]);
+
+  const displayedReview = selectedHistoryReview ?? reviewQuery.data ?? null;
+  const displayedSelectedId = selectedHistoryReview?.id ?? reviewQuery.data?.id ?? null;
 
 
 
@@ -246,11 +256,17 @@ export function MentorAiReviewPage() {
 
             loading={historyQuery.isLoading}
 
-            selectedId={reviewQuery.data?.id ?? null}
+            selectedId={displayedSelectedId}
+
+            onSelect={(item) => setSelectedHistoryReview(item)}
 
           />
 
-          <AiReviewView review={reviewQuery.data ?? null} loading={reviewQuery.isLoading} detailedRubric />
+          <AiReviewView
+            review={displayedReview}
+            loading={reviewQuery.isLoading && !selectedHistoryReview}
+            detailedRubric
+          />
 
         </div>
 

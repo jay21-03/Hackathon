@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_SUBMISSIONS?: string;
   readonly VITE_ENABLE_GITHUB_PROVISIONING?: string;
   readonly VITE_ENABLE_AI_REVIEW?: string;
+  readonly VITE_AI_REVIEW_JUDGE_ACCESS?: string;
   readonly VITE_ENABLE_AWARDS?: string;
   readonly VITE_ENABLE_ACADEMIC_TERMS?: string;
   readonly VITE_ENABLE_RANKING?: string;

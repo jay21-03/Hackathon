@@ -1,6 +1,7 @@
 import {
   enableAcademicTerms,
   enableAiReview,
+  enableAiReviewJudgeAccess,
   enableAnnouncements,
   enableAwards,
   enableGithubProvisioning,
@@ -138,7 +139,7 @@ export const organizerNav: NavItem[] = [
 export const judgeNav: NavItem[] = [
   { to: "/judge/scoring", label: "Phiếu chấm", icon: "gavel", group: "Chấm điểm" },
   { to: "/judge/dashboard", label: "Đội được chấm", icon: "assignment", group: "Chấm điểm" },
-  { to: "/judge/ai-review", label: "Đánh giá AI", icon: "psychology", group: "Tham khảo", hidden: !enableAiReview },
+  { to: "/judge/ai-review", label: "Đánh giá AI", icon: "psychology", group: "Tham khảo", hidden: !enableAiReview || !enableAiReviewJudgeAccess },
   { to: "/judge/notifications", label: "Thông báo", icon: "notifications", group: "Tài khoản" },
   { to: "/judge/profile", label: "Hồ sơ", icon: "person", group: "Tài khoản" }
 ];

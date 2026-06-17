@@ -448,7 +448,7 @@ export function SubmissionPage() {
                   <Link to="/me/ai-review" className="text-primary underline-offset-2 hover:underline">
                     Xem đánh giá AI
                   </Link>{" "}
-                  (tham khảo, cập nhật ~5 phút/lần).
+                  (tham khảo, cập nhật ~1 giờ/lần).
                 </>
               ) : null}
             </p>

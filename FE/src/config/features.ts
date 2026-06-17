@@ -29,6 +29,10 @@ export const enableGithubProvisioning =
 /** Đánh giá AI repository — tắt bằng VITE_ENABLE_AI_REVIEW=false */
 export const enableAiReview = import.meta.env.VITE_ENABLE_AI_REVIEW !== "false";
 
+/** GK xem AI Review tham khảo — tắt bằng VITE_AI_REVIEW_JUDGE_ACCESS=false (backend: AI_REVIEW_JUDGE_ACCESS_ENABLED) */
+export const enableAiReviewJudgeAccess =
+  import.meta.env.VITE_AI_REVIEW_JUDGE_ACCESS !== "false";
+
 /** Quản lý học kỳ — tắt bằng VITE_ENABLE_ACADEMIC_TERMS=false */
 export const enableAcademicTerms = import.meta.env.VITE_ENABLE_ACADEMIC_TERMS !== "false";
 

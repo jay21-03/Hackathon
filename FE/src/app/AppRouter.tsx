@@ -15,6 +15,7 @@ import {
   enableAnnouncements,
   enableGithubProvisioning,
   enableAiReview,
+  enableAiReviewJudgeAccess,
   enableNotifications,
   enablePhase7,
   enableRanking,
@@ -195,6 +196,14 @@ function gatedArtifactsHubRoute(redirectTo: string, component: ReactNode) {
 function gatedAiReviewRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
     <FeatureRouteGate enabled={enableAiReview} redirectTo={redirectTo}>
+      {component}
+    </FeatureRouteGate>
+  );
+}
+
+function gatedJudgeAiReviewRoute(redirectTo: string, component: ReactNode) {
+  return routeElement(
+    <FeatureRouteGate enabled={enableAiReview && enableAiReviewJudgeAccess} redirectTo={redirectTo}>
       {component}
     </FeatureRouteGate>
   );
@@ -435,7 +444,7 @@ export function AppRouter() {
         >
           <Route path="dashboard" element={routeElement(<JudgeDashboardPage />)} />
           <Route path="scoring" element={gatedScoringRoute("/judge/dashboard", <JudgeScoringPage />)} />
-          <Route path="ai-review" element={gatedAiReviewRoute("/judge/dashboard", <JudgeAiReviewPage />)} />
+          <Route path="ai-review" element={gatedJudgeAiReviewRoute("/judge/dashboard", <JudgeAiReviewPage />)} />
           <Route
             path="notifications"
             element={gatedNotificationRoute("/judge/dashboard", <JudgeNotificationsPage />)}

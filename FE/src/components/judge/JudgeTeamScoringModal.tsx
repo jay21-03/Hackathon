@@ -15,7 +15,7 @@ import {
 import type { JudgeRepositoryResponse } from "../../services/judgeRepositoryService";
 import type { CriteriaResponse, MatrixTeamRowResponse } from "../../services/scoringApi";
 import { useToast } from "../feedback/ToastProvider";
-import { enableAiReview } from "../../config/features";
+import { enableAiReview, enableAiReviewJudgeAccess } from "../../config/features";
 
 type CellKey = `${number}-${number}`;
 
@@ -195,7 +195,7 @@ export function JudgeTeamScoringModal({
                 ) : null}
               </div>
             ) : null}
-            {enableAiReview && repository?.provisionStatus === "CREATED" ? (
+            {enableAiReview && enableAiReviewJudgeAccess && repository?.provisionStatus === "CREATED" ? (
               <div className="border-t border-outline-variant/60 pt-md">
                 <Link
                   to={`/judge/ai-review?${new URLSearchParams({

@@ -13,7 +13,7 @@ import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 
 import { PageHeader } from "../../components/ui/PageHeader";
 
-import { fetchLatestTeamAiReview, fetchTeamAiReviewHistory } from "../../services/aiReviewApi";
+import { fetchLatestTeamAiReview, fetchTeamAiReviewHistory, type AiReviewResponse } from "../../services/aiReviewApi";
 
 import {
 
@@ -50,6 +50,7 @@ export function JudgeAiReviewPage() {
   const [boardId, setBoardId] = useState<number | "">("");
 
   const [teamId, setTeamId] = useState<number | "">("");
+  const [selectedHistoryReview, setSelectedHistoryReview] = useState<AiReviewResponse | null>(null);
 
 
 
@@ -122,6 +123,13 @@ export function JudgeAiReviewPage() {
     queryFn: () => fetchTeamAiReviewHistory(Number(teamId)),
     enabled: teamId !== ""
   });
+
+  useEffect(() => {
+    setSelectedHistoryReview(null);
+  }, [teamId]);
+
+  const displayedReview = selectedHistoryReview ?? reviewQuery.data ?? null;
+  const displayedSelectedId = selectedHistoryReview?.id ?? reviewQuery.data?.id ?? null;
 
   if (assignmentsQuery.isLoading) return <ModuleSkeleton rows={4} />;
 
@@ -230,9 +238,14 @@ export function JudgeAiReviewPage() {
           <AiReviewHistoryPanel
             reviews={historyQuery.data ?? []}
             loading={historyQuery.isLoading}
-            selectedId={reviewQuery.data?.id ?? null}
+            selectedId={displayedSelectedId}
+            onSelect={(item) => setSelectedHistoryReview(item)}
           />
-          <AiReviewView review={reviewQuery.data ?? null} loading={reviewQuery.isLoading} detailedRubric />
+          <AiReviewView
+            review={displayedReview}
+            loading={reviewQuery.isLoading && !selectedHistoryReview}
+            detailedRubric
+          />
         </div>
       ) : null}
 
