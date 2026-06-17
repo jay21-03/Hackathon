@@ -1,6 +1,7 @@
 import { Badge } from "../ui/Badge";
-import {
-  CRITERIA_KEYS,
+import { AiReviewTechInventoryView, AssessmentSections } from "./AiReviewTechInventoryView";
+import { AiReviewAgentIntelligenceView } from "./AiReviewAgentIntelligenceView";
+import {  CRITERIA_KEYS,
   extractRubricRating,
   parseStructuredReview,
   rubricLabel,
@@ -72,8 +73,17 @@ export function AiReviewRubricView({ review, detailed = false }: AiReviewRubricV
 
   return (
     <div className="space-y-md">
-      {structured.historicalSynthesis ? (
-        <section>
+      <AiReviewTechInventoryView
+        techStack={structured.techStack}
+        inventoryExhaustive={structured.inventoryExhaustive}
+        ragFeatures={structured.ragFeatures}
+      />
+
+      <AiReviewAgentIntelligenceView agentIntelligence={structured.agentIntelligence} />
+
+      <AssessmentSections assessment={structured.assessment} />
+
+      {structured.historicalSynthesis ? (        <section>
           <h3 className="font-label-md text-on-surface">Tổng hợp lịch sử</h3>
           <p className="mt-xs font-body-sm text-on-surface-variant whitespace-pre-wrap">
             {structured.historicalSynthesis}

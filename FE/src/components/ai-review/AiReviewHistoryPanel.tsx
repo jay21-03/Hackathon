@@ -14,6 +14,11 @@ function kindShort(kind: AiReviewResponse["reviewKind"]) {
   return "Review";
 }
 
+function statusShort(status: AiReviewResponse["status"]) {
+  if (status === "LLM_STARTED") return "LLM…";
+  return status;
+}
+
 export function AiReviewHistoryPanel({
   reviews,
   loading = false,
@@ -43,7 +48,7 @@ export function AiReviewHistoryPanel({
                 }`}
               >
                 <span className="text-on-surface">
-                  {kindShort(item.reviewKind)} · {item.status}
+                  {kindShort(item.reviewKind)} · {statusShort(item.status)}
                 </span>
                 <span className="shrink-0 text-on-surface-variant">
                   {item.reviewedAt ? new Date(item.reviewedAt).toLocaleString("vi-VN") : "—"}

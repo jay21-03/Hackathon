@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 interface PageHeaderProps {
   eyebrow?: string;
   title: string;
-  description?: string;
+  description?: ReactNode;
   actions?: ReactNode;
 }
 
@@ -16,7 +16,7 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
         ) : null}
         <h1 className="line-clamp-2 font-headline-md text-on-surface md:font-headline-lg">{title}</h1>
         {description ? (
-          <p className="mt-xs line-clamp-2 max-w-3xl font-body-md text-on-surface-variant">{description}</p>
+          <div className="mt-xs max-w-3xl font-body-md text-on-surface-variant">{description}</div>
         ) : null}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap gap-sm md:justify-end">{actions}</div>}

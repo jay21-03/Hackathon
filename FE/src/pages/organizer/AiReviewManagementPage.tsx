@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { AiReviewBackfillModal, type AiReviewBackfillFormValues } from "../../components/ai-review/AiReviewBackfillModal";
+import { AiReviewHealthPanel } from "../../components/ai-review/AiReviewHealthPanel";
 import { AiReviewHistoryPanel } from "../../components/ai-review/AiReviewHistoryPanel";
 import { AiReviewView } from "../../components/ai-review/AiReviewView";
 import { useToast } from "../../components/feedback/ToastProvider";
@@ -13,10 +15,14 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { queryKeys } from "../../lib/queryKeys";
 import {
+  backfillTeamCommits,
+  downloadAiReviewsCsv,
   fetchAiReviewBulkJob,
+  fetchAiReviewHealth,
   fetchEventAiReviews,
   fetchLatestTeamAiReview,
   fetchTeamAiReviewHistory,
+  retryFailedEventAiReviews,
   triggerEventAiReviewsAsync,
   triggerTeamAiReview,
   type AiReviewResponse
@@ -26,6 +32,7 @@ import { resolveApiError } from "../../utils/apiError";
 function statusTone(status: AiReviewResponse["status"]) {
   if (status === "COMPLETED") return "success" as const;
   if (status === "FAILED") return "danger" as const;
+  if (status === "LLM_STARTED") return "active" as const;
   return "warning" as const;
 }
 
@@ -39,6 +46,11 @@ export function AiReviewManagementPage() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
   const [bulkProgress, setBulkProgress] = useState<string | null>(null);
+  const [backfillTeamId, setBackfillTeamId] = useState<number | null>(null);
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [retryingFailed, setRetryingFailed] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [selectedHistoryReview, setSelectedHistoryReview] = useState<AiReviewResponse | null>(null);
 
   const selectedTeamId = useMemo(() => {
     const raw = searchParams.get("teamId");
@@ -53,11 +65,22 @@ export function AiReviewManagementPage() {
     enabled: Boolean(eventId)
   });
 
+  const healthQuery = useQuery({
+    queryKey: [...queryKeys.events.detail(eventId ?? ""), "ai-reviews-health"],
+    queryFn: () => fetchAiReviewHealth(eventId!),
+    enabled: Boolean(eventId),
+    refetchInterval: 60_000
+  });
+
   const detailQuery = useQuery({
     queryKey: ["organizer", "ai-review-detail", selectedTeamId],
     queryFn: () => fetchLatestTeamAiReview(selectedTeamId!),
     enabled: selectedTeamId != null
   });
+
+  useEffect(() => {
+    setSelectedHistoryReview(null);
+  }, [selectedTeamId]);
 
   useEffect(() => {
     if (!selectedTeamId || reviewsQuery.isLoading) return;
@@ -75,7 +98,13 @@ export function AiReviewManagementPage() {
 
   const filteredReviews = useMemo(() => {
     return (reviewsQuery.data ?? []).filter((item) => {
-      if (statusFilter !== "ALL" && item.status !== statusFilter) return false;
+      if (statusFilter !== "ALL") {
+        if (statusFilter === "PENDING") {
+          if (item.status !== "PENDING" && item.status !== "LLM_STARTED") return false;
+        } else if (item.status !== statusFilter) {
+          return false;
+        }
+      }
       if (search.trim()) {
         const label = (item.teamName ?? `Đội #${item.teamId}`).toLowerCase();
         if (!label.includes(search.trim().toLowerCase())) return false;
@@ -139,7 +168,65 @@ export function AiReviewManagementPage() {
     }
   }
 
+  async function handleRetryFailed() {
+    if (!eventId) return;
+    setRetryingFailed(true);
+    try {
+      const result = await retryFailedEventAiReviews(eventId);
+      await queryClient.invalidateQueries({
+        queryKey: [...queryKeys.events.detail(eventId), "ai-reviews"]
+      });
+      await queryClient.invalidateQueries({
+        queryKey: [...queryKeys.events.detail(eventId), "ai-reviews-health"]
+      });
+      notify(
+        `Thử lại ${result.teamsSucceeded}/${result.teamsAttempted} đội` +
+          (result.teamsFailed > 0 ? ` — ${result.teamsFailed} vẫn lỗi.` : "."),
+        result.teamsFailed > 0 ? "warning" : "success"
+      );
+    } catch (err) {
+      notify(resolveApiError(err, "Không thử lại được review lỗi."), "danger");
+    } finally {
+      setRetryingFailed(false);
+    }
+  }
+
+  async function handleExportCsv() {
+    if (!eventId) return;
+    setExportingCsv(true);
+    try {
+      await downloadAiReviewsCsv(eventId);
+      notify("Đã tải CSV đánh giá AI.", "success");
+    } catch (err) {
+      notify(resolveApiError(err, "Không xuất được CSV."), "danger");
+    } finally {
+      setExportingCsv(false);
+    }
+  }
+
+  async function handleBackfill(teamId: number, values: AiReviewBackfillFormValues) {
+    setBackfillLoading(true);
+    try {
+      const result = await backfillTeamCommits(teamId, values);
+      setBackfillTeamId(null);
+      await queryClient.invalidateQueries({
+        queryKey: [...queryKeys.events.detail(eventId ?? ""), "ai-reviews"]
+      });
+      await queryClient.invalidateQueries({ queryKey: ["organizer", "ai-review-detail", teamId] });
+      notify(
+        `Backfill: ${result.commitsImported} commit mới, ${result.commitsSkipped} bỏ qua` +
+          (result.reviewTriggered ? " — đã chạy AI." : "."),
+        "success"
+      );
+    } catch (err) {
+      notify(resolveApiError(err, "Backfill thất bại."), "danger");
+    } finally {
+      setBackfillLoading(false);
+    }
+  }
+
   function selectTeam(teamId: number) {
+    setSelectedHistoryReview(null);
     setSearchParams({ teamId: String(teamId) }, { replace: true });
   }
 
@@ -148,15 +235,51 @@ export function AiReviewManagementPage() {
   const allReviews = reviewsQuery.data ?? [];
   const reviews = filteredReviews;
   const selectedReview = allReviews.find((item) => item.teamId === selectedTeamId) ?? null;
+  const displayedReview =
+    selectedHistoryReview ?? detailQuery.data ?? selectedReview ?? null;
+  const displayedSelectedId =
+    selectedHistoryReview?.id ?? detailQuery.data?.id ?? selectedReview?.id ?? null;
 
   return (
     <div className="space-y-lg">
       <PageHeader
         eyebrow="Vận hành"
         title="Đánh giá AI"
-        description="Theo dõi tiêu chí kỹ thuật (R1) và demo (R2), phân tích mã nguồn đội. Chu kỳ tự động: 5 phút."
+        description={
+          <>
+            Theo dõi tiêu chí kỹ thuật (R1) và demo (R2), phân tích mã nguồn đội. Chu kỳ tự động: 1 giờ.{" "}
+            <a
+              href="https://hackkathon1.vercel.app"
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline-offset-2 hover:underline"
+            >
+              Tài liệu handover AI Auditor (Vercel)
+            </a>
+          </>
+        }
         actions={
           <div className="flex flex-wrap items-center gap-sm">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              loading={exportingCsv}
+              disabled={!eventId}
+              onClick={() => void handleExportCsv()}
+            >
+              Xuất CSV
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              loading={retryingFailed}
+              disabled={!eventId || (healthQuery.data?.teamsWithFailedReview ?? 0) === 0}
+              onClick={() => void handleRetryFailed()}
+            >
+              Thử lại lỗi
+            </Button>
             <Button
               type="button"
               size="sm"
@@ -171,6 +294,8 @@ export function AiReviewManagementPage() {
           </div>
         }
       />
+
+      <AiReviewHealthPanel health={healthQuery.data ?? null} loading={healthQuery.isLoading} />
 
       {reviews.length === 0 ? (
         <EmptyState
@@ -259,6 +384,14 @@ export function AiReviewManagementPage() {
                           <Button
                             type="button"
                             size="sm"
+                            variant="ghost"
+                            onClick={() => setBackfillTeamId(review.teamId)}
+                          >
+                            Backfill
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
                             variant="secondary"
                             loading={runningTeamId === review.teamId}
                             onClick={() => void handleRunReview(review.teamId)}
@@ -277,22 +410,35 @@ export function AiReviewManagementPage() {
           {selectedTeamId ? (
             <section className="space-y-sm">
               <h2 className="font-title-sm text-on-surface">
-                Chi tiết rubric — {selectedReview?.teamName ?? `Đội #${selectedTeamId}`}
+                Chi tiết đánh giá — {selectedReview?.teamName ?? `Đội #${selectedTeamId}`}
               </h2>
               <AiReviewHistoryPanel
                 reviews={historyQuery.data ?? []}
                 loading={historyQuery.isLoading}
-                selectedId={detailQuery.data?.id ?? selectedReview?.id ?? null}
+                selectedId={displayedSelectedId}
+                onSelect={(item) => setSelectedHistoryReview(item)}
               />
               <AiReviewView
-                review={detailQuery.data ?? selectedReview}
-                loading={detailQuery.isLoading}
+                review={displayedReview}
+                loading={detailQuery.isLoading && !selectedHistoryReview}
                 detailedRubric
               />
             </section>
           ) : null}
         </>
       )}
+
+      <AiReviewBackfillModal
+        open={backfillTeamId != null}
+        teamLabel={
+          allReviews.find((r) => r.teamId === backfillTeamId)?.teamName ?? `Đội #${backfillTeamId}`
+        }
+        loading={backfillLoading}
+        onClose={() => setBackfillTeamId(null)}
+        onSubmit={(values) => {
+          if (backfillTeamId != null) void handleBackfill(backfillTeamId, values);
+        }}
+      />
     </div>
   );
 }

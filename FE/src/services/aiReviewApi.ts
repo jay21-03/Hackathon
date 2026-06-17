@@ -1,7 +1,8 @@
 import type { ApiResponse } from "../types/api";
+import { getAccessToken } from "../auth/tokenStorage";
 import { apiClient } from "./apiClient";
 
-export type AiReviewStatus = "PENDING" | "COMPLETED" | "FAILED";
+export type AiReviewStatus = "PENDING" | "LLM_STARTED" | "COMPLETED" | "FAILED";
 export type AiReviewKind = "PER_PUSH" | "TEAM_AGGREGATE";
 
 export interface AiReviewResponse {
@@ -13,6 +14,8 @@ export interface AiReviewResponse {
   commitSha?: string | null;
   reviewKind?: AiReviewKind | null;
   status: AiReviewStatus;
+  /** Handover alias: llm_started / done / error */
+  handoverStatus?: string | null;
   reviewScore?: number | null;
   summary?: string | null;
   issues?: string | null;
@@ -53,6 +56,64 @@ export interface ParsedStructuredReview {
   smbScaleAdvisory?: SmbScaleAdvisory | null;
   historicalSynthesis?: string | null;
   evolutionNotes?: string | null;
+  techStack?: TechStackGroup | null;
+  inventoryExhaustive?: InventoryExhaustive | null;
+  ragLevel?: string | null;
+  ragFeatures?: string[];
+  assessment?: Record<string, string> | null;
+  agentIntelligence?: AgentIntelligence | null;
+}
+
+export interface TechStackGroup {
+  frameworks?: string[];
+  llm_models?: string[];
+  vector_db?: string[];
+  agent_frameworks?: string[];
+  third_party_tools?: string[];
+}
+
+export interface InventoryExhaustive {
+  languages?: string[];
+  frameworks_libraries?: string[];
+  data_stores?: string[];
+  ai_ml_stack?: string[];
+  devops_infra?: string[];
+}
+
+export interface AgentIntelligence {
+  reasoning_pattern?: string | null;
+  detected_skills?: string[];
+  tool_definitions?: string[];
+  has_agent_config_files?: boolean;
+}
+
+export interface ParsedPerPushReview {
+  techStack?: TechStackGroup | null;
+  inventoryExhaustive?: InventoryExhaustive | null;
+  agentIntelligence?: AgentIntelligence | null;
+  ragLevel?: string | null;
+  ragFeatures?: string[];
+  assessment?: Record<string, string> | null;
+  suggestedTestCases?: string[];
+  suggestedQuestions?: string[];
+  suggestedPromptRefinement?: string[];
+  projectAbout?: string | null;
+  pushSummary?: string | null;
+  significantChange?: boolean;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function asStringMap(value: unknown): Record<string, string> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const out: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw === "string" && raw.trim()) out[key] = raw.trim();
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 const R1_LABELS: Record<keyof CriteriaComments, string> = {
@@ -97,6 +158,92 @@ export async function triggerTeamAiReview(teamId: number) {
     throw new Error(data.message || "Không chạy được đánh giá AI.");
   }
   return data.data;
+}
+
+export interface BackfillCommitsRequest {
+  since: string;
+  until?: string | null;
+  runReview?: boolean | null;
+}
+
+export interface BackfillCommitsResponse {
+  teamId: number;
+  commitsImported: number;
+  commitsSkipped: number;
+  commitsFetched: number;
+  since: string;
+  until: string;
+  reviewTriggered: boolean;
+}
+
+export async function backfillTeamCommits(teamId: number, body: BackfillCommitsRequest) {
+  const { data } = await apiClient.post<ApiResponse<BackfillCommitsResponse>>(
+    `/v1/admin/teams/${teamId}/ai-reviews/backfill`,
+    body
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Không backfill được commit.");
+  }
+  return data.data;
+}
+
+export interface AiReviewHealthResponse {
+  eventId: number;
+  aiConfigured: boolean;
+  schedulerEnabled: boolean;
+  webhookReviewEnabled: boolean;
+  teamsWithRepository: number;
+  teamsWithCompletedReview: number;
+  teamsWithFailedReview: number;
+  teamsPendingReview: number;
+  totalFailedReviews: number;
+  oldestFailedReviewAt?: string | null;
+  recommendation?: string | null;
+}
+
+export async function fetchAiReviewHealth(eventId: number) {
+  const { data } = await apiClient.get<ApiResponse<AiReviewHealthResponse>>(
+    `/v1/admin/events/${eventId}/ai-reviews/health`
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Không tải sức khỏe AI review.");
+  }
+  return data.data;
+}
+
+export interface RetryFailedReviewsResponse {
+  teamsAttempted: number;
+  teamsSucceeded: number;
+  teamsFailed: number;
+  failures: BulkAiReviewFailure[];
+}
+
+export async function retryFailedEventAiReviews(eventId: number) {
+  const { data } = await apiClient.post<ApiResponse<RetryFailedReviewsResponse>>(
+    `/v1/admin/events/${eventId}/ai-reviews/retry-failed`
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Không thử lại review lỗi.");
+  }
+  return data.data;
+}
+
+export async function downloadAiReviewsCsv(eventId: number) {
+  const base = apiClient.defaults.baseURL ?? "/api";
+  const token = getAccessToken();
+  const response = await fetch(`${base}/v1/admin/events/${eventId}/ai-reviews/export`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
+  if (!response.ok) {
+    throw new Error("Không xuất được CSV.");
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `ai-reviews-event-${eventId}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export interface BulkAiReviewFailure {
@@ -179,7 +326,7 @@ export function formatAiReviewFailure(summary?: string | null, reason?: string |
   if (lower.includes("quota") || lower.includes("429") || lower.includes("resource exhausted")) {
     return "Hệ thống đánh giá AI đang quá tải — thử lại sau.";
   }
-  if (lower.includes("json") || lower.includes("parse") || lower.includes("invalid")) {
+  if (lower.includes("json") || lower.includes("parse") || lower.includes("invalid") || lower.includes("validation failed")) {
     return "Kết quả đánh giá không hợp lệ — thử chạy lại.";
   }
   if (lower.includes("timeout") || lower.includes("timed out")) {
@@ -189,6 +336,21 @@ export function formatAiReviewFailure(summary?: string | null, reason?: string |
     return summary.replace(/^AI review failed:\s*/i, "");
   }
   return summary;
+}
+
+export function formatHandoverStatus(status?: AiReviewStatus | null, handoverStatus?: string | null) {
+  if (handoverStatus) return handoverStatus;
+  if (status === "COMPLETED") return "done";
+  if (status === "FAILED") return "error";
+  if (status === "LLM_STARTED" || status === "PENDING") return "llm_started";
+  return status ?? "llm_started";
+}
+
+export function handoverStatusLabel(handoverStatus: string) {
+  if (handoverStatus === "done") return "Hoàn tất (done)";
+  if (handoverStatus === "error") return "Lỗi (error)";
+  if (handoverStatus === "llm_started") return "Đang gọi LLM (llm_started)";
+  return handoverStatus;
 }
 
 export function parseJsonList(raw: string | null | undefined): string[] {
@@ -205,14 +367,50 @@ export function parseStructuredReview(raw: string | null | undefined): ParsedStr
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const criteria = parsed.criteria_comments as CriteriaComments | undefined;
-    const smb = parsed.smb_scale_advisory as SmbScaleAdvisory | undefined;
+    const criteria = normalizeCriteriaComments(parsed.criteria_comments);
+    const smb = normalizeSmbAdvisory(parsed.smb_scale_advisory);
     const overall = parsed.overall_picture as Record<string, unknown> | undefined;
+    const rag = parsed.rag_maturity as Record<string, unknown> | undefined;
+    const agent = parsed.agent_intelligence as AgentIntelligence | undefined;
     return {
       criteriaComments: criteria ?? null,
       smbScaleAdvisory: smb ?? null,
       historicalSynthesis: typeof overall?.historical_synthesis === "string" ? overall.historical_synthesis : null,
-      evolutionNotes: typeof overall?.evolution_notes === "string" ? overall.evolution_notes : null
+      evolutionNotes: typeof overall?.evolution_notes === "string" ? overall.evolution_notes : null,
+      techStack: (parsed.tech_stack as TechStackGroup | undefined) ?? null,
+      inventoryExhaustive: (parsed.inventory_exhaustive as InventoryExhaustive | undefined) ?? null,
+      ragLevel: typeof rag?.level === "string" ? rag.level : null,
+      ragFeatures: asStringArray(rag?.features_detected),
+      assessment: asStringMap(parsed.assessment),
+      agentIntelligence: agent ?? null
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function parsePerPushStructured(raw: string | null | undefined): ParsedPerPushReview | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const techStack = parsed.tech_stack as TechStackGroup | undefined;
+    const inventory = parsed.inventory_exhaustive as InventoryExhaustive | undefined;
+    const agent = parsed.agent_intelligence as AgentIntelligence | undefined;
+    const rag = parsed.rag_maturity as Record<string, unknown> | undefined;
+    const overall = parsed.overall_picture as Record<string, unknown> | undefined;
+    return {
+      techStack: techStack ?? null,
+      inventoryExhaustive: inventory ?? null,
+      agentIntelligence: agent ?? null,
+      ragLevel: typeof rag?.level === "string" ? rag.level : null,
+      ragFeatures: asStringArray(rag?.features_detected),
+      assessment: asStringMap(parsed.assessment),
+      suggestedTestCases: asStringArray(parsed.suggested_test_cases),
+      suggestedQuestions: asStringArray(parsed.suggested_questions_for_team),
+      suggestedPromptRefinement: asStringArray(parsed.suggested_prompt_refinement),
+      projectAbout: typeof overall?.project_about === "string" ? overall.project_about : null,
+      pushSummary: typeof overall?.push_summary === "string" ? overall.push_summary : null,
+      significantChange: overall?.significant_change === true
     };
   } catch {
     return null;
@@ -231,6 +429,79 @@ export const CRITERIA_KEYS = [
   "R2_04",
   "R2_05"
 ] as const satisfies readonly (keyof CriteriaComments)[];
+
+/** Legacy / Vercel example keys → canonical R1_01…R2_05 */
+const CRITERIA_ALIASES: Record<string, keyof CriteriaComments> = {
+  r1_problem_solution: "R1_01",
+  r1_tech_stack_suitability: "R1_02",
+  r1_data_pipeline: "R1_02",
+  r1_retrieval_citation: "R1_03",
+  r1_intent_prompting: "R1_04",
+  r1_completeness_readiness: "R1_05",
+  r1_presentation_doc: "R1_05",
+  r2_agent_multihop: "R2_01",
+  r2_model_resources: "R2_02",
+  r2_production_ops: "R2_03",
+  r2_observability_monitoring: "R2_03",
+  r2_extensibility: "R2_04",
+  r2_bgk_qa: "R2_05",
+  r2_security_best_practices: "R2_05"
+};
+
+const SMB_ALIASES: Record<string, keyof SmbScaleAdvisory> = {
+  architecture_recommendations: "tech_and_architecture",
+  infrastructure_cost_estimation: "cost_for_smb",
+  security_compliance: "summary",
+  operations_maintenance: "observability_and_operations",
+  scalability_strategy: "throughput_and_reliability",
+  technology_stack_evolution: "data_and_integrations",
+  system_identity: "system_identity_recap",
+  tech_arch: "tech_and_architecture",
+  cost: "cost_for_smb",
+  reliability: "throughput_and_reliability",
+  observability: "observability_and_operations",
+  data: "data_and_integrations"
+};
+
+function normalizeCriteriaComments(raw: unknown): CriteriaComments | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const out: CriteriaComments = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    const upper = key.toUpperCase().replace(/-/g, "_");
+    if ((CRITERIA_KEYS as readonly string[]).includes(upper)) {
+      out[upper as keyof CriteriaComments] = value;
+      continue;
+    }
+    const alias = CRITERIA_ALIASES[key] ?? CRITERIA_ALIASES[key.toLowerCase()];
+    if (alias) out[alias] = value;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function normalizeSmbAdvisory(raw: unknown): SmbScaleAdvisory | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const out: SmbScaleAdvisory = {};
+  const canonical: (keyof SmbScaleAdvisory)[] = [
+    "system_identity_recap",
+    "summary",
+    "tech_and_architecture",
+    "cost_for_smb",
+    "throughput_and_reliability",
+    "observability_and_operations",
+    "data_and_integrations"
+  ];
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    if (canonical.includes(key as keyof SmbScaleAdvisory)) {
+      out[key as keyof SmbScaleAdvisory] = value;
+      continue;
+    }
+    const alias = SMB_ALIASES[key] ?? SMB_ALIASES[key.toLowerCase()];
+    if (alias) out[alias] = value;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
 
 const RATING_PATTERN = /(Xuất sắc|Tốt|Khá|Trung bình|Yếu)/;
 

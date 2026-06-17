@@ -1,17 +1,20 @@
 import { Badge } from "../ui/Badge";
+import { AiReviewPerPushDetailView } from "./AiReviewPerPushDetailView";
 import { AiReviewRubricView } from "./AiReviewRubricView";
 import type { AiReviewResponse } from "../../services/aiReviewApi";
-import { formatAiReviewFailure, parseJsonList } from "../../services/aiReviewApi";
+import { formatAiReviewFailure, formatHandoverStatus, handoverStatusLabel, parseJsonList, parsePerPushStructured } from "../../services/aiReviewApi";
 
 function statusTone(status: AiReviewResponse["status"]) {
   if (status === "COMPLETED") return "success" as const;
   if (status === "FAILED") return "danger" as const;
+  if (status === "LLM_STARTED") return "active" as const;
   return "warning" as const;
 }
 
 function statusLabel(status: AiReviewResponse["status"]) {
   if (status === "COMPLETED") return "Hoàn tất";
   if (status === "FAILED") return "Lỗi";
+  if (status === "LLM_STARTED") return "Đang gọi LLM";
   return "Đang xử lý";
 }
 
@@ -34,7 +37,7 @@ export function AiReviewView({ review, loading = false, detailedRubric = false }
   if (!review) {
     return (
       <p className="font-body-sm text-on-surface-variant">
-        Chưa có đánh giá AI. Hệ thống tự quét mã nguồn theo chu kỳ (mặc định 5 phút) sau khi mã nguồn được cấp.
+        Chưa có đánh giá AI. Hệ thống tự quét mã nguồn theo chu kỳ (mặc định 1 giờ) sau khi mã nguồn được cấp.
       </p>
     );
   }
@@ -42,18 +45,19 @@ export function AiReviewView({ review, loading = false, detailedRubric = false }
   const issues = parseJsonList(review.issues);
   const suggestions = parseJsonList(review.suggestions);
   const isAggregate = review.reviewKind === "TEAM_AGGREGATE";
+  const isPerPush = review.reviewKind === "PER_PUSH";
+  const perPushStructured = isPerPush ? parsePerPushStructured(review.structuredOutput) : null;
+  const handover = formatHandoverStatus(review.status, review.handoverStatus);
+  const showFlatSuggestions =
+    !isPerPush || !perPushStructured || (perPushStructured.suggestedTestCases?.length ?? 0) === 0;
 
   return (
     <div className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
       <div className="flex flex-wrap items-center gap-sm">
         <Badge tone={statusTone(review.status)}>{statusLabel(review.status)}</Badge>
+        <span className="font-label-sm text-on-surface-variant">{handoverStatusLabel(handover)}</span>
         {review.reviewKind ? <Badge tone="active">{kindLabel(review.reviewKind)}</Badge> : null}
         {review.ragLevel ? <Badge tone="active">RAG: {review.ragLevel}</Badge> : null}
-        {review.reviewScore != null ? (
-          <span className="font-label-sm text-on-surface-variant">
-            Điểm tham khảo: {Number(review.reviewScore).toFixed(0)}/100
-          </span>
-        ) : null}
       </div>
 
       {review.status === "FAILED" ? (
@@ -74,6 +78,8 @@ export function AiReviewView({ review, loading = false, detailedRubric = false }
 
       {isAggregate ? <AiReviewRubricView review={review} detailed={detailedRubric} /> : null}
 
+      {isPerPush ? <AiReviewPerPushDetailView structuredOutput={review.structuredOutput} /> : null}
+
       {issues.length > 0 ? (
         <section>
           <h3 className="font-label-md text-on-surface">Vấn đề / rủi ro</h3>
@@ -85,7 +91,7 @@ export function AiReviewView({ review, loading = false, detailedRubric = false }
         </section>
       ) : null}
 
-      {suggestions.length > 0 ? (
+      {showFlatSuggestions && suggestions.length > 0 ? (
         <section>
           <h3 className="font-label-md text-on-surface">Gợi ý & câu hỏi phản biện</h3>
           <ul className="mt-xs list-disc space-y-xs pl-5 font-body-sm text-on-surface-variant">
