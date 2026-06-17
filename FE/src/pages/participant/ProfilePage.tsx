@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
+import type { z } from "zod";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { getAuthSession, setAuthSession } from "../../auth/authSession";
 import { enableGithubProvisioning } from "../../config/features";
-import { passwordPolicySchema, profileUpdateSchema } from "../../domain/schemas";
+import { passwordPolicySchema, profileUpdateSchema, mentorJudgeProfileUpdateSchema, organizerProfileSchema } from "../../domain/schemas";
+import { isMentorOrJudgeSessionRole, isOrganizerSessionRole, isStaffSessionRole } from "../../utils/staffRoles";
 import { applyApiFormErrors } from "../../utils/apiError";
 import { setMyPassword } from "../../services/authService";
 import { fetchMyProfile, updateMyProfile } from "../../services/profileService";
@@ -14,6 +16,9 @@ import { applyAuthFormErrors, mapAuthErrorMessage } from "../../utils/authErrors
 export function ProfilePage() {
   const { notify } = useToast();
   const role = getAuthSession().role;
+  const staffProfile = isStaffSessionRole(role);
+  const mentorJudgeProfile = isMentorOrJudgeSessionRole(role);
+  const organizerProfile = isOrganizerSessionRole(role);
   const [studentType, setStudentType] = useState<"FPT" | "EXTERNAL">("FPT");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -92,13 +97,17 @@ export function ProfilePage() {
   }
 
   async function saveProfile() {
-    const parsed = profileUpdateSchema.safeParse({
-      studentType,
-      fullName,
-      studentId,
-      university: university || undefined,
-      githubUsername
-    });
+    const parsed = mentorJudgeProfile
+      ? mentorJudgeProfileUpdateSchema.safeParse({ fullName, githubUsername })
+      : organizerProfile
+        ? organizerProfileSchema.safeParse({ fullName })
+        : profileUpdateSchema.safeParse({
+          studentType,
+          fullName,
+          studentId,
+          university: university || undefined,
+          githubUsername
+        });
     if (!parsed.success) {
       const first = parsed.error.issues[0];
       const key = first?.path[0];
@@ -112,13 +121,23 @@ export function ProfilePage() {
     setFieldErrors({});
     setSaving(true);
     try {
-      const result = await updateMyProfile({
-        studentType: parsed.data.studentType,
-        fullName: parsed.data.fullName,
-        studentId: parsed.data.studentId,
-        university: parsed.data.university || undefined,
-        githubUsername: parsed.data.githubUsername?.trim() || undefined
-      });
+      const result = mentorJudgeProfile
+        ? await updateMyProfile({
+            fullName: (parsed.data as z.infer<typeof mentorJudgeProfileUpdateSchema>).fullName,
+            githubUsername: (parsed.data as z.infer<typeof mentorJudgeProfileUpdateSchema>).githubUsername
+          })
+        : organizerProfile
+          ? await updateMyProfile({
+              fullName: (parsed.data as z.infer<typeof organizerProfileSchema>).fullName
+            })
+          : await updateMyProfile({
+            studentType: (parsed.data as z.infer<typeof profileUpdateSchema>).studentType,
+            fullName: (parsed.data as z.infer<typeof profileUpdateSchema>).fullName,
+            studentId: (parsed.data as z.infer<typeof profileUpdateSchema>).studentId,
+            university: (parsed.data as z.infer<typeof profileUpdateSchema>).university || undefined,
+            githubUsername:
+              (parsed.data as z.infer<typeof profileUpdateSchema>).githubUsername?.trim() || undefined
+          });
       setFullName(result.fullName ?? fullName);
       setStudentId(result.studentId ?? studentId);
       setUniversity(result.university ?? university);
@@ -143,125 +162,180 @@ export function ProfilePage() {
       <PageHeader
         eyebrow="Tài khoản"
         title="Hồ sơ cá nhân"
-        description="Cập nhật thông tin liên hệ để ban tổ chức, mentor và đội thi nhận diện đúng bạn."
+        description={
+          mentorJudgeProfile
+            ? "Cập nhật họ tên và GitHub username — BTC dùng để cấp quyền xem repo đội."
+            : organizerProfile
+              ? "Cập nhật họ tên hiển thị trên hệ thống quản trị."
+              : "Cập nhật thông tin liên hệ để ban tổ chức, mentor và đội thi nhận diện đúng bạn."
+        }
       />
 
       <section className="grid gap-md lg:grid-cols-[1fr_320px]">
         <form className="rounded-xl border border-outline-variant bg-surface-container p-lg" onSubmit={(event) => event.preventDefault()}>
-          <div className="grid gap-md md:grid-cols-2">
-            <label className="grid gap-xs font-label-md text-on-surface md:col-span-2">
-              Loai sinh vien
-              <div className="flex flex-wrap gap-md font-body-md">
-                <label className="flex items-center gap-xs">
-                  <input
-                    type="radio"
-                    name="studentType"
-                    checked={studentType === "FPT"}
-                    disabled={loading}
-                    onChange={() => setStudentType("FPT")}
-                  />
-                  Sinh vien FPT
-                </label>
-                <label className="flex items-center gap-xs">
-                  <input
-                    type="radio"
-                    name="studentType"
-                    checked={studentType === "EXTERNAL"}
-                    disabled={loading}
-                    onChange={() => setStudentType("EXTERNAL")}
-                  />
-                  Sinh vien ngoai truong
-                </label>
-              </div>
-            </label>
-            <label className="grid gap-xs font-label-md text-on-surface">
-              Ho va ten
-              <input
-                className={`rounded-lg border bg-surface-container-high px-3 py-2 font-body-md text-on-surface ${fieldErrors.fullName ? "border-error" : "border-outline-variant"}`}
-                value={fullName}
-                onChange={(event) => {
-                  setFullName(event.target.value);
-                  setFieldErrors((prev) => ({ ...prev, fullName: "" }));
-                }}
-                disabled={loading}
-              />
-              {fieldErrors.fullName ? (
-                <span className="font-body-sm text-error">{fieldErrors.fullName}</span>
-              ) : null}
-            </label>
-            <label className="grid gap-xs font-label-md text-on-surface">
-              Email
-              <input
-                className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                disabled
-              />
-            </label>
-          </div>
-          <div className="mt-md grid gap-md md:grid-cols-2">
-            {enableGithubProvisioning ? (
-              <label className="grid gap-xs font-label-md text-on-surface md:col-span-2">
-                GitHub username
-                <input
-                  className={`rounded-lg border bg-surface-container-high px-3 py-2 font-body-md text-on-surface ${fieldErrors.githubUsername ? "border-error" : "border-outline-variant"}`}
-                  value={githubUsername}
-                  onChange={(event) => {
-                    setGithubUsername(event.target.value);
-                    setFieldErrors((prev) => ({ ...prev, githubUsername: "" }));
-                  }}
-                  placeholder="ten-tai-khoan-github"
-                  disabled={loading}
-                />
-                {fieldErrors.githubUsername ? (
-                  <span className="font-body-sm text-error">{fieldErrors.githubUsername}</span>
-                ) : null}
-                <span className="font-body-sm text-on-surface-variant">
-                  {role === "judge"
-                    ? "Cần để BTC cấp quyền xem repository GitHub của đội khi chấm điểm."
-                    : "Cần để hệ thống cấp quyền ghi (push) vào repository đội khi mở đề."}
-                </span>
-              </label>
-            ) : null}
-            <label className="grid gap-xs font-label-md text-on-surface">
-              Ma so sinh vien
-              <input
-                className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
-                value={studentId}
-                onChange={(event) => setStudentId(event.target.value)}
-                disabled={loading}
-              />
-            </label>
-            {studentType === "EXTERNAL" ? (
+          {staffProfile ? (
+            <div className="grid gap-md md:grid-cols-2">
               <label className="grid gap-xs font-label-md text-on-surface">
-                Truong
+                Họ và tên
                 <input
-                  className={`rounded-lg border bg-surface-container-high px-3 py-2 font-body-md text-on-surface ${fieldErrors.university ? "border-error" : "border-outline-variant"}`}
-                  value={university}
+                  className={`rounded-lg border bg-surface-container-high px-3 py-2 font-body-md text-on-surface ${fieldErrors.fullName ? "border-error" : "border-outline-variant"}`}
+                  value={fullName}
                   onChange={(event) => {
-                    setUniversity(event.target.value);
-                    setFieldErrors((prev) => ({ ...prev, university: "" }));
+                    setFullName(event.target.value);
+                    setFieldErrors((prev) => ({ ...prev, fullName: "" }));
                   }}
                   disabled={loading}
                 />
-                {fieldErrors.university ? (
-                  <span className="font-body-sm text-error">{fieldErrors.university}</span>
+                {fieldErrors.fullName ? (
+                  <span className="font-body-sm text-error">{fieldErrors.fullName}</span>
                 ) : null}
               </label>
-            ) : (
               <label className="grid gap-xs font-label-md text-on-surface">
-                Truong
+                Email
                 <input
                   className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
-                  value={university}
-                  onChange={(event) => setUniversity(event.target.value)}
-                  placeholder="FPT University"
-                  disabled={loading}
+                  value={email}
+                  disabled
                 />
               </label>
-            )}
-          </div>
-          {formError && <p className="mt-md font-body-sm text-error">{formError}</p>}
+              {mentorJudgeProfile ? (
+                <label className="grid gap-xs font-label-md text-on-surface md:col-span-2">
+                  GitHub username
+                  <input
+                    className={`rounded-lg border bg-surface-container-high px-3 py-2 font-body-md text-on-surface ${fieldErrors.githubUsername ? "border-error" : "border-outline-variant"}`}
+                    value={githubUsername}
+                    onChange={(event) => {
+                      setGithubUsername(event.target.value);
+                      setFieldErrors((prev) => ({ ...prev, githubUsername: "" }));
+                    }}
+                    placeholder="ten-tai-khoan-github"
+                    disabled={loading}
+                  />
+                  {fieldErrors.githubUsername ? (
+                    <span className="font-body-sm text-error">{fieldErrors.githubUsername}</span>
+                  ) : null}
+                  <span className="font-body-sm text-on-surface-variant">
+                    Cần để BTC cấp quyền xem repository GitHub của đội khi chấm điểm hoặc hỗ trợ.
+                  </span>
+                </label>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-md md:grid-cols-2">
+                <label className="grid gap-xs font-label-md text-on-surface md:col-span-2">
+                  Loai sinh vien
+                  <div className="flex flex-wrap gap-md font-body-md">
+                    <label className="flex items-center gap-xs">
+                      <input
+                        type="radio"
+                        name="studentType"
+                        checked={studentType === "FPT"}
+                        disabled={loading}
+                        onChange={() => setStudentType("FPT")}
+                      />
+                      Sinh vien FPT
+                    </label>
+                    <label className="flex items-center gap-xs">
+                      <input
+                        type="radio"
+                        name="studentType"
+                        checked={studentType === "EXTERNAL"}
+                        disabled={loading}
+                        onChange={() => setStudentType("EXTERNAL")}
+                      />
+                      Sinh vien ngoai truong
+                    </label>
+                  </div>
+                </label>
+                <label className="grid gap-xs font-label-md text-on-surface">
+                  Ho va ten
+                  <input
+                    className={`rounded-lg border bg-surface-container-high px-3 py-2 font-body-md text-on-surface ${fieldErrors.fullName ? "border-error" : "border-outline-variant"}`}
+                    value={fullName}
+                    onChange={(event) => {
+                      setFullName(event.target.value);
+                      setFieldErrors((prev) => ({ ...prev, fullName: "" }));
+                    }}
+                    disabled={loading}
+                  />
+                  {fieldErrors.fullName ? (
+                    <span className="font-body-sm text-error">{fieldErrors.fullName}</span>
+                  ) : null}
+                </label>
+                <label className="grid gap-xs font-label-md text-on-surface">
+                  Email
+                  <input
+                    className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    disabled
+                  />
+                </label>
+              </div>
+              <div className="mt-md grid gap-md md:grid-cols-2">
+                {enableGithubProvisioning ? (
+                  <label className="grid gap-xs font-label-md text-on-surface md:col-span-2">
+                    GitHub username
+                    <input
+                      className={`rounded-lg border bg-surface-container-high px-3 py-2 font-body-md text-on-surface ${fieldErrors.githubUsername ? "border-error" : "border-outline-variant"}`}
+                      value={githubUsername}
+                      onChange={(event) => {
+                        setGithubUsername(event.target.value);
+                        setFieldErrors((prev) => ({ ...prev, githubUsername: "" }));
+                      }}
+                      placeholder="ten-tai-khoan-github"
+                      disabled={loading}
+                    />
+                    {fieldErrors.githubUsername ? (
+                      <span className="font-body-sm text-error">{fieldErrors.githubUsername}</span>
+                    ) : null}
+                    <span className="font-body-sm text-on-surface-variant">
+                      Cần để hệ thống cấp quyền ghi (push) vào repository đội khi mở đề.
+                    </span>
+                  </label>
+                ) : null}
+                <label className="grid gap-xs font-label-md text-on-surface">
+                  Ma so sinh vien
+                  <input
+                    className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
+                    value={studentId}
+                    onChange={(event) => setStudentId(event.target.value)}
+                    disabled={loading}
+                  />
+                </label>
+                {studentType === "EXTERNAL" ? (
+                  <label className="grid gap-xs font-label-md text-on-surface">
+                    Truong
+                    <input
+                      className={`rounded-lg border bg-surface-container-high px-3 py-2 font-body-md text-on-surface ${fieldErrors.university ? "border-error" : "border-outline-variant"}`}
+                      value={university}
+                      onChange={(event) => {
+                        setUniversity(event.target.value);
+                        setFieldErrors((prev) => ({ ...prev, university: "" }));
+                      }}
+                      disabled={loading}
+                    />
+                    {fieldErrors.university ? (
+                      <span className="font-body-sm text-error">{fieldErrors.university}</span>
+                    ) : null}
+                  </label>
+                ) : (
+                  <label className="grid gap-xs font-label-md text-on-surface">
+                    Truong
+                    <input
+                      className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-md text-on-surface"
+                      value={university}
+                      onChange={(event) => setUniversity(event.target.value)}
+                      placeholder="FPT University"
+                      disabled={loading}
+                    />
+                  </label>
+                )}
+              </div>
+            </>
+          )}
+          {formError ? <p className="mt-md font-body-sm text-error">{formError}</p> : null}
           <Button
             className="mt-lg"
             disabled={saving || loading}
@@ -276,7 +350,9 @@ export function ProfilePage() {
           <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary-container text-on-primary-container">
             <Icon name="person" filled className="text-[32px]" />
           </div>
-          <h2 className="mt-md font-headline-sm text-on-surface">{fullName || "Thi sinh"}</h2>
+          <h2 className="mt-md font-headline-sm text-on-surface">
+            {fullName || (mentorJudgeProfile ? "Mentor / Giám khảo" : organizerProfile ? "Ban tổ chức" : "Thi sinh")}
+          </h2>
           <p className="break-all font-body-sm text-on-surface-variant">{email || ""}</p>
           <p className="mt-md font-body-sm text-on-surface-variant">
             Hồ sơ này chỉ dùng cho liên hệ trong cuộc thi. Điểm và xếp hạng không bị ảnh hưởng bởi thông tin cá nhân.

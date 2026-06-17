@@ -73,11 +73,11 @@ export async function googleLogin(idToken: string) {
 export async function registerAccount(payload: {
   email: string;
   password: string;
-  studentType: "FPT" | "EXTERNAL";
   fullName: string;
-  studentId: string;
+  studentType?: "FPT" | "EXTERNAL";
+  studentId?: string;
   university?: string;
-  githubUsername: string;
+  githubUsername?: string;
 }) {
 
   try {

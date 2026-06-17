@@ -4,10 +4,10 @@ import { getAuthSession, isAuthenticated, setAuthSession } from "../../auth/auth
 import { fetchCurrentUser } from "../../services/userService";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
 import { isStaffInvitationActionPath } from "../../utils/staffInvitationPaths";
+import { isStaffApiRole } from "../../utils/staffRoles";
 
 function isStaffRole(roles: string[] | undefined): boolean {
-  const normalized = (roles ?? []).map((role) => role.toUpperCase());
-  return normalized.some((role) => role === "ORGANIZER" || role === "MENTOR" || role === "JUDGE");
+  return isStaffApiRole(roles);
 }
 
 interface AccountApprovalGateProps {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { z } from "zod";
 import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   AuthAlert,
@@ -10,6 +11,7 @@ import {
   StudentTypeFields,
   type StudentTypeValue
 } from "../../components/auth/StudentTypeFields";
+import { StaffProfileFields } from "../../components/auth/StaffProfileFields";
 import { Button } from "../../components/ui/Button";
 import {
   getAuthSession,
@@ -19,7 +21,7 @@ import {
   setAuthSession,
   type UserRole
 } from "../../auth/authSession";
-import { profileCompletionSchema } from "../../domain/schemas";
+import { profileCompletionSchema, mentorJudgeProfileSchema, organizerProfileSchema } from "../../domain/schemas";
 import { fetchMyProfile, updateMyProfile } from "../../services/profileService";
 import { applyApiFormErrors } from "../../utils/apiError";
 import { setStoredActiveEventId } from "../../hooks/useActiveEvent";
@@ -28,6 +30,7 @@ import { fetchMyTeams } from "../../services/registrationService";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { consumeStaffInvitationReturn, isStaffInvitationActionPath, peekStaffInvitationReturn } from "../../utils/staffInvitationPaths";
+import { isMentorOrJudgeApiRole, isStaffApiRole } from "../../utils/staffRoles";
 
 async function resolveParticipantHome(): Promise<string> {
   try {
@@ -71,6 +74,12 @@ export function CompleteProfilePage() {
   const [studentId, setStudentId] = useState("");
   const [university, setUniversity] = useState("");
   const [githubUsername, setGithubUsername] = useState("");
+  const [staffProfileFlow, setStaffProfileFlow] = useState(
+    () => isStaffInvitationActionPath(redirectTarget)
+  );
+  const [mentorJudgeProfile, setMentorJudgeProfile] = useState(
+    () => isStaffInvitationActionPath(redirectTarget)
+  );
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -86,6 +95,18 @@ export function CompleteProfilePage() {
           setAlreadyComplete(true);
           return;
         }
+        setStaffProfileFlow(
+          (current) =>
+            current ||
+            isStaffApiRole(profile.roles) ||
+            isStaffInvitationActionPath(redirectTarget)
+        );
+        setMentorJudgeProfile(
+          (current) =>
+            current ||
+            isMentorOrJudgeApiRole(profile.roles) ||
+            isStaffInvitationActionPath(redirectTarget)
+        );
         setEmail(profile.email ?? "");
         setStudentType(profile.studentType === "EXTERNAL" ? "EXTERNAL" : "FPT");
         setFullName(profile.fullName ?? "");
@@ -127,13 +148,17 @@ export function CompleteProfilePage() {
     event.preventDefault();
     setAuthError(null);
 
-    const parsed = profileCompletionSchema.safeParse({
-      studentType,
-      fullName,
-      studentId,
-      university: university || undefined,
-      githubUsername
-    });
+    const parsed = staffProfileFlow
+      ? mentorJudgeProfile
+        ? mentorJudgeProfileSchema.safeParse({ fullName, githubUsername })
+        : organizerProfileSchema.safeParse({ fullName })
+      : profileCompletionSchema.safeParse({
+          studentType,
+          fullName,
+          studentId,
+          university: university || undefined,
+          githubUsername
+        });
     if (!parsed.success) {
       setFieldErrors(zodFieldErrors(parsed.error));
       return;
@@ -142,10 +167,19 @@ export function CompleteProfilePage() {
     setSaving(true);
 
     try {
-      const updated = await updateMyProfile({
-        ...parsed.data,
-        university: parsed.data.university || undefined
-      });
+      const updated = staffProfileFlow
+        ? mentorJudgeProfile
+          ? await updateMyProfile({
+              fullName: (parsed.data as z.infer<typeof mentorJudgeProfileSchema>).fullName,
+              githubUsername: (parsed.data as z.infer<typeof mentorJudgeProfileSchema>).githubUsername
+            })
+          : await updateMyProfile({
+              fullName: (parsed.data as z.infer<typeof organizerProfileSchema>).fullName
+            })
+        : await updateMyProfile({
+            ...(parsed.data as z.infer<typeof profileCompletionSchema>),
+            university: (parsed.data as z.infer<typeof profileCompletionSchema>).university || undefined
+          });
       const role: UserRole = resolveRoleFromApiRoles(updated.roles);
       setAuthSession({
         role,
@@ -175,7 +209,13 @@ export function CompleteProfilePage() {
   return (
     <AuthFormShell
       title="Hoàn tất hồ sơ"
-      subtitle="Bổ sung thông tin cá nhân để tiếp tục sử dụng hệ thống."
+      subtitle={
+        staffProfileFlow
+          ? mentorJudgeProfile
+            ? "Xác nhận họ tên và GitHub username để BTC cấp quyền xem repo đội."
+            : "Xác nhận họ tên để tiếp tục (BTC không cần MSSV hay GitHub)."
+          : "Bổ sung thông tin cá nhân để tiếp tục sử dụng hệ thống."
+      }
     >
       {authError ? <AuthAlert tone="error">{authError}</AuthAlert> : null}
 
@@ -190,21 +230,34 @@ export function CompleteProfilePage() {
           />
         </AuthFieldLabel>
 
-        <StudentTypeFields
-          studentType={studentType}
-          onStudentTypeChange={setStudentType}
-          fullName={fullName}
-          onFullNameChange={setFullName}
-          studentId={studentId}
-          onStudentIdChange={setStudentId}
-          university={university}
-          onUniversityChange={setUniversity}
-          githubUsername={githubUsername}
-          onGithubUsernameChange={setGithubUsername}
-          fieldErrors={fieldErrors}
-          onClearError={(key) => setFieldErrors((prev) => ({ ...prev, [key]: "" }))}
-          disabled={saving}
-        />
+        {staffProfileFlow ? (
+          <StaffProfileFields
+            fullName={fullName}
+            onFullNameChange={setFullName}
+            githubUsername={githubUsername}
+            onGithubUsernameChange={setGithubUsername}
+            requireGithub={mentorJudgeProfile}
+            fieldErrors={fieldErrors}
+            onClearError={(key) => setFieldErrors((prev) => ({ ...prev, [key]: "" }))}
+            disabled={saving}
+          />
+        ) : (
+          <StudentTypeFields
+            studentType={studentType}
+            onStudentTypeChange={setStudentType}
+            fullName={fullName}
+            onFullNameChange={setFullName}
+            studentId={studentId}
+            onStudentIdChange={setStudentId}
+            university={university}
+            onUniversityChange={setUniversity}
+            githubUsername={githubUsername}
+            onGithubUsernameChange={setGithubUsername}
+            fieldErrors={fieldErrors}
+            onClearError={(key) => setFieldErrors((prev) => ({ ...prev, [key]: "" }))}
+            disabled={saving}
+          />
+        )}
 
         <Button type="submit" loading={saving} className="w-full justify-center">
           Lưu và tiếp tục

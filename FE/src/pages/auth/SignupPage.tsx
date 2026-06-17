@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import type { z } from "zod";
 import { GoogleSignInButton } from "../../components/auth/GoogleSignInButton";
 import {
   AuthAlert,
@@ -12,8 +13,9 @@ import {
   StudentTypeFields,
   type StudentTypeValue
 } from "../../components/auth/StudentTypeFields";
+import { StaffProfileFields } from "../../components/auth/StaffProfileFields";
 import { Button } from "../../components/ui/Button";
-import { signupSchema } from "../../domain/schemas";
+import { signupSchema, mentorJudgeSignupSchema } from "../../domain/schemas";
 import { googleLogin, registerAccount } from "../../services/authService";
 import { applyAuthFormErrors, mapAuthErrorMessage } from "../../utils/authErrors";
 import { finishAuthSession } from "../../utils/authFinish";
@@ -28,6 +30,7 @@ export function SignupPage() {
     (location.state as { from?: string } | null)?.from?.trim() ||
     new URLSearchParams(location.search).get("from")?.trim() ||
     undefined;
+  const staffSignupFlow = isStaffInvitationActionPath(authReturnTo);
 
   const [studentType, setStudentType] = useState<StudentTypeValue>("FPT");
   const [fullName, setFullName] = useState("");
@@ -57,16 +60,24 @@ export function SignupPage() {
   async function handleSignup(event: React.FormEvent) {
     event.preventDefault();
     setAuthError(null);
-    const parsed = signupSchema.safeParse({
-      studentType,
-      fullName,
-      studentId,
-      university: university || undefined,
-      githubUsername,
-      email,
-      password,
-      confirmPassword
-    });
+    const parsed = staffSignupFlow
+      ? mentorJudgeSignupSchema.safeParse({
+          fullName,
+          githubUsername,
+          email,
+          password,
+          confirmPassword
+        })
+      : signupSchema.safeParse({
+          studentType,
+          fullName,
+          studentId,
+          university: university || undefined,
+          githubUsername,
+          email,
+          password,
+          confirmPassword
+        });
     if (!parsed.success) {
       setFieldErrors(zodFieldErrors(parsed.error));
       return;
@@ -74,7 +85,27 @@ export function SignupPage() {
     setFieldErrors({});
     setLoading(true);
     try {
-      const { confirmPassword: _ignored, ...payload } = parsed.data;
+      if (staffSignupFlow) {
+        const staffPayload = parsed.data as z.infer<typeof mentorJudgeSignupSchema>;
+        const {
+          confirmPassword: _ignored,
+          email: staffEmail,
+          password: staffPassword,
+          fullName: staffFullName,
+          githubUsername: staffGithub
+        } = staffPayload;
+        const result = await registerAccount({
+          email: staffEmail,
+          password: staffPassword,
+          fullName: staffFullName,
+          githubUsername: staffGithub
+        });
+        await finishAuthSession(result, authReturnTo ? { from: authReturnTo } : undefined);
+        return;
+      }
+
+      const participantPayload = parsed.data as z.infer<typeof signupSchema>;
+      const { confirmPassword: _ignored, ...payload } = participantPayload;
       const result = await registerAccount({
         ...payload,
         university: payload.university || undefined
@@ -91,7 +122,11 @@ export function SignupPage() {
   return (
     <AuthFormShell
       title="Đăng ký SEAL Hackathon"
-      subtitle="Tạo tài khoản bằng Google hoặc email."
+      subtitle={
+        staffSignupFlow
+          ? "Tạo tài khoản mentor/giám khảo — họ tên, GitHub username và email."
+          : "Tạo tài khoản bằng Google hoặc email."
+      }
       footer={
         <>
           Đã có tài khoản?{" "}
@@ -118,21 +153,34 @@ export function SignupPage() {
       {googleClientId ? <AuthDivider /> : null}
 
       <form className="flex flex-col gap-md" onSubmit={(e) => void handleSignup(e)}>
-        <StudentTypeFields
-          studentType={studentType}
-          onStudentTypeChange={setStudentType}
-          fullName={fullName}
-          onFullNameChange={setFullName}
-          studentId={studentId}
-          onStudentIdChange={setStudentId}
-          university={university}
-          onUniversityChange={setUniversity}
-          githubUsername={githubUsername}
-          onGithubUsernameChange={setGithubUsername}
-          fieldErrors={fieldErrors}
-          onClearError={(key) => setFieldErrors((prev) => ({ ...prev, [key]: "" }))}
-          disabled={loading}
-        />
+        {staffSignupFlow ? (
+          <StaffProfileFields
+            fullName={fullName}
+            onFullNameChange={setFullName}
+            githubUsername={githubUsername}
+            onGithubUsernameChange={setGithubUsername}
+            requireGithub
+            fieldErrors={fieldErrors}
+            onClearError={(key) => setFieldErrors((prev) => ({ ...prev, [key]: "" }))}
+            disabled={loading}
+          />
+        ) : (
+          <StudentTypeFields
+            studentType={studentType}
+            onStudentTypeChange={setStudentType}
+            fullName={fullName}
+            onFullNameChange={setFullName}
+            studentId={studentId}
+            onStudentIdChange={setStudentId}
+            university={university}
+            onUniversityChange={setUniversity}
+            githubUsername={githubUsername}
+            onGithubUsernameChange={setGithubUsername}
+            fieldErrors={fieldErrors}
+            onClearError={(key) => setFieldErrors((prev) => ({ ...prev, [key]: "" }))}
+            disabled={loading}
+          />
+        )}
 
         <AuthFieldLabel label="Email" required>
           <input

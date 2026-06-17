@@ -158,6 +158,44 @@ function applyStudentTypeRules<T extends z.ZodTypeAny>(schema: T) {
 
 export const profileCompletionSchema = applyStudentTypeRules(profileStudentFieldsSchema);
 
+export const staffProfileFullNameSchema = z.object({
+  fullName: z
+    .string()
+    .trim()
+    .min(2, "Họ và tên cần ít nhất 2 ký tự.")
+    .max(200, "Họ tên tối đa 200 ký tự.")
+});
+
+/** Mentor / giám khảo — họ tên + GitHub (cấp quyền xem repo đội). */
+export const mentorJudgeProfileSchema = staffProfileFullNameSchema.extend({
+  githubUsername: requiredGithubUsernameSchema
+});
+
+export const organizerProfileSchema = staffProfileFullNameSchema;
+
+/** @deprecated Dùng mentorJudgeProfileSchema hoặc organizerProfileSchema. */
+export const staffProfileCompletionSchema = mentorJudgeProfileSchema;
+
+export const mentorJudgeSignupSchema = z
+  .object({
+    email: z.string().trim().min(1, "Email là bắt buộc.").email("Email chưa đúng định dạng."),
+    password: passwordPolicySchema,
+    confirmPassword: z.string().min(1, "Xác nhận mật khẩu là bắt buộc.")
+  })
+  .merge(mentorJudgeProfileSchema)
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Mật khẩu xác nhận không khớp.",
+    path: ["confirmPassword"]
+  });
+
+/** @deprecated Dùng mentorJudgeSignupSchema. */
+export const staffSignupSchema = mentorJudgeSignupSchema;
+
+export const mentorJudgeProfileUpdateSchema = mentorJudgeProfileSchema;
+
+/** @deprecated Dùng mentorJudgeProfileUpdateSchema hoặc organizerProfileSchema. */
+export const staffProfileUpdateSchema = mentorJudgeProfileSchema;
+
 export const signupSchema = z
   .object({
     email: z.string().trim().min(1, "Email là bắt buộc.").email("Email chưa đúng định dạng."),

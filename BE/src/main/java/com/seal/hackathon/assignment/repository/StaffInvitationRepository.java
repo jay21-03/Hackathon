@@ -214,5 +214,7 @@ public interface StaffInvitationRepository extends JpaRepository<StaffInvitation
             @Param("now") OffsetDateTime now,
             @Param("deadline") OffsetDateTime deadline);
 
+    boolean existsByEmailIgnoreCaseAndStatus(String email, StaffInvitationStatus status);
+
 }
 

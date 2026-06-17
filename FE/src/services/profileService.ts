@@ -27,9 +27,9 @@ export async function fetchMyProfile() {
 }
 
 export async function updateMyProfile(payload: {
-  studentType: "FPT" | "EXTERNAL";
   fullName: string;
-  studentId: string;
+  studentType?: "FPT" | "EXTERNAL";
+  studentId?: string;
   university?: string;
   avatarUrl?: string;
   githubUsername?: string;

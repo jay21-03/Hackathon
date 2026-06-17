@@ -21,8 +21,10 @@ import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.authprofile.security.GoogleIdTokenVerifierService;
 import com.seal.hackathon.authprofile.security.JwtService;
 import com.seal.hackathon.authprofile.security.VerifiedGoogleUser;
-import com.seal.hackathon.notification.service.NotificationService;
+import com.seal.hackathon.assignment.repository.StaffInvitationRepository;
+import com.seal.hackathon.common.enums.StaffInvitationStatus;
 import com.seal.hackathon.common.enums.SystemRole;
+import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.common.response.PagedResult;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -50,8 +52,12 @@ public class AuthProfileService {
 
     private static final String PARTICIPANT_ROLE = "PARTICIPANT";
 
+    private static final Set<String> STAFF_ROLES = Set.of("ORGANIZER", "MENTOR", "JUDGE");
+    private static final Set<String> MENTOR_JUDGE_ROLES = Set.of("MENTOR", "JUDGE");
+
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
+    private final StaffInvitationRepository staffInvitationRepository;
     private final GoogleIdTokenVerifierService googleIdTokenVerifierService;
     private final JwtService jwtService;
     private final CurrentUserProvider currentUserProvider;
@@ -63,6 +69,7 @@ public class AuthProfileService {
     public AuthProfileService(
             UserRepository userRepository,
             UserRoleRepository userRoleRepository,
+            StaffInvitationRepository staffInvitationRepository,
             GoogleIdTokenVerifierService googleIdTokenVerifierService,
             JwtService jwtService,
             CurrentUserProvider currentUserProvider,
@@ -72,6 +79,7 @@ public class AuthProfileService {
             @Value("${app.auth.bootstrap-organizer-email:}") String bootstrapOrganizerEmailRaw) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
+        this.staffInvitationRepository = staffInvitationRepository;
         this.googleIdTokenVerifierService = googleIdTokenVerifierService;
         this.jwtService = jwtService;
         this.currentUserProvider = currentUserProvider;
@@ -101,15 +109,29 @@ public class AuthProfileService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS");
         }
 
-        StudentType studentType = request.getStudentType();
-        if (studentType == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "studentType must not be null");
-        }
+        boolean staffProfile = usesStaffProfileForEmail(email);
         String fullName = normalizeTextRequired(request.getFullName(), "fullName must not be blank");
-        String studentId = normalizeTextRequired(request.getStudentId(), "studentId must not be blank");
-        String university = resolveUniversityForStudentType(studentType, request.getUniversity());
-        String githubUsername = normalizeTextRequired(request.getGithubUsername(), "githubUsername must not be blank");
-        AuthCredentialPolicy.assertUsername(githubUsername);
+
+        StudentType studentType = null;
+        String studentId = null;
+        String university = null;
+        String githubUsername = null;
+
+        if (staffProfile) {
+            if (hasPendingStaffInvitation(email)) {
+                githubUsername = normalizeTextRequired(request.getGithubUsername(), "githubUsername must not be blank");
+                AuthCredentialPolicy.assertUsername(githubUsername);
+            }
+        } else {
+            studentType = request.getStudentType();
+            if (studentType == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "studentType must not be null");
+            }
+            studentId = normalizeTextRequired(request.getStudentId(), "studentId must not be blank");
+            university = resolveUniversityForStudentType(studentType, request.getUniversity());
+            githubUsername = normalizeTextRequired(request.getGithubUsername(), "githubUsername must not be blank");
+            AuthCredentialPolicy.assertUsername(githubUsername);
+        }
 
         UserStatus initialStatus = isBootstrapOrganizerEmail(email)
                 ? UserStatus.ACTIVE
@@ -125,10 +147,13 @@ public class AuthProfileService {
                 .university(university)
                 .githubUsername(githubUsername)
                 .status(initialStatus)
-                .profileCompleted(true)
+                .profileCompleted(false)
                 .createdAt(now)
                 .updatedAt(now)
                 .build());
+
+        syncProfileCompleted(user, loadRoles(user.getId()));
+        userRepository.flush();
 
         return issueAuthResponse(user);
     }
@@ -183,7 +208,8 @@ public class AuthProfileService {
         if (user.getStatus() == UserStatus.DISABLED) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is disabled");
         }
-        syncProfileCompleted(user);
+        Set<String> roles = loadRoles(user.getId());
+        syncProfileCompleted(user, roles);
         userRepository.flush();
         try {
             notificationService.backfillUserIdOnLogin(user.getId(), user.getEmail());
@@ -192,7 +218,7 @@ public class AuthProfileService {
         }
         ensureBootstrapOrganizerRole(user);
         ensureBootstrapOrganizerApproved(user);
-        Set<String> roles = loadRoles(user.getId());
+        roles = loadRoles(user.getId());
         String accessToken = jwtService.generateToken(user, roles);
         return AuthResponse.builder()
                 .accessToken(accessToken)
@@ -221,24 +247,40 @@ public class AuthProfileService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is disabled");
         }
 
+        Set<String> roles = loadRoles(user.getId());
+        boolean staffProfile = usesStaffProfile(user, roles);
+
+        user.setFullName(normalizeTextRequired(request.getFullName(), "fullName must not be blank"));
+        user.setAvatarUrl(normalizeTextNullable(request.getAvatarUrl()));
+
+        if (staffProfile) {
+            if (requiresGithubForStaffProfile(user, roles)) {
+                String github = normalizeTextRequired(
+                        request.getGithubUsername(), "githubUsername must not be blank");
+                AuthCredentialPolicy.assertUsername(github);
+                user.setGithubUsername(github);
+            }
+            user.setUpdatedAt(OffsetDateTime.now());
+            syncProfileCompleted(user, roles);
+            userRepository.save(user);
+            return toCurrentUserResponse(user, roles);
+        }
+
         StudentType studentType = request.getStudentType();
         if (studentType == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "studentType must not be null");
         }
-        user.setFullName(normalizeTextRequired(request.getFullName(), "fullName must not be blank"));
         user.setStudentType(studentType);
         user.setStudentId(normalizeTextRequired(request.getStudentId(), "studentId must not be blank"));
         user.setUniversity(resolveUniversityForStudentType(studentType, request.getUniversity()));
-        user.setAvatarUrl(normalizeTextNullable(request.getAvatarUrl()));
         if (StringUtils.hasText(request.getGithubUsername())) {
             AuthCredentialPolicy.assertUsername(request.getGithubUsername());
         }
         user.setGithubUsername(normalizeTextNullable(request.getGithubUsername()));
         user.setUpdatedAt(OffsetDateTime.now());
-        syncProfileCompleted(user);
+        syncProfileCompleted(user, roles);
         userRepository.save(user);
 
-        Set<String> roles = loadRoles(user.getId());
         return toCurrentUserResponse(user, roles);
     }
 
@@ -483,9 +525,52 @@ public class AuthProfileService {
         return normalizeTextRequired(universityRaw, "university must not be blank");
     }
 
-    private boolean isProfileComplete(User user) {
-        if (!StringUtils.hasText(user.getFullName())
-                || !StringUtils.hasText(user.getStudentId())
+    private boolean hasMentorOrJudgeRole(Set<String> roles) {
+        return roles.stream().anyMatch(MENTOR_JUDGE_ROLES::contains);
+    }
+
+    private boolean requiresGithubForStaffProfile(User user, Set<String> roles) {
+        if (hasMentorOrJudgeRole(roles)) {
+            return true;
+        }
+        return hasPendingStaffInvitation(user.getEmail());
+    }
+
+    private boolean usesStaffProfileForEmail(String email) {
+        return isBootstrapOrganizerEmail(email) || hasPendingStaffInvitation(email);
+    }
+
+    private boolean hasStaffRole(Set<String> roles) {
+        return roles.stream().anyMatch(STAFF_ROLES::contains);
+    }
+
+    private boolean hasPendingStaffInvitation(String email) {
+        String normalized = normalizeEmailNullable(email);
+        if (normalized == null) {
+            return false;
+        }
+        return staffInvitationRepository.existsByEmailIgnoreCaseAndStatus(
+                normalized, StaffInvitationStatus.INVITED);
+    }
+
+    private boolean usesStaffProfile(User user, Set<String> roles) {
+        if (hasStaffRole(roles)) {
+            return true;
+        }
+        return usesStaffProfileForEmail(user.getEmail());
+    }
+
+    private boolean isProfileComplete(User user, Set<String> roles) {
+        if (!StringUtils.hasText(user.getFullName())) {
+            return false;
+        }
+        if (usesStaffProfile(user, roles)) {
+            if (requiresGithubForStaffProfile(user, roles)) {
+                return StringUtils.hasText(user.getGithubUsername());
+            }
+            return true;
+        }
+        if (!StringUtils.hasText(user.getStudentId())
                 || !StringUtils.hasText(user.getGithubUsername())
                 || user.getStudentType() == null) {
             return false;
@@ -496,8 +581,8 @@ public class AuthProfileService {
         return true;
     }
 
-    private void syncProfileCompleted(User user) {
-        boolean complete = isProfileComplete(user);
+    private void syncProfileCompleted(User user, Set<String> roles) {
+        boolean complete = isProfileComplete(user, roles);
         Boolean current = user.getProfileCompleted();
         if (current == null || current != complete) {
             user.setProfileCompleted(complete);
