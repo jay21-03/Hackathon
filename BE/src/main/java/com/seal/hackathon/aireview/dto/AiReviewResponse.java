@@ -38,6 +38,9 @@ public class AiReviewResponse {
 
     private AiReviewStatus status;
 
+    /** Handover alias: llm_started / done / error */
+    private String handoverStatus;
+
     private BigDecimal reviewScore;
 
     private String summary;

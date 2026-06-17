@@ -47,4 +47,14 @@ public interface TeamRepositoryEntityRepository extends JpaRepository<TeamReposi
 
     List<TeamRepository> findByGithubOwnerIgnoreCaseAndGithubRepoNameIgnoreCase(
             String githubOwner, String githubRepoName);
+
+    @Query("""
+            SELECT tr FROM TeamRepository tr
+            WHERE tr.provisionStatus = :provisionStatus
+              AND tr.githubOwner IS NOT NULL
+              AND tr.githubRepoName IS NOT NULL
+            ORDER BY tr.teamId ASC, tr.problemId ASC NULLS LAST, tr.id ASC
+            """)
+    List<TeamRepository> findReviewableByProvisionStatus(
+            @Param("provisionStatus") RepositoryProvisionStatus provisionStatus);
 }

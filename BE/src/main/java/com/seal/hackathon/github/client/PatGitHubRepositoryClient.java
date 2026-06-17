@@ -173,17 +173,56 @@ public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
 
     @Override
     public List<GitHubCommitInfo> listCommitsSince(
-            String owner, String repo, String branch, OffsetDateTime since, int perPage) {
-        int limit = Math.min(Math.max(perPage, 1), 100);
+            String owner,
+            String repo,
+            String branch,
+            OffsetDateTime since,
+            OffsetDateTime until,
+            int maxCommits) {
+        int cap = Math.min(Math.max(maxCommits, 1), 500);
+        List<GitHubCommitInfo> collected = new ArrayList<>();
+        int page = 1;
+        while (collected.size() < cap) {
+            int perPage = Math.min(100, cap - collected.size());
+            List<GitHubCommitInfo> batch = fetchCommitsPage(owner, repo, branch, since, until, perPage, page);
+            if (batch.isEmpty()) {
+                break;
+            }
+            for (GitHubCommitInfo commit : batch) {
+                if (collected.size() >= cap) {
+                    break;
+                }
+                collected.add(commit);
+            }
+            if (batch.size() < perPage) {
+                break;
+            }
+            page++;
+        }
+        return collected;
+    }
+
+    private List<GitHubCommitInfo> fetchCommitsPage(
+            String owner,
+            String repo,
+            String branch,
+            OffsetDateTime since,
+            OffsetDateTime until,
+            int perPage,
+            int page) {
         try {
             List<Map<String, Object>> response = execute(() -> restClient.get()
                     .uri(uriBuilder -> {
                         var builder = uriBuilder
                                 .path("/repos/{owner}/{repo}/commits")
                                 .queryParam("sha", branch)
-                                .queryParam("per_page", limit);
+                                .queryParam("per_page", perPage)
+                                .queryParam("page", page);
                         if (since != null) {
                             builder.queryParam("since", since.toString());
+                        }
+                        if (until != null) {
+                            builder.queryParam("until", until.toString());
                         }
                         return builder.build(owner, repo);
                     })

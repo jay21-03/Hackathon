@@ -26,9 +26,17 @@ public interface GitHubRepositoryClient {
     /** Latest commit on the given branch (empty repository returns empty). */
     Optional<GitHubCommitInfo> getLatestCommit(String owner, String repo, String branch);
 
-    /** Commits on a branch since the given time (newest first, capped by perPage). */
+    /**
+     * Commits on a branch within an optional time window (newest first).
+     * Paginates GitHub API until {@code maxCommits} is reached or no more pages.
+     */
     List<GitHubCommitInfo> listCommitsSince(
-            String owner, String repo, String branch, OffsetDateTime since, int perPage);
+            String owner,
+            String repo,
+            String branch,
+            OffsetDateTime since,
+            OffsetDateTime until,
+            int maxCommits);
 
     /** Full commit payload including per-file patches when GitHub returns them. */
     Optional<GitHubCommitDetail> getCommitDetail(String owner, String repo, String sha);

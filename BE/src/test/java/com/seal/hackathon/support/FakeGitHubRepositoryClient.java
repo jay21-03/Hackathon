@@ -108,7 +108,12 @@ public class FakeGitHubRepositoryClient implements GitHubRepositoryClient {
 
     @Override
     public List<GitHubCommitInfo> listCommitsSince(
-            String owner, String repo, String branch, OffsetDateTime since, int perPage) {
+            String owner,
+            String repo,
+            String branch,
+            OffsetDateTime since,
+            OffsetDateTime until,
+            int maxCommits) {
         return getLatestCommit(owner, repo, branch).stream().toList();
     }
 

@@ -46,6 +46,10 @@ public class RepoCommit {
     @Column(name = "commit_url")
     private String commitUrl;
 
+    @Column(nullable = false, length = 50)
+    @Builder.Default
+    private String source = "scheduler";
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 }

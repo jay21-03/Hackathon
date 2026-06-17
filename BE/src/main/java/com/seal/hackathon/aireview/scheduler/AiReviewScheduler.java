@@ -17,7 +17,7 @@ public class AiReviewScheduler {
 
     @Scheduled(
             initialDelayString = "${app.ai.review.initial-delay-ms:120000}",
-            fixedDelayString = "${app.ai.review.poll-ms:1800000}")
+            fixedDelayString = "${app.ai.review.poll-ms:3600000}")
     public void runScheduledReviews() {
         int completed = aiReviewService.runDueReviews();
         log.info("AI review scheduler tick: completedReviews={}", completed);

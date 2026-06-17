@@ -11,6 +11,9 @@ import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.registration.entity.Team;
+import com.seal.hackathon.registration.entity.TeamMember;
+import com.seal.hackathon.registration.repository.TeamMemberRepository;
+import com.seal.hackathon.common.enums.TeamMemberStatus;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +31,7 @@ public class AiReviewNotificationPublisher {
     private final EventRepository eventRepository;
     private final MentorAssignmentRepository mentorAssignmentRepository;
     private final BoardSlotRepository boardSlotRepository;
+    private final TeamMemberRepository teamMemberRepository;
 
     @Value("${app.ai.review.notifications-enabled:true}")
     private boolean notificationsEnabled;
@@ -54,6 +58,27 @@ public class AiReviewNotificationPublisher {
                     link,
                     "ai-review-failed:" + review.getId());
             return;
+        }
+
+        if (review.getStatus() == AiReviewStatus.COMPLETED) {
+            String completedDedupe = "ai-review-completed:" + team.getId() + ":" + review.getId();
+            String participantLink = "/me/ai-review";
+            String summarySnippet = StringUtils.hasText(review.getSummary())
+                    ? review.getSummary()
+                    : "Xem chi tiết rubric và gợi ý cải thiện.";
+            if (summarySnippet.length() > 180) {
+                summarySnippet = summarySnippet.substring(0, 177) + "...";
+            }
+            for (Long participantUserId : participantUserIdsForTeam(team.getId())) {
+                notifyUser(
+                        participantUserId,
+                        event.getId(),
+                        NotificationType.GENERAL,
+                        "Đánh giá AI mới — " + teamLabel,
+                        summarySnippet,
+                        participantLink,
+                        completedDedupe + ":participant:" + participantUserId);
+            }
         }
 
         if (significantChange) {
@@ -104,6 +129,16 @@ public class AiReviewNotificationPublisher {
                 if (assignment.getMentorId() != null) {
                     userIds.add(assignment.getMentorId());
                 }
+            }
+        }
+        return userIds;
+    }
+
+    private Set<Long> participantUserIdsForTeam(Long teamId) {
+        Set<Long> userIds = new LinkedHashSet<>();
+        for (TeamMember member : teamMemberRepository.findByTeamIdAndStatus(teamId, TeamMemberStatus.CONFIRMED)) {
+            if (member.getUserId() != null) {
+                userIds.add(member.getUserId());
             }
         }
         return userIds;

@@ -56,6 +56,10 @@ public final class AiReviewIssueFormatter {
 
         appendSection(body, "RAG maturity", textAt(perPushRoot, "rag_maturity", "level"));
 
+        appendInventorySection(body, perPushRoot.path("inventory_exhaustive"));
+
+        appendAgentSection(body, perPushRoot.path("agent_intelligence"));
+
         appendSection(body, "Ưu điểm", textAt(perPushRoot, "assessment", "advantages"));
 
         appendSection(body, "Nhược điểm", textAt(perPushRoot, "assessment", "disadvantages"));
@@ -69,6 +73,8 @@ public final class AiReviewIssueFormatter {
         appendListSection(body, "Gợi ý test case", perPushRoot.path("suggested_test_cases"));
 
         appendListSection(body, "Câu hỏi phản biện cho BGK", perPushRoot.path("suggested_questions_for_team"));
+
+        appendListSection(body, "Gợi ý tinh chỉnh prompt", perPushRoot.path("suggested_prompt_refinement"));
 
 
 
@@ -136,9 +142,67 @@ public final class AiReviewIssueFormatter {
 
 
 
+    private static void appendInventorySection(StringBuilder body, JsonNode inventory) {
+
+        if (inventory.isMissingNode() || inventory.isNull()) {
+
+            return;
+
+        }
+
+        appendNamedListSection(body, "Kiểm kê công nghệ — Ngôn ngữ", inventory.path("languages"));
+
+        appendNamedListSection(body, "Kiểm kê — Framework / thư viện", inventory.path("frameworks_libraries"));
+
+        appendNamedListSection(body, "Kiểm kê — Data stores", inventory.path("data_stores"));
+
+        appendNamedListSection(body, "Kiểm kê — AI/ML stack", inventory.path("ai_ml_stack"));
+
+        appendNamedListSection(body, "Kiểm kê — DevOps / hạ tầng", inventory.path("devops_infra"));
+
+    }
+
+
+
+    private static void appendAgentSection(StringBuilder body, JsonNode agent) {
+
+        if (agent.isMissingNode() || agent.isNull()) {
+
+            return;
+
+        }
+
+        appendSection(body, "Agent — reasoning", textAt(agent, "", "reasoning_pattern"));
+
+        appendNamedListSection(body, "Agent — skills", agent.path("detected_skills"));
+
+        appendNamedListSection(body, "Agent — tools", agent.path("tool_definitions"));
+
+        if (agent.path("has_agent_config_files").asBoolean(false)) {
+
+            body.append("### Agent config\n\nCó file cấu hình agent trong diff.\n\n");
+
+        }
+
+    }
+
+
+
+    private static void appendNamedListSection(StringBuilder body, String title, JsonNode arrayNode) {
+
+        appendListSection(body, title, arrayNode);
+
+    }
+
+
+
     private static String textAt(JsonNode root, String objectField, String textField) {
 
-        JsonNode value = root.path(objectField).path(textField);
+        JsonNode value = StringUtils.hasText(objectField)
+
+                ? root.path(objectField).path(textField)
+
+                : root.path(textField);
 
         return value.isTextual() ? value.asText() : null;
 

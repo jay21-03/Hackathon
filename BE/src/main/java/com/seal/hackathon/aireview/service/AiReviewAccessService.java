@@ -12,6 +12,7 @@ import com.seal.hackathon.registration.repository.TeamMemberRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -31,6 +32,9 @@ public class AiReviewAccessService {
     private final OrganizerAuthorizationService organizerAuthorizationService;
     private final CurrentUserProvider currentUserProvider;
 
+    @Value("${app.ai.review.judge-access-enabled:true}")
+    private boolean judgeAccessEnabled;
+
     public void requireCanViewTeamReviews(Long teamId) {
         CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
         if (principal == null) {
@@ -48,7 +52,7 @@ public class AiReviewAccessService {
         if (isMentorForTeam(teamId, principal.getUserId())) {
             return;
         }
-        if (isJudgeForTeam(teamId, principal.getUserId())) {
+        if (judgeAccessEnabled && isJudgeForTeam(teamId, principal.getUserId())) {
             return;
         }
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");

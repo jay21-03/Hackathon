@@ -12,11 +12,14 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.seal.hackathon.aireview.client.AiReviewLlmClient;
 
+import com.seal.hackathon.aireview.dto.N8nLegacyRepoItem;
+import com.seal.hackathon.aireview.dto.AiReviewHealthResponse;
 import com.seal.hackathon.aireview.dto.AiReviewResponse;
-
+import com.seal.hackathon.aireview.dto.BackfillCommitsRequest;
+import com.seal.hackathon.aireview.dto.BackfillCommitsResponse;
 import com.seal.hackathon.aireview.dto.BulkAiReviewFailure;
-
 import com.seal.hackathon.aireview.dto.BulkAiReviewResponse;
+import com.seal.hackathon.aireview.dto.RetryFailedReviewsResponse;
 
 import com.seal.hackathon.aireview.entity.AiReview;
 
@@ -32,9 +35,13 @@ import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 
 import com.seal.hackathon.aireview.support.AiReviewDiffBuilder;
 
+import com.seal.hackathon.aireview.support.CommitIngestSource;
+
 import com.seal.hackathon.aireview.support.AiReviewIssueFormatter;
 
 import com.seal.hackathon.aireview.support.AiReviewPrompts;
+
+import com.seal.hackathon.aireview.support.AiReviewValidationException;
 
 import com.seal.hackathon.common.enums.AiReviewKind;
 
@@ -69,6 +76,8 @@ import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import java.math.BigDecimal;
 
 import java.time.OffsetDateTime;
+
+import java.util.Locale;
 
 import java.util.ArrayList;
 
@@ -142,6 +151,8 @@ public class AiReviewService {
 
     private final AiReviewLlmClient aiReviewLlmClient;
 
+    private final AiReviewLlmRunner aiReviewLlmRunner;
+
     private final AiReviewAccessService aiReviewAccessService;
 
     private final OrganizerAuthorizationService organizerAuthorizationService;
@@ -181,6 +192,19 @@ public class AiReviewService {
     @Value("${app.ai.review.manual-cooldown-seconds:30}")
 
     private int manualCooldownSeconds;
+
+    @Value("${app.ai.review.max-commits-per-run:100}")
+
+    private int maxCommitsPerRun;
+
+    @Value("${app.ai.review.scheduler-enabled:false}")
+    private boolean schedulerEnabled;
+
+    @Value("${app.ai.review.webhook-enabled:true}")
+    private boolean webhookReviewEnabled;
+
+    @Value("${app.ai.review.batch-window-hours:1}")
+    private int batchWindowHours;
 
     private final ConcurrentHashMap<Long, Instant> manualReviewCooldown = new ConcurrentHashMap<>();
 
@@ -438,7 +462,7 @@ public class AiReviewService {
 
             try {
 
-                if (reviewRepository(repository, false) != null) {
+                if (reviewRepository(repository, false, CommitIngestSource.SCHEDULER) != null) {
 
                     completed++;
 
@@ -456,10 +480,26 @@ public class AiReviewService {
 
     }
 
-
+    @Transactional(readOnly = true)
+    public List<N8nLegacyRepoItem> listProvisionedReposForLegacyN8n() {
+        List<TeamRepository> repositories = teamRepositoryEntityRepository.findReviewableByProvisionStatus(
+                RepositoryProvisionStatus.CREATED);
+        LinkedHashMap<String, N8nLegacyRepoItem> unique = new LinkedHashMap<>();
+        for (TeamRepository repository : repositories) {
+            if (!StringUtils.hasText(repository.getGithubOwner())
+                    || !StringUtils.hasText(repository.getGithubRepoName())) {
+                continue;
+            }
+            String owner = repository.getGithubOwner().trim();
+            String repo = repository.getGithubRepoName().trim();
+            String key = (owner + "/" + repo).toLowerCase(Locale.ROOT);
+            unique.putIfAbsent(
+                    key, new N8nLegacyRepoItem(owner, repo, repository.getTeamId(), repository.getId()));
+        }
+        return new ArrayList<>(unique.values());
+    }
 
     @Transactional
-
     public AiReviewResponse triggerTeamReview(Long teamId) {
 
         Team team = loadTeam(teamId);
@@ -470,6 +510,246 @@ public class AiReviewService {
 
         return triggerTeamReviewInternal(teamId);
 
+    }
+
+    @Transactional
+    public BackfillCommitsResponse backfillCommits(Long teamId, BackfillCommitsRequest request) {
+        Team team = loadTeam(teamId);
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(team.getEventId());
+        if (request == null || request.since() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BACKFILL_SINCE_REQUIRED");
+        }
+        OffsetDateTime since = request.since();
+        OffsetDateTime until = request.until() != null ? request.until() : OffsetDateTime.now();
+        if (until.isBefore(since)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BACKFILL_INVALID_RANGE");
+        }
+
+        TeamRepository repository = teamRepositoryEntityRepository.findAllByTeamId(teamId).stream()
+                .filter(item -> item.getProvisionStatus() == RepositoryProvisionStatus.CREATED)
+                .filter(item -> StringUtils.hasText(item.getGithubOwner()) && StringUtils.hasText(item.getGithubRepoName()))
+                .max(Comparator.comparing(TeamRepository::getUpdatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "NO_REVIEWABLE_REPOSITORY"));
+
+        GitHubRepoCoordinates coordinates = GitHubRepoCoordinates.fromTeamRepository(
+                        repository.getGithubOwner(), repository.getGithubRepoName(), repository.getRepositoryUrl())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "NO_REVIEWABLE_REPOSITORY"));
+
+        String branch = resolveBranch(repository.getProblemId());
+        List<GitHubCommitInfo> commitInfos;
+        try {
+            commitInfos = githubRepositoryClient.listCommitsSince(
+                    coordinates.owner(), coordinates.repoName(), branch, since, until, maxCommitsPerRun);
+        } catch (GitHubClientException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GITHUB_COMMITS_FETCH_FAILED");
+        }
+
+        int imported = 0;
+        int skipped = 0;
+        for (GitHubCommitInfo info : commitInfos) {
+            boolean existed = repoCommitRepository
+                    .findByTeamRepositoryIdAndCommitSha(repository.getId(), info.getSha())
+                    .isPresent();
+            Optional<GitHubCommitDetail> detail = githubRepositoryClient.getCommitDetail(
+                    coordinates.owner(), coordinates.repoName(), info.getSha());
+            if (detail.isEmpty()) {
+                skipped++;
+                continue;
+            }
+            upsertRepoCommit(repository, detail.get(), branch, CommitIngestSource.BACKFILL);
+            if (existed) {
+                skipped++;
+            } else {
+                imported++;
+            }
+        }
+
+        boolean runReview = Boolean.TRUE.equals(request.runReview());
+        if (runReview && aiReviewLlmClient.isConfigured() && !commitInfos.isEmpty()) {
+            reviewRepository(repository, true, CommitIngestSource.BACKFILL);
+        }
+
+        return new BackfillCommitsResponse(
+                teamId,
+                imported,
+                skipped,
+                commitInfos.size(),
+                since,
+                until,
+                runReview && aiReviewLlmClient.isConfigured() && !commitInfos.isEmpty());
+    }
+
+    @Transactional(readOnly = true)
+    public AiReviewHealthResponse getEventHealth(Long eventId) {
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        List<Long> teamIds = registrationTeamRepository.findByEventIdOrderByNameAscIdAsc(eventId).stream()
+                .map(Team::getId)
+                .toList();
+
+        Set<Long> teamsWithRepo = teamRepositoryEntityRepository.findByTeamIdIn(teamIds).stream()
+                .filter(this::isReviewableRepository)
+                .map(TeamRepository::getTeamId)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
+        List<AiReviewResponse> summaries = listEventReviews(eventId);
+        int completed = 0;
+        int failed = 0;
+        int pending = 0;
+        for (AiReviewResponse item : summaries) {
+            if (item.getStatus() == AiReviewStatus.COMPLETED) {
+                completed++;
+            } else if (item.getStatus() == AiReviewStatus.FAILED) {
+                failed++;
+            } else {
+                pending++;
+            }
+        }
+
+        long totalFailedRows = teamIds.isEmpty()
+                ? 0
+                : aiReviewRepository.countByTeamIdInAndStatus(teamIds, AiReviewStatus.FAILED);
+        OffsetDateTime oldestFailed = teamIds.isEmpty()
+                ? null
+                : aiReviewRepository
+                        .findFirstByTeamIdInAndStatusOrderByReviewedAtAsc(teamIds, AiReviewStatus.FAILED)
+                        .map(AiReview::getReviewedAt)
+                        .orElse(null);
+
+        String recommendation = buildHealthRecommendation(
+                aiReviewLlmClient.isConfigured(), teamsWithRepo.size(), failed, totalFailedRows);
+
+        return AiReviewHealthResponse.builder()
+                .eventId(eventId)
+                .aiConfigured(aiReviewLlmClient.isConfigured())
+                .schedulerEnabled(schedulerEnabled)
+                .webhookReviewEnabled(webhookReviewEnabled)
+                .teamsWithRepository(teamsWithRepo.size())
+                .teamsWithCompletedReview(completed)
+                .teamsWithFailedReview(failed)
+                .teamsPendingReview(pending)
+                .totalFailedReviews((int) totalFailedRows)
+                .oldestFailedReviewAt(oldestFailed)
+                .recommendation(recommendation)
+                .build();
+    }
+
+    @Transactional
+    public RetryFailedReviewsResponse retryFailedReviewsForEvent(Long eventId) {
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        if (!aiReviewLlmClient.isConfigured()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "AI_REVIEW_NOT_CONFIGURED");
+        }
+        List<Long> teamIds = registrationTeamRepository.findByEventIdOrderByNameAscIdAsc(eventId).stream()
+                .map(Team::getId)
+                .toList();
+        if (teamIds.isEmpty()) {
+            return new RetryFailedReviewsResponse(0, 0, 0, List.of());
+        }
+
+        Set<Long> failedTeamIds = aiReviewRepository
+                .findByTeamIdInAndStatusOrderByReviewedAtDesc(teamIds, AiReviewStatus.FAILED)
+                .stream()
+                .map(AiReview::getTeamId)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
+        return retryTeams(new ArrayList<>(failedTeamIds));
+    }
+
+    @Transactional
+    public int retryAllFailedReviews() {
+        if (!aiReviewLlmClient.isConfigured()) {
+            return 0;
+        }
+        List<Long> teamIds = aiReviewRepository.findDistinctTeamIdsByStatus(AiReviewStatus.FAILED);
+        if (teamIds.isEmpty()) {
+            return 0;
+        }
+        return retryTeams(teamIds).teamsSucceeded();
+    }
+
+    private RetryFailedReviewsResponse retryTeams(List<Long> teamIds) {
+        List<AiReviewResponse> succeeded = new ArrayList<>();
+        List<BulkAiReviewFailure> failures = new ArrayList<>();
+        for (Long teamId : teamIds) {
+            try {
+                succeeded.add(triggerTeamReviewInternal(teamId));
+            } catch (ResponseStatusException ex) {
+                Team team = registrationTeamRepository.findById(teamId).orElse(null);
+                failures.add(BulkAiReviewFailure.builder()
+                        .teamId(teamId)
+                        .teamName(team != null ? team.getName() : null)
+                        .reason(ex.getReason())
+                        .build());
+            } catch (RuntimeException ex) {
+                Team team = registrationTeamRepository.findById(teamId).orElse(null);
+                failures.add(BulkAiReviewFailure.builder()
+                        .teamId(teamId)
+                        .teamName(team != null ? team.getName() : null)
+                        .reason(ex.getMessage())
+                        .build());
+            }
+        }
+        return new RetryFailedReviewsResponse(
+                teamIds.size(), succeeded.size(), failures.size(), failures);
+    }
+
+    @Transactional(readOnly = true)
+    public String exportEventReviewsCsv(Long eventId) {
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        List<AiReviewResponse> reviews = listEventReviews(eventId);
+        StringBuilder csv = new StringBuilder();
+        csv.append("team_id,team_name,review_kind,status,rag_level,commit_sha,review_score,summary,github_issue_url,reviewed_at\n");
+        for (AiReviewResponse review : reviews) {
+            if (review.getStatus() == null) {
+                continue;
+            }
+            csv.append(review.getTeamId())
+                    .append(',')
+                    .append(csvCell(review.getTeamName()))
+                    .append(',')
+                    .append(csvCell(review.getReviewKind() != null ? review.getReviewKind().name() : ""))
+                    .append(',')
+                    .append(csvCell(review.getStatus().name()))
+                    .append(',')
+                    .append(csvCell(review.getRagLevel()))
+                    .append(',')
+                    .append(csvCell(review.getCommitSha()))
+                    .append(',')
+                    .append(review.getReviewScore() != null ? review.getReviewScore().toPlainString() : "")
+                    .append(',')
+                    .append(csvCell(review.getSummary()))
+                    .append(',')
+                    .append(csvCell(review.getGithubIssueUrl()))
+                    .append(',')
+                    .append(csvCell(review.getReviewedAt() != null ? review.getReviewedAt().toString() : ""))
+                    .append('\n');
+        }
+        return csv.toString();
+    }
+
+    private String buildHealthRecommendation(
+            boolean configured, int teamsWithRepo, int teamsFailedLatest, long totalFailedRows) {
+        if (!configured) {
+            return "Cấu hình AI_API_KEY trước khi chạy review.";
+        }
+        if (teamsWithRepo == 0) {
+            return "Chưa có đội nào được cấp repository — provision repo trước.";
+        }
+        if (teamsFailedLatest > 0 || totalFailedRows > 0) {
+            return "Có review lỗi — dùng «Thử lại lỗi» hoặc bật AI_REVIEW_RETRY_FAILED_ENABLED.";
+        }
+        return "Hệ thống ổn định — theo dõi webhook và scheduler.";
+    }
+
+    private String csvCell(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
     }
 
     @Transactional
@@ -494,7 +774,7 @@ public class AiReviewService {
 
         }
 
-        AiReview review = reviewRepository(repository, true);
+        AiReview review = reviewRepository(repository, true, CommitIngestSource.MANUAL);
 
         if (review == null) {
 
@@ -520,13 +800,13 @@ public class AiReviewService {
             return;
         }
         try {
-            reviewRepository(repository, true);
+            reviewRepository(repository, true, CommitIngestSource.WEBHOOK);
         } catch (Exception ex) {
             log.warn("AI review on push failed for repository {}: {}", teamRepositoryId, ex.getMessage());
         }
     }
 
-    private AiReview reviewRepository(TeamRepository repository, boolean force) {
+    private AiReview reviewRepository(TeamRepository repository, boolean force, CommitIngestSource ingestSource) {
 
         GitHubRepoCoordinates coordinates = GitHubRepoCoordinates.fromTeamRepository(
 
@@ -546,17 +826,21 @@ public class AiReviewService {
 
         String branch = resolveBranch(repository.getProblemId());
 
+        OffsetDateTime windowStart = OffsetDateTime.now().minusHours(Math.max(batchWindowHours, 1));
+
         OffsetDateTime since = repository.getLastReviewedAt();
-
-        if (since == null && !force) {
-
-            since = OffsetDateTime.now().minusHours(1);
-
-        }
 
         if (force && since == null) {
 
             since = OffsetDateTime.now().minusDays(7);
+
+        } else if (!force) {
+
+            if (since == null || since.isBefore(windowStart)) {
+
+                since = windowStart;
+
+            }
 
         }
 
@@ -568,7 +852,7 @@ public class AiReviewService {
 
             commitInfos = githubRepositoryClient.listCommitsSince(
 
-                    coordinates.owner(), coordinates.repoName(), branch, since, 20);
+                    coordinates.owner(), coordinates.repoName(), branch, since, null, maxCommitsPerRun);
 
         } catch (GitHubClientException ex) {
 
@@ -628,7 +912,7 @@ public class AiReviewService {
 
             details.add(detail.get());
 
-            latestSavedCommit = upsertRepoCommit(repository, detail.get(), branch);
+            latestSavedCommit = upsertRepoCommit(repository, detail.get(), branch, ingestSource);
 
         }
 
@@ -720,31 +1004,39 @@ public class AiReviewService {
 
         String activityLog = AiReviewDiffBuilder.buildActivityLog(details);
 
+        String modifiedFilesList = AiReviewDiffBuilder.buildModifiedFilesList(details);
+
+        String configFilesDetected = AiReviewDiffBuilder.buildConfigFilesDetected(details);
+
         String codeChanges = AiReviewDiffBuilder.buildCodeChangesDetail(details);
 
-        String prompt = AiReviewPrompts.perPushPrompt(team.getName(), repoLabel, activityLog, codeChanges);
+        String headCommitSha = latestSavedCommit != null && StringUtils.hasText(latestSavedCommit.getCommitSha())
+                ? latestSavedCommit.getCommitSha()
+                : (details.isEmpty() ? "unknown" : details.get(details.size() - 1).getSha());
+
+        String prompt = AiReviewPrompts.perPushPrompt(
+
+                team.getName(),
+
+                repoLabel,
+
+                headCommitSha,
+
+                details.size(),
+
+                activityLog,
+
+                modifiedFilesList,
+
+                configFilesDetected,
+
+                codeChanges);
 
 
 
-        AiReview pending = AiReview.builder()
+        AiReview pending = prepareReviewRow(
 
-                .teamId(repository.getTeamId())
-
-                .roundId(repository.getRoundId())
-
-                .repoCommitId(latestSavedCommit.getId())
-
-                .commitSha(latestSavedCommit.getCommitSha())
-
-                .reviewKind(AiReviewKind.PER_PUSH)
-
-                .status(AiReviewStatus.PENDING)
-
-                .aiModel(aiModel)
-
-                .createdAt(now)
-
-                .build();
+                repository, latestSavedCommit, AiReviewKind.PER_PUSH, now);
 
         pending = aiReviewRepository.save(pending);
 
@@ -752,9 +1044,15 @@ public class AiReviewService {
 
         try {
 
-            String json = aiReviewLlmClient.analyzeCodeDiff(prompt);
+            pending.setStatus(AiReviewStatus.LLM_STARTED);
 
-            JsonNode root = objectMapper.readTree(json);
+            pending = aiReviewRepository.save(pending);
+
+            AiReviewLlmRunner.LlmJsonResult llmResult = aiReviewLlmRunner.invokeValidated(prompt, AiReviewKind.PER_PUSH);
+
+            String json = llmResult.rawJson();
+
+            JsonNode root = llmResult.root();
 
             pending.setStatus(AiReviewStatus.COMPLETED);
 
@@ -770,8 +1068,6 @@ public class AiReviewService {
 
             pending.setRagLevel(textAt(root, "rag_maturity", "level"));
 
-            pending.setReviewScore(parseScore(root.path("reference_score")));
-
             pending.setIssues(buildIssuesJson(root));
 
             pending.setSuggestions(buildSuggestionsJson(root));
@@ -779,6 +1075,20 @@ public class AiReviewService {
             pending.setReviewedAt(now);
 
             return aiReviewRepository.save(pending);
+
+        } catch (AiReviewValidationException ex) {
+
+            pending.setStatus(AiReviewStatus.FAILED);
+
+            pending.setSummary("AI review validation failed: " + String.join("; ", ex.violations()));
+
+            pending.setReviewedAt(now);
+
+            aiReviewRepository.save(pending);
+
+            log.warn("Per-push AI review validation failed for team {}: {}", team.getId(), ex.getMessage());
+
+            return pending;
 
         } catch (Exception ex) {
 
@@ -900,33 +1210,24 @@ public class AiReviewService {
 
 
 
-            AiReview pending = AiReview.builder()
+            AiReview pending = prepareReviewRow(
 
-                    .teamId(repository.getTeamId())
-
-                    .roundId(repository.getRoundId())
-
-                    .repoCommitId(latestSavedCommit.getId())
-
-                    .commitSha(latestSavedCommit.getCommitSha())
-
-                    .reviewKind(AiReviewKind.TEAM_AGGREGATE)
-
-                    .status(AiReviewStatus.PENDING)
-
-                    .aiModel(aiModel)
-
-                    .createdAt(now)
-
-                    .build();
+                    repository, latestSavedCommit, AiReviewKind.TEAM_AGGREGATE, now);
 
             pending = aiReviewRepository.save(pending);
 
 
 
-            String json = aiReviewLlmClient.analyzeCodeDiff(prompt);
+            pending.setStatus(AiReviewStatus.LLM_STARTED);
 
-            JsonNode root = objectMapper.readTree(json);
+            pending = aiReviewRepository.save(pending);
+
+            AiReviewLlmRunner.LlmJsonResult llmResult =
+                    aiReviewLlmRunner.invokeValidated(prompt, AiReviewKind.TEAM_AGGREGATE);
+
+            String json = llmResult.rawJson();
+
+            JsonNode root = llmResult.root();
 
             pending.setStatus(AiReviewStatus.COMPLETED);
 
@@ -950,8 +1251,6 @@ public class AiReviewService {
 
             }
 
-            pending.setReviewScore(parseScore(root.path("reference_score")));
-
             pending.setIssues(buildAggregateIssuesJson(root));
 
             pending.setSuggestions(buildAggregateSuggestionsJson(root, perPushRoot));
@@ -960,33 +1259,35 @@ public class AiReviewService {
 
             return aiReviewRepository.save(pending);
 
+        } catch (AiReviewValidationException ex) {
+
+            log.warn("Team aggregate AI review validation failed for team {}: {}", team.getId(), ex.getMessage());
+
+            AiReview failed = prepareReviewRow(
+
+                    repository, latestSavedCommit, AiReviewKind.TEAM_AGGREGATE, now);
+
+            failed.setStatus(AiReviewStatus.FAILED);
+
+            failed.setSummary("Aggregate review validation failed: " + String.join("; ", ex.violations()));
+
+            failed.setReviewedAt(now);
+
+            return aiReviewRepository.save(failed);
+
         } catch (Exception ex) {
 
             log.warn("Team aggregate AI review failed for team {}: {}", team.getId(), ex.getMessage());
 
-            AiReview failed = AiReview.builder()
+            AiReview failed = prepareReviewRow(
 
-                    .teamId(repository.getTeamId())
+                    repository, latestSavedCommit, AiReviewKind.TEAM_AGGREGATE, now);
 
-                    .roundId(repository.getRoundId())
+            failed.setStatus(AiReviewStatus.FAILED);
 
-                    .repoCommitId(latestSavedCommit.getId())
+            failed.setSummary("Aggregate review failed: " + ex.getMessage());
 
-                    .commitSha(latestSavedCommit.getCommitSha())
-
-                    .reviewKind(AiReviewKind.TEAM_AGGREGATE)
-
-                    .status(AiReviewStatus.FAILED)
-
-                    .summary("Aggregate review failed: " + ex.getMessage())
-
-                    .aiModel(aiModel)
-
-                    .reviewedAt(now)
-
-                    .createdAt(now)
-
-                    .build();
+            failed.setReviewedAt(now);
 
             return aiReviewRepository.save(failed);
 
@@ -1062,7 +1363,7 @@ public class AiReviewService {
 
             node.put("commit_sha", review.getCommitSha());
 
-            node.put("summary", review.getSummary());
+            node.put("push_summary", review.getSummary());
 
             node.put("rag_level", review.getRagLevel());
 
@@ -1070,11 +1371,27 @@ public class AiReviewService {
 
                 try {
 
-                    node.set("structured", objectMapper.readTree(review.getStructuredOutput()));
+                    JsonNode structured = objectMapper.readTree(review.getStructuredOutput());
+
+                    JsonNode overall = structured.path("overall_picture");
+
+                    if (!overall.isMissingNode() && !overall.isNull()) {
+
+                        node.set("overall_picture", overall);
+
+                    }
+
+                    JsonNode pushSummaryNode = overall.path("push_summary");
+
+                    if (pushSummaryNode.isTextual() && StringUtils.hasText(pushSummaryNode.asText())) {
+
+                        node.put("push_summary", pushSummaryNode.asText());
+
+                    }
 
                 } catch (Exception ignored) {
 
-                    node.put("structured_raw", truncate(review.getStructuredOutput(), 2000));
+                    // keep summary / rag_level only
 
                 }
 
@@ -1090,7 +1407,9 @@ public class AiReviewService {
 
 
 
-    private RepoCommit upsertRepoCommit(TeamRepository repository, GitHubCommitDetail detail, String branch) {
+    private RepoCommit upsertRepoCommit(
+
+            TeamRepository repository, GitHubCommitDetail detail, String branch, CommitIngestSource source) {
 
         Optional<RepoCommit> existing =
 
@@ -1122,9 +1441,71 @@ public class AiReviewService {
 
                 .commitUrl(detail.getHtmlUrl())
 
+                .source(source.value())
+
                 .createdAt(now)
 
                 .build());
+
+    }
+
+    private AiReview prepareReviewRow(
+
+            TeamRepository repository,
+
+            RepoCommit latestSavedCommit,
+
+            AiReviewKind reviewKind,
+
+            OffsetDateTime now) {
+
+        Optional<AiReview> existing = aiReviewRepository.findByTeamIdAndCommitShaAndReviewKind(
+
+                repository.getTeamId(), latestSavedCommit.getCommitSha(), reviewKind);
+
+        AiReview review = existing.orElseGet(() -> AiReview.builder()
+
+                .teamId(repository.getTeamId())
+
+                .commitSha(latestSavedCommit.getCommitSha())
+
+                .reviewKind(reviewKind)
+
+                .createdAt(now)
+
+                .build());
+
+        review.setRoundId(repository.getRoundId());
+
+        review.setRepoCommitId(latestSavedCommit.getId());
+
+        review.setStatus(AiReviewStatus.PENDING);
+
+        review.setReviewScore(null);
+
+        review.setAiModel(aiModel);
+
+        review.setSummary(null);
+
+        review.setIssues(null);
+
+        review.setSuggestions(null);
+
+        review.setStructuredOutput(null);
+
+        review.setRagLevel(null);
+
+        review.setReviewScore(null);
+
+        review.setReviewedAt(null);
+
+        if (reviewKind != AiReviewKind.PER_PUSH) {
+
+            review.setGithubIssueUrl(null);
+
+        }
+
+        return review;
 
     }
 
@@ -1267,6 +1648,8 @@ public class AiReviewService {
         appendTextArray(suggestions, root.path("suggested_test_cases"));
 
         appendTextArray(suggestions, root.path("suggested_questions_for_team"));
+
+        appendTextArray(suggestions, root.path("suggested_prompt_refinement"));
 
         String improvements = textAt(root, "assessment", "improvement_areas");
 
@@ -1463,6 +1846,8 @@ public class AiReviewService {
                 .reviewKind(review.getReviewKind())
 
                 .status(review.getStatus())
+
+                .handoverStatus(review.getStatus() != null ? review.getStatus().toHandoverStatus() : null)
 
                 .reviewScore(review.getReviewScore())
 
