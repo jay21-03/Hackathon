@@ -92,9 +92,9 @@ app:
   ai:
     review:
       scheduler-enabled: ${AI_REVIEW_SCHEDULER_ENABLED:false}
-      interval-minutes: ${AI_REVIEW_INTERVAL_MINUTES:5}
+      interval-minutes: ${AI_REVIEW_INTERVAL_MINUTES:60}
       initial-delay-ms: ${AI_REVIEW_INITIAL_DELAY_MS:120000}
-      poll-ms: ${AI_REVIEW_POLL_MS:300000}
+      poll-ms: ${AI_REVIEW_POLL_MS:3600000}
       api-key: ${AI_API_KEY:}
       model: ${AI_REVIEW_MODEL:gemini-2.0-flash}
       github-issues-enabled: ${AI_REVIEW_GITHUB_ISSUES_ENABLED:true}
@@ -102,6 +102,13 @@ app:
       webhook-debounce-ms: ${AI_REVIEW_WEBHOOK_DEBOUNCE_MS:60000}
       notifications-enabled: ${AI_REVIEW_NOTIFICATIONS_ENABLED:true}
       manual-cooldown-seconds: ${AI_REVIEW_MANUAL_COOLDOWN_SECONDS:30}
+      max-commits-per-run: ${AI_REVIEW_MAX_COMMITS_PER_RUN:100}
+      batch-window-hours: ${AI_REVIEW_BATCH_WINDOW_HOURS:1}
+      judge-access-enabled: ${AI_REVIEW_JUDGE_ACCESS_ENABLED:true}
+      retry-failed-enabled: ${AI_REVIEW_RETRY_FAILED_ENABLED:false}
+      retry-failed-poll-ms: ${AI_REVIEW_RETRY_FAILED_POLL_MS:600000}
+      retry-failed-initial-delay-ms: ${AI_REVIEW_RETRY_FAILED_INITIAL_DELAY_MS:300000}
+      n8n-webhook-secret: ${N8N_AI_REVIEW_WEBHOOK_SECRET:}
   event:
     lifecycle:
       scheduler-enabled: ${EVENT_LIFECYCLE_SCHEDULER_ENABLED:true}

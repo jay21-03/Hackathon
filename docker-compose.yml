@@ -72,8 +72,9 @@ services:
       GITHUB_WEBHOOK_URL: ${GITHUB_WEBHOOK_URL:-}
       GITHUB_WEBHOOK_AUTO_REGISTER: ${GITHUB_WEBHOOK_AUTO_REGISTER:-true}
       AI_REVIEW_SCHEDULER_ENABLED: ${AI_REVIEW_SCHEDULER_ENABLED:-false}
-      AI_REVIEW_INTERVAL_MINUTES: ${AI_REVIEW_INTERVAL_MINUTES:-5}
-      AI_REVIEW_POLL_MS: ${AI_REVIEW_POLL_MS:-300000}
+      AI_REVIEW_INTERVAL_MINUTES: ${AI_REVIEW_INTERVAL_MINUTES:-60}
+      AI_REVIEW_POLL_MS: ${AI_REVIEW_POLL_MS:-3600000}
+      AI_REVIEW_BATCH_WINDOW_HOURS: ${AI_REVIEW_BATCH_WINDOW_HOURS:-1}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_REVIEW_MODEL: ${AI_REVIEW_MODEL:-gemini-2.0-flash}
       AI_REVIEW_GITHUB_ISSUES_ENABLED: ${AI_REVIEW_GITHUB_ISSUES_ENABLED:-true}
@@ -81,6 +82,10 @@ services:
       AI_REVIEW_WEBHOOK_DEBOUNCE_MS: ${AI_REVIEW_WEBHOOK_DEBOUNCE_MS:-60000}
       AI_REVIEW_NOTIFICATIONS_ENABLED: ${AI_REVIEW_NOTIFICATIONS_ENABLED:-true}
       AI_REVIEW_MANUAL_COOLDOWN_SECONDS: ${AI_REVIEW_MANUAL_COOLDOWN_SECONDS:-30}
+      AI_REVIEW_MAX_COMMITS_PER_RUN: ${AI_REVIEW_MAX_COMMITS_PER_RUN:-100}
+      AI_REVIEW_JUDGE_ACCESS_ENABLED: ${AI_REVIEW_JUDGE_ACCESS_ENABLED:-true}
+      AI_REVIEW_RETRY_FAILED_ENABLED: ${AI_REVIEW_RETRY_FAILED_ENABLED:-false}
+      N8N_AI_REVIEW_WEBHOOK_SECRET: ${N8N_AI_REVIEW_WEBHOOK_SECRET:-}
       FILE_STORAGE_PATH: /app/storage
     ports:
       - "8085:8085"
@@ -92,6 +97,43 @@ services:
       start_period: 40s
     volumes:
       - ./storage:/app/storage
+
+  n8n:
+    profiles: ["n8n"]
+    image: docker.n8n.io/n8nio/n8n:1.76.1
+    container_name: seal_n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Legacy workflows use $env.N8N_*_WORKFLOW_ID in Execute Workflow nodes
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      GENERIC_TIMEZONE: Asia/Ho_Chi_Minh
+      TZ: Asia/Ho_Chi_Minh
+      # n8n container must reach host BE — do not use localhost here
+      BACKEND_URL: ${N8N_BACKEND_URL:-http://host.docker.internal:8085}
+      N8N_AI_REVIEW_WEBHOOK_SECRET: ${N8N_AI_REVIEW_WEBHOOK_SECRET:-}
+      GEMINI_API_KEY: ${AI_API_KEY:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_REVIEW_MODEL: ${AI_REVIEW_MODEL:-gemini-2.5-flash}
+      SUPABASE_URL: ${N8N_SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${N8N_SUPABASE_SERVICE_ROLE_KEY:-}
+      N8N_SUPABASE_URL: ${N8N_SUPABASE_URL:-}
+      N8N_SUPABASE_SERVICE_ROLE_KEY: ${N8N_SUPABASE_SERVICE_ROLE_KEY:-}
+      N8N_FIREBASE_DATABASE_URL: ${N8N_FIREBASE_DATABASE_URL:-}
+      N8N_FIREBASE_ACCESS_TOKEN: ${N8N_FIREBASE_ACCESS_TOKEN:-}
+      N8N_REPO_LIST: ${N8N_REPO_LIST:-}
+      N8N_PROCESS_SINGLE_REPO_WORKFLOW_ID: ${N8N_PROCESS_SINGLE_REPO_WORKFLOW_ID:-}
+      N8N_LLM_HACKATHON_WORKFLOW_ID: ${N8N_LLM_HACKATHON_WORKFLOW_ID:-}
+      GITHUB_PAT: ${GITHUB_PAT:-}
+      GITHUB_TOKEN: ${GITHUB_PAT:-}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./ai-review/n8n/workflows:/import/workflows:ro
 
   frontend:
     profiles: ["frontend"]
@@ -108,3 +150,4 @@ services:
 
 volumes:
   postgres_data:
+  n8n_data:

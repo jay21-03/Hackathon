@@ -1,4 +1,43 @@
-# Load Hackathon/.env when present (mail, JWT, Google client, etc.)
+# CHI dung khi debug BE bang JVM tren may (khong qua Docker).
+# Dev hang ngay: tu thu muc Hackathon chay .\start-dev.ps1
+$ErrorActionPreference = "Stop"
+
+function Test-PortInUse([int]$Port) {
+    return [bool](Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+}
+
+$dockerBackend = docker ps --filter "name=^seal_backend$" --filter "status=running" -q 2>$null
+if ($dockerBackend) {
+    Write-Host "seal_backend Docker dang chay tren port 8085." -ForegroundColor Yellow
+    Write-Host "Khong can run-dev.ps1. Dung Docker: cd .. ; .\start-dev.ps1" -ForegroundColor Yellow
+    Write-Host "Neu muon chay JVM: docker compose stop backend" -ForegroundColor Yellow
+    exit 1
+}
+
+if (Test-PortInUse 8085) {
+    Write-Host "Port 8085 da bi chiem. Dung process do truoc khi chay mvn." -ForegroundColor Red
+    Write-Host "Get-NetTCPConnection -LocalPort 8085 -State Listen" -ForegroundColor Yellow
+    exit 1
+}
+
+function Assert-PostgresRunning {
+    try {
+        $names = docker ps --filter "name=^seal_postgres$" --filter "status=running" -q 2>$null
+        if (-not $names) {
+            Write-Host "Postgres chua chay. Tu thu muc Hackathon:" -ForegroundColor Yellow
+            Write-Host "  .\start-dev.ps1" -ForegroundColor Yellow
+            Write-Host "hoac: docker compose up -d postgres" -ForegroundColor Yellow
+            exit 1
+        }
+        Write-Host "Postgres OK (seal_postgres)" -ForegroundColor Green
+    } catch {
+        Write-Host "Can Docker Desktop cho Postgres (port 5433)." -ForegroundColor Red
+        exit 1
+    }
+}
+
+Assert-PostgresRunning
+
 $dotenvPath = Join-Path $PSScriptRoot "..\.env"
 if (Test-Path $dotenvPath) {
     Get-Content $dotenvPath | ForEach-Object {
@@ -15,7 +54,6 @@ if (Test-Path $dotenvPath) {
     }
 }
 
-# Local BE overrides (Postgres host port mapped by docker-compose)
 $env:SERVER_PORT = "8085"
 $env:DB_URL = "jdbc:postgresql://localhost:5433/seal_hackathon"
 $env:DB_USERNAME = if ($env:DB_USERNAME) { $env:DB_USERNAME } else { "postgres" }
@@ -35,7 +73,6 @@ if (-not $env:CORS_ALLOWED_ORIGINS) {
     $env:CORS_ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:5174"
 }
 if (-not $env:DEV_AUTH_ENABLED) { $env:DEV_AUTH_ENABLED = "true" }
-if (-not $env:AI_REVIEW_INTERVAL_MINUTES) { $env:AI_REVIEW_INTERVAL_MINUTES = "30" }
 if (-not $env:FILE_STORAGE_PATH) { $env:FILE_STORAGE_PATH = "../storage" }
 if (-not $env:MAIL_HOST) { $env:MAIL_HOST = "smtp.gmail.com" }
 if (-not $env:MAIL_PORT) { $env:MAIL_PORT = "587" }
@@ -44,7 +81,7 @@ if (-not $env:MAIL_SMTP_STARTTLS_ENABLE) { $env:MAIL_SMTP_STARTTLS_ENABLE = "tru
 if (-not $env:INVITATION_BASE_URL) { $env:INVITATION_BASE_URL = "http://localhost:5173" }
 if (-not $env:MAIL_ENABLED) { $env:MAIL_ENABLED = "false" }
 
+Write-Host "Che do JVM local (khong Docker backend)." -ForegroundColor Cyan
 Write-Host "MAIL_ENABLED=$($env:MAIL_ENABLED) MAIL_FROM=$($env:MAIL_FROM)"
-Write-Host "Sau khi pull code moi: restart BE de Flyway chay migration (can V21+ cho thong bao)." -ForegroundColor Yellow
 
 mvn spring-boot:run

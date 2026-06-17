@@ -55,7 +55,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class SubmissionService {
 
-    private static final int DEFAULT_REVIEW_INTERVAL_MINUTES = 30;
+    private static final int DEFAULT_REVIEW_INTERVAL_MINUTES = 60;
 
     private final ContestManagementService contestManagementService;
     private final TeamRepositoryEntityRepository teamRepositoryEntityRepository;

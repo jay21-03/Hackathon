@@ -69,7 +69,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class RepositoryProvisioningService {
 
-    private static final int DEFAULT_REVIEW_INTERVAL_MINUTES = 5;
+    private static final int DEFAULT_REVIEW_INTERVAL_MINUTES = 60;
 
     private final ProblemRepositoryTemplateRepository templateRepository;
     private final TeamRepositoryEntityRepository teamRepositoryEntityRepository;
