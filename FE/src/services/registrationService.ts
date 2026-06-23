@@ -134,7 +134,7 @@ export async function cancelPendingInvitation(teamId: number, memberId: number) 
     `/v1/teams/${teamId}/members/${memberId}`
   );
   if (!data.data) {
-    throw new Error(data.message || "Huỷ lời mời thất bại");
+    throw new Error(data.message || "Hủy lời mời thất bại");
   }
   return data.data;
 }

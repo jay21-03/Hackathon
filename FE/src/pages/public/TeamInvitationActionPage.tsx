@@ -33,7 +33,7 @@ import {
 
 } from "../../services/registrationService";
 
-import { getApiErrorMessage } from "../../utils/apiError";
+import { resolveApiError } from "../../utils/apiError";
 import { decodeInvitationTokenParam, invitationErrorMessage } from "../../utils/invitationToken";
 
 
@@ -115,7 +115,7 @@ export function TeamInvitationActionPage({ action }: TeamInvitationActionPagePro
         );
 
       } catch (err) {
-        const apiMessage = getApiErrorMessage(err, "");
+        const apiMessage = resolveApiError(err, "");
         setError(invitationErrorMessage(apiMessage, isAccept));
 
       } finally {
