@@ -180,6 +180,32 @@ public class NotificationService {
     }
 
     @Transactional
+    public void notifyTeamGithubProfileIncomplete(Team team, String issueSummary) {
+        if (team == null || !StringUtils.hasText(issueSummary)) {
+            return;
+        }
+        Event event = eventRepository.findById(team.getEventId()).orElse(null);
+        String eventName = event != null ? event.getName() : "cuộc thi";
+        String title = "Cần cập nhật GitHub username";
+        String content = "Đội «" + team.getName() + "» tại " + eventName
+                + " chưa đủ thông tin GitHub để cấp repository: " + issueSummary
+                + ". Vui lòng cập nhật hồ sơ trước khi BTC cấp repo.";
+        String linkUrl = "/me/profile?eventId=" + team.getEventId();
+        String dedupeKey = "team-github-profile:" + team.getId() + ":" + issueSummary.hashCode();
+        for (TeamMember member : teamMemberRepository.findByTeamIdAndStatus(team.getId(), TeamMemberStatus.CONFIRMED)) {
+            create(
+                    member.getUserId(),
+                    member.getEmail(),
+                    team.getEventId(),
+                    NotificationType.GENERAL,
+                    title,
+                    content,
+                    linkUrl,
+                    dedupeKey);
+        }
+    }
+
+    @Transactional
     public void notifyTeamStatusChanged(Team team, TeamStatus newStatus) {
         if (newStatus != TeamStatus.CONFIRMED
                 && newStatus != TeamStatus.REJECTED
@@ -446,6 +472,34 @@ public class NotificationService {
                 content,
                 linkUrl,
                 dedupeKey);
+        return created != null;
+    }
+
+    @Transactional
+    public boolean notifyJudgeScoringReminder(
+            Long judgeId, Board board, Round round, Event event, int submitted, int totalTeams) {
+        if (judgeId == null || board == null || totalTeams <= 0 || submitted >= totalTeams) {
+            return false;
+        }
+        User judge = userRepository.findById(judgeId).orElse(null);
+        if (judge == null) {
+            return false;
+        }
+        String eventName = event != null ? event.getName() : "cuộc thi";
+        String title = "Nhắc nộp phiếu chấm — " + board.getName();
+        String content = eventName + ": bạn đã nộp " + submitted + "/" + totalTeams
+                + " phiếu trên bảng «" + board.getName() + "». Vui lòng hoàn tất trước hạn.";
+        String linkUrl = "/judge/scoring?boardId=" + board.getId();
+        Long eventId = event != null ? event.getId() : null;
+        Notification created = create(
+                judge.getId(),
+                judge.getEmail(),
+                eventId,
+                NotificationType.SCORING_REMINDER,
+                title,
+                content,
+                linkUrl,
+                "scoring-reminder:j" + judgeId + ":b" + board.getId());
         return created != null;
     }
 
