@@ -1,0 +1,50 @@
+{
+  "name": "cron-job",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 5 }]
+        }
+      },
+      "id": "cron-schedule",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const backendUrl = ($env.BACKEND_URL || 'http://host.docker.internal:8085').replace(/\\/$/, '');\nconst secret = $env.N8N_AI_REVIEW_WEBHOOK_SECRET || '';\nconst extraRaw = $env.N8N_REPO_LIST || '';\n\nasync function fetchFromBackend() {\n  if (!secret) return [];\n  try {\n    const res = await this.helpers.httpRequest({\n      method: 'GET',\n      url: `${backendUrl}/api/v1/webhooks/n8n/ai-review/legacy-repos`,\n      headers: { 'X-N8N-Secret': secret },\n      json: true,\n      timeout: 30000,\n    });\n    return Array.isArray(res) ? res : [];\n  } catch (e) {\n    return [];\n  }\n}\n\nfunction parseExtra(raw) {\n  return raw\n    .split(',')\n    .map(s => s.trim())\n    .filter(Boolean)\n    .map(full => {\n      const slash = full.indexOf('/');\n      if (slash <= 0) return null;\n      return { owner: full.slice(0, slash).trim(), repo: full.slice(slash + 1).trim() };\n    })\n    .filter(r => r && r.owner && r.repo);\n}\n\nfunction dedupe(items) {\n  const seen = new Set();\n  const out = [];\n  for (const item of items) {\n    const key = `${item.owner}/${item.repo}`.toLowerCase();\n    if (seen.has(key)) continue;\n    seen.add(key);\n    out.push({ owner: item.owner, repo: item.repo });\n  }\n  return out;\n}\n\nconst fromBe = await fetchFromBackend();\nconst fromBeMapped = fromBe.map(r => ({ owner: r.owner, repo: r.repo }));\nconst merged = dedupe([...fromBeMapped, ...parseExtra(extraRaw)]);\n\nif (!merged.length) {\n  throw new Error(\n    'No repositories to review. Provision repos on the platform (status CREATED) or set N8N_REPO_LIST for extra test repos.'\n  );\n}\n\nreturn merged.map(r => ({ json: r }));"
+      },
+      "id": "cron-repo-list",
+      "name": "repo list",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.N8N_PROCESS_SINGLE_REPO_WORKFLOW_ID }}",
+        "mode": "each"
+      },
+      "id": "cron-exec-repo",
+      "name": "Call Process Single Repo",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [520, 0]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{ "node": "repo list", "type": "main", "index": 0 }]]
+    },
+    "repo list": {
+      "main": [[{ "node": "Call Process Single Repo", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true },
+  "tags": [{ "name": "ai-review" }, { "name": "legacy" }]
+}

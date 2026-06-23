@@ -1,0 +1,1181 @@
+{
+  "name": "LLM - Hackathon",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "llm-01",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const i = $json;\nreturn [{\n  json: {\n    team_id: i.team_id,\n    commit_sha: i.commit_sha,\n    repo_name: i.repo_name,\n    author: 'n8n',\n    commit_message: (i.activity_log || '').slice(0, 500),\n    committed_at: i.timestamp || new Date().toISOString(),\n    source: 'webhook',\n    _passthrough: { ...i }\n  }\n}];"
+      },
+      "id": "llm-02",
+      "name": "Prepare Team Commit Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.N8N_SUPABASE_URL || $env.SUPABASE_URL || '').replace(/\\/$/, '') }}/rest/v1/team_commits",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"team_id\": {{ JSON.stringify($('Prepare Team Commit Row').first().json.team_id) }},\n  \"commit_sha\": {{ JSON.stringify($('Prepare Team Commit Row').first().json.commit_sha) }},\n  \"repo_name\": {{ JSON.stringify($('Prepare Team Commit Row').first().json.repo_name) }},\n  \"author\": {{ JSON.stringify($('Prepare Team Commit Row').first().json.author) }},\n  \"commit_message\": {{ JSON.stringify($('Prepare Team Commit Row').first().json.commit_message) }},\n  \"committed_at\": {{ JSON.stringify($('Prepare Team Commit Row').first().json.committed_at) }},\n  \"source\": {{ JSON.stringify($('Prepare Team Commit Row').first().json.source) }}\n}",
+        "options": {}
+      },
+      "id": "llm-03",
+      "name": "Create Team Commit Row",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json.error || ($json.statusCode && Number($json.statusCode) >= 400) || ($json.code && String($json.code).includes('23505')) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "llm-04",
+      "name": "Team Commit Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $('Prepare Team Commit Row').first().json;\nreturn [{ json: { ...row, _update: true } }];"
+      },
+      "id": "llm-05",
+      "name": "Build Row For Update Team Commit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ ($env.N8N_SUPABASE_URL || $env.SUPABASE_URL || '').replace(/\\/$/, '') }}/rest/v1/team_commits?team_id=eq.{{ encodeURIComponent($('Build Row For Update Team Commit').first().json.team_id) }}&commit_sha=eq.{{ encodeURIComponent($('Build Row For Update Team Commit').first().json.commit_sha) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"repo_name\": {{ JSON.stringify($('Build Row For Update Team Commit').first().json.repo_name) }},\n  \"author\": {{ JSON.stringify($('Build Row For Update Team Commit').first().json.author) }},\n  \"commit_message\": {{ JSON.stringify($('Build Row For Update Team Commit').first().json.commit_message) }},\n  \"committed_at\": {{ JSON.stringify($('Build Row For Update Team Commit').first().json.committed_at) }},\n  \"source\": {{ JSON.stringify($('Build Row For Update Team Commit').first().json.source) }}\n}",
+        "options": {}
+      },
+      "id": "llm-06",
+      "name": "Update Team Commit Row",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        280
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $('Prepare Team Commit Row').first().json;\nreturn [{ json: row._passthrough }];"
+      },
+      "id": "llm-07",
+      "name": "Restore After Team Commit Upsert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const i = $json;\nconst base = ($env.N8N_SUPABASE_URL || $env.SUPABASE_URL || '').replace(/\\/$/, '');\nconst key = $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY || '';\nconst started = {\n  team_id: i.team_id,\n  commit_sha: i.commit_sha,\n  repo_name: i.repo_name,\n  review_kind: 'per_push',\n  status: 'llm_started',\n  structured_output: { initial_input: i }\n};\nif (base && key) {\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${base}/rest/v1/ai_reviews`,\n      headers: {\n        apikey: key,\n        Authorization: `Bearer ${key}`,\n        'Content-Type': 'application/json',\n        Prefer: 'resolution=merge-duplicates,return=minimal'\n      },\n      body: started,\n      json: true\n    });\n  } catch (e) { /* duplicate llm_started ok */ }\n}\nreturn [{ json: { ...i, started_payload: started } }];"
+      },
+      "id": "llm-08",
+      "name": "Build Supabase Started Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function buildPerPushPrompt(i) {\r\n  const commitCount = i.commit_count ?? 1;\r\n  const activityLog = i.activity_log || '';\r\n  const modifiedFiles = Array.isArray(i.modified_files_list)\r\n    ? i.modified_files_list.join('\\n')\r\n    : String(i.modified_files_list || '(none)');\r\n  const configFiles = Array.isArray(i.config_files_detected)\r\n    ? i.config_files_detected.join('\\n')\r\n    : String(i.config_files_detected || '(none)');\r\n  const codeDetail = String(i.code_changes_detail || '').slice(0, 50000);\r\n\r\n  const schema = `{\r\n  \"tech_stack\": { \"frameworks\": [], \"llm_models\": [], \"vector_db\": [], \"agent_frameworks\": [], \"third_party_tools\": [] },\r\n  \"inventory_exhaustive\": {\r\n    \"languages\": [], \"frameworks_libraries\": [], \"data_stores\": [], \"ai_ml_stack\": [], \"devops_infra\": []\r\n  },\r\n  \"rag_maturity\": { \"level\": \"Basic|Advanced|Agentic-RAG\", \"features_detected\": [] },\r\n  \"agent_intelligence\": {\r\n    \"reasoning_pattern\": \"\", \"detected_skills\": [], \"tool_definitions\": [], \"has_agent_config_files\": false\r\n  },\r\n  \"assessment\": {\r\n    \"advantages\": \"\", \"disadvantages\": \"\", \"improvement_areas\": \"\",\r\n    \"security\": \"\", \"completeness\": \"\", \"latency\": \"\", \"observability\": \"\", \"error_handling\": \"\"\r\n  },\r\n  \"suggested_test_cases\": [],\r\n  \"suggested_questions_for_team\": [],\r\n  \"suggested_prompt_refinement\": [],\r\n  \"overall_picture\": { \"project_about\": \"\", \"push_summary\": \"\", \"significant_change\": false }\r\n}`;\r\n\r\n  const rules = `\r\nQuy tắc:\r\n- Chỉ dựa trên diff; không bịa commit hoặc tính năng không có trong mã.\r\n- push_summary BẮT BUỘC bắt đầu bằng số commit trong batch (vd: \"Batch gồm ${commitCount} commit: ...\").\r\n- significant_change=true khi thay đổi lớn về RAG pipeline, agent, bảo mật, hoặc kiến trúc.\r\n- inventory_exhaustive: kiểm kê đủ 5 nhóm công nghệ thực tế trong diff.\r\n- assessment: đủ 8 trường NFR (security, latency, observability, error_handling...).\r\n- suggested_test_cases: 4-10 kịch bản test RAG & NFR.\r\n- suggested_questions_for_team: 5-10 câu phản biện cho ban giám khảo.\r\n- suggested_prompt_refinement: 3-8 gợi ý tối ưu system prompt của đội.\r\n- Không chấm điểm số — chỉ mô tả định tính. Viết tiếng Việt cho các trường mô tả.\r\n- AI KHÔNG thấy lịch sử commit cũ hay review trước — chỉ push hiện tại.`;\r\n\r\n  const system = `Bạn là AI Technical Auditor cho hackathon RAG/Agent. Phân tích diff code (Per-Push).\r\nTrả về MỘT JSON object hợp lệ (không markdown), theo schema:\r\n${schema}\r\n${rules}`;\r\n\r\n  const user = `Team: ${i.team_id}\r\nRepository: ${i.repo_name}\r\ncommit_sha: ${i.commit_sha}\r\ncommit_count: ${commitCount}\r\n\r\nActivity log:\r\n${activityLog}\r\n\r\nmodified_files_list:\r\n${modifiedFiles}\r\n\r\nconfig_files_detected:\r\n${configFiles}\r\n\r\nCode changes:\r\n${codeDetail}`;\r\n\r\n  return system + '\\n\\n' + user;\r\n}\nconst i = $json;\nreturn [{ json: { ...i, per_push_prompt: buildPerPushPrompt(i) } }];"
+      },
+      "id": "llm-09",
+      "name": "Structured Output Parser",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const i = $json;\nreturn [{ json: { ...i, model_note: 'Gemini HTTP substitutes Google Vertex Chat Model (handover parity)' } }];"
+      },
+      "id": "llm-10",
+      "name": "Google Vertex Chat Model",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $env.AI_REVIEW_MODEL || 'gemini-2.5-flash' }}:generateContent?key={{ $env.GEMINI_API_KEY || $env.AI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\"parts\": [{\"text\": {{ JSON.stringify($('Structured Output Parser').first().json.per_push_prompt) }} }]}],\n  \"generationConfig\": {\"temperature\": 0.2, \"responseMimeType\": \"application/json\", \"thinkingConfig\": {\"thinkingBudget\": 0}}\n}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "llm-11",
+      "name": "Basic LLM Chain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst parts = resp?.candidates?.[0]?.content?.parts;\nlet text = '';\nif (Array.isArray(parts)) {\n  text = parts.map((p) => p?.text).filter(Boolean).join('\\n');\n} else if (typeof parts === 'string') {\n  text = parts;\n}\nconst failed = Boolean(resp?.error) || !text;\nconst err = resp?.error?.message || resp?.message || (!text ? 'No text in Gemini response' : '');\nreturn [{ json: { ...resp, _gemini_text: text, _llm_failed: failed, _llm_error: err } }];"
+      },
+      "id": "llm-11b",
+      "name": "Parse Gemini Per Push",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2090,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "error"
+            }
+          ]
+        }
+      },
+      "id": "llm-12",
+      "name": "LLM Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('Parse Gemini Per Push').first().json;\nconst ctx = $('Restore After Team Commit Upsert').first().json;\nconst err = parsed._llm_error || 'LLM failed';\nreturn [{\n  json: {\n    team_id: ctx.team_id,\n    commit_sha: ctx.commit_sha,\n    review_kind: 'per_push',\n    status: 'error',\n    push_summary: String(err).slice(0, 500),\n    structured_output: { error: err, raw: parsed }\n  }\n}];"
+      },
+      "id": "llm-13",
+      "name": "Build Supabase Error Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ ($env.N8N_SUPABASE_URL || $env.SUPABASE_URL || '').replace(/\\/$/, '') }}/rest/v1/ai_reviews?team_id=eq.{{ encodeURIComponent($json.team_id) }}&commit_sha=eq.{{ encodeURIComponent($json.commit_sha) }}&review_kind=eq.per_push",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": {{ JSON.stringify($json.status) }},\n  \"rag_level\": {{ JSON.stringify($json.rag_level) }},\n  \"push_summary\": {{ JSON.stringify($json.push_summary) }},\n  \"structured_output\": {{ JSON.stringify($json.structured_output) }}\n}",
+        "options": {}
+      },
+      "id": "llm-14",
+      "name": "Update Supabase Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        280
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('Parse Gemini Per Push').first().json;\nconst ctx = $('Restore After Team Commit Upsert').first().json;\n\nif (parsed._llm_failed) {\n  const err = parsed._llm_error || 'LLM request failed';\n  return [{\n    json: {\n      team_id: ctx.team_id,\n      commit_sha: ctx.commit_sha,\n      repo_name: ctx.repo_name,\n      review_kind: 'per_push',\n      status: 'error',\n      push_summary: String(err).slice(0, 500),\n      structured_output: { error: err, raw: parsed }\n    }\n  }];\n}\n\nlet text = parsed._gemini_text || '{}';\ntry { if (typeof text === 'string') text = JSON.parse(text); } catch (e) { text = { parse_error: String(text).slice(0, 500) }; }\nconst nested = text?.output?.output || text?.output || text;\nconst rag = nested?.rag_maturity?.level || nested?.rag_level || 'Basic';\nreturn [{\n  json: {\n    team_id: ctx.team_id,\n    commit_sha: ctx.commit_sha,\n    repo_name: ctx.repo_name,\n    review_kind: 'per_push',\n    status: 'done',\n    rag_level: rag,\n    push_summary: nested?.overall_picture?.push_summary || '',\n    structured_output: nested,\n    significant_change: nested?.overall_picture?.significant_change === true\n  }\n}];"
+      },
+      "id": "llm-15",
+      "name": "Build Per Push Review Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.N8N_SUPABASE_URL || $env.SUPABASE_URL || '').replace(/\\/$/, '') }}/rest/v1/ai_reviews",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"team_id\": {{ JSON.stringify($json.team_id) }},\n  \"commit_sha\": {{ JSON.stringify($json.commit_sha) }},\n  \"review_kind\": \"per_push\",\n  \"status\": {{ JSON.stringify($json.status) }},\n  \"rag_level\": {{ JSON.stringify($json.rag_level) }},\n  \"push_summary\": {{ JSON.stringify($json.push_summary) }},\n  \"structured_output\": {{ JSON.stringify($json.structured_output) }}\n}",
+        "options": {}
+      },
+      "id": "llm-16",
+      "name": "Create Supabase Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        520
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json.error || ($json.statusCode && Number($json.statusCode) >= 400) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "llm-17",
+      "name": "Per Push Review Create Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Build Per Push Review Result').first().json;\nreturn [{ json: p }];"
+      },
+      "id": "llm-18",
+      "name": "Build Data For Update AI Review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ ($env.N8N_SUPABASE_URL || $env.SUPABASE_URL || '').replace(/\\/$/, '') }}/rest/v1/ai_reviews?team_id=eq.{{ encodeURIComponent($json.team_id) }}&commit_sha=eq.{{ encodeURIComponent($json.commit_sha) }}&review_kind=eq.per_push",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": {{ JSON.stringify($json.status) }},\n  \"rag_level\": {{ JSON.stringify($json.rag_level) }},\n  \"push_summary\": {{ JSON.stringify($json.push_summary) }},\n  \"structured_output\": {{ JSON.stringify($json.structured_output) }}\n}",
+        "options": {}
+      },
+      "id": "llm-19",
+      "name": "Update AI Review On Duplicate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3300,
+        420
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $('Build Per Push Review Result').first().json.significant_change === true }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "llm-20",
+      "name": "isChange?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function buildGitHubIssueMarkdown(payload) {\r\n  const root = payload.structured_output || payload;\r\n  const lines = [];\r\n  const push = (title, text) => {\r\n    if (text && String(text).trim()) lines.push(`### ${title}\\n\\n${String(text).trim()}\\n`);\r\n  };\r\n  const list = (title, arr) => {\r\n    if (!Array.isArray(arr) || !arr.length) return;\r\n    lines.push(`### ${title}\\n`);\r\n    arr.forEach((item) => lines.push(`- ${item}`));\r\n    lines.push('');\r\n  };\r\n\r\n  lines.push('## Báo cáo AI Auditor (tham khảo)\\n');\r\n  lines.push(`**Đội:** ${payload.team_id || ''}`);\r\n  lines.push(`**Repository:** \\`${payload.repo_name || ''}\\``);\r\n  if (payload.commit_sha) lines.push(`**Commit:** \\`${payload.commit_sha}\\``);\r\n  lines.push('\\n> Đánh giá tự động — không phải điểm chính thức của ban tổ chức.\\n');\r\n\r\n  const overall = root.overall_picture || {};\r\n  push('Tóm tắt push', overall.push_summary);\r\n  push('Dự án', overall.project_about);\r\n  push('RAG maturity', root.rag_maturity?.level);\r\n\r\n  const inv = root.inventory_exhaustive || {};\r\n  list('Kiểm kê — Ngôn ngữ', inv.languages);\r\n  list('Kiểm kê — Framework', inv.frameworks_libraries);\r\n\r\n  const agent = root.agent_intelligence || {};\r\n  push('Agent — reasoning', agent.reasoning_pattern);\r\n  list('Agent — skills', agent.detected_skills);\r\n\r\n  const assess = root.assessment || {};\r\n  push('Ưu điểm', assess.advantages);\r\n  push('Nhược điểm', assess.disadvantages);\r\n  push('Bảo mật', assess.security);\r\n  push('Cải thiện', assess.improvement_areas);\r\n\r\n  list('Gợi ý test case', root.suggested_test_cases);\r\n  list('Câu hỏi phản biện cho BGK', root.suggested_questions_for_team);\r\n  list('Gợi ý tinh chỉnh prompt', root.suggested_prompt_refinement);\r\n\r\n  lines.push('\\n---\\n*Generated by Hackathon AI Review (legacy n8n)*');\r\n  return lines.join('\\n');\r\n}\nconst p = $('Build Per Push Review Result').first().json;\nconst token = $env.GITHUB_PAT || $env.GITHUB_TOKEN || '';\nconst parts = (p.repo_name || '/').split('/');\nconst owner = parts[0];\nconst repo = parts[1];\nconst shaShort = (p.commit_sha || '').slice(0, 7) || 'latest';\nconst title = '[AI Auditor] Thay đổi quan trọng — ' + p.team_id + ' (' + shaShort + ')';\nconst body = buildGitHubIssueMarkdown({ ...p, structured_output: p.structured_output });\ntry {\n  const res = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://api.github.com/repos/' + owner + '/' + repo + '/issues',\n    headers: {\n      Authorization: 'Bearer ' + token,\n      Accept: 'application/vnd.github+json',\n      'User-Agent': 'n8n-ai-review'\n    },\n    body: { title, body },\n    json: true\n  });\n  return [{ json: { issue_url: res.html_url, title } }];\n} catch (e) {\n  return [{ json: { error: String(e.message || e) } }];\n}"
+      },
+      "id": "llm-21",
+      "name": "Create an issue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        700
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Build Per Push Review Result').first().json;\nreturn [{ json: { team_id: p.team_id, commit_sha: p.commit_sha, repo_name: p.repo_name, rag_level: p.rag_level, per_push: p.structured_output, _passthrough: $('Restore After Team Commit Upsert').first().json } }];"
+      },
+      "id": "llm-22",
+      "name": "Prepare Fetch Aggregate Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.N8N_SUPABASE_URL || $env.SUPABASE_URL || '').replace(/\\/$/, '') }}/rest/v1/team_commits",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "team_id",
+              "value": "=eq.{{ $json.team_id }}"
+            },
+            {
+              "name": "order",
+              "value": "committed_at.asc"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "select",
+              "value": "commit_sha,committed_at,author,commit_message"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "llm-23",
+      "name": "Get All Team Commits Agg",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3740,
+        300
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $('Get All Team Commits Agg').all().map(i => i.json).flat();\nconst commits = rows.map(r => ({\n  sha: r.commit_sha,\n  committed_at: r.committed_at,\n  author: r.author,\n  message: (r.commit_message || '').slice(0, 500)\n}));\nreturn [{ json: { commits } }];"
+      },
+      "id": "llm-24",
+      "name": "Collapse Commits For Aggregate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3960,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.N8N_SUPABASE_URL || $env.SUPABASE_URL || '').replace(/\\/$/, '') }}/rest/v1/ai_reviews",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "team_id",
+              "value": "=eq.{{ $('Prepare Fetch Aggregate Context').first().json.team_id }}"
+            },
+            {
+              "name": "review_kind",
+              "value": "eq.per_push"
+            },
+            {
+              "name": "status",
+              "value": "eq.done"
+            },
+            {
+              "name": "order",
+              "value": "updated_at.desc"
+            },
+            {
+              "name": "limit",
+              "value": "40"
+            },
+            {
+              "name": "select",
+              "value": "push_summary,rag_level,structured_output,commit_sha"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "llm-25",
+      "name": "Get Prior Push Reviews Agg",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3740,
+        520
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "llm-26",
+      "name": "Merge Bundle And Reviews",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        4180,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Prepare Fetch Aggregate Context').first().json;\nconst merged = $input.all();\nlet commits = [];\nlet prior = [];\nfor (const item of merged) {\n  if (item.json.commits) commits = item.json.commits;\n  if (Array.isArray(item.json) && item.json[0]?.push_summary !== undefined) prior = item.json;\n  else if (item.json.push_summary !== undefined) prior.push(item.json);\n}\nif (!prior.length) {\n  prior = $('Get Prior Push Reviews Agg').all().map(i => i.json).flat();\n}\nif (!commits.length) {\n  commits = $('Collapse Commits For Aggregate').first().json.commits || [];\n}\nreturn [{ json: { ...ctx, aggregate_context: { commits, prior_push_reviews: prior } } }];"
+      },
+      "id": "llm-27",
+      "name": "Merge Aggregate Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function buildAggregatePrompt(ctx) {\r\n  const ac = ctx.aggregate_context || { commits: [], prior_push_reviews: [] };\r\n  const schema = `{\r\n  \"tech_stack\": { \"frameworks\": [], \"llm_models\": [], \"vector_db\": [], \"agent_frameworks\": [], \"third_party_tools\": [] },\r\n  \"inventory_exhaustive\": {\r\n    \"languages\": [], \"frameworks_libraries\": [], \"data_stores\": [], \"ai_ml_stack\": [], \"devops_infra\": []\r\n  },\r\n  \"rag_maturity\": { \"level\": \"Basic|Advanced|Agentic-RAG\", \"features_detected\": [] },\r\n  \"agent_intelligence\": {\r\n    \"reasoning_pattern\": \"\", \"detected_skills\": [], \"tool_definitions\": [], \"has_agent_config_files\": false\r\n  },\r\n  \"assessment\": {\r\n    \"advantages\": \"\", \"disadvantages\": \"\", \"improvement_areas\": \"\",\r\n    \"security\": \"\", \"completeness\": \"\", \"latency\": \"\", \"observability\": \"\", \"error_handling\": \"\"\r\n  },\r\n  \"criteria_comments\": {\r\n    \"R1_01\": \"Nhận xét + phân hạng (Xuất sắc|Tốt|Khá|Trung bình|Yếu) — Problem & Solution Fit\",\r\n    \"R1_02\": \"... — Data Pipeline\",\r\n    \"R1_03\": \"... — Retrieval & Citation\",\r\n    \"R1_04\": \"... — Intent & Prompting\",\r\n    \"R1_05\": \"... — Presentation & Doc\",\r\n    \"R2_01\": \"... — Agent & Multi-hop (25%)\",\r\n    \"R2_02\": \"... — Model Resources (25%)\",\r\n    \"R2_03\": \"... — Production Ops (15%)\",\r\n    \"R2_04\": \"... — Extensibility (15%)\",\r\n    \"R2_05\": \"... — BGK Q&A Prep (20%)\"\r\n  },\r\n  \"smb_scale_advisory\": {\r\n    \"system_identity_recap\": \"\", \"summary\": \"\", \"tech_and_architecture\": \"\",\r\n    \"cost_for_smb\": \"\", \"throughput_and_reliability\": \"\",\r\n    \"observability_and_operations\": \"\", \"data_and_integrations\": \"\"\r\n  },\r\n  \"overall_picture\": {\r\n    \"project_about\": \"\", \"historical_synthesis\": \"\", \"evolution_notes\": \"\", \"push_summary\": \"\"\r\n  },\r\n  \"suggested_questions_for_team\": []\r\n}`;\r\n\r\n  const rules = `\r\nQuy trình bắt buộc: B1 Nhận diện hệ thống → B2 Khoảng cách & rủi ro → B3 Đề xuất cải tiến.\r\n- criteria_comments: đủ 10 khóa R1_01–R2_05, mỗi khóa có phân hạng Xuất sắc|Tốt|Khá|Trung bình|Yếu.\r\n- smb_scale_advisory: đủ 7 trường, gắn với hệ thống thực tế, không chung chung.\r\n- agent_intelligence: tổng hợp cấp đội; reasoning_pattern bắt buộc.\r\n- Tuyệt đối KHÔNG bịa số liệu, commit, hoặc buổi demo. Viết tiếng Việt.`;\r\n\r\n  const system = `Bạn là AI Technical Auditor tổng hợp cấp đội (Team Aggregate).\r\nTrả về MỘT JSON hợp lệ (không markdown):\r\n${schema}\r\n${rules}`;\r\n\r\n  const user = `Team: ${ctx.team_id}\r\nRepository: ${ctx.repo_name}\r\n\r\nLịch sử commit (JSON, max 200):\r\n${JSON.stringify(ac.commits || [])}\r\n\r\nPer-push reviews trước (JSON, max 40):\r\n${JSON.stringify(ac.prior_push_reviews || [])}\r\n\r\nPer-push review hiện tại (JSON):\r\n${JSON.stringify(ctx.per_push || {})}`;\r\n\r\n  return system + '\\n\\n' + user;\r\n}\nconst ctx = $json;\nreturn [{ json: { ...ctx, aggregate_prompt: buildAggregatePrompt(ctx) } }];"
+      },
+      "id": "llm-28",
+      "name": "Build Team Aggregate Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4620,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const i = $json;\nconst schema = 'criteria_comments(R1,R2), smb_scale_advisory(7), overall_picture(historical_synthesis,evolution_notes), tech_stack, inventory_exhaustive, assessment';\nreturn [{ json: { ...i, aggregate_schema: schema } }];"
+      },
+      "id": "llm-29",
+      "name": "Structured Output Parser Team",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4840,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $env.AI_REVIEW_MODEL || 'gemini-2.5-flash' }}:generateContent?key={{ $env.GEMINI_API_KEY || $env.AI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\"parts\": [{\"text\": {{ JSON.stringify($('Build Team Aggregate Prompt').first().json.aggregate_prompt) }} }]}],\n  \"generationConfig\": {\"temperature\": 0.2, \"responseMimeType\": \"application/json\", \"thinkingConfig\": {\"thinkingBudget\": 0}}\n}",
+        "options": {
+          "timeout": 240000
+        }
+      },
+      "id": "llm-30",
+      "name": "Team Aggregate LLM Chain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5060,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst parts = resp?.candidates?.[0]?.content?.parts;\nlet text = '';\nif (Array.isArray(parts)) {\n  text = parts.map((p) => p?.text).filter(Boolean).join('\\n');\n} else if (typeof parts === 'string') {\n  text = parts;\n}\nconst failed = Boolean(resp?.error) || !text;\nconst err = resp?.error?.message || resp?.message || (!text ? 'No text in Gemini response' : '');\nreturn [{ json: { ...resp, _gemini_text: text, _llm_failed: failed, _llm_error: err } }];"
+      },
+      "id": "llm-30b",
+      "name": "Parse Gemini Aggregate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5170,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "error"
+            }
+          ]
+        }
+      },
+      "id": "llm-31",
+      "name": "LLM2 Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5280,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Prepare Fetch Aggregate Context').first().json;\nconst err = $json.error?.message || $json.message || 'Aggregate LLM failed';\nreturn [{\n  json: {\n    team_id: ctx.team_id,\n    commit_sha: ctx.commit_sha,\n    review_kind: 'team_aggregate',\n    status: 'error',\n    structured_output: { error: err }\n  }\n}];"
+      },
+      "id": "llm-32",
+      "name": "Build Supabase Aggregate Error Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5500,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ ($env.N8N_SUPABASE_URL || $env.SUPABASE_URL || '').replace(/\\/$/, '') }}/rest/v1/ai_reviews?team_id=eq.{{ encodeURIComponent($json.team_id) }}&commit_sha=eq.{{ encodeURIComponent($json.commit_sha) }}&review_kind=eq.team_aggregate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": {{ JSON.stringify($json.status) }},\n  \"structured_output\": {{ JSON.stringify($json.structured_output) }}\n}",
+        "options": {}
+      },
+      "id": "llm-33",
+      "name": "Update Supabase Aggregate Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5720,
+        280
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('Parse Gemini Aggregate').first().json;\nconst ctx = $('Prepare Fetch Aggregate Context').first().json;\n\nif (parsed._llm_failed) {\n  const err = parsed._llm_error || 'Aggregate LLM request failed';\n  return [{\n    json: {\n      team_id: ctx.team_id,\n      commit_sha: ctx.commit_sha,\n      review_kind: 'team_aggregate',\n      status: 'error',\n      structured_output: { error: err, raw: parsed }\n    }\n  }];\n}\n\nlet text = parsed._gemini_text || '{}';\ntry { if (typeof text === 'string') text = JSON.parse(text); } catch (e) { text = { parse_error: String(text).slice(0, 500) }; }\nconst nested = text?.output?.output || text?.output || text;\nreturn [{\n  json: {\n    team_id: ctx.team_id,\n    commit_sha: ctx.commit_sha,\n    review_kind: 'team_aggregate',\n    status: 'done',\n    rag_level: ctx.rag_level,\n    structured_output: nested\n  }\n}];"
+      },
+      "id": "llm-34",
+      "name": "Build Team Aggregate Review Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5500,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.N8N_SUPABASE_URL || $env.SUPABASE_URL || '').replace(/\\/$/, '') }}/rest/v1/ai_reviews",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_SUPABASE_SERVICE_ROLE_KEY || $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"team_id\": {{ JSON.stringify($json.team_id) }},\n  \"commit_sha\": {{ JSON.stringify($json.commit_sha) }},\n  \"review_kind\": \"team_aggregate\",\n  \"status\": {{ JSON.stringify($json.status) }},\n  \"rag_level\": {{ JSON.stringify($json.rag_level) }},\n  \"structured_output\": {{ JSON.stringify($json.structured_output) }}\n}",
+        "options": {}
+      },
+      "id": "llm-35",
+      "name": "Create Supabase Aggregate Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5720,
+        520
+      ],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Team Commit Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Team Commit Row": {
+      "main": [
+        [
+          {
+            "node": "Create Team Commit Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Team Commit Row": {
+      "main": [
+        [
+          {
+            "node": "Team Commit Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Team Commit Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Build Row For Update Team Commit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Restore After Team Commit Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Row For Update Team Commit": {
+      "main": [
+        [
+          {
+            "node": "Update Team Commit Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Team Commit Row": {
+      "main": [
+        [
+          {
+            "node": "Restore After Team Commit Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore After Team Commit Upsert": {
+      "main": [
+        [
+          {
+            "node": "Build Supabase Started Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Supabase Started Payload": {
+      "main": [
+        [
+          {
+            "node": "Structured Output Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "main": [
+        [
+          {
+            "node": "Google Vertex Chat Model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Vertex Chat Model": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Parse Gemini Per Push",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gemini Per Push": {
+      "main": [
+        [
+          {
+            "node": "Build Per Push Review Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Per Push Review Result": {
+      "main": [
+        [
+          {
+            "node": "Create Supabase Review",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "isChange?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Supabase Error Payload": {
+      "main": []
+    },
+    "Create Supabase Review": {
+      "main": [
+        [
+          {
+            "node": "Per Push Review Create Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Per Push Review Create Failed?": {
+      "main": [
+        [
+          {
+            "node": "Build Data For Update AI Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Fetch Aggregate Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Data For Update AI Review": {
+      "main": [
+        [
+          {
+            "node": "Update AI Review On Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update AI Review On Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Prepare Fetch Aggregate Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "isChange?": {
+      "main": [
+        [
+          {
+            "node": "Create an issue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Prepare Fetch Aggregate Context": {
+      "main": [
+        [
+          {
+            "node": "Get All Team Commits Agg",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Prior Push Reviews Agg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Team Commits Agg": {
+      "main": [
+        [
+          {
+            "node": "Collapse Commits For Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collapse Commits For Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Merge Bundle And Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prior Push Reviews Agg": {
+      "main": [
+        [
+          {
+            "node": "Merge Bundle And Reviews",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Bundle And Reviews": {
+      "main": [
+        [
+          {
+            "node": "Merge Aggregate Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Aggregate Context": {
+      "main": [
+        [
+          {
+            "node": "Build Team Aggregate Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Team Aggregate Prompt": {
+      "main": [
+        [
+          {
+            "node": "Structured Output Parser Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser Team": {
+      "main": [
+        [
+          {
+            "node": "Team Aggregate LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Team Aggregate LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Parse Gemini Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gemini Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Build Team Aggregate Review Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Team Aggregate Review Result": {
+      "main": [
+        [
+          {
+            "node": "Create Supabase Aggregate Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM2 Failed?": {
+      "main": []
+    },
+    "Build Supabase Aggregate Error Payload": {
+      "main": []
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "ai-review"
+    },
+    {
+      "name": "legacy"
+    }
+  ]
+}
