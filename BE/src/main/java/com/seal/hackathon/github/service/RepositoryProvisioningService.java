@@ -1,9 +1,11 @@
 package com.seal.hackathon.github.service;
 
 import com.seal.hackathon.aireview.entity.TeamRepository;
+import com.seal.hackathon.aireview.repository.RepositoryStatusStatsProjection;
 import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.assignment.entity.JudgeAssignment;
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
+import com.seal.hackathon.authprofile.security.AuthCredentialPolicy;
 import com.seal.hackathon.authprofile.entity.User;
 import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
@@ -26,6 +28,7 @@ import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.github.client.GitHubClientException;
 import com.seal.hackathon.github.client.GitHubRepositoryClient;
 import com.seal.hackathon.github.client.GitHubRepositoryInfo;
+import com.seal.hackathon.github.dto.EventRepositoriesPageResponse;
 import com.seal.hackathon.github.dto.GrantJudgeAccessResponse;
 import com.seal.hackathon.github.dto.JudgeAccessGrantItem;
 import com.seal.hackathon.github.dto.JudgeRepositoryResponse;
@@ -33,8 +36,10 @@ import com.seal.hackathon.github.dto.ProvisionProblemRepositoriesResponse;
 import com.seal.hackathon.github.dto.RepoTemplateResponse;
 import com.seal.hackathon.github.dto.RepositoryLockResponse;
 import com.seal.hackathon.github.dto.RepositoryRetryResponse;
+import com.seal.hackathon.github.dto.RepositoryStatusStatsResponse;
 import com.seal.hackathon.github.dto.SaveRepoTemplateRequest;
 import com.seal.hackathon.github.dto.TeamRepositoryResponse;
+import com.seal.hackathon.github.entity.JudgeRepositoryAccessGrant;
 import com.seal.hackathon.github.entity.ProblemRepositoryTemplate;
 import com.seal.hackathon.github.repository.ProblemRepositoryTemplateRepository;
 import com.seal.hackathon.assignment.service.BoardScoringReadinessService;
@@ -56,6 +61,9 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +76,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class RepositoryProvisioningService {
 
     private static final int DEFAULT_REVIEW_INTERVAL_MINUTES = 60;
+    private static final int MAX_REPO_PAGE_SIZE = 200;
 
     private final ProblemRepositoryTemplateRepository templateRepository;
     private final TeamRepositoryEntityRepository teamRepositoryEntityRepository;
@@ -85,6 +94,9 @@ public class RepositoryProvisioningService {
     private final JudgeAssignmentRepository judgeAssignmentRepository;
     private final CurrentUserProvider currentUserProvider;
     private final RepoCommitService repoCommitService;
+    private final com.seal.hackathon.github.repository.JudgeRepositoryAccessGrantRepository
+            judgeRepositoryAccessGrantRepository;
+    private final com.seal.hackathon.notification.service.NotificationService notificationService;
 
     @Value("${app.github.org:}")
     private String githubOrg;
@@ -264,7 +276,7 @@ public class RepositoryProvisioningService {
         if (total == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "PROBLEM_NOT_CLOSED");
         }
-        if (locked > 0) {
+        if (locked > 0 && hasPendingJudgeGrantsForRound(roundId)) {
             grantJudgeAccessForRoundInternal(roundId);
         }
         return RepositoryLockResponse.builder()
@@ -285,6 +297,9 @@ public class RepositoryProvisioningService {
         for (ProblemRepositoryTemplate template : templateRepository.findByEnabledTrue()) {
             Problem problem = problemRepository.findById(template.getProblemId()).orElse(null);
             if (problem == null || problem.getReleaseAt() == null || now.isBefore(problem.getReleaseAt())) {
+                continue;
+            }
+            if (isProblemFullyProvisioned(problem.getId())) {
                 continue;
             }
             processedProblems++;
@@ -385,7 +400,9 @@ public class RepositoryProvisioningService {
             }
         }
         for (Long roundId : roundsToGrant) {
-            grantJudgeAccessForRoundInternal(roundId);
+            if (hasPendingJudgeGrantsForRound(roundId)) {
+                grantJudgeAccessForRoundInternal(roundId);
+            }
         }
         return lockedTotal;
     }
@@ -400,6 +417,7 @@ public class RepositoryProvisioningService {
         if (result.locked() > 0) {
             boardRepository.findById(problem.getBoardId())
                     .map(Board::getRoundId)
+                    .filter(this::hasPendingJudgeGrantsForRound)
                     .ifPresent(this::grantJudgeAccessForRoundInternal);
         }
         return RepositoryLockResponse.builder()
@@ -475,7 +493,9 @@ public class RepositoryProvisioningService {
             }
         }
         for (Long roundId : roundsToGrant) {
-            grantJudgeAccessForRoundInternal(roundId);
+            if (hasPendingJudgeGrantsForRound(roundId)) {
+                grantJudgeAccessForRoundInternal(roundId);
+            }
         }
     }
 
@@ -508,19 +528,60 @@ public class RepositoryProvisioningService {
     }
 
     @Transactional(readOnly = true)
-    public List<TeamRepositoryResponse> getRepositoriesByEvent(Long eventId) {
+    public EventRepositoriesPageResponse getRepositoriesByEventPaged(
+            Long eventId,
+            Long roundId,
+            Long boardId,
+            RepositoryAccessStatus accessStatus,
+            String q,
+            int page,
+            int size) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
-        List<Long> teamIds = teamRepository.findByEventIdOrderByNameAscIdAsc(eventId).stream()
-                .map(Team::getId)
-                .toList();
-        if (teamIds.isEmpty()) {
-            return List.of();
-        }
-        return teamRepositoryEntityRepository.findByTeamIdInOrderByTeamIdAscProblemIdAsc(teamIds).stream()
+        int safeSize = Math.min(Math.max(size, 1), MAX_REPO_PAGE_SIZE);
+        int safePage = Math.max(page, 0);
+        String trimmedQuery = (q != null && !q.isBlank()) ? q.trim() : null;
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+        Page<TeamRepository> pageResult = teamRepositoryEntityRepository.findByEventFiltered(
+                eventId, roundId, boardId, accessStatus, trimmedQuery, pageable);
+        RepositoryStatusStatsProjection summary = teamRepositoryEntityRepository.summarizeByEventFiltered(
+                eventId, roundId, boardId, accessStatus, trimmedQuery);
+        List<TeamRepositoryResponse> items = pageResult.getContent().stream()
                 .map(repository -> toRepositoryResponse(repository, true))
                 .toList();
+        return EventRepositoriesPageResponse.builder()
+                .items(items)
+                .page(pageResult.getNumber())
+                .size(pageResult.getSize())
+                .total(pageResult.getTotalElements())
+                .totalPages(pageResult.getTotalPages())
+                .stats(toRepositoryStatusStats(summary))
+                .build();
+    }
+
+    private RepositoryStatusStatsResponse toRepositoryStatusStats(RepositoryStatusStatsProjection summary) {
+        if (summary == null) {
+            return RepositoryStatusStatsResponse.builder().build();
+        }
+        return RepositoryStatusStatsResponse.builder()
+                .total(summary.getTotal() == null ? 0L : summary.getTotal())
+                .open(summary.getOpenCount() == null ? 0L : summary.getOpenCount())
+                .closed(summary.getClosedCount() == null ? 0L : summary.getClosedCount())
+                .pending(summary.getPendingCount() == null ? 0L : summary.getPendingCount())
+                .failed(summary.getFailedCount() == null ? 0L : summary.getFailedCount())
+                .created(summary.getCreatedCount() == null ? 0L : summary.getCreatedCount())
+                .githubIssueCount(summary.getGithubIssueCount() == null ? 0L : summary.getGithubIssueCount())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public RepositoryStatusStatsResponse getEventRepositoryStats(Long eventId) {
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        return toRepositoryStatusStats(
+                teamRepositoryEntityRepository.summarizeByEventFiltered(eventId, null, null, null, null));
     }
 
     @Transactional(readOnly = true)
@@ -676,12 +737,43 @@ public class RepositoryProvisioningService {
                             .build());
                     continue;
                 }
+                if (judgeRepositoryAccessGrantRepository.existsByTeamRepositoryIdAndJudgeId(
+                        repository.getId(), judgeId)) {
+                    skipped++;
+                    grants.add(JudgeAccessGrantItem.builder()
+                            .repositoryId(repository.getId())
+                            .teamId(repository.getTeamId())
+                            .teamName(teamName)
+                            .judgeId(judgeId)
+                            .judgeUsername(judgeUsername)
+                            .access("READ")
+                            .status("SKIPPED")
+                            .error("ALREADY_GRANTED")
+                            .build());
+                    continue;
+                }
+                if (hasGithubCollaboratorAccess(repository, judgeUsername)) {
+                    persistJudgeAccessGrant(repository.getId(), judgeId, judgeUsername);
+                    skipped++;
+                    grants.add(JudgeAccessGrantItem.builder()
+                            .repositoryId(repository.getId())
+                            .teamId(repository.getTeamId())
+                            .teamName(teamName)
+                            .judgeId(judgeId)
+                            .judgeUsername(judgeUsername)
+                            .access("READ")
+                            .status("SKIPPED")
+                            .error("ALREADY_GRANTED")
+                            .build());
+                    continue;
+                }
                 try {
                     githubRepositoryClient.addCollaborator(
                             repository.getGithubOwner(),
                             repository.getGithubRepoName(),
                             judgeUsername,
                             "pull");
+                    persistJudgeAccessGrant(repository.getId(), judgeId, judgeUsername);
                     granted++;
                     grants.add(JudgeAccessGrantItem.builder()
                             .repositoryId(repository.getId())
@@ -771,10 +863,24 @@ public class RepositoryProvisioningService {
         boolean judgeHasGithubUsername = StringUtils.hasText(judgeGithubUsername);
         String normalizedJudgeGithub = judgeHasGithubUsername ? judgeGithubUsername.trim() : null;
 
-        return teamRepositoryEntityRepository.findByTeamIdInOrderByTeamIdAscProblemIdAsc(List.copyOf(teamIds)).stream()
+        List<TeamRepository> repositories = teamRepositoryEntityRepository
+                .findByTeamIdInOrderByTeamIdAscProblemIdAsc(List.copyOf(teamIds)).stream()
                 .filter(repository -> repository.getProblemId() != null)
                 .filter(repository -> boardIds.contains(repository.getBoardId()))
-                .map(repository -> toJudgeRepositoryResponse(repository, normalizedJudgeGithub, judgeHasGithubUsername))
+                .toList();
+        Set<Long> repositoryIds = repositories.stream().map(TeamRepository::getId).collect(Collectors.toSet());
+        Set<Long> grantedRepositoryIds = judgeRepositoryAccessGrantRepository
+                .findByJudgeIdAndTeamRepositoryIdIn(judgeId, repositoryIds).stream()
+                .map(JudgeRepositoryAccessGrant::getTeamRepositoryId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        return repositories.stream()
+                .map(repository -> toJudgeRepositoryResponse(
+                        repository,
+                        judgeId,
+                        normalizedJudgeGithub,
+                        judgeHasGithubUsername,
+                        grantedRepositoryIds.contains(repository.getId())))
                 .toList();
     }
 
@@ -786,10 +892,14 @@ public class RepositoryProvisioningService {
             OffsetDateTime now) {
         List<String> usernames = loadConfirmedGithubUsernames(team.getId());
         if (usernames.isEmpty()) {
+            String profileIssue = describeTeamGithubProfileIssue(team.getId());
             repository.setProvisionStatus(RepositoryProvisionStatus.FAILED);
             repository.setAccessStatus(RepositoryAccessStatus.FAILED);
-            repository.setLastError("Missing GitHub username for confirmed team members");
+            repository.setLastError(profileIssue != null
+                    ? profileIssue
+                    : "Missing GitHub username for confirmed team members");
             repository.setUpdatedAt(now);
+            notificationService.notifyTeamGithubProfileIncomplete(team, profileIssue);
             return new ProvisionOutcome(teamRepositoryEntityRepository.save(repository), false, true);
         }
         if (!StringUtils.hasText(githubOrg)) {
@@ -853,9 +963,53 @@ public class RepositoryProvisioningService {
             if (user == null || !StringUtils.hasText(user.getGithubUsername())) {
                 return List.of();
             }
-            usernames.add(user.getGithubUsername().trim());
+            String normalized = AuthCredentialPolicy.normalizeUsername(user.getGithubUsername());
+            if (normalized == null) {
+                return List.of();
+            }
+            try {
+                AuthCredentialPolicy.assertUsername(normalized);
+            } catch (ResponseStatusException ex) {
+                return List.of();
+            }
+            usernames.add(normalized);
         }
         return List.copyOf(usernames);
+    }
+
+    private String describeTeamGithubProfileIssue(Long teamId) {
+        List<TeamMember> members = teamMemberRepository.findByTeamIdAndStatus(teamId, TeamMemberStatus.CONFIRMED);
+        if (members.isEmpty()) {
+            return "Team has no confirmed members";
+        }
+        List<String> issues = new ArrayList<>();
+        for (TeamMember member : members) {
+            if (member.getUserId() == null) {
+                issues.add("Thành viên chưa liên kết tài khoản");
+                continue;
+            }
+            User user = userRepository.findById(member.getUserId()).orElse(null);
+            if (user == null) {
+                issues.add("Không tìm thấy tài khoản thành viên");
+                continue;
+            }
+            String label = StringUtils.hasText(user.getFullName()) ? user.getFullName() : user.getEmail();
+            if (!StringUtils.hasText(user.getGithubUsername())) {
+                issues.add(label + ": thiếu GitHub username");
+                continue;
+            }
+            String normalized = AuthCredentialPolicy.normalizeUsername(user.getGithubUsername());
+            if (normalized == null) {
+                issues.add(label + ": GitHub username trống");
+                continue;
+            }
+            try {
+                AuthCredentialPolicy.assertUsername(normalized);
+            } catch (ResponseStatusException ex) {
+                issues.add(label + ": GitHub username không hợp lệ (" + normalized + ")");
+            }
+        }
+        return issues.isEmpty() ? null : String.join("; ", issues);
     }
 
     private TeamRepository initializeRepository(Team team, ProblemScope scope, Long currentUserId, OffsetDateTime now) {
@@ -1023,7 +1177,11 @@ public class RepositoryProvisioningService {
     }
 
     private JudgeRepositoryResponse toJudgeRepositoryResponse(
-            TeamRepository repository, String judgeGithubUsername, boolean judgeHasGithubUsername) {
+            TeamRepository repository,
+            Long judgeId,
+            String judgeGithubUsername,
+            boolean judgeHasGithubUsername,
+            boolean accessGrantedByRecord) {
         Problem problem = repository.getProblemId() == null
                 ? null
                 : problemRepository.findById(repository.getProblemId()).orElse(null);
@@ -1056,17 +1214,27 @@ public class RepositoryProvisioningService {
                 .judgeGithubUsername(judgeGithubUsername)
                 .judgeHasGithubUsername(judgeHasGithubUsername)
                 .judgeGithubAccessGranted(resolveJudgeGithubAccessGranted(
-                        repository, judgeGithubUsername, judgeHasGithubUsername))
+                        repository, judgeId, judgeGithubUsername, judgeHasGithubUsername, accessGrantedByRecord))
                 .build();
     }
 
     private Boolean resolveJudgeGithubAccessGranted(
-            TeamRepository repository, String judgeGithubUsername, boolean judgeHasGithubUsername) {
+            TeamRepository repository,
+            Long judgeId,
+            String judgeGithubUsername,
+            boolean judgeHasGithubUsername,
+            boolean accessGrantedByRecord) {
         if (!judgeHasGithubUsername
                 || repository.getProvisionStatus() != RepositoryProvisionStatus.CREATED
                 || !StringUtils.hasText(repository.getGithubOwner())
                 || !StringUtils.hasText(repository.getGithubRepoName())) {
             return null;
+        }
+        if (accessGrantedByRecord
+                || (judgeId != null
+                        && judgeRepositoryAccessGrantRepository.existsByTeamRepositoryIdAndJudgeId(
+                                repository.getId(), judgeId))) {
+            return true;
         }
         try {
             return githubRepositoryClient
@@ -1079,6 +1247,85 @@ public class RepositoryProvisioningService {
         } catch (GitHubClientException ex) {
             return null;
         }
+    }
+
+    private boolean hasGithubCollaboratorAccess(TeamRepository repository, String judgeGithubUsername) {
+        if (!StringUtils.hasText(judgeGithubUsername)
+                || !StringUtils.hasText(repository.getGithubOwner())
+                || !StringUtils.hasText(repository.getGithubRepoName())) {
+            return false;
+        }
+        try {
+            return githubRepositoryClient
+                    .getCollaboratorPermission(
+                            repository.getGithubOwner(),
+                            repository.getGithubRepoName(),
+                            judgeGithubUsername)
+                    .map(this::isReadAccessPermission)
+                    .orElse(false);
+        } catch (GitHubClientException ex) {
+            return false;
+        }
+    }
+
+    private boolean isProblemFullyProvisioned(Long problemId) {
+        ProblemScope scope = loadProblemScope(problemId);
+        List<Team> eligibleTeams = findEligibleTeams(scope);
+        if (eligibleTeams.isEmpty()) {
+            return true;
+        }
+        for (Team team : eligibleTeams) {
+            TeamRepository repository = teamRepositoryEntityRepository
+                    .findByTeamIdAndProblemId(team.getId(), problemId)
+                    .orElse(null);
+            if (repository == null || repository.getProvisionStatus() != RepositoryProvisionStatus.CREATED) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void persistJudgeAccessGrant(Long teamRepositoryId, Long judgeId, String judgeGithubUsername) {
+        if (judgeRepositoryAccessGrantRepository.existsByTeamRepositoryIdAndJudgeId(teamRepositoryId, judgeId)) {
+            return;
+        }
+        judgeRepositoryAccessGrantRepository.save(JudgeRepositoryAccessGrant.builder()
+                .teamRepositoryId(teamRepositoryId)
+                .judgeId(judgeId)
+                .judgeGithubUsername(judgeGithubUsername)
+                .grantedAt(OffsetDateTime.now())
+                .build());
+    }
+
+    private boolean hasPendingJudgeGrantsForRound(Long roundId) {
+        if (roundId == null || !roundRepository.existsById(roundId)) {
+            return false;
+        }
+        List<Board> boards = boardRepository.findByRoundId(roundId);
+        Map<Long, Set<Long>> judgesByBoard = new HashMap<>();
+        for (Board board : boards) {
+            Set<Long> judgeIds = judgeAssignmentRepository.findByBoardId(board.getId()).stream()
+                    .map(JudgeAssignment::getJudgeId)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            judgesByBoard.put(board.getId(), judgeIds);
+        }
+        List<TeamRepository> repositories = teamRepositoryEntityRepository
+                .findByRoundIdOrderByTeamIdAscProblemIdAsc(roundId).stream()
+                .filter(repository -> repository.getProvisionStatus() == RepositoryProvisionStatus.CREATED)
+                .filter(repository -> repository.getProblemId() != null)
+                .filter(repository -> StringUtils.hasText(repository.getGithubOwner())
+                        && StringUtils.hasText(repository.getGithubRepoName()))
+                .toList();
+        for (TeamRepository repository : repositories) {
+            Set<Long> judgeIds = judgesByBoard.getOrDefault(repository.getBoardId(), Set.of());
+            for (Long judgeId : judgeIds) {
+                if (!judgeRepositoryAccessGrantRepository.existsByTeamRepositoryIdAndJudgeId(
+                        repository.getId(), judgeId)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private String resolveRepositoryBranch(TeamRepository repository) {

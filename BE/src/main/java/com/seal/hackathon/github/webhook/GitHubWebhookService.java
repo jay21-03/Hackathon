@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.aireview.entity.TeamRepository;
 import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.aireview.service.AiReviewAsyncTrigger;
+import com.seal.hackathon.github.service.RepoCommitService;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ public class GitHubWebhookService {
     private final GitHubWebhookSignatureVerifier signatureVerifier;
     private final TeamRepositoryEntityRepository teamRepositoryEntityRepository;
     private final AiReviewAsyncTrigger aiReviewAsyncTrigger;
+    private final RepoCommitService repoCommitService;
     private final ObjectMapper objectMapper;
 
     @Value("${app.github.webhook-secret:}")
@@ -83,6 +85,9 @@ public class GitHubWebhookService {
             }
         }
         teamRepositoryEntityRepository.saveAll(repositories);
+        for (TeamRepository repositoryEntity : repositories) {
+            repoCommitService.captureLatestCommitSilently(repositoryEntity.getId());
+        }
         if (webhookReviewEnabled) {
             for (TeamRepository repositoryEntity : repositories) {
                 aiReviewAsyncTrigger.scheduleAfterPush(repositoryEntity.getId());
