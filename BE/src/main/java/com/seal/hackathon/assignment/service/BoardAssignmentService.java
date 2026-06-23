@@ -99,6 +99,9 @@ public class BoardAssignmentService {
         if (!userRoleRepository.existsByUserIdAndRole(judgeId, SystemRole.JUDGE)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TARGET_NOT_JUDGE");
         }
+        if (mentorAssignmentRepository.existsByBoardIdAndMentorId(boardId, judgeId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MENTOR_CANNOT_JUDGE_OWN_BOARD");
+        }
 
         if (judgeAssignmentRepository.existsByBoardIdAndJudgeId(boardId, judgeId)) {
             JudgeAssignment existing = judgeAssignmentRepository.findByBoardIdAndJudgeId(boardId, judgeId).get();
@@ -205,6 +208,9 @@ public class BoardAssignmentService {
             return;
         }
         if (role == SystemRole.JUDGE) {
+            if (mentorAssignmentRepository.existsByBoardIdAndMentorId(boardId, userId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MENTOR_CANNOT_JUDGE_OWN_BOARD");
+            }
             if (!judgeAssignmentRepository.existsByBoardIdAndJudgeId(boardId, userId)) {
                 judgeAssignmentRepository.save(JudgeAssignment.builder()
                         .boardId(boardId)
