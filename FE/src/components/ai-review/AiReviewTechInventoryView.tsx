@@ -1,18 +1,18 @@
 import type { InventoryExhaustive, TechStackGroup } from "../../services/aiReviewApi";
 
 export const TECH_STACK_LABELS: Record<keyof TechStackGroup, string> = {
-  frameworks: "Frameworks",
-  llm_models: "LLM models",
-  vector_db: "Vector DB",
-  agent_frameworks: "Agent frameworks",
-  third_party_tools: "Third-party tools"
+  frameworks: "Framework",
+  llm_models: "Mô hình LLM",
+  vector_db: "Cơ sở vector",
+  agent_frameworks: "Framework agent",
+  third_party_tools: "Công cụ bên thứ ba"
 };
 
 export const INVENTORY_LABELS: Record<keyof InventoryExhaustive, string> = {
   languages: "Ngôn ngữ",
   frameworks_libraries: "Framework / thư viện",
-  data_stores: "Data stores",
-  ai_ml_stack: "AI / ML stack",
+  data_stores: "Kho dữ liệu",
+  ai_ml_stack: "Ngăn xếp AI / ML",
   devops_infra: "DevOps / hạ tầng"
 };
 
@@ -22,8 +22,8 @@ export const ASSESSMENT_LABELS: Record<string, string> = {
   improvement_areas: "Cải thiện",
   security: "Bảo mật",
   completeness: "Độ hoàn thiện",
-  latency: "Latency (NFR)",
-  observability: "Observability (NFR)",
+  latency: "Độ trễ (NFR)",
+  observability: "Khả năng quan sát (NFR)",
   error_handling: "Xử lý lỗi (NFR)"
 };
 
@@ -95,18 +95,18 @@ export function AiReviewTechInventoryView({
   return (
     <div className="space-y-md">
       <GroupedChips
-        title="Tech stack (tổng hợp)"
+        title="Ngăn xếp công nghệ (tổng hợp)"
         groups={techStack as ChipGroups | null | undefined}
         labels={TECH_STACK_LABELS}
       />
       <GroupedChips
-        title="Kiểm kê công nghệ (inventory_exhaustive)"
+        title="Kiểm kê công nghệ (đầy đủ)"
         groups={inventoryExhaustive as ChipGroups | null | undefined}
         labels={INVENTORY_LABELS}
       />
       {hasRag ? (
         <section>
-          <h3 className="font-label-md text-on-surface">RAG features</h3>
+          <h3 className="font-label-md text-on-surface">Tính năng RAG</h3>
           <ChipList items={ragFeatures} />
         </section>
       ) : null}
