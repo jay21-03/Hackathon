@@ -1,0 +1,44 @@
+{
+  "name": "AI Review - Platform Scheduler",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 1 }]
+        }
+      },
+      "id": "a1b2c3d4-schedule",
+      "name": "Every 1 hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/v1/webhooks/n8n/ai-review/run-due",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-N8N-Secret", "value": "={{ $env.N8N_AI_REVIEW_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "options": { "timeout": 120000 }
+      },
+      "id": "b2c3d4e5-http-run",
+      "name": "Run due AI reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [280, 0]
+    }
+  ],
+  "connections": {
+    "Every 1 hour": {
+      "main": [[{ "node": "Run due AI reviews", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true },
+  "tags": [{ "name": "ai-review" }, { "name": "platform" }]
+}

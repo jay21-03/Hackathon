@@ -1,0 +1,126 @@
+{
+  "name": "Process Single Repo",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "psr-trigger",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst since = new Date(now.getTime() - 60 * 60 * 1000);\nconst owner = $json.owner;\nconst repo = $json.repo;\nreturn [{\n  json: {\n    owner,\n    repo,\n    team_id: repo,\n    repo_name: `${owner}/${repo}`,\n    since: since.toISOString(),\n    until: now.toISOString()\n  }\n}];"
+      },
+      "id": "psr-hour-window",
+      "name": "ComputeHourWindow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/commits",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "per_page", "value": "100" },
+            { "name": "since", "value": "={{ $json.since }}" },
+            { "name": "until", "value": "={{ $json.until }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "psr-github-commits",
+      "name": "Get repo commit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('ComputeHourWindow').first().json;\nconst token = $env.GITHUB_PAT || $env.GITHUB_TOKEN || '';\nlet list = $('Get repo commit').all().map(i => i.json);\nif (list.length === 1 && Array.isArray(list[0])) list = list[0];\nelse if (list.length === 1 && list[0]?.sha && !list[0]?.files) list = [list[0]];\nlist = list.filter(c => c && c.sha);\nif (!list.length) return [];\nconst details = [];\nfor (const c of list) {\n  const sha = c.sha;\n  try {\n    const res = await this.helpers.httpRequest({\n      method: 'GET',\n      url: `https://api.github.com/repos/${ctx.owner}/${ctx.repo}/commits/${sha}`,\n      headers: {\n        Authorization: `Bearer ${token}`,\n        Accept: 'application/vnd.github+json',\n        'User-Agent': 'n8n-ai-review'\n      },\n      json: true\n    });\n    details.push(res);\n  } catch (e) {\n    details.push({ sha, commit: c.commit || {}, files: [], error: String(e.message || e) });\n  }\n}\nreturn [{ json: { ctx, details } }];"
+      },
+      "id": "psr-commit-details",
+      "name": "Get commit details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const IGNORED = new Set(['.gitignore','package-lock.json','yarn.lock','.env','README.md']);\nconst CONFIG_NAMES = new Set(['requirements.txt','requirements-dev.txt','pyproject.toml','poetry.lock','pipfile','package.json','docker-compose.yml','docker-compose.yaml','dockerfile','makefile','cargo.toml','go.mod','.env.example','application.yml','application.yaml','application.properties','tsconfig.json','vite.config.ts','vite.config.js']);\nconst PATCH_LIMIT = 3000;\nconst TOTAL_LIMIT = 50000;\n\nfunction shouldInclude(filename) {\n  if (!filename) return false;\n  const n = filename.trim();\n  if (IGNORED.has(n)) return false;\n  return !n.toLowerCase().endsWith('.lock');\n}\nfunction isConfig(filename) {\n  const base = filename.includes('/') ? filename.slice(filename.lastIndexOf('/') + 1) : filename;\n  const lower = base.toLowerCase();\n  if (CONFIG_NAMES.has(lower)) return true;\n  return lower.endsWith('.env.example') || lower.endsWith('.yaml') || lower.endsWith('.yml') || lower.endsWith('.toml') || lower.startsWith('dockerfile');\n}\nfunction trim(value, max) {\n  if (!value) return '';\n  const t = String(value).trim().replace(/\\n/g, ' ');\n  return t.length <= max ? t : t.slice(0, max) + '…';\n}\nfunction toUtc7(iso) {\n  if (!iso) return new Date().toISOString();\n  const d = new Date(iso);\n  return new Date(d.getTime() + 7 * 3600000).toISOString().replace('Z', '+07:00');\n}\n\nconst pack = $json;\nconst ctx = pack.ctx || $('ComputeHourWindow').first().json;\nconst details = pack.details || [];\nif (!details.length) return [];\n\nconst modifiedSet = new Set();\nconst configSet = new Set();\nlet activityLog = '';\nlet codeDetail = '';\nconst firebaseRecords = [];\n\nfor (const commit of details) {\n  const sha = commit.sha || '';\n  const shortSha = sha.slice(0, 7);\n  const msg = commit.commit?.message || '';\n  const committedAt = commit.commit?.author?.date || commit.commit?.committer?.date || '';\n  const files = (commit.files || []).filter(f => shouldInclude(f.filename));\n  files.forEach(f => {\n    modifiedSet.add(f.filename.trim());\n    if (isConfig(f.filename)) configSet.add(f.filename.trim());\n  });\n  const fileNames = files.map(f => f.filename).join(', ') || '(no files)';\n  if (activityLog) activityLog += '\\n';\n  activityLog += `${shortSha}: ${trim(msg, 200)} | ${fileNames}`;\n\n  let diffContent = '';\n  for (const file of files) {\n    diffContent += `\\n--- ${file.filename} (+${file.additions || 0}/-${file.deletions || 0}) ---\\n`;\n    let patch = file.patch || '';\n    if (patch.length > PATCH_LIMIT) patch = patch.slice(0, PATCH_LIMIT) + '\\n... [Truncated] ...';\n    diffContent += patch;\n  }\n\n  firebaseRecords.push({\n    commit_sha: sha,\n    repo_name: ctx.repo_name,\n    team_id: ctx.team_id,\n    author: commit.commit?.author?.name || commit.author?.login || 'unknown',\n    timestamp: toUtc7(committedAt),\n    commit_message: trim(msg, 500),\n    branch: 'main',\n    stats: {\n      additions: commit.stats?.additions || 0,\n      deletions: commit.stats?.deletions || 0,\n      files_changed_count: files.length\n    },\n    modified_files_list: files.map(f => f.filename),\n    config_files_detected: files.filter(f => isConfig(f.filename)).map(f => f.filename)\n  });\n\n  if (codeDetail) codeDetail += '\\n=== COMMIT-BOUNDARY ===\\n';\n  codeDetail += `SHA: ${sha}\\nMessage: ${trim(msg, 500)}\\n`;\n  codeDetail += diffContent;\n  if (codeDetail.length >= TOTAL_LIMIT) {\n    codeDetail = codeDetail.slice(0, TOTAL_LIMIT) + '\\n... [Truncated total diff] ...';\n    break;\n  }\n}\n\nif (codeDetail.length > TOTAL_LIMIT) {\n  codeDetail = codeDetail.slice(0, TOTAL_LIMIT) + '\\n... [Truncated total diff] ...';\n}\n\nconst modifiedList = [...modifiedSet];\nconst configList = [...configSet];\n\nreturn [{\n  json: {\n    repo_name: ctx.repo_name,\n    team_id: ctx.team_id,\n    owner: ctx.owner,\n    repo: ctx.repo,\n    commit_sha: details[0].sha,\n    commit_count: details.length,\n    activity_log: activityLog,\n    code_changes_detail: codeDetail || '(no diff)',\n    modified_files_list: modifiedList,\n    config_files_detected: configList,\n    cron_batch_review: true,\n    batched_commit_shas: details.map(c => c.sha),\n    timestamp: new Date().toISOString(),\n    firebase_records: firebaseRecords,\n    firebase_base: ($env.N8N_FIREBASE_DATABASE_URL || '').replace(/\\/$/, '')\n  }\n}];"
+      },
+      "id": "psr-summation",
+      "name": "Summation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const batch = $json;\nconst base = batch.firebase_base;\nconst token = $env.N8N_FIREBASE_ACCESS_TOKEN || '';\nif (!base || !token || !(batch.firebase_records || []).length) {\n  return [{ json: { skipped: true, reason: 'firebase not configured or no commits' } }];\n}\nfor (const rec of batch.firebase_records) {\n  try {\n    await this.helpers.httpRequest({\n      method: 'PUT',\n      url: `${base}/commit/${rec.commit_sha}.json`,\n      headers: {\n        Authorization: `Bearer ${token}`,\n        'Content-Type': 'application/json'\n      },\n      body: rec,\n      json: true\n    });\n  } catch (e) {\n    // continue other commits\n  }\n}\nreturn [{ json: { firebase_written: (batch.firebase_records || []).length } }];"
+      },
+      "id": "psr-firebase",
+      "name": "INSERT Firebase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 180],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const s = $('Summation').first().json;\nreturn [{\n  json: {\n    repo_name: s.repo_name,\n    team_id: s.team_id,\n    owner: s.owner,\n    repo: s.repo,\n    commit_sha: s.commit_sha,\n    commit_count: s.commit_count,\n    activity_log: s.activity_log,\n    code_changes_detail: s.code_changes_detail,\n    modified_files_list: s.modified_files_list,\n    config_files_detected: s.config_files_detected,\n    cron_batch_review: true,\n    batched_commit_shas: s.batched_commit_shas,\n    timestamp: s.timestamp\n  }\n}];"
+      },
+      "id": "psr-aggregate-batch",
+      "name": "Aggregate batch for LLM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 420]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.N8N_LLM_HACKATHON_WORKFLOW_ID }}",
+        "mode": "once"
+      },
+      "id": "psr-call-llm",
+      "name": "Call LLM - Hackathon",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1440, 420]
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [[{ "node": "ComputeHourWindow", "type": "main", "index": 0 }]]
+    },
+    "ComputeHourWindow": {
+      "main": [[{ "node": "Get repo commit", "type": "main", "index": 0 }]]
+    },
+    "Get repo commit": {
+      "main": [[{ "node": "Get commit details", "type": "main", "index": 0 }]]
+    },
+    "Get commit details": {
+      "main": [[{ "node": "Summation", "type": "main", "index": 0 }]]
+    },
+    "Summation": {
+      "main": [[
+        { "node": "INSERT Firebase", "type": "main", "index": 0 },
+        { "node": "Aggregate batch for LLM", "type": "main", "index": 0 }
+      ]]
+    },
+    "Aggregate batch for LLM": {
+      "main": [[{ "node": "Call LLM - Hackathon", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true },
+  "tags": [{ "name": "ai-review" }, { "name": "legacy" }]
+}
