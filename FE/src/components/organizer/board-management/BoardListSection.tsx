@@ -1,5 +1,6 @@
 import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
+import { ConfirmAction } from "../../feedback/ConfirmAction";
 import type { RoundResponse } from "../../../services/contestApi";
 import type { BoardWithSlots } from "../../../pages/organizer/boardManagementUtils";
 import { getStatusLabel, getStatusTone } from "../../../domain/status";
@@ -163,15 +164,16 @@ export function BoardListSection({
                     >
                       Lưu bảng
                     </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={() => onDeleteBoard(board.id)}
+                    <ConfirmAction
+                      title="Xóa bảng?"
+                      message={`Xóa bảng «${edit.name}»? Cần xóa hết đội khỏi vị trí và chưa công bố kết quả bảng.`}
+                      confirmLabel="Xóa bảng"
+                      onConfirm={() => onDeleteBoard(board.id)}
                     >
-                      Xóa bảng
-                    </Button>
+                      <Button type="button" size="sm" variant="ghost" disabled={busy}>
+                        Xóa bảng
+                      </Button>
+                    </ConfirmAction>
                   </div>
                   <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant sm:col-span-2">
                     Mô tả

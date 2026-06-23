@@ -1,5 +1,6 @@
 import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
+import { ConfirmAction } from "../../feedback/ConfirmAction";
 import { Icon } from "../../ui/Icon";
 import { getStatusLabel, getStatusTone } from "../../../domain/status";
 import type { RoundResponse } from "../../../services/contestApi";
@@ -223,9 +224,16 @@ export function BoardRoundSection({
                   <Button type="button" disabled={busy} onClick={onSaveRound}>
                     Lưu vòng
                   </Button>
-                  <Button type="button" variant="ghost" disabled={busy} onClick={onDeleteRound}>
-                    Xóa vòng
-                  </Button>
+                  <ConfirmAction
+                    title="Xóa vòng?"
+                    message={`Xóa vòng «${activeRound?.name ?? "này"}»? Cần xóa hết đội và chưa công bố kết quả vòng.`}
+                    confirmLabel="Xóa vòng"
+                    onConfirm={onDeleteRound}
+                  >
+                    <Button type="button" variant="ghost" disabled={busy}>
+                      Xóa vòng
+                    </Button>
+                  </ConfirmAction>
                 </div>
               </div>
             </div>

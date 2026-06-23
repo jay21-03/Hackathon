@@ -7,6 +7,8 @@ import { BoardListSection } from "../../components/organizer/board-management/Bo
 import { BoardRoundSection } from "../../components/organizer/board-management/BoardRoundSection";
 import { BoardSlotsSection } from "../../components/organizer/board-management/BoardSlotsSection";
 import { TeamDetailModal } from "../../components/organizer/TeamDetailModal";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { ButtonLink } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
@@ -78,6 +80,7 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
     teams,
     loading,
     error,
+    refetch,
     slotTeamPick,
     setSlotTeamPick,
     boardEdits,
@@ -340,7 +343,7 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
       setSlotTeamPick((current) => ({ ...current, [slotId]: "" }));
       notify("Đã gỡ đội khỏi vị trí.", "success");
     } catch (err) {
-      notify(resolveApiError(err, "Gỡ đội thất bại."), "danger");
+      notify(resolveApiError(err, "Xóa đội thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -361,7 +364,6 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
   }
 
   async function handleDeleteBoard(boardId: number) {
-    if (!window.confirm("Xóa bảng này? Cần gỡ hết đội và chưa công bố kết quả bảng.")) return;
     setBusy(true);
     try {
       await deleteBoard(boardId);
@@ -377,7 +379,6 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
 
   async function handleDeleteRound() {
     if (!selectedRoundId) return;
-    if (!window.confirm("Xóa vòng đang chọn? Cần gỡ hết đội và chưa công bố kết quả vòng.")) return;
     const deletedRoundId = selectedRoundId;
     setBusy(true);
     try {
@@ -691,9 +692,7 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
       )}
 
       {error ? (
-        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface">{error}</p>
-        </div>
+        <RetryPanel message={error} onRetry={() => void refetch()} />
       ) : null}
 
       <WorkflowSteps

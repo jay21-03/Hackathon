@@ -72,6 +72,8 @@ export function BoardPrepSections({
   const [staffBusy, setStaffBusy] = useState(false);
   const [mentorPick, setMentorPick] = useState("");
   const [judgePick, setJudgePick] = useState("");
+  const [mentorPickError, setMentorPickError] = useState<string | null>(null);
+  const [judgePickError, setJudgePickError] = useState<string | null>(null);
   const [problemFieldErrors, setProblemFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -165,9 +167,11 @@ export function BoardPrepSections({
     if (!boardId) return;
     const userId = Number(mentorPick);
     if (!userId) {
+      setMentorPickError("Chọn mentor trước khi gán.");
       notify("Chọn mentor.", "warning");
       return;
     }
+    setMentorPickError(null);
     setStaffBusy(true);
     try {
       await assignMentor(boardId, userId);
@@ -185,9 +189,11 @@ export function BoardPrepSections({
     if (!boardId) return;
     const userId = Number(judgePick);
     if (!userId) {
+      setJudgePickError("Chọn giám khảo trước khi gán.");
       notify("Chọn giám khảo.", "warning");
       return;
     }
+    setJudgePickError(null);
     setStaffBusy(true);
     try {
       await assignJudge(boardId, userId);
@@ -207,9 +213,9 @@ export function BoardPrepSections({
     try {
       await removeMentor(boardId, assigneeId);
       await invalidateAssignments();
-      notify("Đã gỡ mentor.", "success");
+      notify("Đã xóa mentor.", "success");
     } catch (err) {
-      notify(resolveApiError(err, "Gỡ mentor thất bại."), "danger");
+      notify(resolveApiError(err, "Xóa mentor thất bại."), "danger");
     } finally {
       setStaffBusy(false);
     }
@@ -221,9 +227,9 @@ export function BoardPrepSections({
     try {
       await removeJudge(boardId, assigneeId);
       await invalidateAssignments();
-      notify("Đã gỡ giám khảo.", "success");
+      notify("Đã xóa giám khảo.", "success");
     } catch (err) {
-      notify(resolveApiError(err, "Gỡ giám khảo thất bại."), "danger");
+      notify(resolveApiError(err, "Xóa giám khảo thất bại."), "danger");
     } finally {
       setStaffBusy(false);
     }
@@ -271,10 +277,14 @@ export function BoardPrepSections({
           userNameById={resolvedUserNameById}
           staffPoolScope={staffPoolTermScoped ? staffTermLabel : null}
           pickValue={mentorPick}
+          pickError={mentorPickError}
           busy={staffBusy}
           onRoundChange={setSelectedRoundId}
           onBoardChange={setBoardId}
-          onPickChange={setMentorPick}
+          onPickChange={(value) => {
+            setMentorPick(value);
+            setMentorPickError(null);
+          }}
           onAssign={() => void handleAssignMentor()}
           onRemove={(id) => void handleRemoveMentor(id)}
         />
@@ -291,10 +301,14 @@ export function BoardPrepSections({
           userNameById={resolvedUserNameById}
           staffPoolScope={staffPoolTermScoped ? staffTermLabel : null}
           pickValue={judgePick}
+          pickError={judgePickError}
           busy={staffBusy}
           onRoundChange={setSelectedRoundId}
           onBoardChange={setBoardId}
-          onPickChange={setJudgePick}
+          onPickChange={(value) => {
+            setJudgePick(value);
+            setJudgePickError(null);
+          }}
           onAssign={() => void handleAssignJudge()}
           onRemove={(id) => void handleRemoveJudge(id)}
         />

@@ -1,5 +1,7 @@
 import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
+import { ConfirmAction } from "../../feedback/ConfirmAction";
+import { RemoveIconButton } from "../../ui/RemoveIconButton";
 import { getStatusLabel, getStatusTone } from "../../../domain/status";
 import type { AssignmentResponse } from "../../../services/assignmentService";
 import type { BoardResponse, RoundResponse } from "../../../services/contestApi";
@@ -18,6 +20,7 @@ interface BoardStaffSectionProps {
   staffPool: UserSummaryResponse[];
   userNameById: Record<number, string>;
   pickValue: string;
+  pickError?: string | null;
   busy: boolean;
   staffPoolScope?: string | null;
   onRoundChange: (roundId: number) => void;
@@ -43,6 +46,7 @@ export function BoardStaffSection({
   staffPool,
   userNameById,
   pickValue,
+  pickError,
   busy,
   staffPoolScope,
   onRoundChange,
@@ -126,32 +130,43 @@ export function BoardStaffSection({
                 className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-high px-sm py-xs font-body-sm"
               >
                 {resolveAssigneeLabel(row, userNameById)}
-                <button
-                  type="button"
-                  className="font-label-sm text-error hover:underline"
-                  disabled={busy}
-                  onClick={() => onRemove(row.assigneeId)}
+                <ConfirmAction
+                  title={isMentor ? "Xóa mentor khỏi bảng?" : "Xóa giám khảo khỏi bảng?"}
+                  message={
+                    isMentor
+                      ? `Xóa ${resolveAssigneeLabel(row, userNameById)} khỏi bảng «${selectedBoard?.name ?? "này"}»?`
+                      : `Xóa ${resolveAssigneeLabel(row, userNameById)} khỏi bảng «${selectedBoard?.name ?? "này"}»? Phiếu chấm nháp (nếu có) sẽ bị xóa.`
+                  }
+                  confirmLabel={isMentor ? "Xóa mentor" : "Xóa giám khảo"}
+                  onConfirm={() => onRemove(row.assigneeId)}
                 >
-                  Gỡ
-                </button>
+                  <RemoveIconButton
+                    label={`Xóa ${resolveAssigneeLabel(row, userNameById)}`}
+                    disabled={busy}
+                  />
+                </ConfirmAction>
               </li>
             ))}
           </ul>
         )}
-        <div className="flex flex-wrap items-center gap-sm pt-xs">
-          <select
-            className="form-input min-w-[200px]"
-            value={pickValue}
-            onChange={(e) => onPickChange(e.target.value)}
-          >
-            <option value="">{addLabel}</option>
-            {staffPool.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.fullName}
-              </option>
-            ))}
-          </select>
-          <Button type="button" size="sm" disabled={busy} onClick={onAssign}>
+        <div className="flex flex-wrap items-start gap-sm pt-xs">
+          <label className="flex min-w-[200px] flex-col gap-xs font-label-sm text-on-surface-variant">
+            {addLabel}
+            <select
+              className={`form-input${pickError ? " border-error" : ""}`}
+              value={pickValue}
+              onChange={(e) => onPickChange(e.target.value)}
+            >
+              <option value="">{addLabel}</option>
+              {staffPool.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.fullName}
+                </option>
+              ))}
+            </select>
+            {pickError ? <span className="font-body-sm text-error">{pickError}</span> : null}
+          </label>
+          <Button type="button" size="sm" className="mt-[1.35rem]" disabled={busy} onClick={onAssign}>
             Gán
           </Button>
         </div>

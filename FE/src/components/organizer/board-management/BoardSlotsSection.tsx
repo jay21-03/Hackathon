@@ -2,6 +2,7 @@ import { ConfirmAction } from "../../feedback/ConfirmAction";
 import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
 import { Icon } from "../../ui/Icon";
+import { RemoveIconButton } from "../../ui/RemoveIconButton";
 import type { BoardSlotResponse } from "../../../services/contestApi";
 import type { TeamDetailResponse } from "../../../services/registrationService";
 import { getStatusLabel, getStatusTone } from "../../../domain/status";
@@ -325,14 +326,15 @@ export function BoardSlotsSection({
                               ) : null}
                               {slot.teamId ? (
                                 <ConfirmAction
-                                  title="Gỡ đội khỏi vị trí?"
-                                  message={`Gỡ «${teamMap[slot.teamId] ?? "đội này"}» khỏi vị trí #${slot.teamNumber}.`}
-                                  confirmLabel="Gỡ đội"
+                                  title="Xóa đội khỏi vị trí?"
+                                  message={`Xóa «${teamMap[slot.teamId] ?? "đội này"}» khỏi vị trí #${slot.teamNumber}.`}
+                                  confirmLabel="Xóa đội"
                                   onConfirm={() => onUnassignSlot(slot.id)}
                                 >
-                                  <Button type="button" size="sm" variant="danger" disabled={busy}>
-                                    Gỡ
-                                  </Button>
+                                  <RemoveIconButton
+                                    label={`Xóa đội khỏi vị trí #${slot.teamNumber}`}
+                                    disabled={busy}
+                                  />
                                 </ConfirmAction>
                               ) : (
                                 <ConfirmAction
