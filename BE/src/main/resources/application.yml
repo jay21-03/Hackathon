@@ -109,6 +109,8 @@ app:
       retry-failed-poll-ms: ${AI_REVIEW_RETRY_FAILED_POLL_MS:600000}
       retry-failed-initial-delay-ms: ${AI_REVIEW_RETRY_FAILED_INITIAL_DELAY_MS:300000}
       n8n-webhook-secret: ${N8N_AI_REVIEW_WEBHOOK_SECRET:}
+      supabase-url: ${N8N_SUPABASE_URL:}
+      supabase-service-role-key: ${N8N_SUPABASE_SERVICE_ROLE_KEY:}
   event:
     lifecycle:
       scheduler-enabled: ${EVENT_LIFECYCLE_SCHEDULER_ENABLED:true}
