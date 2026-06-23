@@ -18,7 +18,7 @@ import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 export function ParticipantOverviewPage() {
   const { eventId, event, loading: eventLoading } = useActiveEvent();
-  const { team, loading: teamLoading, error } = useMyTeam(eventId);
+  const { team, loading: teamLoading, error, refetch } = useMyTeam(eventId);
   const { board, loading: boardLoading } = useMyBoard(eventId);
   const { round, roundId, countdown, loading: roundLoading } = useEventRound(eventId);
   const { submission, loading: submissionLoading } = useMySubmission(eventId);
@@ -39,7 +39,7 @@ export function ParticipantOverviewPage() {
               : "Chọn cuộc thi từ danh sách, xem chi tiết rồi đăng ký đội."
           }
         />
-        {error ? <RetryPanel message={error} /> : null}
+        {error ? <RetryPanel message={error} onRetry={() => void refetch()} /> : null}
         <EmptyState
           icon="groups"
           title="Bạn chưa đăng ký đội nào"

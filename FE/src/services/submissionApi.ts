@@ -52,6 +52,10 @@ export interface AdminTeamSubmissionResponse {
   repositoryName: string | null;
   submittedAt: string | null;
   lastPushAt?: string | null;
+  latestCommitSha?: string | null;
+  latestCommitMessage?: string | null;
+  latestCommitAt?: string | null;
+  commitCount?: number | null;
 }
 
 export async function fetchEventSubmissions(

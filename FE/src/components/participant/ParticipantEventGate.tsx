@@ -22,7 +22,15 @@ export function ParticipantEventGate() {
   }
 
   if (eventId == null) {
-    return <Navigate to="/events" replace />;
+    return (
+      <Navigate
+        to="/events"
+        replace
+        state={{
+          message: "Chọn cuộc thi từ danh sách trước khi vào không gian thi."
+        }}
+      />
+    );
   }
 
   return <Outlet />;

@@ -165,11 +165,61 @@ export async function retryTeamRepository(repositoryId: number) {
   return data.data;
 }
 
-export async function fetchEventRepositories(eventId: number) {
-  const { data } = await apiClient.get<ApiResponse<TeamRepositoryResponse[]>>(
-    `/v1/admin/events/${eventId}/repositories`
+export interface RepositoryStatusStats {
+  total: number;
+  open: number;
+  closed: number;
+  pending: number;
+  failed: number;
+  created: number;
+  githubIssueCount: number;
+}
+
+export interface EventRepositoriesPageResult {
+  items: TeamRepositoryResponse[];
+  page: number;
+  size: number;
+  total: number;
+  totalPages: number;
+  stats: RepositoryStatusStats;
+}
+
+export interface EventRepositoriesQuery {
+  page?: number;
+  size?: number;
+  roundId?: number | null;
+  boardId?: number | null;
+  accessStatus?: string | null;
+  q?: string | null;
+}
+
+export async function fetchEventRepositoriesPaged(
+  eventId: number,
+  query: EventRepositoriesQuery = {}
+) {
+  const { data } = await apiClient.get<ApiResponse<EventRepositoriesPageResult>>(
+    `/v1/admin/events/${eventId}/repositories`,
+    {
+      params: {
+        page: query.page ?? 0,
+        size: query.size ?? 50,
+        ...(query.roundId != null ? { roundId: query.roundId } : {}),
+        ...(query.boardId != null ? { boardId: query.boardId } : {}),
+        ...(query.accessStatus && query.accessStatus !== "ALL" ? { accessStatus: query.accessStatus } : {}),
+        ...(query.q ? { q: query.q } : {})
+      }
+    }
   );
-  return data.data ?? [];
+  return (
+    data.data ?? {
+      items: [],
+      page: 0,
+      size: query.size ?? 50,
+      total: 0,
+      totalPages: 0,
+      stats: { total: 0, open: 0, closed: 0, pending: 0, failed: 0, created: 0, githubIssueCount: 0 }
+    }
+  );
 }
 
 export async function fetchTeamRepositories(teamId: number) {

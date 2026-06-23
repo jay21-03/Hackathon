@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
@@ -15,6 +15,9 @@ import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useMySubmission } from "../../hooks/useMySubmission";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { useParticipantTeamGuard } from "../../hooks/useParticipantTeamGuard";
+import { useCommitUpdates } from "../../hooks/useCommitUpdates";
+import { CommitConnectionBadge } from "../../components/ui/CommitConnectionBadge";
+import { fetchMyProfile } from "../../services/profileService";
 import { ParticipantTeamBlocked } from "../../components/participant/ParticipantTeamBlocked";
 import { enableGithubProvisioning, enableAiReview } from "../../config/features";
 import { queryKeys } from "../../lib/queryKeys";
@@ -327,6 +330,32 @@ export function SubmissionPage() {
   const historyRepos = provisionedRepos.filter((repo) => !repo.currentRound);
   const primaryRepo = currentRepos[0] ?? provisionedRepos[0] ?? null;
 
+  const profileQuery = useQuery({
+    queryKey: ["my-profile"],
+    queryFn: fetchMyProfile,
+    enabled: enableGithubProvisioning
+  });
+
+  const { connectionStatus } = useCommitUpdates({
+    teamId: team?.id ?? null,
+    eventId,
+    enabled: enableGithubProvisioning && Boolean(team?.id)
+  });
+
+  const githubProfileBanner = useMemo(() => {
+    if (!enableGithubProvisioning || !provisionedMode) return null;
+    if (!profileQuery.data?.githubUsername?.trim()) {
+      return "Bạn chưa có GitHub username hợp lệ — cập nhật hồ sơ để được cấp repository.";
+    }
+    const failedRepo = provisionedRepos.find(
+      (repo) =>
+        repo.provisionStatus === "FAILED" &&
+        repo.lastError &&
+        /github|username|thiếu|invalid/i.test(repo.lastError)
+    );
+    return failedRepo?.lastError ?? null;
+  }, [profileQuery.data?.githubUsername, provisionedMode, provisionedRepos]);
+
   useEffect(() => {
     if (submission) {
       setRepositoryUrl(submission.repositoryUrl ?? "");
@@ -449,10 +478,24 @@ export function SubmissionPage() {
         eyebrow="Bài nộp"
         title={team.name}
         description={pageDescription}
-        actions={<Badge tone={statusTone(submission?.status ?? null)}>{displayStatus}</Badge>}
+        actions={
+          <div className="flex flex-wrap items-center gap-sm">
+            {provisionedMode ? <CommitConnectionBadge status={connectionStatus} /> : null}
+            <Badge tone={statusTone(submission?.status ?? null)}>{displayStatus}</Badge>
+          </div>
+        }
       />
 
       <ParticipantWorkflowBar active="submission" />
+
+      {githubProfileBanner ? (
+        <div className="rounded-xl border border-warning/40 bg-warning-container/30 p-md">
+          <p className="font-body-sm text-on-surface">{githubProfileBanner}</p>
+          <Link to="/profile" className="mt-sm inline-block font-label-sm text-primary hover:underline">
+            Cập nhật hồ sơ →
+          </Link>
+        </div>
+      ) : null}
 
       {provisionedMode ? (
         <>

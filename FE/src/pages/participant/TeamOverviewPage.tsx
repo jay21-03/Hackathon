@@ -5,6 +5,7 @@ import { getAuthSession } from "../../auth/authSession";
 import { Badge } from "../../components/ui/Badge";
 import { Button, ButtonLink } from "../../components/ui/Button";
 import { useToast } from "../../components/feedback/ToastProvider";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { TextField } from "../../components/ui/FormField";
 import { Icon } from "../../components/ui/Icon";
@@ -85,7 +86,7 @@ export function TeamOverviewPage() {
         <EmptyState
           icon="groups"
           title="Chưa có đội thi"
-          description="Tạo đội mới hoặc xác nhận lời mời thành viên."
+          description="Đăng ký đội tại trang cuộc thi (/events → Đăng ký) hoặc mời thành viên tại đây sau khi đã có đội."
           action={
             <ButtonLink
               to={eventId ? `/events/${eventId}` : "/events"}
@@ -174,7 +175,7 @@ export function TeamOverviewPage() {
       await refetch();
       notify("Đã huỷ lời mời thành viên.", "success");
     } catch (err) {
-      const message = mapRegistrationErrorMessage(resolveApiError(err, "Huỷ lời mời thất bại."));
+      const message = mapRegistrationErrorMessage(resolveApiError(err, "Hủy lời mời thất bại."));
       notify(message, "danger");
     } finally {
       setCancellingId(null);
@@ -307,15 +308,21 @@ export function TeamOverviewPage() {
                         Gửi lại
                       </Button>
                       {canCancelInvitation(member.status, member.contactPerson) ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          disabled={resendingId === member.id || cancellingId === member.id}
-                          onClick={() => void cancelMember(member.id)}
+                        <ConfirmAction
+                          title="Hủy lời mời thành viên?"
+                          message={`Hủy lời mời gửi tới ${member.email}? Bạn có thể mời lại sau.`}
+                          confirmLabel="Hủy mời"
+                          onConfirm={() => void cancelMember(member.id)}
                         >
-                          Huỷ mời
-                        </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={resendingId === member.id || cancellingId === member.id}
+                          >
+                            Hủy mời
+                          </Button>
+                        </ConfirmAction>
                       ) : null}
                     </div>
                   ) : (
