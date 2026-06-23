@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchPublicEventRounds, fetchRoundCountdown } from "../services/contestApi";
 import { queryKeys } from "../lib/queryKeys";
-import { getApiErrorMessage } from "../utils/apiError";
+import { resolveApiError } from "../utils/apiError";
 import { pickActiveRound } from "../utils/pickActiveRound";
 
 export function useEventRound(eventId: number | null) {
@@ -29,7 +29,7 @@ export function useEventRound(eventId: number | null) {
     countdown: countdownQuery.data ?? null,
     loading: roundsQuery.isLoading,
     error: roundsQuery.isError
-      ? getApiErrorMessage(roundsQuery.error, "Không tải được thông tin vòng thi.")
+      ? resolveApiError(roundsQuery.error, "Không tải được thông tin vòng thi.")
       : null,
     reload: roundsQuery.refetch
   };

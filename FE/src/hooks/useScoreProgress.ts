@@ -3,11 +3,15 @@ import { queryKeys } from "../lib/queryKeys";
 import { fetchScoreProgress } from "../services/scoringApi";
 import { resolveApiError } from "../utils/apiError";
 
-export function useScoreProgress(boardId: number | null) {
+export function useScoreProgress(
+  boardId: number | null,
+  options?: { refetchInterval?: number | false }
+) {
   const query = useQuery({
     queryKey: queryKeys.scoring.progress(boardId),
     queryFn: () => fetchScoreProgress(boardId!),
-    enabled: Boolean(boardId)
+    enabled: Boolean(boardId),
+    refetchInterval: options?.refetchInterval ?? false
   });
 
   return {

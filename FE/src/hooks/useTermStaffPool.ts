@@ -91,8 +91,9 @@ export function useTermStaffPool(options: {
 
   const judges = useMemo(() => {
     const pool = termScoped ? (termJudgesQuery.data ?? []) : fallbackJudges;
-    return excludeAssigned(pool, assignedJudgeIds);
-  }, [termScoped, termJudgesQuery.data, fallbackJudges, assignedJudgeIds]);
+    const excludeIds = [...assignedJudgeIds, ...assignedMentorIds];
+    return excludeAssigned(pool, excludeIds);
+  }, [termScoped, termJudgesQuery.data, fallbackJudges, assignedJudgeIds, assignedMentorIds]);
 
   const loading = termScoped
     ? termMentorsQuery.isLoading || termJudgesQuery.isLoading

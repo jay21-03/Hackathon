@@ -25,7 +25,8 @@ export function useUserManagement(page = 0, size = 100, query = "") {
     error: usersQuery.error
       ? resolveApiError(usersQuery.error, "Không tải được danh sách người dùng.")
       : null,
-    invalidate
+    invalidate,
+    refetch: usersQuery.refetch
   };
 }
 
