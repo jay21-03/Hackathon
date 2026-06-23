@@ -24,7 +24,7 @@ import {
   ACCESS_STATUS_LABELS,
   PROVISION_STATUS_LABELS,
   accessStatusTone,
-  fetchEventRepositories,
+  fetchEventRepositoriesPaged,
   fetchProblemRepoTemplate,
   lockProblemRepositories,
   provisionProblemRepositories,
@@ -71,6 +71,10 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
   const [grantingJudgeAccess, setGrantingJudgeAccess] = useState(false);
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "CLOSED" | "FAILED" | "PENDING">("ALL");
+  const [repoSearch, setRepoSearch] = useState("");
+  const [repoSearchDebounced, setRepoSearchDebounced] = useState("");
+  const [repoPage, setRepoPage] = useState(0);
+  const repoPageSize = 50;
 
   const roundsQuery = useQuery({
     queryKey: queryKeys.rounds.byEvent(eventId),
@@ -102,6 +106,15 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
   useEffect(() => {
     setBoardId((prev) => (prev && boards.some((b) => b.id === prev) ? prev : null));
   }, [boards, activeRoundId]);
+
+  useEffect(() => {
+    setRepoPage(0);
+  }, [activeRoundId, boardId, statusFilter, repoSearchDebounced]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setRepoSearchDebounced(repoSearch.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [repoSearch]);
 
   const problemQuery = useQuery({
     queryKey: [...queryKeys.boards.all, "repo-problem", configBoardId],
@@ -142,30 +155,82 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
   }, [templateQuery.data, templateQuery.isError, templateQuery.error]);
 
   const reposQuery = useQuery({
-    queryKey: queryKeys.repositories.byEvent(eventId),
-    queryFn: () => fetchEventRepositories(eventId!),
-    enabled: Boolean(eventId)
+    queryKey: [
+      ...queryKeys.repositories.byEvent(eventId),
+      "paged",
+      repoPage,
+      activeRoundId,
+      boardId,
+      statusFilter,
+      repoSearchDebounced
+    ],
+    queryFn: () =>
+      fetchEventRepositoriesPaged(eventId!, {
+        page: repoPage,
+        size: repoPageSize,
+        roundId: activeRoundId,
+        boardId,
+        accessStatus: statusFilter,
+        q: repoSearchDebounced || null
+      }),
+    enabled: Boolean(eventId),
+    refetchInterval: (query) => {
+      const rows = query.state.data?.items ?? [];
+      const needsPoll = rows.some(
+        (row) =>
+          row.provisionStatus === "PENDING" ||
+          row.provisionStatus === "FAILED" ||
+          row.accessStatus === "PENDING"
+      );
+      return needsPoll ? 20_000 : false;
+    }
   });
 
-  const filteredRepos = useMemo(() => {
-    const rows = (reposQuery.data ?? []) as TeamRepositoryResponse[];
-    return rows.filter((row) => {
-      if (activeRoundId && row.roundId && row.roundId !== activeRoundId) return false;
-      if (boardId && row.boardId && row.boardId !== boardId) return false;
-      if (statusFilter === "ALL") return true;
-      return row.accessStatus === statusFilter;
-    });
-  }, [reposQuery.data, boardId, activeRoundId, statusFilter]);
+  const pagedRepos = reposQuery.data;
+  const filteredRepos = pagedRepos?.items ?? [];
+  const repoTotalPages = pagedRepos?.totalPages ?? 0;
+  const repoTotal = pagedRepos?.total ?? 0;
+  const repoStats = pagedRepos?.stats;
 
-  const stats = useMemo(() => {
-    const rows = filteredRepos;
-    return {
-      total: rows.length,
-      open: rows.filter((r) => r.accessStatus === "OPEN").length,
-      failed: rows.filter((r) => r.provisionStatus === "FAILED" || r.accessStatus === "FAILED").length,
-      closed: rows.filter((r) => r.accessStatus === "CLOSED").length
-    };
-  }, [filteredRepos]);
+  const stats = useMemo(
+    () => ({
+      total: repoStats?.total ?? repoTotal,
+      open: repoStats?.open ?? 0,
+      failed: repoStats?.failed ?? 0,
+      closed: repoStats?.closed ?? 0
+    }),
+    [repoStats, repoTotal]
+  );
+
+  const githubIssueCount = repoStats?.githubIssueCount ?? 0;
+
+  const githubIssuesQuery = useQuery({
+    queryKey: [
+      ...queryKeys.repositories.byEvent(eventId),
+      "github-issues",
+      activeRoundId,
+      boardId
+    ],
+    queryFn: () =>
+      fetchEventRepositoriesPaged(eventId!, {
+        page: 0,
+        size: Math.min(Math.max(githubIssueCount, 1), 100),
+        roundId: activeRoundId,
+        boardId,
+        accessStatus: "FAILED"
+      }),
+    enabled: Boolean(eventId) && githubIssueCount > 0
+  });
+
+  const githubProfileIssues = useMemo(() => {
+    const pattern = /github|username|thiếu|invalid/i;
+    return (githubIssuesQuery.data?.items ?? []).filter(
+      (row) =>
+        row.provisionStatus === "FAILED" &&
+        row.lastError &&
+        pattern.test(row.lastError)
+    );
+  }, [githubIssuesQuery.data?.items]);
 
   async function invalidateRepos() {
     if (!eventId) return;
@@ -502,6 +567,36 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
         </section>
       )}
 
+      {githubIssueCount > 0 ? (
+        <section className="rounded-xl border border-warning/40 bg-warning-container/25 p-md space-y-sm">
+          <h2 className="font-title-sm text-on-surface">
+            Đội thiếu / sai GitHub username ({githubIssueCount})
+          </h2>
+          <p className="font-body-sm text-on-surface-variant">
+            Các đội dưới đây chưa được cấp repository do thành viên thiếu hoặc sai GitHub username.
+            {githubIssueCount > githubProfileIssues.length
+              ? ` Hiển thị ${githubProfileIssues.length}/${githubIssueCount} — dùng bộ lọc Lỗi để xem thêm.`
+              : null}
+          </p>
+          {githubIssuesQuery.isLoading ? (
+            <p className="font-body-sm text-on-surface-variant">Đang tải danh sách…</p>
+          ) : githubProfileIssues.length > 0 ? (
+            <ul className="space-y-xs font-body-sm text-on-surface">
+              {githubProfileIssues.map((row) => (
+                <li key={row.id} className="rounded-lg border border-outline-variant/60 bg-surface px-sm py-xs">
+                  <strong>{row.teamName ?? `Đội #${row.teamId}`}</strong>
+                  <span className="text-on-surface-variant"> — {row.lastError}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="font-body-sm text-on-surface-variant">
+              Có {githubIssueCount} lỗi liên quan GitHub — chọn bộ lọc Lỗi để xem chi tiết.
+            </p>
+          )}
+        </section>
+      ) : null}
+
       <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
         <div className="flex flex-wrap items-center justify-between gap-md">
           <div>
@@ -518,8 +613,23 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
                     })()
                   : resolveRoundDisplayName(activeRoundId, roundNameById)}
               </strong>
+              {repoTotal > 0 ? (
+                <span className="block pt-1 text-on-surface-variant">
+                  {repoTotal} repository · trang {repoPage + 1}/{Math.max(repoTotalPages, 1)}
+                </span>
+              ) : null}
             </p>
           </div>
+          <label className="mt-md flex min-w-[14rem] flex-col gap-1 font-label-sm text-on-surface-variant">
+            Tìm theo tên đội
+            <input
+              type="search"
+              className="form-input"
+              value={repoSearch}
+              onChange={(e) => setRepoSearch(e.target.value)}
+              placeholder="Nhập tên đội…"
+            />
+          </label>
           <select
             className="form-input w-auto"
             value={statusFilter}
@@ -633,6 +743,31 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
             </table>
           </div>
         )}
+        {repoTotalPages > 1 ? (
+          <div className="mt-md flex flex-wrap items-center justify-between gap-sm">
+            <p className="font-body-sm text-on-surface-variant">
+              Trang {repoPage + 1}/{repoTotalPages} · {repoTotal} repository
+            </p>
+            <div className="flex gap-sm">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={repoPage <= 0 || reposQuery.isFetching}
+                onClick={() => setRepoPage((p) => Math.max(0, p - 1))}
+              >
+                Trước
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={repoPage >= repoTotalPages - 1 || reposQuery.isFetching}
+                onClick={() => setRepoPage((p) => p + 1)}
+              >
+                Sau
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );
