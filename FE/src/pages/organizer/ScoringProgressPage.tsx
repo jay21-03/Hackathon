@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../../components/feedback/ToastProvider";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
@@ -50,7 +51,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
   const boardIdParam = searchParams.get("boardId");
   const deepLinkEventApplied = useRef(false);
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const { rounds, boards, loading: boardsLoading, error: boardsError } = useEventBoards(eventId);
+  const { rounds, boards, loading: boardsLoading, error: boardsError, refetch: refetchBoards } = useEventBoards(eventId);
   const [roundId, setRoundId] = useState<number | null>(null);
   const [boardId, setBoardId] = useState<number | null>(() => {
     if (!boardIdParam) return null;
@@ -66,7 +67,10 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
   );
   const activeBoardId = resolveDefaultBoardId(boardsInRound, rounds, boardId);
 
-  const { progress, loading: progressLoading, error: progressError } = useScoreProgress(activeBoardId);
+  const { progress, loading: progressLoading, error: progressError, refetch: refetchProgress } = useScoreProgress(
+    activeBoardId,
+    { refetchInterval: 20_000 }
+  );
 
   useEffect(() => {
     if (!eventIdParam || deepLinkEventApplied.current || !events.length) return;
@@ -108,9 +112,17 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
     if (!activeBoardId) return;
     setReminding(true);
     try {
-      await sendScoringReminder(activeBoardId);
+      const result = await sendScoringReminder(activeBoardId);
       await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
-      notify("Đã gửi thông báo nhắc chấm cho giám khảo.", "success");
+      if (result.notifiedJudgeCount === 0) {
+        notify("Không còn giám khảo cần nhắc hoặc đã nộp đủ phiếu.", "warning");
+        return;
+      }
+      const names = result.notifiedJudgeNames.join(", ");
+      notify(
+        `Đã nhắc ${result.notifiedJudgeCount} giám khảo: ${names}.`,
+        "success"
+      );
     } catch (err) {
       notify(
         resolveApiError(err, "Gửi nhắc chấm thất bại."),
@@ -207,9 +219,13 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
       </section>
 
       {error ? (
-        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface-variant">{error}</p>
-        </div>
+        <RetryPanel
+          message={error}
+          onRetry={() => {
+            void refetchBoards();
+            void refetchProgress();
+          }}
+        />
       ) : null}
 
       {loading ? (
@@ -237,7 +253,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                 Ma trận tiến độ (đội × giám khảo)
               </h3>
               <div className="overflow-x-auto p-md">
-                <table className="w-full min-w-[32rem] table-fixed border-collapse">
+                <table className="w-full min-w-[32rem] table-fixed border-collapse" role="grid">
                   <colgroup>
                     <col className="w-[11rem]" />
                     {progress.judges.map((judge) => (
@@ -281,8 +297,15 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                           return (
                             <td key={judge.judgeId} className="px-1 py-1.5 text-center">
                               <span
-                                className={`mx-auto inline-flex h-8 w-[3.25rem] items-center justify-center rounded-md font-label-sm ${cellTone(cell.status)}`}
+                                role="gridcell"
+                                tabIndex={0}
+                                className={`mx-auto inline-flex h-8 w-[3.25rem] items-center justify-center rounded-md font-label-sm focus:outline-none focus:ring-2 focus:ring-primary ${cellTone(cell.status)}`}
                                 title={cellTitle(
+                                  cell,
+                                  judge.fullName ?? judgeNameById[judge.judgeId] ?? `Giám khảo #${judge.judgeId}`,
+                                  team.teamName
+                                )}
+                                aria-label={cellTitle(
                                   cell,
                                   judge.fullName ?? judgeNameById[judge.judgeId] ?? `Giám khảo #${judge.judgeId}`,
                                   team.teamName
