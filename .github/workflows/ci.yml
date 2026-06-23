@@ -1,0 +1,96 @@
+# Unified CI: BE tests, FE lint/build/mock E2E, Docker smoke + live E2E (seed)
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: BE
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run tests
+        run: mvn -B test
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: FE
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: FE/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint & typecheck
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E tests (mock API)
+        run: npm run test:e2e:mock
+
+  smoke:
+    runs-on: ubuntu-latest
+    needs: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start stack
+        run: |
+          cp .env.example .env
+          docker compose up -d postgres backend
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 40); do
+            if curl -sf http://localhost:8085/actuator/health | grep -q UP; then
+              exit 0
+            fi
+            sleep 3
+          done
+          docker compose logs backend
+          exit 1
+
+      - name: Seed demo dataset
+        run: docker exec -i seal_postgres psql -U postgres -d seal_hackathon -v ON_ERROR_STOP=1 < scripts/seed-demo-dataset.sql
+
+      - name: API smoke
+        run: bash scripts/full-flow-smoke.sh
+
+      - name: Live E2E (FE + real API)
+        working-directory: FE
+        env:
+          LIVE_STACK: "1"
+        run: |
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v
