@@ -80,6 +80,27 @@ export function canOpenScoringMatrix(assignment: AssignmentResponse): boolean {
   return SCORING_ALLOWED.includes(readiness);
 }
 
+/** Hướng dẫn khi bảng chưa sẵn sàng chấm. */
+export function readinessGuidance(readiness?: JudgeBoardReadiness | null): string | null {
+  switch (readiness) {
+    case "NO_PROBLEM":
+      return "Ban tổ chức chưa tạo đề cho bảng này — liên hệ BTC hoặc đợi cập nhật.";
+    case "WAITING_PROBLEM_RELEASE":
+      return "Đề chưa mở — phiếu chấm sẽ khả dụng khi BTC công bố đề theo lịch.";
+    case "WAITING_RUBRIC":
+      return "Chưa cấu hình tiêu chí chấm — BTC cần thiết lập rubric trước.";
+    case "WAITING_TEAMS":
+      return "Chưa gán đội vào bảng — đợi BTC hoàn tất phân bổ đội.";
+    case "WAITING_REPOSITORIES":
+      return "Đang chờ cấp repository GitHub cho đội — thử lại sau vài phút.";
+    case undefined:
+    case null:
+      return "Trạng thái bảng chưa xác định — thử tải lại hoặc liên hệ BTC.";
+    default:
+      return null;
+  }
+}
+
 export function scoringCtaLabel(assignment: AssignmentResponse): string {
   const readiness = assignment.readiness as JudgeBoardReadiness | undefined;
   if (readiness === "COMPLETED") return "Xem phiếu chấm";

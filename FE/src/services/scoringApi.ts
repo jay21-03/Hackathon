@@ -408,14 +408,20 @@ export async function fetchScoreProgress(boardId: number) {
 }
 
 /** BTC — gửi thông báo nhắc giám khảo nộp phiếu chấm */
+export interface ScoringReminderResponse {
+  notifiedJudgeCount: number;
+  notifiedJudgeNames: string[];
+  organizerNotified: boolean;
+}
+
 export async function sendScoringReminder(boardId: number) {
-  const { data } = await apiClient.post<ApiResponse<string>>(
+  const { data } = await apiClient.post<ApiResponse<ScoringReminderResponse>>(
     `/v1/admin/boards/${boardId}/scoring-reminders`
   );
-  if (!data.success) {
+  if (!data.data) {
     throw new Error(data.message || "Gửi nhắc chấm thất bại.");
   }
-  return data.data ?? data.message ?? "OK";
+  return data.data;
 }
 
 /** Judge — ma trận chấm điểm */

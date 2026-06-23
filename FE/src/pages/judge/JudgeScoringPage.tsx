@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../../components/feedback/ToastProvider";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { JudgeTeamListTable } from "../../components/judge/JudgeTeamListTable";
 import { JudgeTeamScoringModal } from "../../components/judge/JudgeTeamScoringModal";
 import { Badge } from "../../components/ui/Badge";
@@ -10,7 +12,9 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
+import { CommitConnectionBadge } from "../../components/ui/CommitConnectionBadge";
 import { enableGithubProvisioning } from "../../config/features";
+import { useCommitUpdates } from "../../hooks/useCommitUpdates";
 import { useJudgeAssignments } from "../../hooks/useJudgeAssignments";
 import { useScoreMatrix } from "../../hooks/useScoreMatrix";
 import { invalidateAfterScoreMatrixMutation } from "../../lib/invalidateScoringQueries";
@@ -29,7 +33,10 @@ import {
   groupAssignmentsByEvent,
   pickPriorityJudgeAssignment,
   readinessLabel,
-  readinessTone
+  readinessTone,
+  readinessGuidance,
+  canOpenScoringMatrix,
+  type JudgeBoardReadiness
 } from "../../utils/judgeAssignmentUtils";
 import { validateTeamScoresForDraft, validateTeamScoresForSubmit } from "../../domain/schemas";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
@@ -66,7 +73,10 @@ export function JudgeScoringPage() {
     [allAssignments]
   );
   const [boardId, setBoardId] = useState<number | null>(boardIdParam ? Number(boardIdParam) : null);
-  const { matrix, loading: matrixLoading, error: matrixError, refetch: refetchMatrix } = useScoreMatrix(boardId);
+  const { matrix, loading: matrixLoading, error: matrixError, refetch: refetchMatrix } = useScoreMatrix(
+    boardId,
+    { refetchInterval: boardId != null ? 20_000 : false }
+  );
   const [cells, setCells] = useState<Record<CellKey, string>>({});
   const [feedbackByTeam, setFeedbackByTeam] = useState<Record<number, string>>({});
   const [scoringTeamId, setScoringTeamId] = useState<number | null>(null);
@@ -79,6 +89,11 @@ export function JudgeScoringPage() {
     () => assignments.find((item) => item.boardId === boardId) ?? null,
     [assignments, boardId]
   );
+
+  const { connectionStatus } = useCommitUpdates({
+    eventId: selectedAssignment?.eventId ?? null,
+    enabled: enableGithubProvisioning && selectedAssignment?.eventId != null
+  });
 
   const reposQuery = useQuery({
     queryKey: ["judge", "repositories", selectedAssignment?.roundId, boardId],
@@ -334,11 +349,14 @@ export function JudgeScoringPage() {
         title="Danh sách đội"
         description="Chọn đội và bấm Chấm điểm để mở phiếu chấm, xem repository và nộp kết quả."
         actions={
-          matrix ? (
-            <Badge tone={unsubmittedTeams.length ? "warning" : "success"}>
-              {matrix.summary.submittedCount}/{matrix.summary.teamCount} đã nộp
-            </Badge>
-          ) : null
+          <div className="flex flex-wrap items-center gap-sm">
+            {enableGithubProvisioning ? <CommitConnectionBadge status={connectionStatus} /> : null}
+            {matrix ? (
+              <Badge tone={unsubmittedTeams.length ? "warning" : "success"}>
+                {matrix.summary.submittedCount}/{matrix.summary.teamCount} đã nộp
+              </Badge>
+            ) : null}
+          </div>
         }
       />
 
@@ -383,9 +401,21 @@ export function JudgeScoringPage() {
         ) : null}
       </section>
 
+      {selectedAssignment &&
+      !canOpenScoringMatrix(selectedAssignment) &&
+      readinessGuidance(selectedAssignment.readiness as JudgeBoardReadiness | null) ? (
+        <div className="rounded-xl border border-warning/40 bg-warning-container/30 p-md">
+          <p className="font-body-sm text-on-surface">
+            {readinessGuidance(selectedAssignment.readiness as JudgeBoardReadiness | null)}
+          </p>
+        </div>
+      ) : null}
+
       {error ? (
         <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface-variant">{error}</p>
+          <p className="font-body-sm text-on-surface-variant">
+            {typeof error === "string" ? error : resolveApiError(error, "Đã xảy ra lỗi.")}
+          </p>
         </div>
       ) : null}
 
@@ -398,8 +428,22 @@ export function JudgeScoringPage() {
         />
       ) : matrixLoading && !matrix ? (
         <ModuleSkeleton rows={4} />
+      ) : matrixError && !matrix ? (
+        <RetryPanel
+          message={resolveApiError(matrixError, "Không tải được ma trận chấm điểm.")}
+          onRetry={() => void refetchMatrix()}
+        />
       ) : !matrix ? (
-        <ModuleSkeleton rows={4} />
+        <EmptyState
+          icon="gavel"
+          title="Không có dữ liệu chấm"
+          description="Ma trận chấm điểm trống hoặc chưa sẵn sàng cho bảng này."
+          action={
+            <Button type="button" variant="secondary" onClick={() => void refetchMatrix()}>
+              Tải lại
+            </Button>
+          }
+        />
       ) : matrix.criteria.length === 0 ? (
         <EmptyState
           icon="data_object"
@@ -415,18 +459,21 @@ export function JudgeScoringPage() {
           </section>
 
           {matrix.teams.length > 0 ? (
-            <div className="flex flex-wrap gap-md">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-md">
               <Button type="button" variant="secondary" loading={saving} onClick={() => void handleSaveAll()}>
                 Lưu tất cả
               </Button>
               {unsubmittedTeams.length > 0 ? (
-                <Button
-                  type="button"
-                  loading={submitting}
-                  onClick={() => void handleSubmit(true)}
+                <ConfirmAction
+                  title="Nộp tất cả phiếu nháp?"
+                  message={`Bạn sắp nộp ${unsubmittedTeams.length} phiếu chấm. Sau khi nộp không thể sửa điểm.`}
+                  confirmLabel={`Nộp ${unsubmittedTeams.length} phiếu`}
+                  onConfirm={() => void handleSubmit(true)}
                 >
-                  Nộp tất cả phiếu nháp
-                </Button>
+                  <Button type="button" loading={submitting}>
+                    Nộp tất cả phiếu nháp
+                  </Button>
+                </ConfirmAction>
               ) : null}
             </div>
           ) : null}
