@@ -4,6 +4,7 @@ import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
+import { RemoveIconButton } from "../../components/ui/RemoveIconButton";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Modal } from "../../components/ui/Modal";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
@@ -283,7 +284,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
       await invalidateAwards();
       notify("Đã gỡ giải.", "success");
     } catch (err) {
-      notify(resolveApiError(err, "Gỡ giải thất bại."), "danger");
+      notify(resolveApiError(err, "Xóa giải thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -628,14 +629,17 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                                         <span className="text-on-surface-variant"> — {winner.note}</span>
                                       ) : null}
                                     </span>
-                                    <Button
-                                      variant="secondary"
-                                      size="sm"
-                                      disabled={busy}
-                                      onClick={() => void handleRemoveAward(winner.id)}
+                                    <ConfirmAction
+                                      title="Xóa giải đã gán?"
+                                      message={`Xóa giải «${category.name}» khỏi đội «${winner.teamName}»?`}
+                                      confirmLabel="Xóa giải"
+                                      onConfirm={() => void handleRemoveAward(winner.id)}
                                     >
-                                      Gỡ
-                                    </Button>
+                                      <RemoveIconButton
+                                        label={`Xóa giải ${category.name} khỏi ${winner.teamName}`}
+                                        disabled={busy}
+                                      />
+                                    </ConfirmAction>
                                   </li>
                                 ))}
                               </ul>
@@ -757,7 +761,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
           </label>
           <div className="flex justify-end gap-sm">
             <Button variant="secondary" onClick={() => setCategoryModalOpen(false)}>
-              Huỷ
+              Hủy
             </Button>
             <Button disabled={busy} onClick={() => void handleSaveCategory()}>
               {editingCategoryId != null ? "Lưu" : "Tạo"}
