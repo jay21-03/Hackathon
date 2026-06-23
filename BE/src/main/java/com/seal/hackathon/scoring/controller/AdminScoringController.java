@@ -14,6 +14,7 @@ import com.seal.hackathon.scoring.dto.SaveRubricRequest;
 import com.seal.hackathon.scoring.service.CriteriaTemplateService;
 
 import com.seal.hackathon.scoring.dto.ScoreProgressResponse;
+import com.seal.hackathon.scoring.dto.ScoringReminderResponse;
 
 import com.seal.hackathon.scoring.service.ScoringService;
 
@@ -125,11 +126,9 @@ public class AdminScoringController {
 
     @PostMapping("/boards/{boardId}/scoring-reminders")
 
-    public ApiResponse<String> sendScoringReminder(@PathVariable Long boardId) {
+    public ApiResponse<ScoringReminderResponse> sendScoringReminder(@PathVariable Long boardId) {
 
-        scoringService.sendScoringReminder(boardId);
-
-        return ApiResponse.ok("sent");
+        return ApiResponse.ok(scoringService.sendScoringReminder(boardId));
 
     }
 
