@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { EventCard } from "../../components/events/EventCard";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
+import { useRouteFlashMessage } from "../../hooks/useRouteFlashMessage";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -12,9 +14,10 @@ import { usePublicEvents } from "../../hooks/usePublicEvents";
 type Filter = "all" | "open" | "upcoming";
 
 export function EventsDiscoveryPage() {
+  useRouteFlashMessage();
   const authenticated = isAuthenticated();
   const session = getAuthSession();
-  const { events, loading, error } = usePublicEvents();
+  const { events, loading, error, refetch } = usePublicEvents();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -87,11 +90,9 @@ export function EventsDiscoveryPage() {
 
       {listLoading && <ModuleSkeleton rows={3} variant="cards" />}
 
-      {!listLoading && error && (
-        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface-variant">{error}</p>
-        </div>
-      )}
+      {!listLoading && error ? (
+        <RetryPanel message={error} onRetry={() => void refetch()} />
+      ) : null}
 
       {!listLoading && !error && filtered.length === 0 && (
         <EmptyState

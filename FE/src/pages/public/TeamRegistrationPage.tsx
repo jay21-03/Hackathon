@@ -17,7 +17,7 @@ import { setStoredActiveEventId } from "../../hooks/useActiveEvent";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
 import { getAuthSession } from "../../auth/authSession";
-import { getApiErrorMessage } from "../../utils/apiError";
+import { resolveApiError } from "../../utils/apiError";
 import { createIdempotencyKey } from "../../utils/idempotency";
 import {
   applyRegistrationFormErrors,
@@ -165,7 +165,7 @@ export function TeamRegistrationPage() {
       notify(`Đăng ký thành công: ${getStatusLabel(status)}.`, "success");
     } catch (err) {
       if (!applyRegistrationFormErrors(err, setFieldErrors, setMemberFieldErrors)) {
-        const raw = getApiErrorMessage(err, "Đăng ký đội thất bại.");
+        const raw = resolveApiError(err, "Đăng ký đội thất bại.");
         const message = mapRegistrationErrorMessage(raw);
         setErrors([message]);
         notify(message, "danger");

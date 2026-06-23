@@ -16,7 +16,7 @@ import {
   declineStaffInvitation,
   type StaffInvitationResponse
 } from "../../services/staffInvitationService";
-import { getApiErrorMessage } from "../../utils/apiError";
+import { resolveApiError } from "../../utils/apiError";
 import { decodeInvitationTokenParam } from "../../utils/invitationToken";
 import { formatBoardWithRoundLabel } from "../../utils/boardLabels";
 import { consumeStaffInvitationReturn, rememberStaffInvitationReturn } from "../../utils/staffInvitationPaths";
@@ -64,7 +64,7 @@ export function StaffInvitationActionPage({ action }: StaffInvitationActionPageP
           notify("Đã từ chối lời mời.", "success");
         }
       } catch (err) {
-        setError(getApiErrorMessage(err, "Không xử lý được lời mời."));
+        setError(resolveApiError(err, "Không xử lý được lời mời."));
       } finally {
         setProcessing(false);
       }
