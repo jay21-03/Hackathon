@@ -364,7 +364,21 @@ class RepositoryProvisioningIntegrationTest {
     }
 
     @Test
-    void closesRepositoriesWhenProblemCloseAtPasses() throws Exception {
+    void participantRepositoryListSurvivesUnresolvableEventContext() throws Exception {
+        saveTemplate(releasedProblem.getId());
+        provision(releasedProblem.getId());
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/me/teams/{teamId}/repository", team.getId())
+                        .param("eventId", "999999")
+                        .header("Authorization", "Bearer " + participantJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].repositoryUrl").value(
+                        "https://github.com/seal-org/" + repoName(team.getId(), releasedProblem.getId())))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].provisionStatus").value("CREATED"));
+    }
+
+    @Test
+    void participantRepositoryListShowsClosedAfterProblemCloseAt() throws Exception {
         saveTemplate(releasedProblem.getId());
         provision(releasedProblem.getId());
 
@@ -376,19 +390,7 @@ class RepositoryProvisioningIntegrationTest {
                         .header("Authorization", "Bearer " + participantJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].accessStatus").value("CLOSED"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].submissionStatus").value("SUBMITTED"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].latestCommit.sha").value("abc123def4567890"));
-
-        assertThat(fakeGitHubRepositoryClient.collaboratorPermission(
-                        "seal-org", repoName(team.getId(), releasedProblem.getId()), "seal-participant"))
-                .isEqualTo("pull");
-        assertThat(fakeGitHubRepositoryClient.isBranchProtected(
-                        "seal-org", repoName(team.getId(), releasedProblem.getId()), "main"))
-                .isTrue();
-
-        var teamRepo = teamRepositoryEntityRepository.findAllByTeamId(team.getId()).getFirst();
-        assertThat(repoCommitRepository.findTopByTeamRepositoryIdOrderByCommittedAtDescIdDesc(teamRepo.getId()))
-                .isPresent();
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].submissionStatus").value("SUBMITTED"));
     }
 
     @Test
@@ -433,6 +435,18 @@ class RepositoryProvisioningIntegrationTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.sha").value("abc123def4567890"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.message").value("Initial commit"));
 
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                        "/api/v1/me/team-repositories/{repositoryId}/commits/refresh", teamRepo.getId())
+                .header("Authorization", "Bearer " + participantJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.sha").value("abc123def4567890"));
+
+        assertThat(repoCommitRepository.findAll().stream()
+                        .filter(commit -> teamRepo.getId().equals(commit.getTeamRepositoryId()))
+                        .filter(commit -> "abc123def4567890".equals(commit.getCommitSha()))
+                        .count())
+                .isEqualTo(1);
+
         mockMvc.perform(MockMvcRequestBuilders.get(
                         "/api/v1/me/team-repositories/{repositoryId}/commits/latest", teamRepo.getId())
                 .header("Authorization", "Bearer " + participantJwt))
@@ -443,6 +457,30 @@ class RepositoryProvisioningIntegrationTest {
                         .header("Authorization", "Bearer " + participantJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].latestCommit.sha").value("abc123def4567890"));
+    }
+
+    @Test
+    void lockProblemRepositoriesAfterCloseAtIgnoresAlreadyCapturedCommit() throws Exception {
+        saveTemplate(releasedProblem.getId());
+        provision(releasedProblem.getId());
+
+        var teamRepo = teamRepositoryEntityRepository.findAllByTeamId(team.getId()).getFirst();
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                        "/api/v1/me/team-repositories/{repositoryId}/commits/refresh", teamRepo.getId())
+                .header("Authorization", "Bearer " + participantJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.sha").value("abc123def4567890"));
+
+        OffsetDateTime now = OffsetDateTime.now();
+        releasedProblem.setCloseAt(now.minusMinutes(1));
+        problemRepository.save(releasedProblem);
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                        "/api/v1/admin/problems/{problemId}/repositories/lock", releasedProblem.getId())
+                .header("Authorization", "Bearer " + organizerJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.lockedCount").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.repositories[0].accessStatus").value("CLOSED"));
     }
 
     @Test

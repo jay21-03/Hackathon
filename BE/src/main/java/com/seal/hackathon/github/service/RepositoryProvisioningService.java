@@ -14,12 +14,10 @@ import com.seal.hackathon.common.enums.SubmissionStatus;
 import com.seal.hackathon.common.enums.TeamMemberStatus;
 import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
-import com.seal.hackathon.contest.dto.MyBoardResponse;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Problem;
 import com.seal.hackathon.contest.entity.Round;
-import com.seal.hackathon.contest.service.ContestManagementService;
 import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
@@ -86,7 +84,6 @@ public class RepositoryProvisioningService {
     private final BoardScoringReadinessService boardScoringReadinessService;
     private final JudgeAssignmentRepository judgeAssignmentRepository;
     private final CurrentUserProvider currentUserProvider;
-    private final ContestManagementService contestManagementService;
     private final RepoCommitService repoCommitService;
 
     @Value("${app.github.org:}")
@@ -551,25 +548,16 @@ public class RepositoryProvisioningService {
                 .toList();
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public List<TeamRepositoryResponse> getMyTeamRepository(Long teamId, Long currentUserId, Long eventId) {
         if (!teamMemberRepository.existsByTeamIdAndUserId(teamId, currentUserId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
-        closeExpiredRepositoriesForTeam(teamId);
 
-        Long currentRoundId = null;
-        Long currentProblemId = null;
-        if (eventId != null) {
-            MyBoardResponse board = contestManagementService.getMyBoard(eventId, currentUserId);
-            if (board.isAssigned()) {
-                currentRoundId = board.getRoundId();
-                currentProblemId = resolvePrimaryProblemId(board.getBoardId());
-            }
-        }
+        CurrentRepositoryScope currentScope = resolveCurrentRepositoryScope(teamId, eventId);
 
-        final Long preferredRoundId = currentRoundId;
-        final Long preferredProblemId = currentProblemId;
+        final Long preferredRoundId = currentScope.roundId();
+        final Long preferredProblemId = currentScope.problemId();
         List<TeamRepository> repositories = new ArrayList<>(teamRepositoryEntityRepository.findAllByTeamId(teamId));
         repositories.sort((left, right) -> Integer.compare(
                 repoSortPriority(right, preferredRoundId, preferredProblemId),
@@ -581,6 +569,33 @@ public class RepositoryProvisioningService {
                         false,
                         isCurrentRepository(repository, preferredRoundId, preferredProblemId)))
                 .toList();
+    }
+
+    private CurrentRepositoryScope resolveCurrentRepositoryScope(Long teamId, Long eventId) {
+        if (eventId == null) {
+            return CurrentRepositoryScope.empty();
+        }
+        BoardSlot bestSlot = null;
+        Round bestRound = null;
+        for (BoardSlot slot : boardSlotRepository.findByTeamId(teamId)) {
+            if (slot.getRoundId() == null) {
+                continue;
+            }
+            Round round = roundRepository.findById(slot.getRoundId()).orElse(null);
+            if (round == null || !eventId.equals(round.getEventId())) {
+                continue;
+            }
+            if (bestRound == null
+                    || Comparator.nullsLast(Integer::compareTo)
+                            .compare(round.getRoundOrder(), bestRound.getRoundOrder()) > 0) {
+                bestSlot = slot;
+                bestRound = round;
+            }
+        }
+        if (bestSlot == null || bestRound == null) {
+            return CurrentRepositoryScope.empty();
+        }
+        return new CurrentRepositoryScope(bestRound.getId(), resolvePrimaryProblemId(bestSlot.getBoardId()));
     }
 
     @Transactional
@@ -940,7 +955,7 @@ public class RepositoryProvisioningService {
                 .githubOwner(repository.getGithubOwner())
                 .githubRepoName(repository.getGithubRepoName())
                 .githubRepoId(repository.getGithubRepoId())
-                .accessStatus(repository.getAccessStatus())
+                .accessStatus(resolveAccessStatus(repository))
                 .provisionStatus(repository.getProvisionStatus())
                 .submissionStatus(resolveSubmissionStatus(repository))
                 .submittedAt(com.seal.hackathon.common.util.SubmissionLifecycle.effectiveSubmittedAt(
@@ -973,6 +988,16 @@ public class RepositoryProvisioningService {
     private SubmissionStatus resolveSubmissionStatus(TeamRepository repository) {
         return com.seal.hackathon.common.util.SubmissionLifecycle.effectiveStatus(
                 repository, resolveProblemCloseAt(repository.getProblemId()));
+    }
+
+    private RepositoryAccessStatus resolveAccessStatus(TeamRepository repository) {
+        OffsetDateTime closeAt = resolveProblemCloseAt(repository.getProblemId());
+        if (repository.getAccessStatus() == RepositoryAccessStatus.OPEN
+                && com.seal.hackathon.common.util.SubmissionLifecycle.isDeadlinePassed(closeAt)
+                && com.seal.hackathon.common.util.SubmissionLifecycle.hasSubmittableContent(repository)) {
+            return RepositoryAccessStatus.CLOSED;
+        }
+        return repository.getAccessStatus();
     }
 
     private OffsetDateTime resolveProblemCloseAt(Long problemId) {
@@ -1208,5 +1233,11 @@ public class RepositoryProvisioningService {
     }
 
     private record LockBatchResult(int locked, int failed, List<TeamRepositoryResponse> responses) {
+    }
+
+    private record CurrentRepositoryScope(Long roundId, Long problemId) {
+        private static CurrentRepositoryScope empty() {
+            return new CurrentRepositoryScope(null, null);
+        }
     }
 }

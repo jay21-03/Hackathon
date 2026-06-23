@@ -105,6 +105,12 @@ public class RepoCommitService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "REPOSITORY_EMPTY");
         }
 
+        Optional<RepoCommit> existing = repoCommitRepository.findByTeamRepositoryIdAndCommitSha(
+                repository.getId(), commitInfo.getSha());
+        if (existing.isPresent()) {
+            return toResponse(existing.get());
+        }
+
         OffsetDateTime now = OffsetDateTime.now();
         RepoCommit saved = repoCommitRepository.save(RepoCommit.builder()
                 .teamRepositoryId(repository.getId())
