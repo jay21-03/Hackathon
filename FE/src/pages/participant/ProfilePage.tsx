@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { z } from "zod";
 import { useToast } from "../../components/feedback/ToastProvider";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -32,32 +33,32 @@ export function ProfilePage() {
   const [passwordError, setPasswordError] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let active = true;
-    fetchMyProfile()
-      .then((result) => {
-        if (!active) return;
-        setStudentType(result.studentType === "EXTERNAL" ? "EXTERNAL" : "FPT");
-        setFullName(result.fullName ?? "");
-        setEmail(result.email ?? "");
-        setHasPassword(result.hasPassword === true);
-        setStudentId(result.studentId ?? "");
-        setUniversity(result.university ?? "");
-        setGithubUsername(result.githubUsername ?? "");
-      })
-      .catch(() => {
-        if (active) setFormError("Không tải được hồ sơ từ hệ thống.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const result = await fetchMyProfile();
+      setStudentType(result.studentType === "EXTERNAL" ? "EXTERNAL" : "FPT");
+      setFullName(result.fullName ?? "");
+      setEmail(result.email ?? "");
+      setHasPassword(result.hasPassword === true);
+      setStudentId(result.studentId ?? "");
+      setUniversity(result.university ?? "");
+      setGithubUsername(result.githubUsername ?? "");
+    } catch {
+      setLoadError("Không tải được hồ sơ từ hệ thống.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
 
   async function savePassword() {
     const parsed = passwordPolicySchema.safeParse(newPassword);
@@ -148,7 +149,7 @@ export function ProfilePage() {
         name: result.fullName || session.name,
         profileCompleted: result.profileCompleted !== false
       });
-      notify("Đã lưu hồ sơ ca nhan.", "success");
+      notify("Đã lưu hồ sơ cá nhân.", "success");
     } catch (error) {
       applyApiFormErrors(error, setFieldErrors);
       notify("Lưu hồ sơ thất bại.", "danger");
@@ -170,6 +171,10 @@ export function ProfilePage() {
               : "Cập nhật thông tin liên hệ để ban tổ chức, mentor và đội thi nhận diện đúng bạn."
         }
       />
+
+      {loadError ? (
+        <RetryPanel message={loadError} onRetry={() => void loadProfile()} />
+      ) : null}
 
       <section className="grid gap-md lg:grid-cols-[1fr_320px]">
         <form className="rounded-xl border border-outline-variant bg-surface-container p-lg" onSubmit={(event) => event.preventDefault()}>

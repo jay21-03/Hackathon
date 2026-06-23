@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../lib/queryKeys";
 import { fetchMyTeams, type TeamDetailResponse } from "../services/registrationService";
-import { getApiErrorMessage } from "../utils/apiError";
+import { resolveApiError } from "../utils/apiError";
 
 export function useMyTeam(eventId: number | null) {
   const query = useQuery({
@@ -18,7 +18,7 @@ export function useMyTeam(eventId: number | null) {
     teams,
     loading: query.isLoading,
     error: query.isError
-      ? getApiErrorMessage(query.error, "Không tải được thông tin đội.")
+      ? resolveApiError(query.error, "Không tải được thông tin đội.")
       : null,
     refetch: query.refetch
   };
