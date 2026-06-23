@@ -3,6 +3,7 @@ import { BoardTeamAssignmentSection } from "../../components/organizer/board-ope
 import { ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
@@ -26,7 +27,8 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
     boards,
     loading,
     error,
-    invalidate
+    invalidate,
+    refetch
   } = useBoardManagement(eventId);
 
   const slotsCount = useMemo(
@@ -116,9 +118,7 @@ export function BoardOperationsPage({ embedded = false, onWizardStep }: HubEmbed
       />
 
       {error ? (
-        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface">{error}</p>
-        </div>
+        <RetryPanel message={error} onRetry={() => void refetch()} />
       ) : null}
 
       {boards.length === 0 ? (

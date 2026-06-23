@@ -186,7 +186,7 @@ export function BoardTeamAssignmentSection({
       await invalidate();
       notify("Đã gỡ đội khỏi vị trí.", "success");
     } catch (err) {
-      notify(resolveApiError(err, "Gỡ đội thất bại."), "danger");
+      notify(resolveApiError(err, "Xóa đội thất bại."), "danger");
     } finally {
       setBusy(false);
     }
