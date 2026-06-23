@@ -30,4 +30,5 @@ public interface RepoCommitRepository extends JpaRepository<RepoCommit, Long> {
 
             List<Long> teamRepositoryIds, Pageable pageable);
 
+    long countByTeamRepositoryId(Long teamRepositoryId);
 }

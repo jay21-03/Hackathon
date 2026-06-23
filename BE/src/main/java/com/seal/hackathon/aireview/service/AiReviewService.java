@@ -105,6 +105,8 @@ import org.slf4j.LoggerFactory;
 
 import org.springframework.beans.factory.annotation.Value;
 
+import org.springframework.dao.DataIntegrityViolationException;
+
 import org.springframework.data.domain.PageRequest;
 
 import org.springframework.http.HttpStatus;
@@ -154,6 +156,8 @@ public class AiReviewService {
     private final AiReviewLlmRunner aiReviewLlmRunner;
 
     private final AiReviewAccessService aiReviewAccessService;
+
+    private final AiReviewSupabaseMirror aiReviewSupabaseMirror;
 
     private final OrganizerAuthorizationService organizerAuthorizationService;
 
@@ -1074,7 +1078,7 @@ public class AiReviewService {
 
             pending.setReviewedAt(now);
 
-            return aiReviewRepository.save(pending);
+            return saveAndMirror(pending);
 
         } catch (AiReviewValidationException ex) {
 
@@ -1084,7 +1088,7 @@ public class AiReviewService {
 
             pending.setReviewedAt(now);
 
-            aiReviewRepository.save(pending);
+            saveAndMirror(pending);
 
             log.warn("Per-push AI review validation failed for team {}: {}", team.getId(), ex.getMessage());
 
@@ -1098,7 +1102,7 @@ public class AiReviewService {
 
             pending.setReviewedAt(now);
 
-            aiReviewRepository.save(pending);
+            saveAndMirror(pending);
 
             log.warn("Per-push AI review failed for team {}: {}", team.getId(), ex.getMessage());
 
@@ -1160,7 +1164,7 @@ public class AiReviewService {
 
                 perPush.setGithubIssueUrl(issue.getHtmlUrl());
 
-                aiReviewRepository.save(perPush);
+                saveAndMirror(perPush);
 
                 log.info("Created GitHub issue for team {}: {}", team.getId(), issue.getHtmlUrl());
 
@@ -1257,7 +1261,7 @@ public class AiReviewService {
 
             pending.setReviewedAt(now);
 
-            return aiReviewRepository.save(pending);
+            return saveAndMirror(pending);
 
         } catch (AiReviewValidationException ex) {
 
@@ -1273,7 +1277,7 @@ public class AiReviewService {
 
             failed.setReviewedAt(now);
 
-            return aiReviewRepository.save(failed);
+            return saveAndMirror(failed);
 
         } catch (Exception ex) {
 
@@ -1289,7 +1293,7 @@ public class AiReviewService {
 
             failed.setReviewedAt(now);
 
-            return aiReviewRepository.save(failed);
+            return saveAndMirror(failed);
 
         }
 
@@ -1423,7 +1427,8 @@ public class AiReviewService {
 
         OffsetDateTime now = OffsetDateTime.now();
 
-        return repoCommitRepository.save(RepoCommit.builder()
+        try {
+            return repoCommitRepository.save(RepoCommit.builder()
 
                 .teamRepositoryId(repository.getId())
 
@@ -1446,6 +1451,10 @@ public class AiReviewService {
                 .createdAt(now)
 
                 .build());
+        } catch (DataIntegrityViolationException ex) {
+            return repoCommitRepository.findByTeamRepositoryIdAndCommitSha(repository.getId(), detail.getSha())
+                    .orElseThrow(() -> ex);
+        }
 
     }
 
@@ -1507,6 +1516,12 @@ public class AiReviewService {
 
         return review;
 
+    }
+
+    private AiReview saveAndMirror(AiReview review) {
+        AiReview saved = aiReviewRepository.save(review);
+        aiReviewSupabaseMirror.mirror(saved);
+        return saved;
     }
 
 

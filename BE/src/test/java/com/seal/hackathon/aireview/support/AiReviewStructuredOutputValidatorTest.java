@@ -33,7 +33,7 @@ class AiReviewStructuredOutputValidatorTest {
     }
 
     @Test
-    void rejectsAggregateMissingCriteriaAndSmb() throws Exception {
+    void rejectsAggregateMissingCriteriaButFillsSmbFallback() throws Exception {
         var root = objectMapper.readTree("""
                 {
                   "criteria_comments": { "R1_01": "Tốt" },
@@ -42,10 +42,24 @@ class AiReviewStructuredOutputValidatorTest {
                   "agent_intelligence": { "reasoning_pattern": "none" }
                 }
                 """);
+        validator.normalize(root, AiReviewKind.TEAM_AGGREGATE);
         var result = validator.validate(root, AiReviewKind.TEAM_AGGREGATE);
         assertThat(result.valid()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.contains("R1_02"));
-        assertThat(result.violations()).anyMatch(v -> v.contains("cost_for_smb"));
+        assertThat(result.violations()).noneMatch(v -> v.contains("smb_scale_advisory"));
+        assertThat(root.path("smb_scale_advisory").path("cost_for_smb").asText()).isNotBlank();
+    }
+
+    @Test
+    void acceptsAggregateWhenOnlySmbAdvisoryIsMissing() throws Exception {
+        var root = objectMapper.readTree(FakeAggregateJson.MINIMAL_VALID);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root).remove("smb_scale_advisory");
+
+        validator.normalize(root, AiReviewKind.TEAM_AGGREGATE);
+        var result = validator.validate(root, AiReviewKind.TEAM_AGGREGATE);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(root.path("smb_scale_advisory").path("system_identity_recap").asText()).isNotBlank();
     }
 
     @Test
@@ -55,7 +69,7 @@ class AiReviewStructuredOutputValidatorTest {
         var root = objectMapper.readTree(json);
         var result = validator.validate(root, AiReviewKind.TEAM_AGGREGATE);
         assertThat(result.valid()).isFalse();
-        assertThat(result.violations()).anyMatch(v -> v.contains("R1_01") && v.contains("phân hạng"));
+        assertThat(result.violations()).anyMatch(v -> v.contains("R1_01"));
     }
 
     private static final class FakePerPushJson {

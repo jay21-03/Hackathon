@@ -1,6 +1,7 @@
 package com.seal.hackathon.aireview.support;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.seal.hackathon.common.enums.AiReviewKind;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -15,7 +16,7 @@ import org.springframework.util.StringUtils;
 public final class AiReviewStructuredOutputValidator {
 
     private static final Pattern QUALITATIVE_RATING = Pattern.compile(
-            "(?i)(?<![\\p{L}])(Xuất sắc|Tốt|Khá|Trung bình|Yếu)(?![\\p{L}])");
+            "(?i)(?<![\\p{L}])(Xuất sắc|Tốt|Khá|Trung bình|Yếu|Xuáº¥t sáº¯c|Tá»‘t|KhÃ¡|Trung bÃ¬nh|Yáº¿u)(?![\\p{L}])");
 
     private static final List<String> CRITERIA_KEYS =
             List.of("R1_01", "R1_02", "R1_03", "R1_04", "R1_05", "R2_01", "R2_02", "R2_03", "R2_04", "R2_05");
@@ -71,9 +72,16 @@ public final class AiReviewStructuredOutputValidator {
 
     public ValidationResult validate(JsonNode root, AiReviewKind kind) {
         if (root == null || root.isMissingNode() || !root.isObject()) {
-            return ValidationResult.fail(List.of("Phản hồi LLM phải là JSON object."));
+            return ValidationResult.fail(List.of("Pháº£n há»“i LLM pháº£i lÃ  JSON object."));
         }
         return kind == AiReviewKind.TEAM_AGGREGATE ? validateAggregate(root) : validatePerPush(root);
+    }
+
+    public JsonNode normalize(JsonNode root, AiReviewKind kind) {
+        if (kind == AiReviewKind.TEAM_AGGREGATE && root != null && root.isObject()) {
+            normalizeAggregate((ObjectNode) root);
+        }
+        return root;
     }
 
     private ValidationResult validatePerPush(JsonNode root) {
@@ -82,12 +90,12 @@ public final class AiReviewStructuredOutputValidator {
         requireNonBlankText(root, "rag_maturity", "level", violations);
         JsonNode assessment = root.path("assessment");
         if (!assessment.isObject()) {
-            violations.add("Thiếu object assessment.");
+            violations.add("Thiáº¿u object assessment.");
         } else {
             for (String field :
                     List.of("advantages", "disadvantages", "security", "completeness", "latency", "observability", "error_handling")) {
                 if (!hasNonBlankText(assessment, field)) {
-                    violations.add("assessment." + field + " trống.");
+                    violations.add("assessment." + field + " trá»‘ng.");
                 }
             }
         }
@@ -100,18 +108,18 @@ public final class AiReviewStructuredOutputValidator {
         for (String key : CRITERIA_KEYS) {
             String value = criteria.get(key);
             if (!StringUtils.hasText(value)) {
-                violations.add("criteria_comments." + key + " trống.");
+                violations.add("criteria_comments." + key + " trá»‘ng.");
                 continue;
             }
             if (!QUALITATIVE_RATING.matcher(value).find()) {
-                violations.add("criteria_comments." + key + " thiếu phân hạng (Xuất sắc|Tốt|Khá|Trung bình|Yếu).");
+                violations.add("criteria_comments." + key + " thiáº¿u phÃ¢n háº¡ng (Xuáº¥t sáº¯c|Tá»‘t|KhÃ¡|Trung bÃ¬nh|Yáº¿u).");
             }
         }
 
         Map<String, String> smb = normalizeSmb(root.path("smb_scale_advisory"));
         for (String key : SMB_KEYS) {
             if (!StringUtils.hasText(smb.get(key))) {
-                violations.add("smb_scale_advisory." + key + " trống.");
+                violations.add("smb_scale_advisory." + key + " trá»‘ng.");
             }
         }
 
@@ -120,6 +128,27 @@ public final class AiReviewStructuredOutputValidator {
         requireNonBlankText(root, "agent_intelligence", "reasoning_pattern", violations);
 
         return violations.isEmpty() ? ValidationResult.ok() : ValidationResult.fail(violations);
+    }
+
+    private static void normalizeAggregate(ObjectNode root) {
+        JsonNode rawAdvisory = root.path("smb_scale_advisory");
+        ObjectNode advisory = rawAdvisory.isObject()
+                ? (ObjectNode) rawAdvisory
+                : root.putObject("smb_scale_advisory");
+        Map<String, String> normalized = normalizeSmb(advisory);
+        String fallback = buildSmbFallback(root);
+        for (String key : SMB_KEYS) {
+            String value = normalized.get(key);
+            advisory.put(key, StringUtils.hasText(value) ? value : fallback);
+        }
+    }
+
+    private static String buildSmbFallback(JsonNode root) {
+        String synthesis = textAt(root.path("overall_picture"), "historical_synthesis");
+        if (StringUtils.hasText(synthesis)) {
+            return "Chưa đủ bằng chứng riêng cho mục này; tham chiếu tổng hợp hiện có: " + synthesis;
+        }
+        return "Chưa đủ bằng chứng từ lịch sử commit và per-push review để kết luận chắc chắn.";
     }
 
     private static Map<String, String> normalizeCriteria(JsonNode raw) {
@@ -170,7 +199,7 @@ public final class AiReviewStructuredOutputValidator {
     private static void requireNonBlankText(
             JsonNode root, String objectField, String textField, List<String> violations) {
         if (!hasNonBlankText(root.path(objectField), textField)) {
-            violations.add(objectField + "." + textField + " trống.");
+            violations.add(objectField + "." + textField + " trá»‘ng.");
         }
     }
 
@@ -181,4 +210,14 @@ public final class AiReviewStructuredOutputValidator {
         JsonNode value = parent.path(field);
         return value.isTextual() && StringUtils.hasText(value.asText());
     }
+
+    private static String textAt(JsonNode parent, String field) {
+        if (!parent.isObject()) {
+            return "";
+        }
+        JsonNode value = parent.path(field);
+        return value.isTextual() ? value.asText().trim() : "";
+    }
 }
+
+
