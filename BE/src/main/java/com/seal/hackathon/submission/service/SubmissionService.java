@@ -1,5 +1,7 @@
 package com.seal.hackathon.submission.service;
 
+import com.seal.hackathon.aireview.entity.RepoCommit;
+import com.seal.hackathon.aireview.repository.RepoCommitRepository;
 import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
@@ -23,6 +25,7 @@ import com.seal.hackathon.contest.service.ContestManagementService;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.submission.dto.AdminTeamSubmissionResponse;
+import com.seal.hackathon.submission.dto.EventSubmissionSummaryResponse;
 import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.submission.dto.SaveSubmissionDraftRequest;
 import com.seal.hackathon.submission.dto.SubmissionResponse;
@@ -69,6 +72,7 @@ public class SubmissionService {
     private final OrganizerAuthorizationService organizerAuthorizationService;
     private final NotificationService notificationService;
     private final RepoCommitService repoCommitService;
+    private final RepoCommitRepository repoCommitRepository;
 
     @Transactional(readOnly = true)
     public PagedResult<AdminTeamSubmissionResponse> listSubmissionsPaged(
@@ -121,6 +125,41 @@ public class SubmissionService {
                 .size(resolvedSize)
                 .total(slotPage.getTotalElements())
                 .totalPages(slotPage.getTotalPages())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public EventSubmissionSummaryResponse summarizeEventSubmissions(Long eventId) {
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        Map<Long, BoardSlot> slotByTeamId = new LinkedHashMap<>();
+        Map<Long, Board> boardById = new HashMap<>();
+        for (Round round : roundRepository.findByEventId(eventId)) {
+            for (BoardSlot slot : boardSlotRepository.findByRoundId(round.getId())) {
+                if (slot.getTeamId() == null) {
+                    continue;
+                }
+                slotByTeamId.putIfAbsent(slot.getTeamId(), slot);
+                if (slot.getBoardId() != null && !boardById.containsKey(slot.getBoardId())) {
+                    boardRepository.findById(slot.getBoardId()).ifPresent(b -> boardById.put(b.getId(), b));
+                }
+            }
+        }
+
+        long submittedCount = 0;
+        long draftCount = 0;
+        for (BoardSlot slot : slotByTeamId.values()) {
+            AdminTeamSubmissionResponse row = toAdminSubmissionRow(slot, boardById.get(slot.getBoardId()));
+            if (row.getStatus() == SubmissionStatus.SUBMITTED) {
+                submittedCount++;
+            } else if (row.getStatus() == SubmissionStatus.DRAFT) {
+                draftCount++;
+            }
+        }
+
+        return EventSubmissionSummaryResponse.builder()
+                .totalTeams(slotByTeamId.size())
+                .submittedCount(submittedCount)
+                .draftCount(draftCount)
                 .build();
     }
 
@@ -281,6 +320,12 @@ public class SubmissionService {
         }
         com.seal.hackathon.aireview.entity.TeamRepository repo = resolveRepositoryForParticipantAdmin(slot, board);
         OffsetDateTime deadlineAt = resolveDeadlineForBoard(slot.getBoardId());
+        RepoCommit latestCommit = repo != null
+                ? repoCommitRepository
+                        .findTopByTeamRepositoryIdOrderByCommittedAtDescIdDesc(repo.getId())
+                        .orElse(null)
+                : null;
+        long commitCount = repo != null ? repoCommitRepository.countByTeamRepositoryId(repo.getId()) : 0L;
         return AdminTeamSubmissionResponse.builder()
                 .teamId(teamId)
                 .teamName(team.getName())
@@ -292,6 +337,10 @@ public class SubmissionService {
                 .repositoryName(repo != null ? repo.getRepositoryName() : null)
                 .submittedAt(repo != null ? effectiveSubmittedAt(repo, deadlineAt) : null)
                 .lastPushAt(repo != null ? repo.getLastPushAt() : null)
+                .latestCommitSha(latestCommit != null ? latestCommit.getCommitSha() : null)
+                .latestCommitMessage(latestCommit != null ? latestCommit.getMessage() : null)
+                .latestCommitAt(latestCommit != null ? latestCommit.getCommittedAt() : null)
+                .commitCount(commitCount > 0 ? (int) commitCount : null)
                 .build();
     }
 
