@@ -159,6 +159,16 @@ export function useBoardManagement(eventId: number | null) {
     ? resolveApiError(queryError, "Không tải được thông tin bảng thi.")
     : null;
 
+  const refetch = useCallback(async () => {
+    await Promise.all([
+      roundsQuery.refetch(),
+      teamsQuery.refetch(),
+      boardDataQuery.refetch(),
+      eventDetailQuery.refetch(),
+      teamSummaryQuery.refetch()
+    ]);
+  }, [roundsQuery, teamsQuery, boardDataQuery, eventDetailQuery, teamSummaryQuery]);
+
   return {
     rounds,
     selectedRoundId,
@@ -172,6 +182,7 @@ export function useBoardManagement(eventId: number | null) {
     boardEdits,
     setBoardEdits,
     invalidate,
+    refetch,
     eventDetail: eventDetailQuery.data ?? null,
     teamMap,
     confirmedTeams,

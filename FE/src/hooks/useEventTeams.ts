@@ -5,7 +5,13 @@ import { resolveApiError } from "../utils/apiError";
 
 export function useEventTeams(
   eventId: number | null,
-  options?: { page?: number; size?: number; status?: string; q?: string }
+  options?: {
+    page?: number;
+    size?: number;
+    status?: string;
+    q?: string;
+    refetchInterval?: number | false;
+  }
 ) {
   const page = options?.page ?? 0;
   const size = options?.size ?? 100;
@@ -14,7 +20,8 @@ export function useEventTeams(
   const query = useQuery({
     queryKey: [...queryKeys.teams.byEvent(eventId ?? 0), page, size, status ?? "ALL", q ?? ""],
     queryFn: () => fetchEventTeams(eventId!, { page, size, status, q }),
-    enabled: Boolean(eventId)
+    enabled: Boolean(eventId),
+    refetchInterval: options?.refetchInterval ?? false
   });
 
   return {

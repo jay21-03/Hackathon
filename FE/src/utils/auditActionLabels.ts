@@ -1,6 +1,6 @@
 const auditActionLabels: Record<string, string> = {
   SLOT_ASSIGNED: "Gán đội vào vị trí",
-  SLOT_UNASSIGNED: "Gỡ đội khỏi vị trí",
+  SLOT_UNASSIGNED: "Xóa đội khỏi vị trí",
   TEAM_STATUS_CHANGED: "Đổi trạng thái đội",
   TEAM_DISQUALIFIED: "Loại đội",
   TEAM_REJECTED: "Từ chối hồ sơ đội",
