@@ -2,10 +2,11 @@ import { useMemo, useState, useEffect } from "react";
 import type { PagedResult } from "../../types/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ReasonConfirmAction } from "../../components/feedback/ReasonConfirmAction";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
-import { DataTable, tableActionCellClass, tableRowClass } from "../../components/ui/DataTable";
+import { DataTable, tableActionCellClass, tableFirstCellStickyClass, tableRowClass } from "../../components/ui/DataTable";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -36,6 +37,17 @@ type Filter = "ALL" | "PENDING" | "CONFIRMED" | "WAITLIST" | "REJECTED" | "DISQU
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function getApproveDisabledReason(registration: {
+  status: string;
+  readyForOrganizerApproval?: boolean;
+}): string | null {
+  if (registration.status !== "PENDING") return null;
+  if (!registration.readyForOrganizerApproval) {
+    return "Còn thành viên chưa xác nhận email — đợi đội xác nhận trước khi duyệt.";
+  }
+  return null;
 }
 
 function summarizeAuditDetail(raw: string) {
@@ -81,18 +93,21 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
     setListPage(0);
   }, [filter, searchDebounced, eventId]);
 
-  const { teams: registrations, loading, error, total, totalPages } = useEventTeams(eventId, {
-    page: listPage,
-    size: 50,
-    status: filter,
-    q: searchDebounced
-  });
-
   const detailQuery = useQuery({
     queryKey: queryKeys.events.detail(eventId ?? ""),
     queryFn: () => fetchEventDetail(String(eventId)),
     enabled: Boolean(eventId)
   });
+
+  const { teams: registrations, loading, error, total, totalPages, refetch } = useEventTeams(eventId, {
+    page: listPage,
+    size: 50,
+    status: filter,
+    q: searchDebounced,
+    refetchInterval:
+      detailQuery.data?.status === "REGISTRATION_OPEN" ? 20_000 : false
+  });
+
   const quota = detailQuery.data?.maxTeams ?? 0;
   const maxTeamSize = detailQuery.data?.maxTeamSize ?? 5;
   const { summary: teamSummary, loading: summaryLoading } = useEventTeamSummary(eventId);
@@ -212,7 +227,7 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
             actions={
               <>
                 <OrganizerContextBar />
-                <Badge tone={error ? "danger" : "success"}>
+                <Badge tone="success">
                   {confirmed}/{quota || "—"} quota
                 </Badge>
               </>
@@ -227,16 +242,14 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
         </>
       ) : (
         <div className="flex flex-wrap items-center justify-end gap-sm">
-          <Badge tone={error ? "danger" : "success"}>
+          <Badge tone="success">
             {confirmed}/{quota || "—"} quota
           </Badge>
         </div>
       )}
 
       {error ? (
-        <p className="rounded-lg border border-error/40 bg-error-container/40 p-md font-body-sm text-on-surface">
-          {error}
-        </p>
+        <RetryPanel message={error} onRetry={() => void refetch()} />
       ) : null}
 
       <section className="grid gap-md md:grid-cols-3">
@@ -262,6 +275,7 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
                 <button
                   key={item}
                   type="button"
+                  aria-pressed={filter === item}
                   onClick={() => setFilter(item)}
                   className={`shrink-0 rounded-lg px-3 py-2 font-label-sm normal-case ${
                     filter === item
@@ -280,10 +294,10 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
             </Button>
           }
         />
-        <DataTable headers={["Đội thi", "Thành viên", "Cập nhật", "Trạng thái", "Thao tác"]}>
+        <DataTable headers={["Đội thi", "Thành viên", "Cập nhật", "Trạng thái", "Thao tác"]} stickyFirstColumn>
           {sortedRegistrations.map((registration) => (
             <tr key={registration.id} className={tableRowClass}>
-              <td className="px-md py-md">
+              <td className={tableFirstCellStickyClass}>
                 <p className="font-label-md">{registration.name}</p>
                 <p className="text-on-surface-variant">Cuộc thi #{registration.eventId}</p>
               </td>
@@ -297,10 +311,14 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
                 </Badge>
               </td>
               <td className={tableActionCellClass}>
-                <div className="flex flex-wrap justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2 max-sm:min-w-[12rem]">
                   <Button type="button" variant="ghost" onClick={() => openTeamDetail(registration.id)}>
                     Chi tiết
                   </Button>
+                  <span
+                    title={getApproveDisabledReason(registration) ?? undefined}
+                    className="inline-flex"
+                  >
                     <Button
                       type="button"
                       variant="ghost"
@@ -312,6 +330,7 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
                     >
                       Duyệt
                     </Button>
+                  </span>
                     <Button
                       type="button"
                       variant="secondary"

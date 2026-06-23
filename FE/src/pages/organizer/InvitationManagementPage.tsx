@@ -36,6 +36,10 @@ import { zodFieldErrors } from "../../utils/zodFieldErrors";
 import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
 import { buildRoundNameById, formatBoardLabelById } from "../../utils/boardLabels";
 import { createIdempotencyKey } from "../../utils/idempotency";
+import {
+  bulkStaffInviteSuccessMessage,
+  staffInviteSuccessMessage
+} from "../../utils/staffInviteMessages";
 
 type Tab = "members" | "staff";
 
@@ -88,6 +92,7 @@ export function InvitationManagementPage({
   const [staffRole, setStaffRole] = useState<StaffRole | "">("");
   const [staffStatus, setStaffStatus] = useState<StaffInvitationStatus>("INVITED");
   const [staffEmailFilter, setStaffEmailFilter] = useState("");
+  const [staffEmailDebounced, setStaffEmailDebounced] = useState("");
   const [staffPage, setStaffPage] = useState(0);
   const [staffEmail, setStaffEmail] = useState("");
   const [staffFieldErrors, setStaffFieldErrors] = useState<Record<string, string>>({});
@@ -97,9 +102,20 @@ export function InvitationManagementPage({
   const [staffSending, setStaffSending] = useState(false);
   const [memberStatus, setMemberStatus] = useState<TeamInvitationStatus>("INVITED");
   const [memberEmailFilter, setMemberEmailFilter] = useState("");
+  const [memberEmailDebounced, setMemberEmailDebounced] = useState("");
   const [memberPage, setMemberPage] = useState(0);
   const cell = getDensityCellClass(density);
   const pageSize = 25;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setMemberEmailDebounced(memberEmailFilter), 300);
+    return () => window.clearTimeout(timer);
+  }, [memberEmailFilter]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setStaffEmailDebounced(staffEmailFilter), 300);
+    return () => window.clearTimeout(timer);
+  }, [staffEmailFilter]);
 
   const {
     teamItems,
@@ -117,7 +133,7 @@ export function InvitationManagementPage({
   } = useInvitationManagement(eventId, {
     teamEnabled: tab === "members",
     teamStatus: memberStatus,
-    teamEmail: memberEmailFilter,
+    teamEmail: memberEmailDebounced,
     teamPage: memberPage,
     teamSize: pageSize,
     staffEnabled: tab === "staff" && enableStaffInvitations,
@@ -125,7 +141,7 @@ export function InvitationManagementPage({
     staffBoardId,
     staffRole,
     staffStatus,
-    staffEmail: staffEmailFilter,
+    staffEmail: staffEmailDebounced,
     staffPage,
     staffSize: pageSize
   });
@@ -140,11 +156,11 @@ export function InvitationManagementPage({
 
   useEffect(() => {
     setStaffPage(0);
-  }, [eventId, activeStaffRoundId, staffBoardId, staffRole, staffStatus, staffEmailFilter]);
+  }, [eventId, activeStaffRoundId, staffBoardId, staffRole, staffStatus, staffEmailDebounced]);
 
   useEffect(() => {
     setMemberPage(0);
-  }, [eventId, memberStatus, memberEmailFilter]);
+  }, [eventId, memberStatus, memberEmailDebounced]);
 
   async function resendMember(teamMemberId: number) {
     setResendingId(teamMemberId);
@@ -174,14 +190,14 @@ export function InvitationManagementPage({
     setStaffFieldErrors({});
     setStaffSending(true);
     try {
-      await createStaffInvitation(
+      const result = await createStaffInvitation(
         parsed.data.boardId,
         { email: parsed.data.email, role: parsed.data.role },
         createIdempotencyKey(`staff-invite-${parsed.data.boardId}-${parsed.data.email.toLowerCase()}`)
       );
       setStaffEmail("");
       await refetchStaff();
-      notify("Đã gửi lời mời mentor/giám khảo.", "success");
+      notify(staffInviteSuccessMessage(result), result.status === "ACCEPTED" ? "success" : "success");
     } catch (err) {
       applyApiFormErrors(err, setStaffFieldErrors);
       notify(resolveApiError(err, "Không gửi được lời mời."), "danger");
@@ -212,12 +228,9 @@ export function InvitationManagementPage({
       setStaffBulkOpen(false);
       await refetchStaff();
       if (result.failedCount > 0) {
-        notify(
-          `Đã gửi ${result.succeededCount}/${result.total} lời mời. ${result.failedCount} lỗi.`,
-          result.succeededCount > 0 ? "warning" : "danger"
-        );
+        notify(bulkStaffInviteSuccessMessage(result), result.succeededCount > 0 ? "warning" : "danger");
       } else {
-        notify(`Đã gửi ${result.succeededCount} lời mời.`, "success");
+        notify(bulkStaffInviteSuccessMessage(result), "success");
       }
     } catch (err) {
       notify(resolveApiError(err, "Không gửi hàng loạt được."), "danger");
@@ -298,6 +311,7 @@ export function InvitationManagementPage({
                 type="button"
                 size="sm"
                 variant={memberStatus === s.id ? "secondary" : "ghost"}
+                aria-pressed={memberStatus === s.id}
                 onClick={() => setMemberStatus(s.id)}
               >
                 {s.label}
@@ -364,6 +378,7 @@ export function InvitationManagementPage({
                 type="button"
                 size="sm"
                 variant={staffStatus === s.id ? "secondary" : "ghost"}
+                aria-pressed={staffStatus === s.id}
                 onClick={() => setStaffStatus(s.id)}
               >
                 {s.label}
