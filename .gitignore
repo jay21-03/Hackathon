@@ -8,3 +8,4 @@ target/
 *.log
 *.tsbuildinfo
 BE/src/main/resources/db/seed/
+FE/tests/e2e/live/.auth/
