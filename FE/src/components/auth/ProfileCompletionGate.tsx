@@ -6,6 +6,7 @@ import {
   setAuthSession
 } from "../../auth/authSession";
 import { fetchCurrentUser } from "../../services/userService";
+import { RetryPanel } from "../feedback/RetryPanel";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
 
 interface ProfileCompletionGateProps {
@@ -16,10 +17,13 @@ export function ProfileCompletionGate({ children }: ProfileCompletionGateProps) 
   const location = useLocation();
   const [ready, setReady] = useState(false);
   const [incomplete, setIncomplete] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!isAuthenticated()) {
       setIncomplete(false);
+      setFetchError(null);
       setReady(true);
       return;
     }
@@ -27,11 +31,15 @@ export function ProfileCompletionGate({ children }: ProfileCompletionGateProps) 
     const session = getAuthSession();
     if (session.profileCompleted === true) {
       setIncomplete(false);
+      setFetchError(null);
       setReady(true);
       return;
     }
 
     let active = true;
+    setReady(false);
+    setFetchError(null);
+
     fetchCurrentUser()
       .then((user) => {
         if (!active) return;
@@ -44,7 +52,9 @@ export function ProfileCompletionGate({ children }: ProfileCompletionGateProps) 
         setIncomplete(!profileCompleted);
       })
       .catch(() => {
-        if (active) setIncomplete(false);
+        if (active) {
+          setFetchError("Không kiểm tra được hồ sơ. Vui lòng thử lại.");
+        }
       })
       .finally(() => {
         if (active) setReady(true);
@@ -53,10 +63,24 @@ export function ProfileCompletionGate({ children }: ProfileCompletionGateProps) 
     return () => {
       active = false;
     };
-  }, [location.pathname]);
+  }, [location.pathname, retryKey]);
 
   if (!ready) {
     return <ModuleSkeleton rows={4} />;
+  }
+
+  if (fetchError) {
+    return (
+      <div className="p-page">
+        <RetryPanel
+          message={fetchError}
+          onRetry={() => {
+            setFetchError(null);
+            setRetryKey((value) => value + 1);
+          }}
+        />
+      </div>
+    );
   }
 
   if (incomplete) {

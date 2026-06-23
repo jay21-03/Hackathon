@@ -20,6 +20,7 @@ export function ThemeToggle({ className = "", showLabel = false }: ThemeTogglePr
       onClick={() => setMode(toggleTheme())}
       className={`flex items-center gap-2 rounded-lg p-2 font-label-md text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface ${className}`}
       aria-label={mode === "dark" ? "Bật giao diện sáng" : "Bật giao diện tối"}
+      aria-pressed={mode === "dark"}
       title={mode === "dark" ? "Giao diện sáng" : "Giao diện tối"}
     >
       <Icon name={mode === "dark" ? "light_mode" : "dark_mode"} className="text-[20px]" />

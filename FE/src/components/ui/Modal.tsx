@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 
@@ -24,14 +24,55 @@ const heightClass = {
   "2xl": "max-h-[min(92vh,920px)]"
 };
 
+const FOCUSABLE =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function Modal({ open, title, onClose, children, size = "lg" }: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<Element | null>(null);
+
   useEffect(() => {
     if (!open) return;
+    triggerRef.current = document.activeElement;
+
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+
+      const focusables = [...dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (el) => el.offsetParent !== null
+      );
+      if (focusables.length === 0) return;
+
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      const active = document.activeElement;
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
+
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    const focusTimer = window.setTimeout(() => {
+      const first = dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+      first?.focus();
+    }, 0);
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      window.clearTimeout(focusTimer);
+      if (triggerRef.current instanceof HTMLElement) {
+        triggerRef.current.focus();
+      }
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -43,6 +84,7 @@ export function Modal({ open, title, onClose, children, size = "lg" }: ModalProp
       role="presentation"
     >
       <div
+        ref={dialogRef}
         className={`flex w-full flex-col rounded-xl border border-outline-variant bg-surface-container shadow-2xl ${sizeClass[size]} ${heightClass[size]}`}
         role="dialog"
         aria-modal="true"

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { enableAcademicTerms } from "../config/features";
 import { queryKeys } from "../lib/queryKeys";
 import { fetchAcademicTerms } from "../services/academicTermService";
-import { getApiErrorMessage } from "../utils/apiError";
+import { resolveApiError } from "../utils/apiError";
 import { useApiRoles } from "./useApiRoles";
 
 const STORAGE_KEY = "seal.activeTermId";
@@ -65,7 +65,7 @@ export function useActiveTerm() {
     enabled: canManageTerms,
     loading: canManageTerms && (rolesLoading || termsQuery.isLoading),
     error: termsQuery.isError
-      ? getApiErrorMessage(termsQuery.error, "Không tải được danh sách học kỳ.")
+      ? resolveApiError(termsQuery.error, "Không tải được danh sách học kỳ.")
       : null,
     refetch: termsQuery.refetch
   };
