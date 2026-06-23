@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "../../components/ui/Badge";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
+import { SchedulerHealthPanel } from "../../components/organizer/SchedulerHealthPanel";
 import { TermDashboardPanel } from "../../components/organizer/TermDashboardPanel";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
@@ -20,7 +22,7 @@ import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { queryKeys } from "../../lib/queryKeys";
 
 export function OrganizerOverviewPage() {
-  const { eventId, event, loading, error } = useActiveEvent({ autoSelectFirst: true });
+  const { eventId, event, loading, error, refetch: refetchEvents } = useActiveEvent({ autoSelectFirst: true });
   const { roundId, countdown, loading: roundLoading } = useEventRound(eventId);
   const { summary: teamSummary } = useEventTeamSummary(eventId);
   const { context: setupContext } = useEventSetupProgress(eventId);
@@ -163,12 +165,12 @@ export function OrganizerOverviewPage() {
       />
 
       {error ? (
-        <div className="rounded-xl border border-error-container bg-error-container/30 p-md">
-          <p className="font-body-sm text-on-surface">{error}</p>
-        </div>
+        <RetryPanel message={error} onRetry={() => void refetchEvents()} />
       ) : null}
 
       <TermDashboardPanel />
+
+      <SchedulerHealthPanel />
 
       <RoundCountdown roundId={roundId} countdown={countdown} loading={roundLoading} />
 

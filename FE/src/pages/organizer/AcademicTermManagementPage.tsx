@@ -57,6 +57,7 @@ import {
 import type { AcademicTerm, AcademicTermStatus, AcademicTermType } from "../../types/entities";
 
 import { useToast } from "../../components/feedback/ToastProvider";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 
 import { academicTermDateRangeSchema, academicTermFormSchema } from "../../domain/schemas";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
@@ -1015,21 +1016,20 @@ export function AcademicTermManagementPage() {
 
                         {term.status === "ACTIVE" && editingId !== term.id ? (
 
-                          <Button
-
-                            type="button"
-
-                            variant="ghost"
-
-                            onClick={() => void archiveTerm(term)}
-
-                            icon={<Icon name="archive" />}
-
+                          <ConfirmAction
+                            title="Lưu trữ học kỳ?"
+                            message={`Lưu trữ «${term.name}» (${term.code})? Học kỳ sẽ chuyển sang chỉ xem — không thể dùng cho thao tác mới.`}
+                            confirmLabel="Lưu trữ"
+                            onConfirm={() => void archiveTerm(term)}
                           >
-
-                            Lưu trữ
-
-                          </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              icon={<Icon name="archive" />}
+                            >
+                              Lưu trữ
+                            </Button>
+                          </ConfirmAction>
 
                         ) : null}
 
