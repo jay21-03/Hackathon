@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { SubmissionDetailModal } from "../../components/organizer/SubmissionDetailModal";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
@@ -16,7 +17,9 @@ import {
   fetchTeamSubmission,
   type AdminTeamSubmissionResponse
 } from "../../services/submissionApi";
-import { formatRepositoryTimestamp } from "../../services/repositoryProvisioningService";
+import { formatRepositoryTimestamp, shortCommitSha } from "../../services/repositoryProvisioningService";
+import { CommitConnectionBadge } from "../../components/ui/CommitConnectionBadge";
+import { useCommitUpdates } from "../../hooks/useCommitUpdates";
 import { resolveApiError } from "../../utils/apiError";
 import { buildRoundNameById, formatBoardLabelById } from "../../utils/boardLabels";
 import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
@@ -40,7 +43,8 @@ function statusTone(status: string | null | undefined): "success" | "warning" | 
 export function SubmissionManagementPage({ embedded = false }: { embedded?: boolean }) {
   const { notify } = useToast();
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const { rounds, boards, loading: boardsLoading, error: boardsError } = useEventBoards(eventId);
+  const { rounds, boards, loading: boardsLoading, error: boardsError, refetch: refetchBoards } =
+    useEventBoards(eventId);
   const [roundId, setRoundId] = useState<number | null>(null);
   const [boardId, setBoardId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
@@ -68,7 +72,7 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
     setListPage(0);
   }, [eventId, boardId, activeRoundId, statusFilter, searchDebounced]);
 
-  const { submissions, total, totalPages, loading, error } = useEventSubmissions(
+  const { submissions, total, totalPages, loading, error, refetch: refetchSubmissions } = useEventSubmissions(
     eventId,
     boardId,
     activeRoundId,
@@ -76,6 +80,8 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
     25,
     { status: statusFilter, q: searchDebounced }
   );
+
+  const { connectionStatus } = useCommitUpdates({ eventId, enabled: Boolean(eventId) });
 
   useEffect(() => {
     setRoundId((prev) => resolveDefaultRoundId(rounds, prev));
@@ -147,11 +153,17 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
           title="Theo dõi bài nộp đội"
           description="Xem link GitHub/GitLab mà các đội đã lưu nháp hoặc nộp chính thức."
           actions={
-            <Badge tone={pageError ? "danger" : "success"}>
-              {pageError ? "Lỗi tải dữ liệu" : `${total} đội trong vòng`}
+            <Badge tone="success">
+              {pageError ? "—" : `${total} đội trong vòng`}
             </Badge>
           }
         />
+      ) : null}
+
+      {!embedded ? (
+        <div className="flex justify-end">
+          <CommitConnectionBadge status={connectionStatus} />
+        </div>
       ) : null}
 
       {!embedded ? (
@@ -165,10 +177,11 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
       <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
         {!embedded ? <OrganizerContextBar /> : null}
         {embedded ? (
-          <Badge tone={pageError ? "danger" : "success"}>
-            {pageError ? "Lỗi tải dữ liệu" : `${total} đội trong vòng`}
+          <Badge tone="success">
+            {pageError ? "—" : `${total} đội trong vòng`}
           </Badge>
         ) : null}
+        <CommitConnectionBadge status={connectionStatus} />
         <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
           Vòng
           <select
@@ -239,9 +252,13 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
       </section>
 
       {pageError ? (
-        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface-variant">{pageError}</p>
-        </div>
+        <RetryPanel
+          message={pageError}
+          onRetry={() => {
+            void refetchBoards();
+            void refetchSubmissions();
+          }}
+        />
       ) : null}
 
       <section className="grid gap-md md:grid-cols-3">
@@ -273,6 +290,8 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
                   <th className="px-md py-sm">Repository</th>
                   <th className="px-md py-sm">Nộp lúc</th>
                   <th className="px-md py-sm">Lần push cuối</th>
+                  <th className="px-md py-sm">Commit cuối</th>
+                  <th className="px-md py-sm">Số commit</th>
                   <th className="px-md py-sm">Chi tiết</th>
                 </tr>
               </thead>
@@ -308,6 +327,21 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
                     </td>
                     <td className="px-md py-md text-on-surface-variant">
                       {formatRepositoryTimestamp(row.lastPushAt) ?? "—"}
+                    </td>
+                    <td className="px-md py-md text-on-surface-variant">
+                      {row.latestCommitSha ? (
+                        <span title={row.latestCommitMessage ?? undefined}>
+                          {shortCommitSha(row.latestCommitSha)}
+                          {row.latestCommitAt
+                            ? ` · ${formatRepositoryTimestamp(row.latestCommitAt)}`
+                            : ""}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-md py-md text-on-surface-variant">
+                      {row.commitCount ?? "—"}
                     </td>
                     <td className="px-md py-md">
                       <Button type="button" variant="ghost" onClick={() => void openDetail(row)}>

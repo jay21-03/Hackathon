@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "../../components/feedback/ToastProvider";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
@@ -15,6 +16,7 @@ import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 import { useEventRounds } from "../../hooks/useEventRounds";
 import { useRubric } from "../../hooks/useRubric";
 import { invalidateAfterRubricMutation } from "../../lib/invalidateScoringQueries";
+import { queryKeys } from "../../lib/queryKeys";
 import {
   createDefaultHackathonRubric,
   createEmptyCriteria,
@@ -22,6 +24,7 @@ import {
   enrichHackathonRubricCriteria,
   normalizeLevelDescriptors,
   saveRubric,
+  fetchRubric,
   type CriteriaRequestItem,
   type LevelDescriptor
 } from "../../services/scoringApi";
@@ -30,7 +33,6 @@ import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
 import {
   applyCriteriaTemplate,
-  copyRubricFromRound,
   fetchCriteriaTemplates
 } from "../../services/criteriaTemplateApi";
 
@@ -64,15 +66,23 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
     eventId,
     "/organizer/rubric"
   );
-  const { rounds, loading: roundsLoading, error: roundsError } = useEventRounds(eventId);
+  const { rounds, loading: roundsLoading, error: roundsError, refetch: refetchRounds } = useEventRounds(eventId);
   const [roundId, setRoundId] = useState<number | null>(null);
   const activeRoundId = resolveDefaultRoundId(rounds, roundId);
-  const { rubric, loading: rubricLoading, error: rubricError } = useRubric(activeRoundId);
+  const { rubric, loading: rubricLoading, error: rubricError, refetch: refetchRubric } = useRubric(activeRoundId);
   const [criteria, setCriteria] = useState<CriteriaRequestItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [templateActionId, setTemplateActionId] = useState<number | null>(null);
   const [copySourceRoundId, setCopySourceRoundId] = useState<number | null>(null);
+  const [inheritBusyIndex, setInheritBusyIndex] = useState<number | null>(null);
+  const [inheritSourceByIndex, setInheritSourceByIndex] = useState<Record<number, number>>({});
+
+  const sourceRubricQuery = useQuery({
+    queryKey: queryKeys.scoring.rubric(copySourceRoundId),
+    queryFn: () => fetchRubric(copySourceRoundId!),
+    enabled: copySourceRoundId != null
+  });
 
   const templatesQuery = useQuery({
     queryKey: ["criteria-templates"],
@@ -112,7 +122,7 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
     () => criteria.reduce((sum, c) => sum + (Number(c.weight) || 0), 0),
     [criteria]
   );
-  const error = roundsError ?? rubricError ?? saveError;
+  const loadError = roundsError ?? rubricError;
   const loading = roundsLoading || rubricLoading;
 
   function updateCriteria(index: number, patch: Partial<CriteriaRequestItem>) {
@@ -130,6 +140,47 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
       })
     );
   }
+
+  async function inheritCriterionAt(index: number) {
+    if (!copySourceRoundId) {
+      notify("Chọn vòng nguồn để kế thừa tiêu chí.", "warning");
+      return;
+    }
+    setInheritBusyIndex(index);
+    try {
+      const sourceRubric =
+        sourceRubricQuery.data ?? (await fetchRubric(copySourceRoundId));
+      const sourceIndex = inheritSourceByIndex[index] ?? index;
+      const sourceItem = sourceRubric.criteria[sourceIndex];
+      if (!sourceItem) {
+        notify(`Vòng nguồn không có tiêu chí #${sourceIndex + 1}.`, "warning");
+        return;
+      }
+      const [inherited] = rubricToForm([
+        {
+          code: sourceItem.code,
+          name: sourceItem.name,
+          weight: Number(sourceItem.weight),
+          minScore: Number(sourceItem.minScore),
+          maxScore: Number(sourceItem.maxScore),
+          description: sourceItem.description ?? "",
+          sortOrder: index + 1,
+          levelDescriptors: sourceItem.levelDescriptors
+        }
+      ]);
+      setCriteria((prev) => prev.map((c, i) => (i === index ? inherited : c)));
+      notify(
+        `Đã kế thừa tiêu chí #${sourceIndex + 1} từ vòng nguồn vào vị trí #${index + 1}.`,
+        "success"
+      );
+    } catch (err) {
+      notify(resolveApiError(err, "Kế thừa tiêu chí thất bại."), "danger");
+    } finally {
+      setInheritBusyIndex(null);
+    }
+  }
+
+  const sourceCriteria = sourceRubricQuery.data?.criteria ?? [];
 
   async function handleSave() {
     if (!roundId) return;
@@ -233,10 +284,20 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
             description="Cấu hình tiêu chí và trọng số % cho từng vòng. Tổng trọng số phải bằng 100."
             actions={
               <Badge tone={locked ? "warning" : weightSum === 100 ? "success" : "danger"}>
-                {locked ? "Đã khóa" : `Tổng trọng số: ${weightSum}%`}
+                {locked
+                  ? weightSum === 100
+                    ? "Đã khóa · 100%"
+                    : `Đã khóa · tổng ${weightSum}% (server)`
+                  : `Tổng trọng số: ${weightSum}%`}
               </Badge>
             }
           />
+          {locked && weightSum !== 100 ? (
+            <p className="rounded-lg border border-warning/40 bg-warning-container/25 px-md py-sm font-body-sm text-on-surface">
+              Rubric đã khóa trên server — tổng trọng số hiện tại là {weightSum}%. Liên hệ quản trị nếu cần chỉnh
+              (có phiếu chấm đã nộp).
+            </p>
+          ) : null}
           <WorkflowSteps
             title="Quy trình thiết lập"
             description="Cùng thứ tự với sidebar — trạng thái tính từ dữ liệu thật."
@@ -320,76 +381,39 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
             </label>
             <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
               Kế thừa từ vòng
-              <div className="flex flex-wrap gap-sm">
-                <select
-                  className="min-w-[12rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
-                  value={copySourceRoundId ?? ""}
-                  onChange={(e) =>
-                    setCopySourceRoundId(e.target.value ? Number(e.target.value) : null)
-                  }
-                  disabled={templateActionId != null}
-                >
-                  <option value="">Chọn vòng nguồn…</option>
-                  {rounds
-                    .filter((round) => round.id !== roundId)
-                    .map((round) => (
-                      <option key={round.id} value={round.id}>
-                        {round.name}
-                      </option>
-                    ))}
-                </select>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={!copySourceRoundId || templateActionId != null}
-                  loading={templateActionId === -1}
-                  onClick={() => {
-                    if (!copySourceRoundId || !roundId) return;
-                    void (async () => {
-                      setTemplateActionId(-1);
-                      try {
-                        const result = await copyRubricFromRound(roundId, copySourceRoundId, true);
-                        setCriteria(
-                          rubricToForm(
-                            result.criteria.map((c) => ({
-                              code: c.code,
-                              name: c.name,
-                              weight: Number(c.weight),
-                              minScore: Number(c.minScore),
-                              maxScore: Number(c.maxScore),
-                              description: c.description ?? "",
-                              sortOrder: c.sortOrder ?? undefined,
-                              levelDescriptors: c.levelDescriptors
-                            }))
-                          )
-                        );
-                        if (activeRoundId) {
-                          await invalidateAfterRubricMutation(queryClient, activeRoundId);
-                        }
-                        notify(
-                          "Đã sao chép rubric từ vòng nguồn (gồm mô tả đã lưu).",
-                          "success"
-                        );
-                      } catch (err) {
-                        notify(resolveApiError(err, "Sao chép rubric thất bại."), "danger");
-                      } finally {
-                        setTemplateActionId(null);
-                      }
-                    })();
-                  }}
-                >
-                  Sao chép
-                </Button>
-              </div>
+              <select
+                className="min-w-[12rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+                value={copySourceRoundId ?? ""}
+                onChange={(e) =>
+                  setCopySourceRoundId(e.target.value ? Number(e.target.value) : null)
+                }
+                disabled={templateActionId != null}
+              >
+                <option value="">Chọn vòng nguồn…</option>
+                {rounds
+                  .filter((round) => round.id !== roundId)
+                  .map((round) => (
+                    <option key={round.id} value={round.id}>
+                      {round.name}
+                    </option>
+                  ))}
+              </select>
             </label>
           </>
         ) : null}
       </section>
 
-      {error ? (
+      {loadError ? (
+        <RetryPanel
+          message={loadError}
+          onRetry={() => {
+            void refetchRounds();
+            void refetchRubric();
+          }}
+        />
+      ) : saveError ? (
         <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface-variant">{error}</p>
+          <p className="font-body-sm text-on-surface-variant">{saveError}</p>
         </div>
       ) : null}
 
@@ -413,15 +437,51 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
               >
                 <div className="mb-md flex flex-wrap items-center justify-between gap-sm">
                   <h3 className="font-title-sm text-on-surface">Tiêu chí #{index + 1}</h3>
-                  {!locked && criteria.length > 1 ? (
-                    <Button
-                      type="button"
-                      variant="danger"
-                      size="sm"
-                      onClick={() => setCriteria((prev) => prev.filter((_, i) => i !== index))}
-                    >
-                      Xóa
-                    </Button>
+                  {!locked ? (
+                    <div className="flex flex-wrap items-center gap-sm">
+                      {copySourceRoundId && sourceCriteria.length > 0 ? (
+                        <label className="flex items-center gap-1 font-label-sm text-on-surface-variant">
+                          Từ tiêu chí
+                          <select
+                            className="rounded-lg border border-outline-variant bg-surface px-2 py-1 font-body-sm"
+                            value={inheritSourceByIndex[index] ?? index}
+                            disabled={inheritBusyIndex === index}
+                            onChange={(e) =>
+                              setInheritSourceByIndex((prev) => ({
+                                ...prev,
+                                [index]: Number(e.target.value)
+                              }))
+                            }
+                          >
+                            {sourceCriteria.map((sourceItem, sourceIndex) => (
+                              <option key={`${sourceItem.code}-${sourceIndex}`} value={sourceIndex}>
+                                #{sourceIndex + 1} — {sourceItem.name || sourceItem.code}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={!copySourceRoundId || inheritBusyIndex === index}
+                        loading={inheritBusyIndex === index}
+                        onClick={() => void inheritCriterionAt(index)}
+                      >
+                        Kế thừa
+                      </Button>
+                      {criteria.length > 1 ? (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => setCriteria((prev) => prev.filter((_, i) => i !== index))}
+                        >
+                          Xóa
+                        </Button>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
 

@@ -4,7 +4,7 @@ import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { Modal } from "../ui/Modal";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
-import { formatRepositoryTimestamp } from "../../services/repositoryProvisioningService";
+import { formatRepositoryTimestamp, shortCommitSha } from "../../services/repositoryProvisioningService";
 import type { AdminTeamSubmissionResponse } from "../../services/submissionApi";
 
 interface SubmissionDetailModalProps {
@@ -77,6 +77,24 @@ export function SubmissionDetailModal({
             <InfoRow label="Lần push cuối">
               {formatRepositoryTimestamp(detail.lastPushAt) ?? "Chưa có push qua webhook"}
             </InfoRow>
+            <InfoRow label="Commit cuối">
+              {detail.latestCommitSha ? (
+                <span title={detail.latestCommitMessage ?? undefined}>
+                  {shortCommitSha(detail.latestCommitSha)}
+                  {detail.latestCommitAt
+                    ? ` · ${formatRepositoryTimestamp(detail.latestCommitAt)}`
+                    : ""}
+                </span>
+              ) : (
+                "—"
+              )}
+            </InfoRow>
+            <InfoRow label="Số commit">{detail.commitCount ?? "—"}</InfoRow>
+            {detail.latestCommitMessage ? (
+              <InfoRow label="Nội dung commit">
+                <span className="text-on-surface-variant">{detail.latestCommitMessage}</span>
+              </InfoRow>
+            ) : null}
             <InfoRow label="Repository">
               {detail.repositoryUrl ? (
                 <a
