@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { getAuthSession, isAuthenticated, setAuthenticated } from "../../auth/authSession";
+import { useRouteFlashMessage } from "../../hooks/useRouteFlashMessage";
 import {
   getVisibleNavItems,
   isNotificationsNavItem,
@@ -18,6 +19,7 @@ import { sidebarNavClassName, sidebarPrimaryActionClassName } from "./sidebarSty
 
 export function ParticipantShell() {
   const location = useLocation();
+  useRouteFlashMessage();
   const { event } = useActiveEvent();
   const visibleNavItems = getVisibleNavItems(participantWorkspaceNav);
   const unreadQuery = useUnreadNotificationCount();

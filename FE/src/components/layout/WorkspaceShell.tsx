@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { setAuthenticated } from "../../auth/authSession";
+import { useRouteFlashMessage } from "../../hooks/useRouteFlashMessage";
 import { Icon } from "../ui/Icon";
 import { getVisibleNavItems, isNotificationsNavItem, navItemUsesEnd, type NavItem } from "../../config/navigation";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
@@ -29,6 +30,7 @@ export function WorkspaceShell({
 }: WorkspaceShellProps) {
   const { notify } = useToast();
   const location = useLocation();
+  useRouteFlashMessage();
   const { event } = useActiveEvent({ autoSelectFirst: showActiveEventSubtitle });
   const visibleNavItems = getVisibleNavItems(navItems);
   const unreadQuery = useUnreadNotificationCount();

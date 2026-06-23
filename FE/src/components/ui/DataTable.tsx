@@ -5,6 +5,8 @@ interface DataTableProps {
   children: ReactNode;
   /** Cố định cột cuối (thao tác) */
   stickyActions?: boolean;
+  /** Cố định cột đầu khi cuộn ngang */
+  stickyFirstColumn?: boolean;
 }
 
 export const tableRowClass =
@@ -12,7 +14,15 @@ export const tableRowClass =
 
 export const tableActionCellClass = "w-[1%] whitespace-nowrap px-md py-md";
 
-export function DataTable({ headers, children, stickyActions = true }: DataTableProps) {
+export const tableFirstCellStickyClass =
+  "sticky left-0 z-10 bg-surface-container px-md py-md shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]";
+
+export function DataTable({
+  headers,
+  children,
+  stickyActions = true,
+  stickyFirstColumn = false
+}: DataTableProps) {
   const lastIndex = headers.length - 1;
   return (
     <div className="overflow-x-auto">
@@ -23,6 +33,10 @@ export function DataTable({ headers, children, stickyActions = true }: DataTable
               <th
                 key={index}
                 className={`whitespace-nowrap px-md py-3 ${
+                  stickyFirstColumn && index === 0
+                    ? "sticky left-0 z-10 bg-surface-container"
+                    : ""
+                } ${
                   stickyActions && index === lastIndex ? "w-[1%] text-right" : ""
                 }`}
               >

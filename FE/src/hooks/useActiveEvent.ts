@@ -7,7 +7,7 @@ import { queryKeys } from "../lib/queryKeys";
 
 import { fetchPublicEvents } from "../services/eventsApi";
 
-import { getApiErrorMessage } from "../utils/apiError";
+import { resolveApiError } from "../utils/apiError";
 
 import { useActiveTerm } from "./useActiveTerm";
 
@@ -120,7 +120,7 @@ export function useActiveEvent(options?: UseActiveEventOptions) {
 
     error: eventsQuery.isError
 
-      ? getApiErrorMessage(eventsQuery.error, "Không tải được danh sách cuộc thi.")
+      ? resolveApiError(eventsQuery.error, "Không tải được danh sách cuộc thi.")
 
       : null,
 
