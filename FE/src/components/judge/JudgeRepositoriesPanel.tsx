@@ -116,6 +116,7 @@ export function JudgeRepositoriesPanel({ roundId, boardId }: JudgeRepositoriesPa
               <th className="px-sm py-2 font-label-sm text-on-surface-variant">Đội</th>
               <th className="px-sm py-2 font-label-sm text-on-surface-variant">Đề</th>
               <th className="px-sm py-2 font-label-sm text-on-surface-variant">Truy cập</th>
+              <th className="px-sm py-2 font-label-sm text-on-surface-variant">Quyền GK</th>
               <th className="px-sm py-2 font-label-sm text-on-surface-variant">Cấp repo</th>
               <th className="px-sm py-2 font-label-sm text-on-surface-variant">GitHub</th>
             </tr>
@@ -129,6 +130,17 @@ export function JudgeRepositoriesPanel({ roundId, boardId }: JudgeRepositoriesPa
                   <Badge tone={accessStatusTone(item.accessStatus)}>
                     {ACCESS_STATUS_LABELS[item.accessStatus]}
                   </Badge>
+                </td>
+                <td className="px-sm py-2">
+                  {!item.judgeHasGithubUsername ? (
+                    <Badge tone="warning">Thiếu username</Badge>
+                  ) : item.judgeGithubAccessGranted === true ? (
+                    <Badge tone="success">Đã cấp quyền</Badge>
+                  ) : item.judgeGithubAccessGranted === false ? (
+                    <Badge tone="warning">Chờ cấp quyền</Badge>
+                  ) : (
+                    <Badge tone="neutral">Chưa xác định</Badge>
+                  )}
                 </td>
                 <td className="px-sm py-2">
                   <Badge tone={provisionStatusTone(item.provisionStatus)}>
@@ -148,7 +160,7 @@ export function JudgeRepositoriesPanel({ roundId, boardId }: JudgeRepositoriesPa
                           (item.judgeHasGithubUsername && item.judgeGithubAccessGranted === false)
                         }
                       >
-                        Open GitHub
+                        Mở GitHub
                       </Button>
                     ) : null}
                     {item.cloneUrl ? (

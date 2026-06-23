@@ -3,6 +3,7 @@ import { Badge } from "../ui/Badge";
 import { ButtonLink } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
+import { RetryPanel } from "../feedback/RetryPanel";
 import { PageHeader } from "../ui/PageHeader";
 import { StatCard } from "../ui/StatCard";
 import { JudgeAssignmentsTable } from "../judge/JudgeAssignmentsTable";
@@ -17,6 +18,7 @@ interface StaffAssignmentDashboardProps {
   assignments: AssignmentResponse[];
   loading: boolean;
   error: unknown;
+  onRetry?: () => void;
   workflow?: ReactNode;
   scorePath?: (boardId: number) => string;
   layout?: "cards" | "table";
@@ -33,6 +35,7 @@ export function StaffAssignmentDashboard({
   assignments,
   loading,
   error,
+  onRetry,
   workflow,
   scorePath,
   layout = "cards",
@@ -112,6 +115,10 @@ export function StaffAssignmentDashboard({
       />
 
       {workflow}
+
+      {errorMessage ? (
+        <RetryPanel message={errorMessage} onRetry={onRetry} />
+      ) : null}
 
       {showFilters ? (
         <div className="flex flex-wrap gap-md rounded-xl border border-outline-variant bg-surface-container p-md">

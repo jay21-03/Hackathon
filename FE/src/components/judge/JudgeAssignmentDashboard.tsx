@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "../ui/Badge";
 import { EmptyState } from "../ui/EmptyState";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
+import { RetryPanel } from "../feedback/RetryPanel";
 import { PageHeader } from "../ui/PageHeader";
 import { StatCard } from "../ui/StatCard";
 import { JudgeAssignmentsTable } from "./JudgeAssignmentsTable";
@@ -21,6 +22,7 @@ interface JudgeAssignmentDashboardProps {
   assignments: AssignmentResponse[];
   loading: boolean;
   error: unknown;
+  onRetry?: () => void;
   scorePath: (boardId: number) => string;
 }
 
@@ -28,6 +30,7 @@ export function JudgeAssignmentDashboard({
   assignments,
   loading,
   error,
+  onRetry,
   scorePath
 }: JudgeAssignmentDashboardProps) {
   const [tab, setTab] = useState<JudgeDashboardTab>("todo");
@@ -216,9 +219,7 @@ export function JudgeAssignmentDashboard({
       ) : null}
 
       {errorMessage ? (
-        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface-variant">{errorMessage}</p>
-        </div>
+        <RetryPanel message={errorMessage} onRetry={onRetry} />
       ) : null}
 
       <section className="grid gap-md md:grid-cols-2">

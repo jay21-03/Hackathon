@@ -13,6 +13,7 @@ export function JudgeDashboardPage() {
       assignments={query.data ?? []}
       loading={query.isLoading}
       error={query.error}
+      onRetry={() => void query.refetch()}
       scorePath={(boardId) => `/judge/scoring?boardId=${boardId}`}
     />
   );

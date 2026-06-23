@@ -14,6 +14,7 @@ import {
 } from "../../services/repositoryProvisioningService";
 import type { JudgeRepositoryResponse } from "../../services/judgeRepositoryService";
 import type { CriteriaResponse, MatrixTeamRowResponse } from "../../services/scoringApi";
+import { ConfirmAction } from "../feedback/ConfirmAction";
 import { useToast } from "../feedback/ToastProvider";
 import { enableAiReview, enableAiReviewJudgeAccess } from "../../config/features";
 
@@ -88,13 +89,15 @@ export function JudgeTeamScoringModal({
       !repository.judgeHasGithubUsername ||
       repository.judgeGithubAccessGranted !== false);
 
-  const repoAccessHint = !repository?.judgeHasGithubUsername
-    ? "Cập nhật GitHub username trong hồ sơ để được cấp quyền xem repo."
-    : repository?.judgeGithubAccessGranted === false
-      ? "Bạn chưa được cấp quyền xem repo — liên hệ Ban tổ chức để được grant quyền read/pull."
-      : repository?.judgeGithubAccessGranted === true
-        ? "Bạn đã được cấp quyền xem repo trên GitHub."
-        : null;
+  const repoAccessBadge = !repository ? null : !repository.judgeHasGithubUsername ? (
+    <Badge tone="warning">Thiếu GitHub username</Badge>
+  ) : repository.judgeGithubAccessGranted === true ? (
+    <Badge tone="success">Đã cấp quyền</Badge>
+  ) : repository.judgeGithubAccessGranted === false ? (
+    <Badge tone="warning">Chờ cấp quyền</Badge>
+  ) : (
+    <Badge tone="neutral">Chưa xác định</Badge>
+  );
 
   async function copyCloneUrl() {
     if (!cloneUrl) return;
@@ -170,10 +173,8 @@ export function JudgeTeamScoringModal({
                   </a>
                 </InfoRow>
               ) : null}
-              {repoAccessHint ? (
-                <InfoRow label="Quyền GK">
-                  <span className="text-on-surface-variant">{repoAccessHint}</span>
-                </InfoRow>
+              {repository ? (
+                <InfoRow label="Quyền GK">{repoAccessBadge}</InfoRow>
               ) : null}
             </dl>
             {repoUrl ? (
@@ -309,9 +310,22 @@ export function JudgeTeamScoringModal({
             <Button type="button" variant="secondary" loading={saving} onClick={onSave}>
               {team.status === "SUBMITTED" ? "Lưu thay đổi" : "Lưu nháp"}
             </Button>
-            <Button type="button" loading={submitting} onClick={onSubmit}>
-              {team.status === "SUBMITTED" ? "Cập nhật phiếu" : "Nộp phiếu"}
-            </Button>
+            {team.status === "SUBMITTED" ? (
+              <Button type="button" loading={submitting} onClick={onSubmit}>
+                Cập nhật phiếu
+              </Button>
+            ) : (
+              <ConfirmAction
+                title="Nộp phiếu chấm?"
+                message={`Nộp phiếu chấm cho đội «${team.teamName}»? Sau khi nộp bạn vẫn có thể cập nhật lại nếu BTC chưa khóa rubric.`}
+                confirmLabel="Nộp phiếu"
+                onConfirm={onSubmit}
+              >
+                <Button type="button" loading={submitting}>
+                  Nộp phiếu
+                </Button>
+              </ConfirmAction>
+            )}
           </div>
         </div>
       </div>
