@@ -6,6 +6,8 @@ import com.seal.hackathon.common.enums.RepositoryProvisionStatus;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -57,4 +59,54 @@ public interface TeamRepositoryEntityRepository extends JpaRepository<TeamReposi
             """)
     List<TeamRepository> findReviewableByProvisionStatus(
             @Param("provisionStatus") RepositoryProvisionStatus provisionStatus);
+
+    @Query("""
+            SELECT tr FROM TeamRepository tr
+            JOIN Team t ON t.id = tr.teamId
+            WHERE t.eventId = :eventId
+              AND (:roundId IS NULL OR tr.roundId = :roundId)
+              AND (:boardId IS NULL OR tr.boardId = :boardId)
+              AND (:accessStatus IS NULL OR tr.accessStatus = :accessStatus)
+              AND (:q IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%')))
+            ORDER BY t.name ASC, tr.problemId ASC NULLS LAST, tr.id ASC
+            """)
+    Page<TeamRepository> findByEventFiltered(
+            @Param("eventId") Long eventId,
+            @Param("roundId") Long roundId,
+            @Param("boardId") Long boardId,
+            @Param("accessStatus") RepositoryAccessStatus accessStatus,
+            @Param("q") String q,
+            Pageable pageable);
+
+    @Query("""
+            SELECT
+              COUNT(tr) AS total,
+              COALESCE(SUM(CASE WHEN tr.accessStatus = com.seal.hackathon.common.enums.RepositoryAccessStatus.OPEN THEN 1 ELSE 0 END), 0) AS openCount,
+              COALESCE(SUM(CASE WHEN tr.accessStatus = com.seal.hackathon.common.enums.RepositoryAccessStatus.CLOSED THEN 1 ELSE 0 END), 0) AS closedCount,
+              COALESCE(SUM(CASE WHEN tr.accessStatus = com.seal.hackathon.common.enums.RepositoryAccessStatus.PENDING THEN 1 ELSE 0 END), 0) AS pendingCount,
+              COALESCE(SUM(CASE WHEN tr.accessStatus = com.seal.hackathon.common.enums.RepositoryAccessStatus.FAILED
+                OR tr.provisionStatus = com.seal.hackathon.common.enums.RepositoryProvisionStatus.FAILED THEN 1 ELSE 0 END), 0) AS failedCount,
+              COALESCE(SUM(CASE WHEN tr.provisionStatus = com.seal.hackathon.common.enums.RepositoryProvisionStatus.CREATED THEN 1 ELSE 0 END), 0) AS createdCount,
+              COALESCE(SUM(CASE WHEN tr.provisionStatus = com.seal.hackathon.common.enums.RepositoryProvisionStatus.FAILED
+                AND tr.lastError IS NOT NULL
+                AND (
+                  LOWER(tr.lastError) LIKE '%github%'
+                  OR LOWER(tr.lastError) LIKE '%username%'
+                  OR LOWER(tr.lastError) LIKE '%thiếu%'
+                  OR LOWER(tr.lastError) LIKE '%invalid%'
+                ) THEN 1 ELSE 0 END), 0) AS githubIssueCount
+            FROM TeamRepository tr
+            JOIN Team t ON t.id = tr.teamId
+            WHERE t.eventId = :eventId
+              AND (:roundId IS NULL OR tr.roundId = :roundId)
+              AND (:boardId IS NULL OR tr.boardId = :boardId)
+              AND (:accessStatus IS NULL OR tr.accessStatus = :accessStatus)
+              AND (:q IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%')))
+            """)
+    RepositoryStatusStatsProjection summarizeByEventFiltered(
+            @Param("eventId") Long eventId,
+            @Param("roundId") Long roundId,
+            @Param("boardId") Long boardId,
+            @Param("accessStatus") RepositoryAccessStatus accessStatus,
+            @Param("q") String q);
 }

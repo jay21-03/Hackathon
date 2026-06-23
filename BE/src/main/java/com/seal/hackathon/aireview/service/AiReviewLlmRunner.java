@@ -34,9 +34,10 @@ public class AiReviewLlmRunner {
             lastRaw = aiReviewLlmClient.analyzeCodeDiff(currentPrompt);
             try {
                 JsonNode root = objectMapper.readTree(lastRaw);
+                root = outputValidator.normalize(root, kind);
                 ValidationResult validation = outputValidator.validate(root, kind);
                 if (validation.valid()) {
-                    return new LlmJsonResult(lastRaw, root);
+                    return new LlmJsonResult(objectMapper.writeValueAsString(root), root);
                 }
                 lastViolations = validation.violations();
             } catch (Exception ex) {
