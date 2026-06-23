@@ -2,6 +2,8 @@ package com.seal.hackathon.github.controller;
 
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.common.response.ApiResponse;
+import com.seal.hackathon.common.enums.RepositoryAccessStatus;
+import com.seal.hackathon.github.dto.EventRepositoriesPageResponse;
 import com.seal.hackathon.github.dto.GrantJudgeAccessResponse;
 import com.seal.hackathon.github.dto.ProvisionProblemRepositoriesResponse;
 import com.seal.hackathon.github.dto.RepoTemplateResponse;
@@ -84,8 +86,25 @@ public class AdminRepositoryProvisioningController {
     }
 
     @GetMapping("/events/{eventId}/repositories")
-    public ApiResponse<List<TeamRepositoryResponse>> getEventRepositories(@PathVariable Long eventId) {
-        return ApiResponse.ok(repositoryProvisioningService.getRepositoriesByEvent(eventId));
+    public ApiResponse<EventRepositoriesPageResponse> getEventRepositories(
+            @PathVariable Long eventId,
+            @RequestParam(required = false) Long roundId,
+            @RequestParam(required = false) Long boardId,
+            @RequestParam(required = false) String accessStatus,
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        RepositoryAccessStatus parsedAccessStatus = null;
+        if (accessStatus != null && !accessStatus.isBlank() && !"ALL".equalsIgnoreCase(accessStatus.trim())) {
+            try {
+                parsedAccessStatus = RepositoryAccessStatus.valueOf(accessStatus.trim().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid repository access status");
+            }
+        }
+        return ApiResponse.ok(repositoryProvisioningService.getRepositoriesByEventPaged(
+                eventId, roundId, boardId, parsedAccessStatus, q, page, size));
     }
 
     @GetMapping("/teams/{teamId}/repository")

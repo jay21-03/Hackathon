@@ -35,6 +35,7 @@ public class RepoCommitService {
     private final ProblemRepositoryTemplateRepository templateRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final GitHubRepositoryClient githubRepositoryClient;
+    private final CommitUpdateBroadcaster commitUpdateBroadcaster;
 
     @Value("${app.github.default-branch:main}")
     private String configuredDefaultBranch;
@@ -123,7 +124,9 @@ public class RepoCommitService {
                 .commitUrl(commitInfo.getHtmlUrl())
                 .createdAt(now)
                 .build());
-        return toResponse(saved);
+        RepoCommitResponse response = toResponse(saved);
+        commitUpdateBroadcaster.broadcastFromRepository(repository, response);
+        return response;
     }
 
     private String resolveBranch(Long problemId) {
