@@ -46,6 +46,7 @@ export function AiReviewManagementPage() {
   const [runningAll, setRunningAll] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
   const [bulkProgress, setBulkProgress] = useState<string | null>(null);
   const [backfillTeamId, setBackfillTeamId] = useState<number | null>(null);
   const [backfillLoading, setBackfillLoading] = useState(false);
@@ -84,6 +85,11 @@ export function AiReviewManagementPage() {
   }, [selectedTeamId]);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setSearchDebounced(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     if (!selectedTeamId || reviewsQuery.isLoading) return;
     const exists = (reviewsQuery.data ?? []).some((item) => item.teamId === selectedTeamId);
     if (!exists && (reviewsQuery.data ?? []).length > 0) {
@@ -106,13 +112,13 @@ export function AiReviewManagementPage() {
           return false;
         }
       }
-      if (search.trim()) {
+      if (searchDebounced.trim()) {
         const label = (item.teamName ?? `Đội #${item.teamId}`).toLowerCase();
-        if (!label.includes(search.trim().toLowerCase())) return false;
+        if (!label.includes(searchDebounced.trim().toLowerCase())) return false;
       }
       return true;
     });
-  }, [reviewsQuery.data, search, statusFilter]);
+  }, [reviewsQuery.data, searchDebounced, statusFilter]);
 
   async function pollBulkJob(jobId: string) {
     if (!eventId) return;
