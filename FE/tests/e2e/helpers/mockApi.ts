@@ -135,13 +135,15 @@ export async function mockCoreApis(page: Page) {
       route,
       ok({
         id: 1,
-        email: profileGithubUsername ? "participant@seal.edu.vn" : "organizer@seal.edu.vn",
-        fullName: profileGithubUsername ? "Thí sinh E2E" : "Ban tổ chức E2E",
+        email: "participant@seal.edu.vn",
+        fullName: "Thí sinh E2E",
+        studentType: "FPT",
+        studentId: "SE123456",
         githubUsername: profileGithubUsername,
         status: "ACTIVE",
-        roles: profileGithubUsername
-          ? ["PARTICIPANT"]
-          : ["ORGANIZER", "PARTICIPANT", "MENTOR", "JUDGE"]
+        profileCompleted: true,
+        hasPassword: false,
+        roles: ["ORGANIZER", "PARTICIPANT", "MENTOR", "JUDGE"]
       })
     );
   });
@@ -339,6 +341,18 @@ export async function mockCoreApis(page: Page) {
     );
   });
 
+  await page.route("**/api/v1/admin/platform/scheduler-health**", async (route) => {
+    await json(
+      route,
+      ok({
+        githubSchedulerEnabled: true,
+        aiReviewSchedulerEnabled: true,
+        eventLifecycleSchedulerEnabled: true,
+        recommendation: null
+      })
+    );
+  });
+
   const sampleBoard = {
     id: 1,
     roundId: 1,
@@ -411,6 +425,8 @@ export async function mockCoreApis(page: Page) {
     teamId: 10,
     teamName: "Đội E2E Alpha",
     roundId: 1,
+    roundName: "Vòng 1",
+    currentRound: true,
     boardId: 1,
     problemId: 1,
     repositoryUrl: "https://github.com/seal-org/seal-event-1-team-10-problem-1",
@@ -431,11 +447,47 @@ export async function mockCoreApis(page: Page) {
       await json(route, ok(sampleRepoTemplate));
       return;
     }
-    await route.continue();
+    await json(route, ok(null));
   });
 
   await page.route("**/api/v1/admin/events/*/repositories**", async (route) => {
-    await json(route, ok([sampleProvisionedRepo]));
+    if (route.request().method() === "GET") {
+      await json(
+        route,
+        ok({
+          items: [sampleProvisionedRepo],
+          page: 0,
+          size: 50,
+          total: 1,
+          totalPages: 1,
+          stats: { total: 1, open: 1, closed: 0, pending: 0, failed: 0, created: 1, githubIssueCount: 0 }
+        })
+      );
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/admin/events/*/artifacts-summary**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(
+        route,
+        ok({
+          submissions: { totalTeams: 1, submittedCount: 0, draftCount: 1 },
+          repositories: {
+            total: 1,
+            open: 1,
+            closed: 0,
+            pending: 0,
+            failed: 0,
+            created: 1,
+            githubIssueCount: 0
+          }
+        })
+      );
+      return;
+    }
+    await route.continue();
   });
 
   await page.route("**/api/v1/admin/problems/*/repositories/provision**", async (route) => {
