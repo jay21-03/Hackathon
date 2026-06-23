@@ -167,7 +167,13 @@ const organizerErrorMap: Record<string, string> = {
   "Event must be REGISTRATION_CLOSED or REGISTRATION_OPEN to start competition":
     "Bắt đầu thi khi đã đóng đăng ký hoặc đang mở đăng ký (khẩn cấp).",
   "Event must be IN_PROGRESS to complete": "Chỉ kết thúc khi cuộc thi đang diễn ra.",
-  USER_NOT_PENDING_APPROVAL: "Tài khoản không ở trạng thái chờ duyệt."
+  USER_NOT_PENDING_APPROVAL: "Tài khoản không ở trạng thái chờ duyệt.",
+  AI_REVIEW_COOLDOWN: "Vui lòng chờ 30 giây trước khi chạy lại đánh giá AI cho đội này.",
+  AI_REVIEW_NOT_CONFIGURED: "Dịch vụ đánh giá AI chưa được cấu hình API key.",
+  NO_REVIEWABLE_REPOSITORY: "Đội chưa có repository sẵn sàng để đánh giá AI.",
+  NO_COMMITS_TO_REVIEW: "Repository chưa có commit để đánh giá AI.",
+  GITHUB_COMMITS_FETCH_FAILED:
+    "Không lấy được commit từ GitHub. Vui lòng kiểm tra repository và GitHub token."
 };
 
 /** Alias của `resolveApiError` — giữ tương thích import cũ. */

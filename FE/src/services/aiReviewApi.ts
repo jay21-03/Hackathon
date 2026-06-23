@@ -152,7 +152,9 @@ export async function fetchEventAiReviews(eventId: number) {
 
 export async function triggerTeamAiReview(teamId: number) {
   const { data } = await apiClient.post<ApiResponse<AiReviewResponse>>(
-    `/v1/admin/teams/${teamId}/ai-reviews/run`
+    `/v1/admin/teams/${teamId}/ai-reviews/run`,
+    undefined,
+    { timeout: 180_000 }
   );
   if (!data.data) {
     throw new Error(data.message || "Không chạy được đánh giá AI.");
@@ -325,6 +327,9 @@ export function formatAiReviewFailure(summary?: string | null, reason?: string |
   const lower = summary.toLowerCase();
   if (lower.includes("quota") || lower.includes("429") || lower.includes("resource exhausted")) {
     return "Hệ thống đánh giá AI đang quá tải — thử lại sau.";
+  }
+  if (lower.includes("503") || lower.includes("service unavailable") || lower.includes("high demand")) {
+    return "Gemini đang quá tải tạm thời — vui lòng thử lại sau vài phút.";
   }
   if (lower.includes("json") || lower.includes("parse") || lower.includes("invalid") || lower.includes("validation failed")) {
     return "Kết quả đánh giá không hợp lệ — thử chạy lại.";

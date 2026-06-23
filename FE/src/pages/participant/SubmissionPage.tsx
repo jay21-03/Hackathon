@@ -78,6 +78,20 @@ function statusTone(status: string | null | undefined): "success" | "warning" | 
   return "neutral";
 }
 
+function isPastDeadline(deadlineAt: string | null | undefined) {
+  return Boolean(deadlineAt && Date.now() >= new Date(deadlineAt).getTime());
+}
+
+function overviewAccessStatus(
+  repo: TeamRepositoryResponse | null,
+  submissionStatus: string | null | undefined,
+  deadlineAt: string | null | undefined
+) {
+  if (submissionStatus === "SUBMITTED" || isPastDeadline(deadlineAt)) return "CLOSED";
+  if (repo?.accessStatus) return repo.accessStatus;
+  return null;
+}
+
 function pushGuidance(repo: TeamRepositoryResponse) {
   if (repo.accessStatus === "CLOSED") {
     return "Repository đã khóa push — ban tổ chức đã chốt bài.";
@@ -311,7 +325,7 @@ export function SubmissionPage() {
   const provisionedMode = enableGithubProvisioning;
   const currentRepos = provisionedRepos.filter((repo) => repo.currentRound);
   const historyRepos = provisionedRepos.filter((repo) => !repo.currentRound);
-  const primaryRepo = currentRepos[0] ?? null;
+  const primaryRepo = currentRepos[0] ?? provisionedRepos[0] ?? null;
 
   useEffect(() => {
     if (submission) {
@@ -420,6 +434,11 @@ export function SubmissionPage() {
   const blocked = submission?.blockReason;
   const editable = submission?.editable ?? false;
   const displayStatus = statusLabel(submission?.status ?? null);
+  const displayAccessStatus = overviewAccessStatus(
+    primaryRepo,
+    submission?.status ?? null,
+    submission?.deadlineAt ?? null
+  );
   const pageDescription = provisionedMode
     ? "Ban tổ chức cấp repository GitHub — push code trước hạn, không cần nộp link thủ công."
     : "Gửi link repository GitHub hoặc GitLab trước deadline.";
@@ -474,9 +493,9 @@ export function SubmissionPage() {
               <div className="rounded-lg border border-outline-variant/60 bg-surface px-3 py-2">
                 <dt className="font-label-sm text-on-surface-variant">Quyền push</dt>
                 <dd className="mt-xs">
-                  {primaryRepo ? (
-                    <Badge tone={accessStatusTone(primaryRepo.accessStatus)}>
-                      {ACCESS_STATUS_LABELS[primaryRepo.accessStatus]}
+                  {displayAccessStatus ? (
+                    <Badge tone={accessStatusTone(displayAccessStatus)}>
+                      {ACCESS_STATUS_LABELS[displayAccessStatus]}
                     </Badge>
                   ) : (
                     <Badge tone="neutral">—</Badge>

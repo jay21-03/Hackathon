@@ -22,6 +22,7 @@ import {
   fetchEventAiReviews,
   fetchLatestTeamAiReview,
   fetchTeamAiReviewHistory,
+  formatAiReviewFailure,
   retryFailedEventAiReviews,
   triggerEventAiReviewsAsync,
   triggerTeamAiReview,
@@ -154,13 +155,24 @@ export function AiReviewManagementPage() {
   async function handleRunReview(teamId: number) {
     setRunningTeamId(teamId);
     try {
-      await triggerTeamAiReview(teamId);
-      await queryClient.invalidateQueries({
-        queryKey: [...queryKeys.events.detail(eventId ?? ""), "ai-reviews"]
-      });
-      await queryClient.invalidateQueries({ queryKey: ["organizer", "ai-review-detail", teamId] });
+      const result = await triggerTeamAiReview(teamId);
+      await Promise.allSettled([
+        queryClient.invalidateQueries({
+          queryKey: [...queryKeys.events.detail(eventId ?? ""), "ai-reviews"]
+        }),
+        queryClient.invalidateQueries({ queryKey: ["organizer", "ai-review-detail", teamId] }),
+        queryClient.invalidateQueries({
+          queryKey: [...queryKeys.events.detail(eventId ?? ""), "ai-reviews-health"]
+        })
+      ]);
       setSearchParams({ teamId: String(teamId) }, { replace: true });
-      notify("Đã chạy đánh giá AI cho đội.", "success");
+      if (result.status === "FAILED") {
+        notify(`Không thể hoàn tất đánh giá AI: ${formatAiReviewFailure(result.summary)}`, "danger");
+      } else if (result.status === "COMPLETED") {
+        notify("Đã hoàn tất đánh giá AI cho đội.", "success");
+      } else {
+        notify("Đánh giá AI đang được xử lý.", "warning");
+      }
     } catch (err) {
       notify(resolveApiError(err, "Không chạy được đánh giá AI."), "danger");
     } finally {
@@ -371,7 +383,9 @@ export function AiReviewManagementPage() {
                       </td>
                       <td className="px-md py-md">{review.ragLevel ?? "—"}</td>
                       <td className="max-w-md px-md py-md text-on-surface-variant">
-                        {review.summary ?? "—"}
+                        {review.status === "FAILED"
+                          ? formatAiReviewFailure(review.summary)
+                          : review.summary ?? "—"}
                       </td>
                       <td className="px-md py-md">
                         {review.reviewedAt ? new Date(review.reviewedAt).toLocaleString("vi-VN") : "—"}
