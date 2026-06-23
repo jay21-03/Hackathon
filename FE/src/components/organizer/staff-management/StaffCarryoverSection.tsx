@@ -84,13 +84,16 @@ export function StaffCarryoverSection({
     queryKey: ["staff-carryover", sourceId, currentTermId],
     enabled: Boolean(sourceId && currentTermId),
     queryFn: async () => {
-      const pageSize = 500;
+      const pageSize = 100;
       const [srcJudges, srcMentors, curJudgeCandidates, curMentorCandidates] = await Promise.all([
         fetchTermJudges(sourceId!, 0, pageSize),
         fetchTermMentors(sourceId!, 0, pageSize),
         currentTermId ? fetchTermJudgeCandidates(currentTermId, 0, pageSize) : null,
         currentTermId ? fetchTermMentorCandidates(currentTermId, 0, pageSize) : null
       ]);
+      const truncated =
+        (srcJudges?.totalElements ?? 0) > pageSize ||
+        (srcMentors?.totalElements ?? 0) > pageSize;
       const currentJudgeIds = new Set((curJudgeCandidates?.items ?? []).map((u) => u.id));
       const currentMentorIds = new Set((curMentorCandidates?.items ?? []).map((u) => u.id));
       const people: CarryoverPerson[] = [];
@@ -114,12 +117,18 @@ export function StaffCarryoverSection({
         const key = `${person.email.toLowerCase()}::${person.role}`;
         if (!byKey.has(key)) byKey.set(key, person);
       }
-      return [...byKey.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, "vi"));
+      return {
+        people: [...byKey.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, "vi")),
+        truncated
+      };
     }
   });
 
+  const rosterPeople = rosterQuery.data?.people ?? [];
+  const rosterTruncated = rosterQuery.data?.truncated ?? false;
+
   const filteredPeople = useMemo(() => {
-    const list = rosterQuery.data ?? [];
+    const list = rosterPeople;
     const nameQuery = nameFilter.trim().toLowerCase();
     const emailQuery = emailFilter.trim().toLowerCase();
     return list.filter((person) => {
@@ -130,7 +139,7 @@ export function StaffCarryoverSection({
       if (emailQuery && !person.email.toLowerCase().includes(emailQuery)) return false;
       return true;
     });
-  }, [rosterQuery.data, roleFilter, newTermFilter, nameFilter, emailFilter]);
+  }, [rosterPeople, roleFilter, newTermFilter, nameFilter, emailFilter]);
 
   const selectablePeople = useMemo(
     () => filteredPeople.filter((p) => !p.inCurrentTerm),
@@ -146,15 +155,13 @@ export function StaffCarryoverSection({
   );
 
   useEffect(() => {
-    if (!rosterQuery.data) return;
-    const invitable = rosterQuery.data.filter((p) => !p.inCurrentTerm);
-    setSelectedIds(new Set(invitable.map((p) => `${p.email.toLowerCase()}::${p.role}`)));
-  }, [rosterQuery.data, sourceId]);
+    setSelectedIds(new Set());
+  }, [sourceId]);
 
   useEffect(() => {
     setSelectedIds((prev) => {
       const validKeys = new Set(
-        (rosterQuery.data ?? []).map((p) => `${p.email.toLowerCase()}::${p.role}`)
+        rosterPeople.map((p) => `${p.email.toLowerCase()}::${p.role}`)
       );
       const next = new Set<string>();
       for (const key of prev) {
@@ -162,7 +169,7 @@ export function StaffCarryoverSection({
       }
       return next;
     });
-  }, [roleFilter, newTermFilter, nameFilter, emailFilter, rosterQuery.data]);
+  }, [roleFilter, newTermFilter, nameFilter, emailFilter, rosterPeople]);
 
   function togglePerson(key: string, checked: boolean) {
     setSelectedIds((prev) => {
@@ -257,6 +264,11 @@ export function StaffCarryoverSection({
 
   return (
     <div className="space-y-lg">
+      {rosterTruncated ? (
+        <p className="rounded-lg border border-warning/40 bg-warning-container/25 px-md py-sm font-body-sm text-on-surface">
+          Danh sách học kỳ nguồn có hơn 100 người — chỉ hiển thị 100 đầu. Dùng bộ lọc hoặc liên hệ quản trị nếu thiếu tên.
+        </p>
+      ) : null}
       <div className="grid gap-md md:grid-cols-2 xl:grid-cols-3">
         <label className="space-y-xs font-body-sm">
           Học kỳ nguồn

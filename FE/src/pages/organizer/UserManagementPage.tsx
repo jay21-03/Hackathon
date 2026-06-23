@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -28,7 +29,7 @@ export function UserManagementPage() {
   const [assigningId, setAssigningId] = useState<number | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const pageSize = 25;
-  const { users, total, totalPages, loading, error, invalidate } = useUserManagement(
+  const { users, total, totalPages, loading, error, invalidate, refetch } = useUserManagement(
     listPage,
     pageSize,
     debouncedSearch
@@ -90,9 +91,13 @@ export function UserManagementPage() {
       />
 
       {error ? (
-        <div className="rounded-xl border border-error/40 bg-error-container/40 p-md">
-          <p className="font-body-sm text-on-surface">{error}</p>
-        </div>
+        <RetryPanel
+          message={error}
+          onRetry={() => {
+            void refetch();
+            void invalidate();
+          }}
+        />
       ) : null}
 
       <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
