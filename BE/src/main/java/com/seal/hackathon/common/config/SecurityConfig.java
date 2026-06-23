@@ -90,6 +90,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/public/email-tracking/**").permitAll()
                 .requestMatchers("/api/v1/staff-invitations/decline").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/github").permitAll()
+                .requestMatchers("/ws/commits", "/ws/commits/**").permitAll()
                 .requestMatchers("/api/v1/webhooks/n8n/ai-review/**").permitAll()
                 .requestMatchers("/api/v1/team-invitations/confirm", "/api/v1/team-invitations/decline").authenticated()
                 .requestMatchers("/api/v1/staff-invitations/accept").authenticated()
