@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
+import { ConfirmAction } from "../feedback/ConfirmAction";
 import { Button } from "../ui/Button";
+import { RemoveIconButton } from "../ui/RemoveIconButton";
 import { deleteProblemAttachment, uploadProblemAttachment } from "../../services/fileUploadApi";
 import {
   PROBLEM_ATTACHMENT_EXTENSIONS,
@@ -44,7 +46,7 @@ export function ProblemFileUploadZone({
       await deleteProblemAttachment(eventId, attachmentUrl);
       onClear();
     } catch (err) {
-      setError(resolveApiError(err, "Không gỡ được tệp đính kèm."));
+      setError(resolveApiError(err, "Không xóa được tệp đính kèm."));
     } finally {
       setUploading(false);
     }
@@ -94,14 +96,14 @@ export function ProblemFileUploadZone({
             <p className="font-label-sm text-on-surface-variant">Tệp đính kèm</p>
             <p className="font-body-sm text-on-surface truncate">{fileName ?? attachmentUrl}</p>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={disabled || uploading}
-            onClick={() => void handleClear()}
+          <ConfirmAction
+            title="Xóa tệp đính kèm?"
+            message="Tệp sẽ bị xóa khỏi đề thi. Bạn có thể tải lên tệp mới sau."
+            confirmLabel="Xóa tệp"
+            onConfirm={() => void handleClear()}
           >
-            Gỡ tệp
-          </Button>
+            <RemoveIconButton label="Xóa tệp đính kèm" disabled={disabled || uploading} />
+          </ConfirmAction>
         </div>
         <p className="font-body-sm text-on-surface-variant">
           Kéo thả tệp mới hoặc bấm bên dưới để thay thế.
