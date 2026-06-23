@@ -42,6 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -67,6 +68,7 @@ public class StaffInvitationService {
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final BoardAssignmentService boardAssignmentService;
+    private final StaffCarryoverService staffCarryoverService;
     private final CurrentUserProvider currentUserProvider;
     private final OrganizerAuthorizationService organizerAuthorizationService;
     private final OutboxMessageRepository outboxMessageRepository;
@@ -382,6 +384,10 @@ public class StaffInvitationService {
             Long eventId, Long actorId, String rawEmail, SystemRole role) {
         validateStaffRole(role);
         String email = normalizeEmail(rawEmail);
+        Optional<StaffInvitationResponse> carried = tryCarryoverInvitation(eventId, null, actorId, email, role);
+        if (carried.isPresent()) {
+            return carried.get();
+        }
         staffInvitationRepository
                 .findByEventIdAndBoardIdIsNullAndEmailIgnoreCaseAndRoleAndStatus(
                         eventId, email, role, StaffInvitationStatus.INVITED)
@@ -412,6 +418,10 @@ public class StaffInvitationService {
             Board board, Long eventId, Long actorId, String rawEmail, SystemRole role) {
         validateStaffRole(role);
         String email = normalizeEmail(rawEmail);
+        Optional<StaffInvitationResponse> carried = tryCarryoverInvitation(eventId, board, actorId, email, role);
+        if (carried.isPresent()) {
+            return carried.get();
+        }
         staffInvitationRepository
                 .findByBoardIdAndEmailIgnoreCaseAndRoleAndStatus(
                         board.getId(), email, role, StaffInvitationStatus.INVITED)
@@ -436,6 +446,57 @@ public class StaffInvitationService {
         enqueueEmail(invitation, rawToken, now, board, eventId);
         notificationService.notifyStaffInvited(invitation, board, eventId, role);
         return toResponse(invitation, board, eventId);
+    }
+
+    private Optional<StaffInvitationResponse> tryCarryoverInvitation(
+            Long eventId, Board board, Long actorId, String email, SystemRole role) {
+        Event event = eventRepository.findById(eventId).orElse(null);
+        if (event == null || event.getAcademicTermId() == null) {
+            return Optional.empty();
+        }
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return Optional.empty();
+        }
+        Long sourceTermId = staffCarryoverService.resolvePreviousTermId(event.getAcademicTermId());
+        if (sourceTermId == null
+                || !staffCarryoverService.wasStaffInSourceTerm(sourceTermId, user.getId(), role)) {
+            return Optional.empty();
+        }
+
+        boolean alreadyInTerm = staffInvitationRepository
+                .findByEventIdAndBoardIdIsNullAndEmailIgnoreCaseAndRoleAndStatus(
+                        eventId, email, role, StaffInvitationStatus.ACCEPTED)
+                .isPresent();
+        if (!alreadyInTerm) {
+            staffCarryoverService.registerStaffForCurrentTerm(eventId, actorId, user, role);
+        } else {
+            activateInvitedStaffUser(user, role);
+            ensureUserRole(user.getId(), role);
+        }
+
+        if (board != null) {
+            boardAssignmentService.completeStaffAssignment(board.getId(), user.getId(), role, actorId);
+        }
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        StaffInvitation invitation = staffInvitationRepository.save(StaffInvitation.builder()
+                .eventId(eventId)
+                .boardId(board != null ? board.getId() : null)
+                .email(email)
+                .role(role)
+                .status(StaffInvitationStatus.ACCEPTED)
+                .invitedAt(now)
+                .acceptedAt(now)
+                .acceptedUserId(user.getId())
+                .resendCount(0)
+                .createdBy(actorId)
+                .createdAt(now)
+                .build());
+        if (board != null) {
+            notificationService.notifyStaffInvitationAccepted(event, board, invitation, user);
+        }
+        return Optional.of(toResponse(invitation, board, eventId));
     }
 
     private void enqueueEmail(

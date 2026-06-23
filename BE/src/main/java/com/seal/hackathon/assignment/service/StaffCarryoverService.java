@@ -1,6 +1,8 @@
 package com.seal.hackathon.assignment.service;
 
+import com.seal.hackathon.academic.entity.AcademicTerm;
 import com.seal.hackathon.academic.repository.AcademicTermQueryRepository;
+import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.assignment.dto.StaffCarryoverFailure;
 import com.seal.hackathon.assignment.dto.StaffCarryoverItem;
 import com.seal.hackathon.assignment.dto.StaffCarryoverRequest;
@@ -14,6 +16,7 @@ import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.authprofile.repository.UserRoleRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
+import com.seal.hackathon.common.enums.AcademicTermStatus;
 import com.seal.hackathon.common.enums.StaffInvitationStatus;
 import com.seal.hackathon.common.enums.SystemRole;
 import com.seal.hackathon.common.enums.UserStatus;
@@ -37,6 +40,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class StaffCarryoverService {
 
     private final EventRepository eventRepository;
+    private final AcademicTermRepository academicTermRepository;
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final StaffInvitationRepository staffInvitationRepository;
@@ -146,6 +150,50 @@ public class StaffCarryoverService {
                 .succeeded(succeeded)
                 .failed(failed)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public Long resolvePreviousTermId(Long currentTermId) {
+        if (currentTermId == null) {
+            return null;
+        }
+        List<AcademicTerm> terms = academicTermRepository.findAllByOrderByYearDescTermTypeAsc();
+        AcademicTerm current = terms.stream()
+                .filter(term -> currentTermId.equals(term.getId()))
+                .findFirst()
+                .orElse(null);
+        if (current == null) {
+            return null;
+        }
+        return terms.stream()
+                .filter(term -> !currentTermId.equals(term.getId()))
+                .filter(term -> term.getStatus() == AcademicTermStatus.ARCHIVED
+                        || term.getYear() < current.getYear()
+                        || (term.getYear().equals(current.getYear())
+                                && term.getTermType().compareTo(current.getTermType()) < 0))
+                .findFirst()
+                .map(AcademicTerm::getId)
+                .orElse(terms.stream()
+                        .filter(term -> !currentTermId.equals(term.getId()))
+                        .reduce((first, second) -> second)
+                        .map(AcademicTerm::getId)
+                        .orElse(null));
+    }
+
+    @Transactional(readOnly = true)
+    public boolean wasStaffInSourceTerm(Long sourceTermId, Long userId, SystemRole role) {
+        if (sourceTermId == null || userId == null || role == null) {
+            return false;
+        }
+        Set<Long> sourceIds = role == SystemRole.MENTOR
+                ? new HashSet<>(academicTermQueryRepository.findMentorIdsByTermId(sourceTermId))
+                : new HashSet<>(academicTermQueryRepository.findJudgeIdsByTermId(sourceTermId));
+        return sourceIds.contains(userId);
+    }
+
+    @Transactional
+    public void registerStaffForCurrentTerm(Long eventId, Long actorId, User user, SystemRole role) {
+        registerStaffForTerm(eventId, actorId, user, role);
     }
 
     private void registerStaffForTerm(Long eventId, Long actorId, User user, SystemRole role) {
