@@ -44,6 +44,7 @@ import com.seal.hackathon.scoring.dto.ScoreItemInput;
 import com.seal.hackathon.scoring.dto.ScoreItemResponse;
 import com.seal.hackathon.scoring.dto.ScoreMatrixResponse;
 import com.seal.hackathon.scoring.dto.ScoreProgressResponse;
+import com.seal.hackathon.scoring.dto.ScoringReminderResponse;
 import com.seal.hackathon.scoring.dto.SubmitFailureDto;
 import com.seal.hackathon.scoring.dto.SubmitMatrixRequest;
 import com.seal.hackathon.scoring.dto.SubmitMatrixResponse;
@@ -371,17 +372,48 @@ public class ScoringService {
     }
 
     @Transactional
-    public void sendScoringReminder(Long boardId) {
+    public ScoringReminderResponse sendScoringReminder(Long boardId) {
         ScoreProgressResponse progress = getScoreProgress(boardId);
         int submitted = progress.getSummary().getSubmittedSheets();
         int expected = progress.getSummary().getExpectedSheets();
         if (expected == 0 || submitted >= expected) {
-            return;
+            return ScoringReminderResponse.builder()
+                    .notifiedJudgeCount(0)
+                    .notifiedJudgeNames(List.of())
+                    .organizerNotified(false)
+                    .build();
         }
         BoardContext ctx = loadBoardContext(boardId);
         Event event = eventRepository.findById(ctx.round.getEventId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
-        notificationService.notifyOrganizerScoringIncomplete(event, ctx.board, submitted, expected);
+
+        List<String> notifiedNames = new ArrayList<>();
+        for (JudgeProgressDto judge : progress.getJudges()) {
+            if (judge.getSubmittedCount() < judge.getTotalTeams()) {
+                boolean sent = notificationService.notifyJudgeScoringReminder(
+                        judge.getJudgeId(),
+                        ctx.board,
+                        ctx.round,
+                        event,
+                        judge.getSubmittedCount(),
+                        judge.getTotalTeams());
+                if (sent) {
+                    notifiedNames.add(judge.getFullName());
+                }
+            }
+        }
+
+        boolean organizerNotified = false;
+        if (event.getCreatedBy() != null) {
+            notificationService.notifyOrganizerScoringIncomplete(event, ctx.board, submitted, expected);
+            organizerNotified = true;
+        }
+
+        return ScoringReminderResponse.builder()
+                .notifiedJudgeCount(notifiedNames.size())
+                .notifiedJudgeNames(notifiedNames)
+                .organizerNotified(organizerNotified)
+                .build();
     }
 
     private void submitSheetInternal(ScoreSheet sheet, List<ScoreCriteria> criteria) {
