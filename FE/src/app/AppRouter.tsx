@@ -83,6 +83,10 @@ const MentorAiReviewPage = lazyPage(
   () => import("../pages/mentor/MentorAiReviewPage"),
   "MentorAiReviewPage"
 );
+const MentorNotificationsPage = lazyPage(
+  () => import("../pages/mentor/MentorNotificationsPage"),
+  "MentorNotificationsPage"
+);
 const AnnouncementPage = lazyPage(() => import("../pages/organizer/AnnouncementPage"), "AnnouncementPage");
 const AssignmentManagementPage = lazyPage(() => import("../pages/organizer/AssignmentManagementPage"), "AssignmentManagementPage");
 const BoardManagementPage = lazyPage(() => import("../pages/organizer/BoardManagementPage"), "BoardManagementPage");
@@ -143,6 +147,10 @@ const NotificationsPage = lazyPage(
   () => import("../pages/participant/NotificationsPage"),
   "NotificationsPage"
 );
+const ParticipantAnnouncementsPage = lazyPage(
+  () => import("../pages/participant/ParticipantAnnouncementsPage"),
+  "ParticipantAnnouncementsPage"
+);
 
 function routeElement(component: ReactNode) {
   return <Suspense fallback={<ModuleSkeleton rows={4} />}>{component}</Suspense>;
@@ -151,7 +159,11 @@ function routeElement(component: ReactNode) {
 /** Phase 7+ tắt → redirect, không hiện FeatureUnavailable */
 function gatedRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
-    <FeatureRouteGate enabled={enablePhase7} redirectTo={redirectTo}>
+    <FeatureRouteGate
+      enabled={enablePhase7}
+      redirectTo={redirectTo}
+      message="Tính năng vận hành cuộc thi chưa được bật trên môi trường này."
+    >
       {component}
     </FeatureRouteGate>
   );
@@ -160,7 +172,11 @@ function gatedRoute(redirectTo: string, component: ReactNode) {
 /** Scoring (rubric, ma trận, tiến độ) — tách khỏi phase 7 khác */
 function gatedScoringRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
-    <FeatureRouteGate enabled={enableScoring} redirectTo={redirectTo}>
+    <FeatureRouteGate
+      enabled={enableScoring}
+      redirectTo={redirectTo}
+      message="Tính năng chấm điểm chưa được bật trên môi trường này."
+    >
       {component}
     </FeatureRouteGate>
   );
@@ -168,7 +184,11 @@ function gatedScoringRoute(redirectTo: string, component: ReactNode) {
 
 function gatedSubmissionRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
-    <FeatureRouteGate enabled={enableSubmissions} redirectTo={redirectTo}>
+    <FeatureRouteGate
+      enabled={enableSubmissions}
+      redirectTo={redirectTo}
+      message="Tính năng nộp bài chưa được bật trên môi trường này."
+    >
       {component}
     </FeatureRouteGate>
   );
@@ -176,7 +196,11 @@ function gatedSubmissionRoute(redirectTo: string, component: ReactNode) {
 
 function gatedGithubRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
-    <FeatureRouteGate enabled={enableGithubProvisioning} redirectTo={redirectTo}>
+    <FeatureRouteGate
+      enabled={enableGithubProvisioning}
+      redirectTo={redirectTo}
+      message="Tính năng GitHub repository chưa được bật trên môi trường này."
+    >
       {component}
     </FeatureRouteGate>
   );
@@ -187,6 +211,7 @@ function gatedArtifactsHubRoute(redirectTo: string, component: ReactNode) {
     <FeatureRouteGate
       enabled={enableSubmissions || enableGithubProvisioning}
       redirectTo={redirectTo}
+      message="Tính năng bài nộp / repository chưa được bật trên môi trường này."
     >
       {component}
     </FeatureRouteGate>
@@ -195,7 +220,11 @@ function gatedArtifactsHubRoute(redirectTo: string, component: ReactNode) {
 
 function gatedAiReviewRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
-    <FeatureRouteGate enabled={enableAiReview} redirectTo={redirectTo}>
+    <FeatureRouteGate
+      enabled={enableAiReview}
+      redirectTo={redirectTo}
+      message="Tính năng AI review chưa được bật trên môi trường này."
+    >
       {component}
     </FeatureRouteGate>
   );
@@ -203,7 +232,11 @@ function gatedAiReviewRoute(redirectTo: string, component: ReactNode) {
 
 function gatedJudgeAiReviewRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
-    <FeatureRouteGate enabled={enableAiReview && enableAiReviewJudgeAccess} redirectTo={redirectTo}>
+    <FeatureRouteGate
+      enabled={enableAiReview && enableAiReviewJudgeAccess}
+      redirectTo={redirectTo}
+      message="Tính năng AI review cho giám khảo chưa được bật trên môi trường này."
+    >
       {component}
     </FeatureRouteGate>
   );
@@ -212,7 +245,11 @@ function gatedJudgeAiReviewRoute(redirectTo: string, component: ReactNode) {
 /** Xếp hạng, công bố, xuất CSV, cổng kết quả công khai */
 function gatedRankingRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
-    <FeatureRouteGate enabled={enableRanking} redirectTo={redirectTo}>
+    <FeatureRouteGate
+      enabled={enableRanking}
+      redirectTo={redirectTo}
+      message="Tính năng xếp hạng và kết quả chưa được bật trên môi trường này."
+    >
       {component}
     </FeatureRouteGate>
   );
@@ -220,7 +257,11 @@ function gatedRankingRoute(redirectTo: string, component: ReactNode) {
 
 function gatedNotificationRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
-    <FeatureRouteGate enabled={enableNotifications} redirectTo={redirectTo}>
+    <FeatureRouteGate
+      enabled={enableNotifications}
+      redirectTo={redirectTo}
+      message="Tính năng thông báo chưa được bật trên môi trường này."
+    >
       {component}
     </FeatureRouteGate>
   );
@@ -228,7 +269,11 @@ function gatedNotificationRoute(redirectTo: string, component: ReactNode) {
 
 function gatedAnnouncementRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
-    <FeatureRouteGate enabled={enableAnnouncements} redirectTo={redirectTo}>
+    <FeatureRouteGate
+      enabled={enableAnnouncements}
+      redirectTo={redirectTo}
+      message="Tính năng thông báo cuộc thi chưa được bật trên môi trường này."
+    >
       {component}
     </FeatureRouteGate>
   );
@@ -318,6 +363,10 @@ export function AppRouter() {
               element={gatedRankingRoute("/me", <ResultsPortalPage participantView />)}
             />
             <Route path="notifications" element={gatedNotificationRoute("/me", <NotificationsPage />)} />
+            <Route
+              path="announcements"
+              element={gatedAnnouncementRoute("/me", <ParticipantAnnouncementsPage />)}
+            />
           </Route>
         </Route>
       </Route>
@@ -343,7 +392,13 @@ export function AppRouter() {
               enableAcademicTerms ? (
                 routeElement(<AcademicTermManagementPage />)
               ) : (
-                <Navigate to="/organizer/dashboard" replace />
+                <Navigate
+                  to="/organizer/dashboard"
+                  replace
+                  state={{
+                    message: "Tính năng quản lý học kỳ chưa được bật trên môi trường này."
+                  }}
+                />
               )
             }
           />
@@ -368,7 +423,13 @@ export function AppRouter() {
           />
           <Route
             path="registrations"
-            element={<Navigate to="/organizer/teams-hub#teams-step-registrations" replace />}
+            element={
+              <Navigate
+                to="/organizer/teams-hub#teams-step-registrations"
+                replace
+                state={{ message: "Trang đăng ký đã chuyển sang Đội & lời mời." }}
+              />
+            }
           />
           <Route path="users" element={routeElement(<UserManagementPage />)} />
           <Route path="board-ops" element={routeElement(<BoardOperationsPage />)} />
@@ -379,7 +440,13 @@ export function AppRouter() {
           />
           <Route
             path="repositories"
-            element={<Navigate to="/organizer/artifacts-hub#artifacts-step-repositories" replace />}
+            element={
+              <Navigate
+                to="/organizer/artifacts-hub#artifacts-step-repositories"
+                replace
+                state={{ message: "Quản lý repository đã chuyển sang Bài nộp & repo." }}
+              />
+            }
           />
           <Route
             path="ai-reviews"
@@ -460,6 +527,10 @@ export function AppRouter() {
         >
           <Route path="dashboard" element={routeElement(<MentorDashboardPage />)} />
           <Route path="ai-review" element={gatedAiReviewRoute("/mentor/dashboard", <MentorAiReviewPage />)} />
+          <Route
+            path="notifications"
+            element={gatedNotificationRoute("/mentor/dashboard", <MentorNotificationsPage />)}
+          />
           <Route path="profile" element={routeElement(<ProfilePage />)} />
         </Route>
       </Route>

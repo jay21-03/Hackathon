@@ -147,6 +147,7 @@ export const judgeNav: NavItem[] = [
 export const mentorNav: NavItem[] = [
   { to: "/mentor/dashboard", label: "Đội phụ trách", icon: "groups", group: "Theo dõi" },
   { to: "/mentor/ai-review", label: "Đánh giá AI", icon: "psychology", group: "Theo dõi", hidden: !enableAiReview },
+  { to: "/mentor/notifications", label: "Thông báo", icon: "notifications", group: "Tài khoản", hidden: !enableNotifications },
   { to: "/mentor/profile", label: "Hồ sơ", icon: "person", group: "Tài khoản" }
 ];
 
@@ -159,6 +160,13 @@ export const participantWorkspaceNav: NavItem[] = [
   { to: "/me/submission", label: "Bài nộp", icon: "upload", group: "Thi" },
   { to: "/me/ai-review", label: "Đánh giá AI", icon: "psychology", group: "Tham khảo", hidden: !enableAiReview },
   { to: "/me/results", label: "Kết quả", icon: "leaderboard", group: "Kết quả" },
+  {
+    to: "/me/announcements",
+    label: "Thông báo BTC",
+    icon: "campaign",
+    group: "Kết quả",
+    hidden: !enableAnnouncements
+  },
   { to: "/me/notifications", label: "Thông báo", icon: "notifications", group: "Tài khoản" },
   { to: "/profile", label: "Hồ sơ", icon: "person", group: "Tài khoản" }
 ];
