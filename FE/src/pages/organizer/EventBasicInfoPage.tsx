@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { Button, ButtonLink } from "../../components/ui/Button";
@@ -142,7 +143,6 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
   }
 
   async function cancelCompetition() {
-    if (!window.confirm("Hủy cuộc thi? Thao tác này không thể hoàn tác.")) return;
     await runLifecycleAction(
       () => cancelEvent(String(eventId!)),
       "Đã hủy cuộc thi.",
@@ -314,14 +314,20 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
                 Kết thúc cuộc thi
               </Button>
             ) : null}
-            <Button
-              variant="ghost"
-              disabled={lifecycleLoading}
-              icon={<Icon name="cancel" />}
-              onClick={cancelCompetition}
+            <ConfirmAction
+              title="Hủy cuộc thi?"
+              message="Hủy cuộc thi? Thao tác này không thể hoàn tác."
+              confirmLabel="Hủy cuộc thi"
+              onConfirm={() => void cancelCompetition()}
             >
-              Hủy cuộc thi
-            </Button>
+              <Button
+                variant="ghost"
+                disabled={lifecycleLoading}
+                icon={<Icon name="cancel" />}
+              >
+                Hủy cuộc thi
+              </Button>
+            </ConfirmAction>
           </div>
         </section>
       ) : null}
