@@ -1,16 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { enableGithubProvisioning, enableSubmissions } from "../../config/features";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
+import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useArtifactsHubProgress } from "../../hooks/useArtifactsHubProgress";
 import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
-import { useEventSubmissions } from "../../hooks/useEventSubmissions";
 import { queryKeys } from "../../lib/queryKeys";
-import { fetchEventRepositories } from "../../services/repositoryProvisioningService";
+import { fetchEventArtifactsSummary } from "../../services/artifactsApi";
+import { resolveApiError } from "../../utils/apiError";
 import {
   normalizeArtifactsHubStep,
   resolveArtifactsHubStep,
@@ -27,36 +28,17 @@ export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedPro
     eventId,
     embedded ? "/organizer/events/wizard" : "/organizer/artifacts-hub"
   );
-  const { submissions, total, loading: submissionsLoading } = useEventSubmissions(
-    eventId,
-    null,
-    null,
-    0,
-    500
-  );
 
-  const reposQuery = useQuery({
-    queryKey: queryKeys.repositories.byEvent(eventId),
-    queryFn: () => fetchEventRepositories(eventId!),
-    enabled: Boolean(eventId) && enableGithubProvisioning
+  const summaryQuery = useQuery({
+    queryKey: [...queryKeys.repositories.byEvent(eventId), "artifacts-summary"],
+    queryFn: () => fetchEventArtifactsSummary(eventId!),
+    enabled: Boolean(eventId) && (enableSubmissions || enableGithubProvisioning)
   });
 
-  const submittedCount = useMemo(
-    () => submissions.filter((row) => row.status === "SUBMITTED").length,
-    [submissions]
-  );
-  const repoRows = reposQuery.data ?? [];
-  const repoProvisionedCount = useMemo(
-    () => repoRows.filter((row) => row.provisionStatus === "CREATED").length,
-    [repoRows]
-  );
-  const repoFailedCount = useMemo(
-    () =>
-      repoRows.filter(
-        (row) => row.provisionStatus === "FAILED" || row.accessStatus === "FAILED"
-      ).length,
-    [repoRows]
-  );
+  const submittedCount = summaryQuery.data?.submissions.submittedCount ?? 0;
+  const totalTeams = summaryQuery.data?.submissions.totalTeams ?? 0;
+  const repoProvisionedCount = summaryQuery.data?.repositories.created ?? 0;
+  const repoFailedCount = summaryQuery.data?.repositories.failed ?? 0;
 
   const { microSteps } = useArtifactsHubProgress({
     hasBoards: context.hasBoards,
@@ -64,7 +46,7 @@ export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedPro
     showSubmissions: enableSubmissions,
     showRepositories: enableGithubProvisioning,
     submittedCount,
-    totalTeams: total,
+    totalTeams,
     repoProvisionedCount,
     repoFailedCount
   });
@@ -85,12 +67,11 @@ export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedPro
     if (hash) setActiveStep(normalizeArtifactsHubStep(hash));
   }, []);
 
-  if (
-    eventLoading ||
-    setupLoading ||
-    (enableSubmissions && submissionsLoading) ||
-    (enableGithubProvisioning && reposQuery.isLoading)
-  ) {
+  const summaryError = summaryQuery.isError
+    ? resolveApiError(summaryQuery.error, "Không tải được tóm tắt bài nộp & mã nguồn.")
+    : null;
+
+  if (eventLoading || setupLoading) {
     return <ModuleSkeleton rows={5} variant="table" />;
   }
 
@@ -103,6 +84,15 @@ export function ArtifactsHubPage({ embedded = false, onWizardStep }: HubEmbedPro
           description="Cấp mã nguồn và theo dõi nộp bài — sau khi gán đội vào bảng."
           actions={<OrganizerContextBar />}
         />
+      ) : null}
+
+      {summaryError ? (
+        <RetryPanel
+          message={summaryError}
+          onRetry={() => void summaryQuery.refetch()}
+        />
+      ) : summaryQuery.isLoading ? (
+        <ModuleSkeleton rows={2} />
       ) : null}
 
       <WorkflowSteps
