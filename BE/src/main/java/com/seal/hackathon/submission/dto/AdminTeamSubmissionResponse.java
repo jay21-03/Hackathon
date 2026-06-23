@@ -18,4 +18,8 @@ public class AdminTeamSubmissionResponse {
     private String repositoryName;
     private OffsetDateTime submittedAt;
     private OffsetDateTime lastPushAt;
+    private String latestCommitSha;
+    private String latestCommitMessage;
+    private OffsetDateTime latestCommitAt;
+    private Integer commitCount;
 }
