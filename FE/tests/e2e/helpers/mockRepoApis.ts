@@ -36,6 +36,8 @@ export const sampleProvisionedRepo = {
   teamId: 10,
   teamName: "Đội E2E Alpha",
   roundId: 1,
+  roundName: "Vòng 1",
+  currentRound: true,
   boardId: 1,
   problemId: 1,
   repositoryUrl: "https://github.com/seal-org/seal-event-1-team-10-problem-1",
@@ -45,6 +47,26 @@ export const sampleProvisionedRepo = {
   accessStatus: "OPEN",
   provisionStatus: "CREATED",
   lastError: null
+};
+
+const sampleBoardMentor = {
+  id: 1,
+  boardId: 1,
+  assigneeId: 3,
+  assigneeName: "Mentor E2E",
+  assigneeEmail: "mentor@seal.edu.vn",
+  createdAt: "2026-06-01T08:00:00+07:00",
+  createdBy: 1
+};
+
+const sampleBoardJudge = {
+  id: 2,
+  boardId: 1,
+  assigneeId: 4,
+  assigneeName: "Giám khảo E2E",
+  assigneeEmail: "judge@seal.edu.vn",
+  createdAt: "2026-06-01T08:00:00+07:00",
+  createdBy: 1
 };
 
 /** Mock API phục vụ trang repository GitHub — đăng ký sau mockCoreApis. */
@@ -82,4 +104,31 @@ export async function mockRepoProvisioningApis(page: Page) {
     await route.continue();
   });
 
+  await page.route("**/api/v1/boards/*/mentors**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(route, ok([sampleBoardMentor]));
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/boards/*/judges**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(route, ok([sampleBoardJudge]));
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/api/v1/admin/problems/*/repo-template**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(route, ok(sampleRepoTemplate));
+      return;
+    }
+    if (route.request().method() === "PUT" || route.request().method() === "POST") {
+      await json(route, ok(sampleRepoTemplate));
+      return;
+    }
+    await json(route, ok(null));
+  });
 }

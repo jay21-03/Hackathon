@@ -155,7 +155,7 @@ test("captain can cancel pending team invitation", async ({ page }) => {
 
   await page.goto("/me/team");
   await waitForWorkspace(page, "Đội của tôi");
-  await page.getByRole("button", { name: "Huỷ mời" }).click();
+  await page.getByRole("button", { name: "Hủy mời" }).click();
   await expect(page.locator("body")).toContainText("Thành viên: 1/5");
 });
 
