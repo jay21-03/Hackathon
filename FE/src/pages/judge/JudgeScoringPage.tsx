@@ -43,6 +43,7 @@ import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { mapOrganizerErrorMessage } from "../../utils/organizerErrors";
 
 type CellKey = `${number}-${number}`;
+const JUDGE_SCORING_FILTER_STORAGE_KEY = "seal.judgeScoring.filters";
 
 function cellKey(teamId: number, criteriaId: number): CellKey {
   return `${teamId}-${criteriaId}`;
@@ -61,6 +62,29 @@ function buildCellMap(matrix: ScoreMatrixResponse | null): Record<CellKey, strin
   return map;
 }
 
+function formatTermLabel(assignment: {
+  academicTermId?: number | null;
+  academicTermCode?: string | null;
+  academicTermName?: string | null;
+}) {
+  return assignment.academicTermCode ?? assignment.academicTermName ?? `Kỳ #${assignment.academicTermId}`;
+}
+
+function readStoredFilters() {
+  if (typeof window === "undefined") return { termId: "", eventId: "" } as const;
+  try {
+    const raw = window.localStorage.getItem(JUDGE_SCORING_FILTER_STORAGE_KEY);
+    if (!raw) return { termId: "", eventId: "" } as const;
+    const parsed = JSON.parse(raw) as { termId?: number | ""; eventId?: number | "" };
+    return {
+      termId: parsed.termId ?? "",
+      eventId: parsed.eventId ?? ""
+    };
+  } catch {
+    return { termId: "", eventId: "" } as const;
+  }
+}
+
 export function JudgeScoringPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -72,6 +96,9 @@ export function JudgeScoringPage() {
     () => excludeArchivedTermJudgeAssignments(allAssignments),
     [allAssignments]
   );
+  const storedFilters = useMemo(readStoredFilters, []);
+  const [selectedTermId, setSelectedTermId] = useState<number | "">(storedFilters.termId);
+  const [selectedEventId, setSelectedEventId] = useState<number | "">(storedFilters.eventId);
   const [boardId, setBoardId] = useState<number | null>(boardIdParam ? Number(boardIdParam) : null);
   const { matrix, loading: matrixLoading, error: matrixError, refetch: refetchMatrix } = useScoreMatrix(
     boardId,
@@ -85,9 +112,45 @@ export function JudgeScoringPage() {
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const termOptions = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const assignment of assignments) {
+      if (assignment.academicTermId == null) continue;
+      map.set(assignment.academicTermId, formatTermLabel(assignment));
+    }
+    return [...map.entries()].map(([id, name]) => ({ id, name }));
+  }, [assignments]);
+
+  const eventOptions = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const assignment of assignments) {
+      if (selectedTermId !== "" && assignment.academicTermId !== selectedTermId) continue;
+      if (assignment.eventId == null) continue;
+      map.set(assignment.eventId, assignment.eventName ?? `Cuộc thi #${assignment.eventId}`);
+    }
+    return [...map.entries()].map(([id, name]) => ({ id, name }));
+  }, [assignments, selectedTermId]);
+
+  const filteredAssignments = useMemo(
+    () =>
+      assignments.filter((assignment) => {
+        if (selectedTermId !== "" && assignment.academicTermId !== selectedTermId) return false;
+        if (selectedEventId !== "" && assignment.eventId !== selectedEventId) return false;
+        return true;
+      }),
+    [assignments, selectedEventId, selectedTermId]
+  );
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      JUDGE_SCORING_FILTER_STORAGE_KEY,
+      JSON.stringify({ termId: selectedTermId, eventId: selectedEventId })
+    );
+  }, [selectedEventId, selectedTermId]);
+
   const selectedAssignment = useMemo(
-    () => assignments.find((item) => item.boardId === boardId) ?? null,
-    [assignments, boardId]
+    () => filteredAssignments.find((item) => item.boardId === boardId) ?? null,
+    [filteredAssignments, boardId]
   );
 
   const { connectionStatus } = useCommitUpdates({
@@ -111,23 +174,26 @@ export function JudgeScoringPage() {
   }, [reposQuery.data, boardId]);
 
   const groupedAssignments = useMemo(
-    () => groupAssignmentsByEvent(assignments),
-    [assignments]
+    () => groupAssignmentsByEvent(filteredAssignments),
+    [filteredAssignments]
   );
 
   useEffect(() => {
-    if (assignments.length === 0) return;
+    if (filteredAssignments.length === 0) {
+      if (boardId != null) setBoardId(null);
+      return;
+    }
     const paramId = boardIdParam ? Number(boardIdParam) : null;
     const validParam =
-      paramId != null && Number.isFinite(paramId) && assignments.some((a) => a.boardId === paramId)
+      paramId != null && Number.isFinite(paramId) && filteredAssignments.some((a) => a.boardId === paramId)
         ? paramId
         : null;
     const nextId =
-      validParam ?? pickPriorityJudgeAssignment(assignments, boardId)?.boardId ?? null;
+      validParam ?? pickPriorityJudgeAssignment(filteredAssignments, boardId)?.boardId ?? null;
     if (nextId != null && nextId !== boardId) {
       setBoardId(nextId);
     }
-  }, [assignments, boardIdParam, boardId]);
+  }, [filteredAssignments, boardIdParam, boardId]);
 
   useEffect(() => {
     if (!boardId) return;
@@ -312,13 +378,10 @@ export function JudgeScoringPage() {
         const detail = result.failed
           .map((f) => `Đội #${f.teamId}: ${mapOrganizerErrorMessage(f.errorCode)}`)
           .join("; ");
-        notify(`${result.failed.length} đội lỗi — ${detail}`, "warning");
+        notify(`${result.failed.length} đội lỗi - ${detail}`, "warning");
       }
       if (result.submitted?.length) {
-        const teamRow = teamId ? matrix?.teams.find((row) => row.teamId === teamId) : null;
-        if (teamId && teamRow?.status === "SUBMITTED") {
-          notify("Đã cập nhật phiếu chấm.", "success");
-        } else if (teamId) {
+        if (teamId) {
           notify("Đã nộp phiếu chấm.", "success");
         } else {
           notify(`Đã nộp ${result.submitted.length} phiếu chấm.`, "success");
@@ -364,12 +427,53 @@ export function JudgeScoringPage() {
         <div className="rounded-xl border border-warning-container bg-warning-container/25 p-md">
           <p className="font-body-sm text-on-surface">
             Còn {unsubmittedTeams.length} phiếu chưa nộp. Rubric có thể bị khóa sau khi BTC bắt đầu công bố
-            kết quả — hãy hoàn tất và nộp phiếu sớm. Phiếu đã nộp vẫn có thể cập nhật lại.
+            kết quả. Hãy hoàn tất và nộp phiếu sớm; phiếu đã nộp sẽ khóa để bảo toàn kết quả.
           </p>
         </div>
       ) : null}
 
       <section className="flex flex-wrap items-end gap-md rounded-xl border border-outline-variant bg-surface-container p-md">
+        {termOptions.length > 1 ? (
+          <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+            Học kỳ
+            <select
+              className="min-w-[10rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+              value={selectedTermId}
+              onChange={(e) => {
+                setSelectedTermId(e.target.value ? Number(e.target.value) : "");
+                setSelectedEventId("");
+                setBoardId(null);
+              }}
+            >
+              <option value="">Tất cả học kỳ</option>
+              {termOptions.map((term) => (
+                <option key={term.id} value={term.id}>
+                  {term.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {eventOptions.length > 1 ? (
+          <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
+            Cuộc thi
+            <select
+              className="min-w-[12rem] rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+              value={selectedEventId}
+              onChange={(e) => {
+                setSelectedEventId(e.target.value ? Number(e.target.value) : "");
+                setBoardId(null);
+              }}
+            >
+              <option value="">Tất cả cuộc thi</option>
+              {eventOptions.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
           Vòng · Bảng
           <select
@@ -377,7 +481,7 @@ export function JudgeScoringPage() {
             value={boardId ?? ""}
             onChange={(e) => setBoardId(e.target.value ? Number(e.target.value) : null)}
           >
-            {assignments.length === 0 ? <option value="">Chưa có phân công</option> : null}
+            {filteredAssignments.length === 0 ? <option value="">Chưa có phân công</option> : null}
             {groupedAssignments.map((group) => (
               <optgroup key={group.eventName} label={group.eventName}>
                 {group.items.map((assignment) => (
@@ -419,7 +523,7 @@ export function JudgeScoringPage() {
         </div>
       ) : null}
 
-      {!boardId || assignments.length === 0 ? (
+      {!boardId || filteredAssignments.length === 0 ? (
         <EmptyState
           icon="gavel"
           title="Chưa có bảng để chấm"

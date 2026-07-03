@@ -103,7 +103,7 @@ export function JudgeRepositoriesPanel({ roundId, boardId }: JudgeRepositoriesPa
       {missingAccess ? (
         <div className="rounded-lg border border-warning-container bg-warning-container/25 p-sm">
           <p className="font-body-sm text-on-surface">
-            Bạn chưa được cấp quyền xem một số repository. Vui lòng liên hệ Ban tổ chức để grant quyền
+            Bạn chưa được cấp quyền xem một số repository. Vui lòng liên hệ Ban tổ chức để cấp quyền
             read/pull trên GitHub.
           </p>
         </div>

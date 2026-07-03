@@ -80,6 +80,7 @@ export function JudgeTeamScoringModal({
   const scoreStatus = getTeamScoreStatus(team, criteria.length, filledByCriteria);
 
   const repoUrl = repository?.repositoryUrl ?? team.repositoryUrl ?? null;
+  const isReadOnly = !team.editable || team.status === "SUBMITTED";
   const cloneUrl = repository?.cloneUrl ?? (repoUrl ? `${repoUrl.replace(/\/$/, "")}.git` : null);
   const canOpenRepo =
     Boolean(repoUrl) &&
@@ -126,7 +127,7 @@ export function JudgeTeamScoringModal({
               <InfoRow label="Tên đội">{team.teamName}</InfoRow>
               <InfoRow label="Vị trí trình bày">#{team.slotNumber}</InfoRow>
               <InfoRow label="Phiếu chấm">
-                {team.status === "SUBMITTED" ? "Đã nộp — có thể cập nhật" : "Nháp (chưa nộp)"}
+                {team.status === "SUBMITTED" ? "Đã nộp - đã khóa" : "Nháp (chưa nộp)"}
               </InfoRow>
               <InfoRow label="Tổng điểm">
                 {team.computed?.judgeTeamScore != null
@@ -265,6 +266,7 @@ export function JudgeTeamScoringModal({
                     className="w-24 rounded-lg border border-outline-variant bg-surface px-3 py-2 text-center font-label-md"
                         value={cellValue}
                         onChange={(e) => onCellChange(criterion.id, e.target.value)}
+                        disabled={isReadOnly}
                         placeholder="—"
                       />
                     </label>
@@ -294,30 +296,29 @@ export function JudgeTeamScoringModal({
             placeholder="Nhận xét tổng quan về bài làm của đội (tùy chọn)"
             value={feedback}
             onChange={(e) => onFeedbackChange(e.target.value)}
+            disabled={isReadOnly}
           />
         </label>
 
         <div className="flex flex-wrap items-center justify-between gap-sm border-t border-outline-variant pt-md">
           <p className="font-body-sm text-on-surface-variant">
             {team.status === "SUBMITTED"
-              ? "Chỉnh sửa điểm rồi bấm Cập nhật phiếu để lưu thay đổi chính thức."
+              ? "Phiếu đã nộp và đang khóa. Liên hệ BTC nếu cần mở lại."
               : "Lưu nháp giữ điểm tạm; Nộp phiếu để gửi kết quả chính thức."}
           </p>
           <div className="flex flex-wrap gap-sm">
             <Button type="button" variant="ghost" onClick={onClose}>
               Đóng
             </Button>
-            <Button type="button" variant="secondary" loading={saving} onClick={onSave}>
-              {team.status === "SUBMITTED" ? "Lưu thay đổi" : "Lưu nháp"}
-            </Button>
-            {team.status === "SUBMITTED" ? (
-              <Button type="button" loading={submitting} onClick={onSubmit}>
-                Cập nhật phiếu
+            {team.status !== "SUBMITTED" ? (
+              <Button type="button" variant="secondary" loading={saving} onClick={onSave} disabled={isReadOnly}>
+                Lưu nháp
               </Button>
-            ) : (
+            ) : null}
+            {team.status !== "SUBMITTED" ? (
               <ConfirmAction
                 title="Nộp phiếu chấm?"
-                message={`Nộp phiếu chấm cho đội «${team.teamName}»? Sau khi nộp bạn vẫn có thể cập nhật lại nếu BTC chưa khóa rubric.`}
+                message={`Nộp phiếu chấm cho đội «${team.teamName}»? Sau khi nộp, phiếu sẽ bị khóa.`}
                 confirmLabel="Nộp phiếu"
                 onConfirm={onSubmit}
               >
@@ -325,7 +326,7 @@ export function JudgeTeamScoringModal({
                   Nộp phiếu
                 </Button>
               </ConfirmAction>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

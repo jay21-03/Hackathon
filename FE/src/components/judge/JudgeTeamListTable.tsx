@@ -39,7 +39,7 @@ export function JudgeTeamListTable({ teams, criteriaCount, onScoreTeam }: JudgeT
                 </td>
                 <td className="px-md py-sm text-right">
                   <Button type="button" size="sm" variant="primary" onClick={() => onScoreTeam(team.teamId)}>
-                    {team.status === "SUBMITTED" ? "Cập nhật điểm" : "Chấm điểm"}
+                    {team.status === "SUBMITTED" ? "Xem phiếu" : "Chấm điểm"}
                   </Button>
                 </td>
               </tr>
