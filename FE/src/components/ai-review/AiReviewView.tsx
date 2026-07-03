@@ -14,13 +14,13 @@ function statusTone(status: AiReviewResponse["status"]) {
 function statusLabel(status: AiReviewResponse["status"]) {
   if (status === "COMPLETED") return "Hoàn tất";
   if (status === "FAILED") return "Lỗi";
-  if (status === "LLM_STARTED") return "Đang gọi LLM";
+  if (status === "LLM_STARTED") return "Đang đánh giá bằng AI";
   return "Đang xử lý";
 }
 
 function kindLabel(kind: AiReviewResponse["reviewKind"]) {
   if (kind === "TEAM_AGGREGATE") return "Tổng hợp đội";
-  if (kind === "PER_PUSH") return "Theo push";
+  if (kind === "PER_PUSH") return "Theo lần cập nhật";
   return "Đánh giá";
 }
 

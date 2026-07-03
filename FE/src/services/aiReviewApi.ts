@@ -14,7 +14,7 @@ export interface AiReviewResponse {
   commitSha?: string | null;
   reviewKind?: AiReviewKind | null;
   status: AiReviewStatus;
-  /** Handover alias: llm_started / done / error */
+  /** Machine handover alias returned by BE. */
   handoverStatus?: string | null;
   reviewScore?: number | null;
   summary?: string | null;
@@ -150,9 +150,11 @@ export async function fetchEventAiReviews(eventId: number) {
   return data.data ?? [];
 }
 
-export async function triggerTeamAiReview(teamId: number) {
+export async function triggerTeamAiReview(teamId: number, eventId?: number | null) {
   const { data } = await apiClient.post<ApiResponse<AiReviewResponse>>(
-    `/v1/admin/teams/${teamId}/ai-reviews/run`,
+    eventId != null
+      ? `/v1/admin/events/${eventId}/teams/${teamId}/ai-reviews/run`
+      : `/v1/admin/teams/${teamId}/ai-reviews/run`,
     undefined,
     { timeout: 180_000 }
   );
@@ -178,9 +180,11 @@ export interface BackfillCommitsResponse {
   reviewTriggered: boolean;
 }
 
-export async function backfillTeamCommits(teamId: number, body: BackfillCommitsRequest) {
+export async function backfillTeamCommits(teamId: number, body: BackfillCommitsRequest, eventId?: number | null) {
   const { data } = await apiClient.post<ApiResponse<BackfillCommitsResponse>>(
-    `/v1/admin/teams/${teamId}/ai-reviews/backfill`,
+    eventId != null
+      ? `/v1/admin/events/${eventId}/teams/${teamId}/ai-reviews/backfill`
+      : `/v1/admin/teams/${teamId}/ai-reviews/backfill`,
     body
   );
   if (!data.data) {
@@ -352,9 +356,9 @@ export function formatHandoverStatus(status?: AiReviewStatus | null, handoverSta
 }
 
 export function handoverStatusLabel(handoverStatus: string) {
-  if (handoverStatus === "done") return "Hoàn tất (done)";
-  if (handoverStatus === "error") return "Lỗi (error)";
-  if (handoverStatus === "llm_started") return "Đang gọi LLM (llm_started)";
+  if (handoverStatus === "done") return "Hoàn tất";
+  if (handoverStatus === "error") return "Lỗi";
+  if (handoverStatus === "llm_started") return "Đang đánh giá bằng AI";
   return handoverStatus;
 }
 

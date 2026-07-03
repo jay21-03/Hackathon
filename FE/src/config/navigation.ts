@@ -158,7 +158,6 @@ export const participantWorkspaceNav: NavItem[] = [
   { to: "/me/board", label: "Bảng thi", icon: "grid_view", group: "Thi" },
   { to: "/me/problem", label: "Đề thi", icon: "code", group: "Thi" },
   { to: "/me/submission", label: "Bài nộp", icon: "upload", group: "Thi" },
-  { to: "/me/ai-review", label: "Đánh giá AI", icon: "psychology", group: "Tham khảo", hidden: !enableAiReview },
   { to: "/me/results", label: "Kết quả", icon: "leaderboard", group: "Kết quả" },
   {
     to: "/me/announcements",

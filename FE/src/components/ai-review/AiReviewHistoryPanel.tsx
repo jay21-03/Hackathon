@@ -10,12 +10,12 @@ interface AiReviewHistoryPanelProps {
 
 function kindShort(kind: AiReviewResponse["reviewKind"]) {
   if (kind === "TEAM_AGGREGATE") return "Tổng hợp";
-  if (kind === "PER_PUSH") return "Push";
+  if (kind === "PER_PUSH") return "Cập nhật";
   return "Review";
 }
 
 function statusShort(status: AiReviewResponse["status"]) {
-  if (status === "LLM_STARTED") return "LLM…";
+  if (status === "LLM_STARTED") return "Đang xử lý";
   return status;
 }
 

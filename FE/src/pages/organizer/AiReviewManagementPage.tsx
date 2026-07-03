@@ -7,7 +7,7 @@ import { AiReviewHistoryPanel } from "../../components/ai-review/AiReviewHistory
 import { AiReviewView } from "../../components/ai-review/AiReviewView";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
-import { Button } from "../../components/ui/Button";
+import { Button, ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
@@ -37,15 +37,40 @@ function statusTone(status: AiReviewResponse["status"]) {
   return "warning" as const;
 }
 
+const AI_REVIEW_FILTER_STORAGE_KEY = "seal.organizerAiReview.filters";
+
+function readStoredAiReviewFilters() {
+  if (typeof window === "undefined") return { statusFilter: "ALL", search: "" };
+  try {
+    const raw = window.localStorage.getItem(AI_REVIEW_FILTER_STORAGE_KEY);
+    if (!raw) return { statusFilter: "ALL", search: "" };
+    const parsed = JSON.parse(raw) as { statusFilter?: string; search?: string };
+    return {
+      statusFilter: parsed.statusFilter ?? "ALL",
+      search: parsed.search ?? ""
+    };
+  } catch {
+    return { statusFilter: "ALL", search: "" };
+  }
+}
+
 export function AiReviewManagementPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const requestedEventId = useMemo(() => {
+    const raw = searchParams.get("eventId");
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }, [searchParams]);
+  const { eventId: activeEventId, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
+  const eventId = requestedEventId ?? activeEventId;
+  const storedFilters = useMemo(readStoredAiReviewFilters, []);
   const [runningTeamId, setRunningTeamId] = useState<number | null>(null);
   const [runningAll, setRunningAll] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
-  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>(storedFilters.statusFilter);
+  const [search, setSearch] = useState(storedFilters.search);
   const [searchDebounced, setSearchDebounced] = useState("");
   const [bulkProgress, setBulkProgress] = useState<string | null>(null);
   const [backfillTeamId, setBackfillTeamId] = useState<number | null>(null);
@@ -85,17 +110,30 @@ export function AiReviewManagementPage() {
   }, [selectedTeamId]);
 
   useEffect(() => {
+    if (requestedEventId != null && requestedEventId !== activeEventId) {
+      setEventId(requestedEventId);
+    }
+  }, [activeEventId, requestedEventId, setEventId]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => setSearchDebounced(search), 300);
     return () => window.clearTimeout(timer);
   }, [search]);
 
   useEffect(() => {
+    window.localStorage.setItem(
+      AI_REVIEW_FILTER_STORAGE_KEY,
+      JSON.stringify({ statusFilter, search })
+    );
+  }, [search, statusFilter]);
+
+  useEffect(() => {
     if (!selectedTeamId || reviewsQuery.isLoading) return;
     const exists = (reviewsQuery.data ?? []).some((item) => item.teamId === selectedTeamId);
     if (!exists && (reviewsQuery.data ?? []).length > 0) {
-      setSearchParams({}, { replace: true });
+      setSearchParams(eventId ? { eventId: String(eventId) } : {}, { replace: true });
     }
-  }, [reviewsQuery.data, reviewsQuery.isLoading, selectedTeamId, setSearchParams]);
+  }, [eventId, reviewsQuery.data, reviewsQuery.isLoading, selectedTeamId, setSearchParams]);
 
   const historyQuery = useQuery({
     queryKey: ["organizer", "ai-review-history", selectedTeamId],
@@ -161,7 +199,7 @@ export function AiReviewManagementPage() {
   async function handleRunReview(teamId: number) {
     setRunningTeamId(teamId);
     try {
-      const result = await triggerTeamAiReview(teamId);
+      const result = await triggerTeamAiReview(teamId, eventId);
       await Promise.allSettled([
         queryClient.invalidateQueries({
           queryKey: [...queryKeys.events.detail(eventId ?? ""), "ai-reviews"]
@@ -171,7 +209,7 @@ export function AiReviewManagementPage() {
           queryKey: [...queryKeys.events.detail(eventId ?? ""), "ai-reviews-health"]
         })
       ]);
-      setSearchParams({ teamId: String(teamId) }, { replace: true });
+      setSearchParams({ teamId: String(teamId), ...(eventId ? { eventId: String(eventId) } : {}) }, { replace: true });
       if (result.status === "FAILED") {
         notify(`Không thể hoàn tất đánh giá AI: ${formatAiReviewFailure(result.summary)}`, "danger");
       } else if (result.status === "COMPLETED") {
@@ -225,7 +263,7 @@ export function AiReviewManagementPage() {
   async function handleBackfill(teamId: number, values: AiReviewBackfillFormValues) {
     setBackfillLoading(true);
     try {
-      const result = await backfillTeamCommits(teamId, values);
+      const result = await backfillTeamCommits(teamId, values, eventId);
       setBackfillTeamId(null);
       await queryClient.invalidateQueries({
         queryKey: [...queryKeys.events.detail(eventId ?? ""), "ai-reviews"]
@@ -245,7 +283,7 @@ export function AiReviewManagementPage() {
 
   function selectTeam(teamId: number) {
     setSelectedHistoryReview(null);
-    setSearchParams({ teamId: String(teamId) }, { replace: true });
+    setSearchParams({ teamId: String(teamId), ...(eventId ? { eventId: String(eventId) } : {}) }, { replace: true });
   }
 
   if (eventLoading || reviewsQuery.isLoading) return <ModuleSkeleton rows={5} />;
@@ -320,6 +358,7 @@ export function AiReviewManagementPage() {
           icon="psychology"
           title="Chưa có đội có mã nguồn"
           description="Cấp mã nguồn cho đội trước, đảm bảo dịch vụ đánh giá AI đã được bật, rồi bấm «Chạy tất cả đội» hoặc «Chạy lại» từng đội."
+          action={<ButtonLink to="/organizer/artifacts-hub#artifacts-step-repositories">Quản lý repository</ButtonLink>}
         />
       ) : (
         <>
@@ -378,7 +417,7 @@ export function AiReviewManagementPage() {
                         </button>
                       </td>
                       <td className="px-md py-md">
-                        {review.reviewKind === "TEAM_AGGREGATE" ? "Tổng hợp" : "Per-push"}
+                        {review.reviewKind === "TEAM_AGGREGATE" ? "Tổng hợp" : "Theo lần cập nhật"}
                       </td>
                       <td className="px-md py-md">
                         {review.status ? (

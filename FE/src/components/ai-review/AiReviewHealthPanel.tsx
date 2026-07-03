@@ -35,7 +35,7 @@ export function AiReviewHealthPanel({ health, loading = false }: AiReviewHealthP
           <dd className="font-label-sm text-on-surface">{health.teamsWithCompletedReview}</dd>
         </div>
         <div>
-          <dt className="text-on-surface-variant">Lỗi (đội)</dt>
+          <dt className="text-on-surface-variant">Lỗi đội</dt>
           <dd className="font-label-sm text-on-surface">{health.teamsWithFailedReview}</dd>
         </div>
         <div>
@@ -43,10 +43,20 @@ export function AiReviewHealthPanel({ health, loading = false }: AiReviewHealthP
           <dd className="font-label-sm text-on-surface">{health.totalFailedReviews}</dd>
         </div>
       </dl>
-      <p className="mt-sm font-body-sm text-on-surface-variant">
-        Scheduler: {health.schedulerEnabled ? "bật" : "tắt"} · Webhook push:{" "}
-        {health.webhookReviewEnabled ? "bật" : "tắt"}
-      </p>
+      <div className="mt-sm flex flex-wrap gap-sm font-body-sm">
+        <span className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-sm py-xs">
+          Scheduler nội bộ
+          <Badge tone={health.schedulerEnabled ? "success" : "warning"}>
+            {health.schedulerEnabled ? "Bật" : "Tắt"}
+          </Badge>
+        </span>
+        <span className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-sm py-xs">
+          Webhook push
+          <Badge tone={health.webhookReviewEnabled ? "success" : "warning"}>
+            {health.webhookReviewEnabled ? "Bật" : "Tắt"}
+          </Badge>
+        </span>
+      </div>
       {health.recommendation ? (
         <p className="mt-xs font-body-sm text-on-surface">{health.recommendation}</p>
       ) : null}

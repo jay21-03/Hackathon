@@ -29,7 +29,7 @@ import { formatBoardAssignmentShortLabel } from "../../utils/judgeAssignmentUtil
 
 export function JudgeAiReviewPage() {
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const boardIdParam = searchParams.get("boardId");
 
@@ -47,9 +47,23 @@ export function JudgeAiReviewPage() {
 
   const assignments = assignmentsQuery.data ?? [];
 
-  const [boardId, setBoardId] = useState<number | "">("");
+  const storedFilters = useMemo<{ boardId: number | ""; teamId: number | "" }>(() => {
+    try {
+      const raw = window.localStorage.getItem("seal.judgeAiReview.filters");
+      if (!raw) return { boardId: "", teamId: "" } as { boardId: number | ""; teamId: number | "" };
+      const parsed = JSON.parse(raw) as { boardId?: unknown; teamId?: unknown };
+      return {
+        boardId: typeof parsed.boardId === "number" ? parsed.boardId : "",
+        teamId: typeof parsed.teamId === "number" ? parsed.teamId : ""
+      };
+    } catch {
+      return { boardId: "", teamId: "" } as { boardId: number | ""; teamId: number | "" };
+    }
+  }, []);
 
-  const [teamId, setTeamId] = useState<number | "">("");
+  const [boardId, setBoardId] = useState<number | "">(storedFilters.boardId);
+
+  const [teamId, setTeamId] = useState<number | "">(storedFilters.teamId);
   const [selectedHistoryReview, setSelectedHistoryReview] = useState<AiReviewResponse | null>(null);
 
 
@@ -82,6 +96,11 @@ export function JudgeAiReviewPage() {
 
       setBoardId(parsedBoardId);
 
+    } else if (boardId !== "" && !boardOptions.some((item) => item.id === boardId)) {
+
+      setBoardId("");
+      setTeamId("");
+
     }
 
     if (Number.isFinite(parsedTeamId)) {
@@ -90,7 +109,15 @@ export function JudgeAiReviewPage() {
 
     }
 
-  }, [assignments.length, boardIdParam, boardOptions, teamIdParam]);
+  }, [assignments.length, boardId, boardIdParam, boardOptions, teamIdParam]);
+
+  useEffect(() => {
+    window.localStorage.setItem("seal.judgeAiReview.filters", JSON.stringify({ boardId, teamId }));
+    const nextParams: Record<string, string> = {};
+    if (boardId !== "") nextParams.boardId = String(boardId);
+    if (teamId !== "") nextParams.teamId = String(teamId);
+    setSearchParams(nextParams, { replace: true });
+  }, [boardId, setSearchParams, teamId]);
 
 
 
@@ -123,6 +150,14 @@ export function JudgeAiReviewPage() {
     queryFn: () => fetchTeamAiReviewHistory(Number(teamId)),
     enabled: teamId !== ""
   });
+
+  useEffect(() => {
+    if (teamId === "" || teamsQuery.isLoading) return;
+    const exists = (teamsQuery.data ?? []).some((team) => team.teamId === teamId);
+    if (!exists) {
+      setTeamId("");
+    }
+  }, [teamId, teamsQuery.data, teamsQuery.isLoading]);
 
   useEffect(() => {
     setSelectedHistoryReview(null);

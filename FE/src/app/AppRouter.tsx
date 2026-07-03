@@ -138,10 +138,6 @@ const ParticipantOverviewPage = lazyPage(() => import("../pages/participant/Part
 const ProfilePage = lazyPage(() => import("../pages/participant/ProfilePage"), "ProfilePage");
 const ProblemPage = lazyPage(() => import("../pages/participant/ProblemPage"), "ProblemPage");
 const SubmissionPage = lazyPage(() => import("../pages/participant/SubmissionPage"), "SubmissionPage");
-const ParticipantAiReviewPage = lazyPage(
-  () => import("../pages/participant/ParticipantAiReviewPage"),
-  "ParticipantAiReviewPage"
-);
 const TeamOverviewPage = lazyPage(() => import("../pages/participant/TeamOverviewPage"), "TeamOverviewPage");
 const NotificationsPage = lazyPage(
   () => import("../pages/participant/NotificationsPage"),
@@ -357,7 +353,7 @@ export function AppRouter() {
             <Route path="problem" element={routeElement(<ProblemPage />)} />
             <Route path="countdown" element={<Navigate to="/me/problem" replace />} />
             <Route path="submission" element={gatedSubmissionRoute("/me", <SubmissionPage />)} />
-            <Route path="ai-review" element={gatedAiReviewRoute("/me", <ParticipantAiReviewPage />)} />
+            <Route path="ai-review" element={<Navigate to="/me/submission" replace />} />
             <Route
               path="results"
               element={gatedRankingRoute("/me", <ResultsPortalPage participantView />)}
