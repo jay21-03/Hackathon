@@ -17,4 +17,6 @@ public interface ScoreSheetRepository extends JpaRepository<ScoreSheet, Long> {
 	Optional<ScoreSheet> findByBoardIdAndTeamIdAndJudgeId(Long boardId, Long teamId, Long judgeId);
 
 	boolean existsByBoardIdAndStatus(Long boardId, ScoreSheetStatus status);
+
+	void deleteByBoardIdAndTeamId(Long boardId, Long teamId);
 }

@@ -60,6 +60,11 @@ import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.registration.service.AuditLogWriter;
 import com.seal.hackathon.notification.service.NotificationService;
+import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
+import com.seal.hackathon.ranking.repository.RankingResultRepository;
+import com.seal.hackathon.scoring.entity.ScoreSheet;
+import com.seal.hackathon.scoring.repository.ScoreItemRepository;
+import com.seal.hackathon.scoring.repository.ScoreSheetRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Objects;
@@ -108,6 +113,10 @@ public class ContestManagementService {
     private final FileStorageService fileStorageService;
     private final ProblemHtmlSanitizer problemHtmlSanitizer;
     private final EventLifecycleService eventLifecycleService;
+    private final ScoreSheetRepository scoreSheetRepository;
+    private final ScoreItemRepository scoreItemRepository;
+    private final RankingResultRepository rankingResultRepository;
+    private final TeamRepositoryEntityRepository teamRepositoryEntityRepository;
 
     @Transactional
     public EventResponse createEvent(CreateEventRequest request) {
@@ -477,6 +486,7 @@ public class ContestManagementService {
     public AssignResponse assignTeamToSlot(Long roundId, Long slotId, AssignRequest request) {
         organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
         BoardSlot slot = getBoardSlotEntity(slotId);
+        assertBoardStructureMutable(slot.getBoardId());
         if (!slot.getRoundId().equals(roundId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slot does not belong to round");
         }
@@ -511,6 +521,9 @@ public class ContestManagementService {
         }
 
         Long previous = slot.getTeamId();
+        if (previous != null && !previous.equals(teamId)) {
+            deleteScoreSheetsForSlotTeam(slot.getBoardId(), previous);
+        }
         slot.setTeamId(teamId);
         slot.setAssignedAt(OffsetDateTime.now());
         slot.setCreatedAt(slot.getCreatedAt());
@@ -560,6 +573,7 @@ public class ContestManagementService {
         Round round = getRoundEntity(roundId);
         eventLifecycleService.assertEventAllowsBoardAssignment(requireEventEntity(round.getEventId()));
         BoardSlot slot = getBoardSlotEntity(slotId);
+        assertBoardStructureMutable(slot.getBoardId());
         if (!slot.getRoundId().equals(roundId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slot does not belong to round");
         }
@@ -569,6 +583,7 @@ public class ContestManagementService {
 
         Long previous = slot.getTeamId();
         OffsetDateTime now = OffsetDateTime.now();
+        deleteScoreSheetsForSlotTeam(slot.getBoardId(), previous);
         slot.setTeamId(null);
         slot.setAssignedAt(now);
         slot.setAssignedBy(currentUserProvider.getCurrentUser().getUserId());
@@ -629,6 +644,10 @@ public class ContestManagementService {
         }
         BoardSlot from = getBoardSlotEntity(fromSlotId);
         BoardSlot to = getBoardSlotEntity(toSlotId);
+        assertBoardStructureMutable(from.getBoardId());
+        if (!Objects.equals(from.getBoardId(), to.getBoardId())) {
+            assertBoardStructureMutable(to.getBoardId());
+        }
 
         if (!from.getRoundId().equals(roundId) || !to.getRoundId().equals(roundId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slots must belong to the same round");
@@ -646,6 +665,9 @@ public class ContestManagementService {
         Long toPrev = to.getTeamId();
 
         OffsetDateTime now = OffsetDateTime.now();
+        if (!Objects.equals(from.getBoardId(), to.getBoardId())) {
+            deleteScoreSheetsForSlotTeam(from.getBoardId(), fromPrev);
+        }
         from.setTeamId(null);
         from.setAssignedAt(now);
         from.setAssignedBy(currentUserProvider.getCurrentUser().getUserId());
@@ -703,6 +725,10 @@ public class ContestManagementService {
         }
         BoardSlot a = getBoardSlotEntity(slotAId);
         BoardSlot b = getBoardSlotEntity(slotBId);
+        assertBoardStructureMutable(a.getBoardId());
+        if (!Objects.equals(a.getBoardId(), b.getBoardId())) {
+            assertBoardStructureMutable(b.getBoardId());
+        }
 
         if (!a.getRoundId().equals(roundId) || !b.getRoundId().equals(roundId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slots must belong to the same round");
@@ -712,6 +738,10 @@ public class ContestManagementService {
         Long bPrev = b.getTeamId();
 
         OffsetDateTime now = OffsetDateTime.now();
+        if (!Objects.equals(a.getBoardId(), b.getBoardId())) {
+            deleteScoreSheetsForSlotTeam(a.getBoardId(), aPrev);
+            deleteScoreSheetsForSlotTeam(b.getBoardId(), bPrev);
+        }
         a.setTeamId(bPrev);
         a.setAssignedAt(now);
         a.setAssignedBy(currentUserProvider.getCurrentUser().getUserId());
@@ -785,6 +815,11 @@ public class ContestManagementService {
             if (slotIdFilter != null && !slotIdFilter.contains(s.getId())) continue;
             targetSlots.add(s);
         }
+        targetSlots.stream()
+                .map(BoardSlot::getBoardId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .forEach(this::assertBoardStructureMutable);
 
         if (eligibleTeams.isEmpty() || targetSlots.isEmpty()) {
             return RandomAssignResponse.builder()
@@ -911,14 +946,57 @@ public class ContestManagementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "teamId is not supported in Phase 2");
         }
         BoardSlot slot = getBoardSlotEntity(slotId);
+        assertBoardStructureMutable(slot.getBoardId());
 
         if (boardSlotRepository.existsByBoardIdAndTeamNumberAndIdNot(slot.getBoardId(), request.getTeamNumber(), slotId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "teamNumber already exists in this board");
         }
 
         slot.setTeamNumber(request.getTeamNumber());
+        deleteScoreSheetsForSlotTeam(slot.getBoardId(), slot.getTeamId());
         slot.setTeamId(null);
         return toBoardSlotResponse(boardSlotRepository.save(slot));
+    }
+
+    private void deleteScoreSheetsForSlotTeam(Long boardId, Long teamId) {
+        if (boardId == null || teamId == null) {
+            return;
+        }
+        List<ScoreSheet> sheets = scoreSheetRepository.findByBoardIdAndTeamId(boardId, teamId);
+        for (ScoreSheet sheet : sheets) {
+            scoreItemRepository.deleteByScoreSheetId(sheet.getId());
+        }
+        if (!sheets.isEmpty()) {
+            scoreSheetRepository.deleteByBoardIdAndTeamId(boardId, teamId);
+        }
+    }
+
+    private void assertBoardStructureMutable(Long boardId) {
+        if (boardId == null) {
+            return;
+        }
+        if (rankingResultRepository.existsByBoardId(boardId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "BOARD_RANKING_LOCKED");
+        }
+        if (!scoreSheetRepository.findByBoardId(boardId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "BOARD_SCORING_LOCKED");
+        }
+    }
+
+    private void assertProblemMutable(Problem problem) {
+        if (problem == null) {
+            return;
+        }
+        if (!teamRepositoryEntityRepository.findByProblemIdOrderByTeamIdAsc(problem.getId()).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "PROBLEM_HAS_REPOSITORIES");
+        }
+        Long boardId = problem.getBoardId();
+        if (boardId != null && rankingResultRepository.existsByBoardId(boardId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "PROBLEM_BOARD_HAS_RANKING");
+        }
+        if (boardId != null && !scoreSheetRepository.findByBoardId(boardId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "PROBLEM_BOARD_HAS_SCORING");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -1002,6 +1080,7 @@ public class ContestManagementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "boardId and createdBy are immutable in Phase 2");
         }
         Problem problem = getProblemEntity(problemId);
+        assertProblemMutable(problem);
         boolean wasReleased = isProblemReleasedNow(problem);
 
         if (request.getTitle() != null) {
@@ -1054,6 +1133,7 @@ public class ContestManagementService {
     public void deleteProblem(Long problemId) {
         organizerAuthorizationService.requireProblemOwnedByCurrentOrganizer(problemId);
         Problem problem = getProblemEntity(problemId);
+        assertProblemMutable(problem);
         String attachmentUrl = problem.getAttachmentUrl();
         problemRepository.delete(problem);
         fileStorageService.deleteByPublicUrl(attachmentUrl);

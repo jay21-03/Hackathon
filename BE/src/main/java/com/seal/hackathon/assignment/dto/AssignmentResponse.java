@@ -21,6 +21,8 @@ public class AssignmentResponse {
     private Long eventId;
     private String eventName;
     private Long academicTermId;
+    private String academicTermCode;
+    private String academicTermName;
     private AcademicTermStatus academicTermStatus;
     private Long assigneeId; // mentorId or judgeId
     private String assigneeName;

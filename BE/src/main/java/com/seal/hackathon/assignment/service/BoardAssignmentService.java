@@ -26,6 +26,7 @@ import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.repository.TeamRepository;
+import com.seal.hackathon.ranking.repository.RankingResultRepository;
 import com.seal.hackathon.scoring.entity.ScoreSheet;
 import com.seal.hackathon.scoring.repository.ScoreSheetRepository;
 import java.time.OffsetDateTime;
@@ -54,6 +55,7 @@ public class BoardAssignmentService {
     private final CurrentUserProvider currentUserProvider;
     private final OrganizerAuthorizationService organizerAuthorizationService;
     private final ScoreSheetRepository scoreSheetRepository;
+    private final RankingResultRepository rankingResultRepository;
     private final JudgeBoardReadinessService judgeBoardReadinessService;
     private final BoardScoringReadinessService boardScoringReadinessService;
 
@@ -75,6 +77,7 @@ public class BoardAssignmentService {
             MentorAssignment existing = mentorAssignmentRepository.findByBoardIdAndMentorId(boardId, mentorId).get();
             return toResponse(existing);
         }
+        assertStaffAssignmentsMutable(boardId);
 
         OffsetDateTime now = OffsetDateTime.now();
         MentorAssignment ma = MentorAssignment.builder()
@@ -107,6 +110,7 @@ public class BoardAssignmentService {
             JudgeAssignment existing = judgeAssignmentRepository.findByBoardIdAndJudgeId(boardId, judgeId).get();
             return toJudgeResponse(existing);
         }
+        assertStaffAssignmentsMutable(boardId);
 
         OffsetDateTime now = OffsetDateTime.now();
         JudgeAssignment ja = JudgeAssignment.builder()
@@ -189,6 +193,7 @@ public class BoardAssignmentService {
     @Transactional
     public void deleteMentorAssignment(Long boardId, Long mentorId) {
         organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
+        assertStaffAssignmentsMutable(boardId);
         mentorAssignmentRepository.deleteByBoardIdAndMentorId(boardId, mentorId);
     }
 
@@ -198,6 +203,7 @@ public class BoardAssignmentService {
         OffsetDateTime now = OffsetDateTime.now();
         if (role == SystemRole.MENTOR) {
             if (!mentorAssignmentRepository.existsByBoardIdAndMentorId(boardId, userId)) {
+                assertStaffAssignmentsMutable(boardId);
                 mentorAssignmentRepository.save(MentorAssignment.builder()
                         .boardId(boardId)
                         .mentorId(userId)
@@ -212,6 +218,7 @@ public class BoardAssignmentService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MENTOR_CANNOT_JUDGE_OWN_BOARD");
             }
             if (!judgeAssignmentRepository.existsByBoardIdAndJudgeId(boardId, userId)) {
+                assertStaffAssignmentsMutable(boardId);
                 judgeAssignmentRepository.save(JudgeAssignment.builder()
                         .boardId(boardId)
                         .judgeId(userId)
@@ -231,9 +238,19 @@ public class BoardAssignmentService {
 
         List<ScoreSheet> scoreSheets = scoreSheetRepository.findByBoardIdAndJudgeId(boardId, judgeId);
         if (!scoreSheets.isEmpty()) {
-            scoreSheetRepository.deleteAll(scoreSheets);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "JUDGE_HAS_SCORE_SHEETS");
         }
+        assertStaffAssignmentsMutable(boardId);
         judgeAssignmentRepository.deleteByBoardIdAndJudgeId(boardId, judgeId);
+    }
+
+    private void assertStaffAssignmentsMutable(Long boardId) {
+        if (rankingResultRepository.existsByBoardId(boardId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "BOARD_RANKING_LOCKED");
+        }
+        if (!scoreSheetRepository.findByBoardId(boardId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "BOARD_SCORING_LOCKED");
+        }
     }
 
     private AssignmentResponse toResponse(MentorAssignment m) {
@@ -290,6 +307,8 @@ public class BoardAssignmentService {
             if (event.getAcademicTermId() != null) {
                 AcademicTerm term = academicTermRepository.findById(event.getAcademicTermId()).orElse(null);
                 if (term != null) {
+                    response.setAcademicTermCode(term.getCode());
+                    response.setAcademicTermName(term.getName());
                     response.setAcademicTermStatus(term.getStatus());
                 }
             }
