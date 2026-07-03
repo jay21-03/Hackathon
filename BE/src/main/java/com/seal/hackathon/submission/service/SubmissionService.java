@@ -448,7 +448,7 @@ public class SubmissionService {
         validateRepositoryUrl(url);
 
         com.seal.hackathon.aireview.entity.TeamRepository entity = upsertRepository(
-                ctx.teamId(),
+                ctx,
                 userId,
                 url,
                 request.getRepositoryName(),
@@ -466,7 +466,7 @@ public class SubmissionService {
 
         String url = StringUtils.hasText(request.getRepositoryUrl())
                 ? normalizeUrl(request.getRepositoryUrl())
-                : repositoryUrl(findBestTeamRepository(ctx.teamId()));
+                : repositoryUrl(resolveRepositoryForContext(ctx));
 
         if (!StringUtils.hasText(url)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "REPOSITORY_URL_REQUIRED");
@@ -475,10 +475,11 @@ public class SubmissionService {
 
         String name = StringUtils.hasText(request.getRepositoryName())
                 ? request.getRepositoryName().trim()
-                : repositoryName(findBestTeamRepository(ctx.teamId()));
+                : repositoryName(resolveRepositoryForContext(ctx));
 
         OffsetDateTime now = OffsetDateTime.now();
-        com.seal.hackathon.aireview.entity.TeamRepository entity = upsertRepository(ctx.teamId(), userId, url, name, SubmissionStatus.SUBMITTED, now);
+        com.seal.hackathon.aireview.entity.TeamRepository entity =
+                upsertRepository(ctx, userId, url, name, SubmissionStatus.SUBMITTED, now);
         Team team = teamRepository.findById(ctx.teamId()).orElse(null);
         Event event = eventRepository.findById(request.getEventId()).orElse(null);
         if (team != null && event != null) {
@@ -488,25 +489,28 @@ public class SubmissionService {
     }
 
     private com.seal.hackathon.aireview.entity.TeamRepository upsertRepository(
-            Long teamId,
+            SubmissionContext ctx,
             Long userId,
             String url,
             String name,
             SubmissionStatus status,
             OffsetDateTime submittedAt) {
         OffsetDateTime now = OffsetDateTime.now();
-        com.seal.hackathon.aireview.entity.TeamRepository entity = findTeamLevelRepository(teamId);
+        com.seal.hackathon.aireview.entity.TeamRepository entity = resolveRepositoryForContext(ctx);
 
         if (entity == null) {
             entity = com.seal.hackathon.aireview.entity.TeamRepository.builder()
-                    .teamId(teamId)
+                    .teamId(ctx.teamId())
+                    .roundId(ctx.roundId())
+                    .boardId(ctx.boardId())
+                    .problemId(ctx.problemId())
                     .repositoryUrl(url)
                     .repositoryName(StringUtils.hasText(name) ? name.trim() : null)
                     .reviewIntervalMinutes(DEFAULT_REVIEW_INTERVAL_MINUTES)
                     .status(status)
                     .submittedAt(submittedAt)
                     .accessStatus(RepositoryAccessStatus.OPEN)
-                    .provisionStatus(RepositoryProvisionStatus.PENDING)
+                    .provisionStatus(RepositoryProvisionStatus.CREATED)
                     .createdBy(userId)
                     .createdAt(now)
                     .updatedAt(now)
@@ -519,6 +523,15 @@ public class SubmissionService {
             entity.setStatus(status);
             entity.setSubmittedAt(submittedAt);
             entity.setUpdatedAt(now);
+            entity.setRoundId(ctx.roundId());
+            entity.setBoardId(ctx.boardId());
+            entity.setProblemId(ctx.problemId());
+            if (StringUtils.hasText(url) && entity.getProvisionStatus() == RepositoryProvisionStatus.PENDING) {
+                entity.setProvisionStatus(RepositoryProvisionStatus.CREATED);
+            }
+            if (entity.getAccessStatus() == null || entity.getAccessStatus() == RepositoryAccessStatus.PENDING) {
+                entity.setAccessStatus(RepositoryAccessStatus.OPEN);
+            }
             if (entity.getCreatedBy() == null) {
                 entity.setCreatedBy(userId);
             }
@@ -562,7 +575,11 @@ public class SubmissionService {
                     continue;
                 }
                 com.seal.hackathon.aireview.entity.TeamRepository repository =
-                        findBestTeamRepository(slot.getTeamId());
+                        teamRepositoryEntityRepository
+                                .findByTeamIdAndProblemId(slot.getTeamId(), problem.getId())
+                                .orElseGet(() -> resolveRepositoryForSlot(slot, boardRepository
+                                        .findById(problem.getBoardId())
+                                        .orElse(null)));
                 if (repository == null || repository.getStatus() == SubmissionStatus.SUBMITTED) {
                     continue;
                 }
@@ -586,7 +603,7 @@ public class SubmissionService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "SUBMISSION_DEADLINE_PASSED");
         }
         if (ctx.teamId() != null) {
-            com.seal.hackathon.aireview.entity.TeamRepository entity = findBestTeamRepository(ctx.teamId());
+            com.seal.hackathon.aireview.entity.TeamRepository entity = resolveRepositoryForContext(ctx);
             if (entity != null && effectiveStatus(entity, ctx.deadlineAt()) == SubmissionStatus.SUBMITTED) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "SUBMISSION_ALREADY_SUBMITTED");
             }
@@ -603,6 +620,21 @@ public class SubmissionService {
         return teamRepositoryEntityRepository
                 .findFirstByTeamIdAndProblemIdIsNullOrderByUpdatedAtDesc(teamId)
                 .orElse(null);
+    }
+
+    private com.seal.hackathon.aireview.entity.TeamRepository resolveRepositoryForContext(SubmissionContext ctx) {
+        if (ctx.teamId() == null) {
+            return null;
+        }
+        if (ctx.problemId() != null) {
+            return teamRepositoryEntityRepository
+                    .findByTeamIdAndProblemId(ctx.teamId(), ctx.problemId())
+                    .orElse(null);
+        }
+        if (ctx.roundId() != null) {
+            return findRoundScopedRepository(ctx.teamId(), ctx.roundId()).orElse(null);
+        }
+        return findTeamLevelRepository(ctx.teamId());
     }
 
     private com.seal.hackathon.aireview.entity.TeamRepository resolveRepositoryForParticipant(
@@ -622,7 +654,7 @@ public class SubmissionService {
                 }
             }
         }
-        return findBestTeamRepository(teamId);
+        return findTeamLevelRepository(teamId);
     }
 
     private BoardSlot resolveAdminSubmissionSlot(
@@ -723,28 +755,17 @@ public class SubmissionService {
             return null;
         }
         Long resolvedRoundId = roundId;
-        return teamRepositoryEntityRepository.findAllByTeamId(teamId).stream()
-                .filter(repo -> repo.getProblemId() == null)
-                .filter(repo -> resolvedRoundId.equals(repo.getRoundId()))
-                .max(Comparator.comparing(
-                        com.seal.hackathon.aireview.entity.TeamRepository::getUpdatedAt,
-                        Comparator.nullsLast(Comparator.naturalOrder())))
-                .orElse(null);
+        return findRoundScopedRepository(teamId, resolvedRoundId).orElse(null);
     }
 
-    private com.seal.hackathon.aireview.entity.TeamRepository findBestTeamRepository(Long teamId) {
-        List<com.seal.hackathon.aireview.entity.TeamRepository> repositories =
-                teamRepositoryEntityRepository.findAllByTeamId(teamId);
-        if (repositories.isEmpty()) {
-            return null;
-        }
-        return repositories.stream()
-                .filter(repo -> repo.getProvisionStatus() == RepositoryProvisionStatus.CREATED)
-                .filter(repo -> StringUtils.hasText(repo.getRepositoryUrl()))
+    private Optional<com.seal.hackathon.aireview.entity.TeamRepository> findRoundScopedRepository(
+            Long teamId, Long roundId) {
+        return teamRepositoryEntityRepository.findAllByTeamId(teamId).stream()
+                .filter(repo -> repo.getProblemId() == null)
+                .filter(repo -> roundId.equals(repo.getRoundId()))
                 .max(Comparator.comparing(
                         com.seal.hackathon.aireview.entity.TeamRepository::getUpdatedAt,
-                        Comparator.nullsLast(Comparator.naturalOrder())))
-                .orElseGet(() -> findTeamLevelRepository(teamId));
+                        Comparator.nullsLast(Comparator.naturalOrder())));
     }
 
     private SubmissionStatus effectiveStatus(
@@ -778,14 +799,28 @@ public class SubmissionService {
         MyProblemResponse problem = contestManagementService.getMyProblem(eventId, userId);
         if (!problem.isAvailable()) {
             String reason = problem.getReason() != null ? problem.getReason() : "PROBLEM_UNAVAILABLE";
-            return new SubmissionContext(team.getId(), team.getName(), problem.getCloseAt(), reason);
+            return new SubmissionContext(
+                    team.getId(),
+                    team.getName(),
+                    board.getBoardId(),
+                    board.getRoundId(),
+                    problem.getProblem() != null ? problem.getProblem().getId() : null,
+                    problem.getCloseAt(),
+                    reason);
         }
 
-        return new SubmissionContext(team.getId(), team.getName(), problem.getCloseAt(), null);
+        return new SubmissionContext(
+                team.getId(),
+                team.getName(),
+                board.getBoardId(),
+                board.getRoundId(),
+                problem.getProblem() != null ? problem.getProblem().getId() : null,
+                problem.getCloseAt(),
+                null);
     }
 
     private SubmissionContext blockedContext(String reason) {
-        return new SubmissionContext(null, null, null, reason);
+        return new SubmissionContext(null, null, null, null, null, null, reason);
     }
 
     private String normalizeUrl(String raw) {
@@ -796,24 +831,6 @@ public class SubmissionService {
         if (!RepositoryUrlValidation.isValid(url)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_REPOSITORY_URL");
         }
-    }
-
-    private SubmissionResponse buildAdminResponse(
-            Team team,
-            com.seal.hackathon.aireview.entity.TeamRepository entity,
-            OffsetDateTime deadlineAt) {
-        return SubmissionResponse.builder()
-                .teamId(team.getId())
-                .teamName(team.getName())
-                .status(entity != null ? effectiveStatus(entity, deadlineAt) : null)
-                .repositoryUrl(entity != null ? entity.getRepositoryUrl() : null)
-                .repositoryName(entity != null ? entity.getRepositoryName() : null)
-                .submittedAt(entity != null ? effectiveSubmittedAt(entity, deadlineAt) : null)
-                .deadlineAt(deadlineAt)
-                .canSubmit(false)
-                .editable(false)
-                .blockReason(null)
-                .build();
     }
 
     private OffsetDateTime resolveDeadlineForBoard(Long boardId) {
@@ -827,21 +844,12 @@ public class SubmissionService {
                 .orElse(null);
     }
 
-    private OffsetDateTime resolveDeadlineForTeam(Long teamId, Long eventId) {
-        List<BoardSlot> slots = boardSlotRepository.findByTeamId(teamId);
-        if (slots.isEmpty()) {
-            return null;
-        }
-        BoardSlot slot = slots.get(0);
-        if (slot.getBoardId() == null) {
-            return null;
-        }
-        return problemRepository.findByBoardId(slot.getBoardId()).stream()
-                .map(Problem::getCloseAt)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
-    }
-
-    private record SubmissionContext(Long teamId, String teamName, OffsetDateTime deadlineAt, String blockReason) {}
+    private record SubmissionContext(
+            Long teamId,
+            String teamName,
+            Long boardId,
+            Long roundId,
+            Long problemId,
+            OffsetDateTime deadlineAt,
+            String blockReason) {}
 }

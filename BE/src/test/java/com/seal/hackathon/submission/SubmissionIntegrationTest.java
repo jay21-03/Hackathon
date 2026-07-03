@@ -32,6 +32,7 @@ import com.seal.hackathon.registration.entity.TeamMember;
 import com.seal.hackathon.registration.repository.TeamMemberRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.authprofile.security.JwtService;
+import com.seal.hackathon.submission.service.SubmissionService;
 import com.seal.hackathon.support.IntegrationTestDataCleaner;
 import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.support.IntegrationTestConfig;
@@ -116,6 +117,9 @@ class SubmissionIntegrationTest {
 
     @Autowired
     TeamRepositoryEntityRepository teamRepositoryEntityRepository;
+
+    @Autowired
+    SubmissionService submissionService;
 
     @Autowired
     IntegrationTestDataCleaner dataCleaner;
@@ -396,6 +400,185 @@ class SubmissionIntegrationTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].teamId").value(team.getId()))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].boardName").value("Bảng A"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.items[0].slotNumber").value(1));
+    }
+
+    @Test
+    void participantCanSubmitSeparateRepositoryForFinalRoundProblem() throws Exception {
+        String jwt = jwtService.generateToken(participant, Set.of());
+        Board groupBoard = boardRepository.findAll().get(0);
+        Problem groupProblem = problemRepository.findByBoardId(groupBoard.getId()).get(0);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/my/submission/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + jwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "eventId", event.getId(),
+                                "repositoryUrl", "https://github.com/org/group-repo",
+                                "repositoryName", "group-repo"))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.status").value("SUBMITTED"));
+
+        Round groupRound = roundRepository.findById(groupBoard.getRoundId()).orElseThrow();
+        groupRound.setStartAt(OffsetDateTime.now().minusHours(4));
+        groupRound.setEndAt(OffsetDateTime.now().minusHours(3));
+        roundRepository.save(groupRound);
+
+        Round finalsRound = roundRepository.save(Round.builder()
+                .eventId(event.getId())
+                .name("Final")
+                .roundType(RoundType.FINAL)
+                .roundOrder(2)
+                .startAt(OffsetDateTime.now().minusMinutes(10))
+                .endAt(OffsetDateTime.now().plusHours(4))
+                .status(RoundStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        Board finalsBoard = boardRepository.save(Board.builder()
+                .roundId(finalsRound.getId())
+                .name("Final Board")
+                .boardOrder(1)
+                .description("")
+                .status(BoardStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        boardSlotRepository.save(BoardSlot.builder()
+                .roundId(finalsRound.getId())
+                .boardId(finalsBoard.getId())
+                .teamNumber(1)
+                .teamId(team.getId())
+                .assignedAt(OffsetDateTime.now())
+                .assignedBy(participant.getId())
+                .createdAt(OffsetDateTime.now())
+                .build());
+
+        Problem finalsProblem = problemRepository.save(Problem.builder()
+                .boardId(finalsBoard.getId())
+                .title("Final problem")
+                .description("Final description")
+                .releaseAt(OffsetDateTime.now().minusMinutes(5))
+                .closeAt(OffsetDateTime.now().plusDays(1))
+                .createdBy(participant.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/my/submission/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + jwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "eventId", event.getId(),
+                                "repositoryUrl", "https://github.com/org/final-repo",
+                                "repositoryName", "final-repo"))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.repositoryUrl").value("https://github.com/org/final-repo"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.status").value("SUBMITTED"));
+
+        var groupRepository = teamRepositoryEntityRepository
+                .findByTeamIdAndProblemId(team.getId(), groupProblem.getId())
+                .orElseThrow();
+        var finalRepository = teamRepositoryEntityRepository
+                .findByTeamIdAndProblemId(team.getId(), finalsProblem.getId())
+                .orElseThrow();
+
+        assertThat(groupRepository.getId()).isNotEqualTo(finalRepository.getId());
+        assertThat(groupRepository.getRoundId()).isEqualTo(groupRound.getId());
+        assertThat(groupRepository.getRepositoryUrl()).isEqualTo("https://github.com/org/group-repo");
+        assertThat(finalRepository.getRoundId()).isEqualTo(finalsRound.getId());
+        assertThat(finalRepository.getBoardId()).isEqualTo(finalsBoard.getId());
+        assertThat(finalRepository.getRepositoryUrl()).isEqualTo("https://github.com/org/final-repo");
+    }
+
+    @Test
+    void autoFinalizeOnlyUsesRepositoryForClosedProblem() {
+        Board groupBoard = boardRepository.findAll().get(0);
+        Problem groupProblem = problemRepository.findByBoardId(groupBoard.getId()).get(0);
+        Round groupRound = roundRepository.findById(groupBoard.getRoundId()).orElseThrow();
+        groupProblem.setCloseAt(OffsetDateTime.now().minusMinutes(5));
+        problemRepository.save(groupProblem);
+
+        Round finalsRound = roundRepository.save(Round.builder()
+                .eventId(event.getId())
+                .name("Final")
+                .roundType(RoundType.FINAL)
+                .roundOrder(2)
+                .startAt(OffsetDateTime.now().plusHours(3))
+                .endAt(OffsetDateTime.now().plusHours(4))
+                .status(RoundStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        Board finalsBoard = boardRepository.save(Board.builder()
+                .roundId(finalsRound.getId())
+                .name("Final Board")
+                .boardOrder(1)
+                .description("")
+                .status(BoardStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        boardSlotRepository.save(BoardSlot.builder()
+                .roundId(finalsRound.getId())
+                .boardId(finalsBoard.getId())
+                .teamNumber(1)
+                .teamId(team.getId())
+                .assignedAt(OffsetDateTime.now())
+                .assignedBy(participant.getId())
+                .createdAt(OffsetDateTime.now())
+                .build());
+        Problem finalsProblem = problemRepository.save(Problem.builder()
+                .boardId(finalsBoard.getId())
+                .title("Final problem")
+                .description("Final description")
+                .releaseAt(OffsetDateTime.now().minusMinutes(5))
+                .closeAt(OffsetDateTime.now().plusDays(1))
+                .createdBy(participant.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        teamRepositoryEntityRepository.save(com.seal.hackathon.aireview.entity.TeamRepository.builder()
+                .teamId(team.getId())
+                .roundId(groupRound.getId())
+                .boardId(groupBoard.getId())
+                .problemId(groupProblem.getId())
+                .repositoryUrl("https://github.com/org/group-repo")
+                .repositoryName("group-repo")
+                .status(SubmissionStatus.DRAFT)
+                .provisionStatus(RepositoryProvisionStatus.CREATED)
+                .reviewIntervalMinutes(30)
+                .createdBy(participant.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        teamRepositoryEntityRepository.save(com.seal.hackathon.aireview.entity.TeamRepository.builder()
+                .teamId(team.getId())
+                .roundId(finalsRound.getId())
+                .boardId(finalsBoard.getId())
+                .problemId(finalsProblem.getId())
+                .repositoryUrl("https://github.com/org/final-repo")
+                .repositoryName("final-repo")
+                .status(SubmissionStatus.DRAFT)
+                .provisionStatus(RepositoryProvisionStatus.CREATED)
+                .reviewIntervalMinutes(30)
+                .createdBy(participant.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        assertThat(submissionService.finalizeSubmissionsForClosedProblems()).isEqualTo(1);
+
+        var groupRepository = teamRepositoryEntityRepository
+                .findByTeamIdAndProblemId(team.getId(), groupProblem.getId())
+                .orElseThrow();
+        var finalRepository = teamRepositoryEntityRepository
+                .findByTeamIdAndProblemId(team.getId(), finalsProblem.getId())
+                .orElseThrow();
+        assertThat(groupRepository.getStatus()).isEqualTo(SubmissionStatus.SUBMITTED);
+        assertThat(finalRepository.getStatus()).isEqualTo(SubmissionStatus.DRAFT);
     }
 
     @Test
