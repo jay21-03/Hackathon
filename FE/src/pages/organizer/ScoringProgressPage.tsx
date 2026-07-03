@@ -43,18 +43,39 @@ function cellTitle(cell: JudgeSheetStatusDto, judgeName: string, teamName: strin
   return base;
 }
 
+type ScoringProgressFilterState = {
+  roundId: number | null;
+  boardId: number | null;
+};
+const SCORING_PROGRESS_FILTER_STORAGE_KEY = "seal.organizerScoringProgress.filters";
+
+function loadScoringProgressFilters(): ScoringProgressFilterState {
+  try {
+    const raw = window.localStorage.getItem(SCORING_PROGRESS_FILTER_STORAGE_KEY);
+    if (!raw) return { roundId: null, boardId: null };
+    const parsed = JSON.parse(raw) as Partial<ScoringProgressFilterState>;
+    return {
+      roundId: typeof parsed.roundId === "number" ? parsed.roundId : null,
+      boardId: typeof parsed.boardId === "number" ? parsed.boardId : null
+    };
+  } catch {
+    return { roundId: null, boardId: null };
+  }
+}
+
 export function ScoringProgressPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const eventIdParam = searchParams.get("eventId");
   const boardIdParam = searchParams.get("boardId");
+  const storedFilters = useMemo(loadScoringProgressFilters, []);
   const deepLinkEventApplied = useRef(false);
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, boards, loading: boardsLoading, error: boardsError, refetch: refetchBoards } = useEventBoards(eventId);
-  const [roundId, setRoundId] = useState<number | null>(null);
+  const [roundId, setRoundId] = useState<number | null>(storedFilters.roundId);
   const [boardId, setBoardId] = useState<number | null>(() => {
-    if (!boardIdParam) return null;
+    if (!boardIdParam) return storedFilters.boardId;
     const parsed = Number(boardIdParam);
     return Number.isFinite(parsed) ? parsed : null;
   });
@@ -66,6 +87,13 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
     [boards, activeRoundId]
   );
   const activeBoardId = resolveDefaultBoardId(boardsInRound, rounds, boardId);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      SCORING_PROGRESS_FILTER_STORAGE_KEY,
+      JSON.stringify({ roundId: activeRoundId, boardId: activeBoardId })
+    );
+  }, [activeBoardId, activeRoundId]);
 
   const { progress, loading: progressLoading, error: progressError, refetch: refetchProgress } = useScoreProgress(
     activeBoardId,

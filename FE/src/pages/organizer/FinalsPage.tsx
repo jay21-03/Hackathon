@@ -25,14 +25,37 @@ function formatScore(score: number) {
   return Number.isInteger(score) ? String(score) : score.toFixed(2);
 }
 
+type FinalsFilterState = {
+  fromRoundId: number | "";
+  toRoundId: number | "";
+  topN: number;
+};
+const FINALS_FILTER_STORAGE_KEY = "seal.organizerFinals.filters";
+
+function loadFinalsFilters(): FinalsFilterState {
+  try {
+    const raw = window.localStorage.getItem(FINALS_FILTER_STORAGE_KEY);
+    if (!raw) throw new Error("empty");
+    const parsed = JSON.parse(raw) as Partial<FinalsFilterState>;
+    return {
+      fromRoundId: typeof parsed.fromRoundId === "number" ? parsed.fromRoundId : "",
+      toRoundId: typeof parsed.toRoundId === "number" ? parsed.toRoundId : "",
+      topN: typeof parsed.topN === "number" && parsed.topN > 0 ? parsed.topN : 2
+    };
+  } catch {
+    return { fromRoundId: "", toRoundId: "", topN: 2 };
+  }
+}
+
 export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, loading: roundsLoading } = useEventRounds(eventId);
-  const [fromRoundId, setFromRoundId] = useState<number | "">("");
-  const [toRoundId, setToRoundId] = useState<number | "">("");
-  const [topN, setTopN] = useState(2);
+  const initialFilters = useMemo(loadFinalsFilters, []);
+  const [fromRoundId, setFromRoundId] = useState<number | "">(initialFilters.fromRoundId);
+  const [toRoundId, setToRoundId] = useState<number | "">(initialFilters.toRoundId);
+  const [topN, setTopN] = useState(initialFilters.topN);
   const [selectedTeamIds, setSelectedTeamIds] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -43,6 +66,24 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
     () => rounds.find((round) => round.id === fromId)?.name ?? null,
     [rounds, fromId]
   );
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      FINALS_FILTER_STORAGE_KEY,
+      JSON.stringify({ fromRoundId, toRoundId, topN })
+    );
+  }, [fromRoundId, toRoundId, topN]);
+
+  useEffect(() => {
+    if (roundsLoading || rounds.length === 0) return;
+    const validRoundIds = new Set(rounds.map((round) => round.id));
+    if (fromRoundId !== "" && !validRoundIds.has(fromRoundId)) {
+      setFromRoundId("");
+    }
+    if (toRoundId !== "" && !validRoundIds.has(toRoundId)) {
+      setToRoundId("");
+    }
+  }, [fromRoundId, rounds, roundsLoading, toRoundId]);
 
   const previewQuery = useQuery({
     queryKey: [...queryKeys.rankings.all, "advance-preview", eventId, fromId, toId, topN],

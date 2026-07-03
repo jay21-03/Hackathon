@@ -48,6 +48,8 @@ export const queryKeys = {
   scoring: {
     all: ["scoring"] as const,
     rubric: (roundId: number | null) => [...queryKeys.scoring.all, "rubric", roundId] as const,
+    eventProgress: (eventId: number | null) =>
+      [...queryKeys.scoring.all, "event-progress", eventId] as const,
     progress: (boardId: number | null) => [...queryKeys.scoring.all, "progress", boardId] as const,
     matrix: (boardId: number | null) => [...queryKeys.scoring.all, "matrix", boardId] as const
   },

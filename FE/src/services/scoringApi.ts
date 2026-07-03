@@ -181,6 +181,15 @@ export interface ScoreProgressResponse {
   teams: TeamProgressDto[];
 }
 
+export interface EventScoreProgressResponse {
+  eventId: number;
+  eventName: string;
+  summary: ProgressSummaryDto;
+  boards: ScoreProgressResponse[];
+  boardsWithoutJudges: number[];
+  boardsIncomplete: number[];
+}
+
 export const DEFAULT_LEVEL_DESCRIPTORS: LevelDescriptor[] = [
   {
     level: "EXCELLENT",
@@ -400,6 +409,16 @@ export async function saveRubric(roundId: number, body: SaveRubricRequest) {
 export async function fetchScoreProgress(boardId: number) {
   const { data } = await apiClient.get<ApiResponse<ScoreProgressResponse>>(
     `/v1/admin/boards/${boardId}/score-progress`
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Không tải được tiến độ chấm.");
+  }
+  return data.data;
+}
+
+export async function fetchEventScoreProgress(eventId: number) {
+  const { data } = await apiClient.get<ApiResponse<EventScoreProgressResponse>>(
+    `/v1/admin/events/${eventId}/score-progress`
   );
   if (!data.data) {
     throw new Error(data.message || "Không tải được tiến độ chấm.");

@@ -23,6 +23,8 @@ export interface AssignmentResponse {
   eventId?: number | null;
   eventName?: string | null;
   academicTermId?: number | null;
+  academicTermCode?: string | null;
+  academicTermName?: string | null;
   academicTermStatus?: AcademicTermStatus | null;
   assigneeId: number;
   assigneeName?: string | null;

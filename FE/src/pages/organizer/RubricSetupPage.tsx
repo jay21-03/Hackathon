@@ -58,6 +58,19 @@ function rubricToForm(criteria: CriteriaRequestItem[] | undefined): CriteriaRequ
   return toFormCriteria(criteria);
 }
 
+const RUBRIC_FILTER_STORAGE_KEY = "seal.organizerRubric.filters";
+
+function loadRubricRoundId(): number | null {
+  try {
+    const raw = window.localStorage.getItem(RUBRIC_FILTER_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { roundId?: unknown };
+    return typeof parsed.roundId === "number" ? parsed.roundId : null;
+  } catch {
+    return null;
+  }
+}
+
 export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -67,7 +80,7 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
     "/organizer/rubric"
   );
   const { rounds, loading: roundsLoading, error: roundsError, refetch: refetchRounds } = useEventRounds(eventId);
-  const [roundId, setRoundId] = useState<number | null>(null);
+  const [roundId, setRoundId] = useState<number | null>(() => loadRubricRoundId());
   const activeRoundId = resolveDefaultRoundId(rounds, roundId);
   const { rubric, loading: rubricLoading, error: rubricError, refetch: refetchRubric } = useRubric(activeRoundId);
   const [criteria, setCriteria] = useState<CriteriaRequestItem[]>([]);
@@ -90,12 +103,12 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
   });
 
   useEffect(() => {
-    setRoundId(null);
-  }, [eventId]);
-
-  useEffect(() => {
     setRoundId((prev) => resolveDefaultRoundId(rounds, prev));
   }, [rounds]);
+
+  useEffect(() => {
+    window.localStorage.setItem(RUBRIC_FILTER_STORAGE_KEY, JSON.stringify({ roundId: activeRoundId }));
+  }, [activeRoundId]);
 
   useEffect(() => {
     if (!rubric || rubricLoading) return;

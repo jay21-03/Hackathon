@@ -28,13 +28,34 @@ import {
 import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 import { resolveDefaultBoardId, resolveDefaultRoundId } from "../../utils/pickActiveRound";
 
+type RankingFilterState = {
+  roundId: number | null;
+  boardId: number | null;
+};
+const RANKING_FILTER_STORAGE_KEY = "seal.organizerRanking.filters";
+
+function loadRankingFilters(): RankingFilterState {
+  try {
+    const raw = window.localStorage.getItem(RANKING_FILTER_STORAGE_KEY);
+    if (!raw) return { roundId: null, boardId: null };
+    const parsed = JSON.parse(raw) as Partial<RankingFilterState>;
+    return {
+      roundId: typeof parsed.roundId === "number" ? parsed.roundId : null,
+      boardId: typeof parsed.boardId === "number" ? parsed.boardId : null
+    };
+  } catch {
+    return { roundId: null, boardId: null };
+  }
+}
+
 export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, boards, loading: boardsLoading } = useEventBoards(eventId);
-  const [boardId, setBoardId] = useState<number | null>(null);
-  const [roundId, setRoundId] = useState<number | null>(null);
+  const initialFilters = useMemo(loadRankingFilters, []);
+  const [boardId, setBoardId] = useState<number | null>(initialFilters.boardId);
+  const [roundId, setRoundId] = useState<number | null>(initialFilters.roundId);
   const [calculating, setCalculating] = useState(false);
   const autoCalculatedBoards = useRef(new Set<number>());
 
@@ -44,6 +65,13 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
     [boards, activeRoundId]
   );
   const activeBoardId = resolveDefaultBoardId(boardsInRound, rounds, boardId);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      RANKING_FILTER_STORAGE_KEY,
+      JSON.stringify({ roundId: activeRoundId, boardId: activeBoardId })
+    );
+  }, [activeBoardId, activeRoundId]);
 
   useEffect(() => {
     setRoundId((prev) => resolveDefaultRoundId(rounds, prev));
@@ -140,7 +168,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
       await invalidateRankingQueries();
       if (result.message === "NO_BOARDS_CALCULATED" || result.boardsCalculated === 0) {
         notify(
-          "Không bảng nào được tính — có thể đã công bố (dùng «Tính lại cả vòng») hoặc thiếu phiếu chấm đã nộp.",
+          "Không bảng nào được tính - có thể đã công bố hoặc chưa đủ phiếu chấm.",
           "warning"
         );
       } else {
@@ -254,14 +282,14 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
             ))}
           </select>
         </label>
-        <Button type="button" loading={calculating} disabled={!activeBoardId} onClick={() => void handleCalculateBoard()}>
+        <Button type="button" loading={calculating} disabled={!activeBoardId || !scoringComplete} onClick={() => void handleCalculateBoard()}>
           Tính bảng này
         </Button>
         <Button
           type="button"
           variant="secondary"
           loading={calculating}
-          disabled={!rounds.length}
+          disabled={!rounds.length || !scoringComplete}
           onClick={() => void handleCalculateRound()}
         >
           Tính cả vòng
@@ -303,8 +331,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
       {incompleteEntries.length > 0 ? (
         <div className="rounded-xl border border-warning/40 bg-warning-container/30 p-md">
           <p className="font-body-sm text-on-surface">
-            {incompleteEntries.length} đội chưa đủ phiếu chấm từ mọi giám khảo — vẫn được xếp hạng
-            theo điểm đã có.{" "}
+            {incompleteEntries.length} đội chưa đủ phiếu chấm từ mọi giám khảo - cần hoàn tất trước khi tính lại xếp hạng.{" "}
             <Link
               to={embedded ? "/organizer/results-hub#results-step-scoring" : "/organizer/scoring"}
               className="text-primary hover:underline"

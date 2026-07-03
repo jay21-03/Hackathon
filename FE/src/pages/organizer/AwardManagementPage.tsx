@@ -54,6 +54,26 @@ const EMPTY_CATEGORY_FORM: CreateAwardCategoryPayload = {
   maxWinners: 1
 };
 
+type AwardFilterState = {
+  roundId: number | null;
+  boardId: number | null;
+};
+const AWARD_FILTER_STORAGE_KEY = "seal.organizerAwards.filters";
+
+function loadAwardFilters(): AwardFilterState {
+  try {
+    const raw = window.localStorage.getItem(AWARD_FILTER_STORAGE_KEY);
+    if (!raw) return { roundId: null, boardId: null };
+    const parsed = JSON.parse(raw) as Partial<AwardFilterState>;
+    return {
+      roundId: typeof parsed.roundId === "number" ? parsed.roundId : null,
+      boardId: typeof parsed.boardId === "number" ? parsed.boardId : null
+    };
+  } catch {
+    return { roundId: null, boardId: null };
+  }
+}
+
 export function AwardManagementPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -61,8 +81,9 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
   const { rounds, boards, loading: boardsLoading } = useEventBoards(eventId);
   const { teams, loading: teamsLoading } = useEventTeams(eventId, { size: 200 });
   const [busy, setBusy] = useState(false);
-  const [roundId, setRoundId] = useState<number | null>(null);
-  const [boardId, setBoardId] = useState<number | null>(null);
+  const initialFilters = useMemo(loadAwardFilters, []);
+  const [roundId, setRoundId] = useState<number | null>(initialFilters.roundId);
+  const [boardId, setBoardId] = useState<number | null>(initialFilters.boardId);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
   const [categoryForm, setCategoryForm] = useState<CreateAwardCategoryPayload>(EMPTY_CATEGORY_FORM);
@@ -87,6 +108,13 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
     () => (activeRoundId != null ? boards.filter((b) => b.roundId === activeRoundId) : []),
     [boards, activeRoundId]
   );
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      AWARD_FILTER_STORAGE_KEY,
+      JSON.stringify({ roundId: activeRoundId, boardId })
+    );
+  }, [activeRoundId, boardId]);
 
   useEffect(() => {
     setRoundId((prev) => resolveDefaultRoundId(rounds, prev));

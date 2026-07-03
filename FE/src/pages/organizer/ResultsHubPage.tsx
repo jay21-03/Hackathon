@@ -10,18 +10,17 @@ import { useEventBoards } from "../../hooks/useEventBoards";
 import { useEventRounds } from "../../hooks/useEventRounds";
 import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
 import { useResultsHubProgress } from "../../hooks/useResultsHubProgress";
-import { useScoreProgress } from "../../hooks/useScoreProgress";
 import { queryKeys } from "../../lib/queryKeys";
 import { fetchAdvancements } from "../../services/advancementApi";
 import { fetchEventAwards } from "../../services/awardApi";
 import { fetchEventRankings } from "../../services/rankingApi";
+import { fetchEventScoreProgress } from "../../services/scoringApi";
 import { AwardManagementPage } from "./AwardManagementPage";
 import { ExportSuccessPage } from "./ExportSuccessPage";
 import { FinalsPage } from "./FinalsPage";
 import { PublishResultsPage } from "./PublishResultsPage";
 import { RankingPage } from "./RankingPage";
 import { ScoringProgressPage } from "./ScoringProgressPage";
-import { resolveDefaultBoardId } from "../../utils/pickActiveRound";
 import { type HubEmbedProps } from "../../utils/hubEmbedUtils";
 import {
   normalizeResultsHubStep,
@@ -37,8 +36,11 @@ export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps
   );
   const { boards, loading: boardsLoading } = useEventBoards(eventId);
   const { rounds, loading: roundsLoading } = useEventRounds(eventId);
-  const firstBoardId = resolveDefaultBoardId(boards, rounds);
-  const { progress, loading: progressLoading } = useScoreProgress(firstBoardId);
+  const eventScoreProgressQuery = useQuery({
+    queryKey: queryKeys.scoring.eventProgress(eventId),
+    queryFn: () => fetchEventScoreProgress(eventId!),
+    enabled: Boolean(eventId)
+  });
 
   const rankingsQuery = useQuery({
     queryKey: queryKeys.rankings.event(eventId),
@@ -66,7 +68,10 @@ export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps
   const rankingBoards = rankingsQuery.data?.boards ?? [];
   const hasRankings = rankingBoards.some((b) => b.entries.length > 0);
   const hasPublished = rankingBoards.some((b) => b.published);
-  const scoringComplete = (progress?.summary.completionPercent ?? 0) >= 100;
+  const scoreProgress = eventScoreProgressQuery.data ?? null;
+  const scoringComplete =
+    (scoreProgress?.summary.expectedSheets ?? 0) > 0 &&
+    (scoreProgress?.summary.completionPercent ?? 0) >= 100;
   const showFinalsStep = enablePhase7 && rounds.length >= 2;
   const finalsDone = (advancementsQuery.data?.length ?? 0) > 0;
   const awardsPublished = awardsQuery.data?.published ?? false;
@@ -102,7 +107,7 @@ export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps
     if (hash) setActiveStep(normalizeResultsHubStep(hash));
   }, []);
 
-  if (eventLoading || setupLoading || boardsLoading || roundsLoading || progressLoading) {
+  if (eventLoading || setupLoading || boardsLoading || roundsLoading || eventScoreProgressQuery.isLoading) {
     return <ModuleSkeleton rows={6} />;
   }
 
