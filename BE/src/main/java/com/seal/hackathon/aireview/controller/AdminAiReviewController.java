@@ -79,6 +79,12 @@ public class AdminAiReviewController {
 
     }
 
+    @PostMapping("/events/{eventId}/teams/{teamId}/ai-reviews/run")
+    public ApiResponse<AiReviewResponse> triggerTeamReview(
+            @PathVariable Long eventId, @PathVariable Long teamId) {
+        return ApiResponse.ok(aiReviewService.triggerTeamReview(eventId, teamId));
+    }
+
     @GetMapping("/events/{eventId}/ai-reviews/health")
     public ApiResponse<AiReviewHealthResponse> getHealth(@PathVariable Long eventId) {
         return ApiResponse.ok(aiReviewService.getEventHealth(eventId));
@@ -102,6 +108,12 @@ public class AdminAiReviewController {
     public ApiResponse<BackfillCommitsResponse> backfillCommits(
             @PathVariable Long teamId, @RequestBody BackfillCommitsRequest request) {
         return ApiResponse.ok(aiReviewService.backfillCommits(teamId, request));
+    }
+
+    @PostMapping("/events/{eventId}/teams/{teamId}/ai-reviews/backfill")
+    public ApiResponse<BackfillCommitsResponse> backfillCommits(
+            @PathVariable Long eventId, @PathVariable Long teamId, @RequestBody BackfillCommitsRequest request) {
+        return ApiResponse.ok(aiReviewService.backfillCommits(eventId, teamId, request));
     }
 
 

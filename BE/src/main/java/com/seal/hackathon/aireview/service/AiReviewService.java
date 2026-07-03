@@ -52,8 +52,12 @@ import com.seal.hackathon.common.enums.RepositoryProvisionStatus;
 import com.seal.hackathon.common.util.GitHubRepoCoordinates;
 
 import com.seal.hackathon.contest.entity.BoardSlot;
+import com.seal.hackathon.contest.entity.Problem;
+import com.seal.hackathon.contest.entity.Round;
 
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
+import com.seal.hackathon.contest.repository.ProblemRepository;
+import com.seal.hackathon.contest.repository.RoundRepository;
 
 import com.seal.hackathon.github.client.GitHubClientException;
 
@@ -92,6 +96,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 
 import java.util.Map;
+
+import java.util.Objects;
 
 import java.util.Optional;
 
@@ -146,6 +152,8 @@ public class AiReviewService {
     private final com.seal.hackathon.registration.repository.TeamRepository registrationTeamRepository;
 
     private final BoardSlotRepository boardSlotRepository;
+    private final RoundRepository roundRepository;
+    private final ProblemRepository problemRepository;
 
     private final GitHubRepositoryClient githubRepositoryClient;
 
@@ -238,11 +246,13 @@ public class AiReviewService {
 
     public List<AiReviewResponse> listTeamReviews(Long teamId) {
 
-        aiReviewAccessService.requireCanViewTeamReviews(teamId);
-
         Team team = loadTeam(teamId);
+        CurrentReviewScope scope = resolveCurrentReviewScope(teamId, team.getEventId());
+        aiReviewAccessService.requireCanViewTeamReviews(teamId, scope.roundId(), scope.boardId());
 
         return aiReviewRepository.findByTeamIdOrderByReviewedAtDescCreatedAtDesc(teamId).stream()
+
+                .filter(review -> reviewBelongsToCurrentScope(review, scope))
 
                 .map(review -> toResponse(review, team.getName(), null))
 
@@ -256,13 +266,20 @@ public class AiReviewService {
 
     public AiReviewResponse getLatestTeamReview(Long teamId) {
 
-        aiReviewAccessService.requireCanViewTeamReviews(teamId);
-
         Team team = loadTeam(teamId);
+        CurrentReviewScope scope = resolveCurrentReviewScope(teamId, team.getEventId());
+        aiReviewAccessService.requireCanViewTeamReviews(teamId, scope.roundId(), scope.boardId());
 
         Optional<AiReview> aggregate = aiReviewRepository
 
-                .findFirstByTeamIdAndReviewKindOrderByReviewedAtDescCreatedAtDesc(teamId, AiReviewKind.TEAM_AGGREGATE);
+                .findByTeamIdAndReviewKindOrderByReviewedAtDescCreatedAtDesc(
+                        teamId, AiReviewKind.TEAM_AGGREGATE, PageRequest.of(0, MAX_PRIOR_PUSH_REVIEWS))
+
+                .stream()
+
+                .filter(review -> reviewBelongsToCurrentScope(review, scope))
+
+                .findFirst();
 
         if (aggregate.isPresent()) {
 
@@ -272,7 +289,14 @@ public class AiReviewService {
 
         return aiReviewRepository
 
-                .findFirstByTeamIdAndReviewKindOrderByReviewedAtDescCreatedAtDesc(teamId, AiReviewKind.PER_PUSH)
+                .findByTeamIdAndReviewKindOrderByReviewedAtDescCreatedAtDesc(
+                        teamId, AiReviewKind.PER_PUSH, PageRequest.of(0, MAX_PRIOR_PUSH_REVIEWS))
+
+                .stream()
+
+                .filter(review -> reviewBelongsToCurrentScope(review, scope))
+
+                .findFirst()
 
                 .map(review -> toResponse(review, team.getName(), null))
 
@@ -308,12 +332,20 @@ public class AiReviewService {
 
         }
 
+        Map<Long, CurrentReviewScope> currentScopeByTeam = new LinkedHashMap<>();
+        for (Long teamId : teamIds) {
+            currentScopeByTeam.put(teamId, resolveCurrentReviewScope(teamId, eventId));
+        }
+
         Map<Long, AiReview> latestByTeam = new LinkedHashMap<>();
 
         for (AiReview review : aiReviewRepository.findByTeamIdInAndReviewKindOrderByReviewedAtDescCreatedAtDesc(
 
                 teamIds, AiReviewKind.TEAM_AGGREGATE)) {
 
+            if (!reviewBelongsToCurrentScope(review, currentScopeByTeam.get(review.getTeamId()))) {
+                continue;
+            }
             latestByTeam.putIfAbsent(review.getTeamId(), review);
 
         }
@@ -324,7 +356,14 @@ public class AiReviewService {
 
                 aiReviewRepository
 
-                        .findFirstByTeamIdAndReviewKindOrderByReviewedAtDescCreatedAtDesc(teamId, AiReviewKind.PER_PUSH)
+                        .findByTeamIdAndReviewKindOrderByReviewedAtDescCreatedAtDesc(
+                                teamId, AiReviewKind.PER_PUSH, PageRequest.of(0, MAX_PRIOR_PUSH_REVIEWS))
+
+                        .stream()
+
+                        .filter(review -> reviewBelongsToCurrentScope(review, currentScopeByTeam.get(teamId)))
+
+                        .findFirst()
 
                         .ifPresent(review -> latestByTeam.put(teamId, review));
 
@@ -332,11 +371,9 @@ public class AiReviewService {
 
         }
 
-        Set<Long> teamsWithReviewableRepo = teamRepositoryEntityRepository.findByTeamIdIn(teamIds).stream()
+        Set<Long> teamsWithReviewableRepo = teamIds.stream()
 
-                .filter(this::isReviewableRepository)
-
-                .map(TeamRepository::getTeamId)
+                .filter(teamId -> resolveReviewableRepository(teamId, eventId).isPresent())
 
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
 
@@ -394,7 +431,7 @@ public class AiReviewService {
 
             try {
 
-                succeeded.add(aiReviewTeamRunner.runForTeam(team.getId()));
+                succeeded.add(aiReviewTeamRunner.runForTeam(team.getId(), eventId));
 
             } catch (ResponseStatusException ex) {
 
@@ -512,14 +549,35 @@ public class AiReviewService {
 
         enforceManualCooldown(teamId);
 
-        return triggerTeamReviewInternal(teamId);
+        return triggerTeamReviewInternal(teamId, team.getEventId());
 
+    }
+
+    @Transactional
+    public AiReviewResponse triggerTeamReview(Long eventId, Long teamId) {
+        Team team = loadTeam(teamId);
+        if (!eventId.equals(team.getEventId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TEAM_EVENT_MISMATCH");
+        }
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        enforceManualCooldown(teamId);
+        return triggerTeamReviewInternal(teamId, eventId);
     }
 
     @Transactional
     public BackfillCommitsResponse backfillCommits(Long teamId, BackfillCommitsRequest request) {
         Team team = loadTeam(teamId);
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(team.getEventId());
+        return backfillCommits(team.getEventId(), teamId, request);
+    }
+
+    @Transactional
+    public BackfillCommitsResponse backfillCommits(Long eventId, Long teamId, BackfillCommitsRequest request) {
+        Team team = loadTeam(teamId);
+        if (!eventId.equals(team.getEventId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TEAM_EVENT_MISMATCH");
+        }
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         if (request == null || request.since() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BACKFILL_SINCE_REQUIRED");
         }
@@ -529,10 +587,7 @@ public class AiReviewService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BACKFILL_INVALID_RANGE");
         }
 
-        TeamRepository repository = teamRepositoryEntityRepository.findAllByTeamId(teamId).stream()
-                .filter(item -> item.getProvisionStatus() == RepositoryProvisionStatus.CREATED)
-                .filter(item -> StringUtils.hasText(item.getGithubOwner()) && StringUtils.hasText(item.getGithubRepoName()))
-                .max(Comparator.comparing(TeamRepository::getUpdatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+        TeamRepository repository = resolveReviewableRepository(teamId, eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "NO_REVIEWABLE_REPOSITORY"));
 
         GitHubRepoCoordinates coordinates = GitHubRepoCoordinates.fromTeamRepository(
@@ -590,9 +645,8 @@ public class AiReviewService {
                 .map(Team::getId)
                 .toList();
 
-        Set<Long> teamsWithRepo = teamRepositoryEntityRepository.findByTeamIdIn(teamIds).stream()
-                .filter(this::isReviewableRepository)
-                .map(TeamRepository::getTeamId)
+        Set<Long> teamsWithRepo = teamIds.stream()
+                .filter(teamId -> resolveReviewableRepository(teamId, eventId).isPresent())
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
 
         List<AiReviewResponse> summaries = listEventReviews(eventId);
@@ -656,7 +710,7 @@ public class AiReviewService {
                 .map(AiReview::getTeamId)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
 
-        return retryTeams(new ArrayList<>(failedTeamIds));
+        return retryTeams(new ArrayList<>(failedTeamIds), eventId);
     }
 
     @Transactional
@@ -668,15 +722,19 @@ public class AiReviewService {
         if (teamIds.isEmpty()) {
             return 0;
         }
-        return retryTeams(teamIds).teamsSucceeded();
+        return retryTeams(teamIds, null).teamsSucceeded();
     }
 
     private RetryFailedReviewsResponse retryTeams(List<Long> teamIds) {
+        return retryTeams(teamIds, null);
+    }
+
+    private RetryFailedReviewsResponse retryTeams(List<Long> teamIds, Long eventId) {
         List<AiReviewResponse> succeeded = new ArrayList<>();
         List<BulkAiReviewFailure> failures = new ArrayList<>();
         for (Long teamId : teamIds) {
             try {
-                succeeded.add(triggerTeamReviewInternal(teamId));
+                succeeded.add(triggerTeamReviewInternal(teamId, eventId));
             } catch (ResponseStatusException ex) {
                 Team team = registrationTeamRepository.findById(teamId).orElse(null);
                 failures.add(BulkAiReviewFailure.builder()
@@ -759,16 +817,21 @@ public class AiReviewService {
     @Transactional
 
     public AiReviewResponse triggerTeamReviewInternal(Long teamId) {
+        return triggerTeamReviewInternal(teamId, null);
+    }
+
+    @Transactional
+
+    public AiReviewResponse triggerTeamReviewInternal(Long teamId, Long eventId) {
 
         Team team = loadTeam(teamId);
 
-        TeamRepository repository = teamRepositoryEntityRepository.findAllByTeamId(teamId).stream()
+        Long resolvedEventId = eventId != null ? eventId : team.getEventId();
+        if (resolvedEventId != null && !resolvedEventId.equals(team.getEventId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TEAM_EVENT_MISMATCH");
+        }
 
-                .filter(item -> item.getProvisionStatus() == RepositoryProvisionStatus.CREATED)
-
-                .filter(item -> StringUtils.hasText(item.getGithubOwner()) && StringUtils.hasText(item.getGithubRepoName()))
-
-                .max(Comparator.comparing(TeamRepository::getUpdatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+        TeamRepository repository = resolveReviewableRepository(teamId, resolvedEventId)
 
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "NO_REVIEWABLE_REPOSITORY"));
 
@@ -788,6 +851,136 @@ public class AiReviewService {
 
         return toResponse(review, team.getName(), review.getCommitSha());
 
+    }
+
+    private Optional<TeamRepository> resolveReviewableRepository(Long teamId, Long eventId) {
+        List<TeamRepository> repositories = teamRepositoryEntityRepository.findAllByTeamId(teamId).stream()
+                .filter(this::isReviewableRepository)
+                .toList();
+        if (repositories.isEmpty()) {
+            return Optional.empty();
+        }
+        if (eventId == null) {
+            return latestRepository(repositories);
+        }
+
+        CurrentReviewScope scope = resolveCurrentReviewScope(teamId, eventId);
+        if (scope.problemId() != null) {
+            Optional<TeamRepository> exactProblem = repositories.stream()
+                    .filter(repository -> Objects.equals(repository.getProblemId(), scope.problemId()))
+                    .max(Comparator.comparing(
+                            TeamRepository::getUpdatedAt,
+                            Comparator.nullsLast(Comparator.naturalOrder())));
+            if (exactProblem.isPresent()) {
+                return exactProblem;
+            }
+        }
+        if (scope.roundId() != null) {
+            Optional<TeamRepository> exactRound = repositories.stream()
+                    .filter(repository -> Objects.equals(repository.getRoundId(), scope.roundId()))
+                    .max(Comparator.comparing(
+                            TeamRepository::getUpdatedAt,
+                            Comparator.nullsLast(Comparator.naturalOrder())));
+            if (exactRound.isPresent()) {
+                return exactRound;
+            }
+        }
+        return latestRepository(repositories);
+    }
+
+    private Optional<TeamRepository> latestRepository(List<TeamRepository> repositories) {
+        return repositories.stream()
+                .max(Comparator.comparing(
+                        TeamRepository::getUpdatedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder())));
+    }
+
+    private CurrentReviewScope resolveCurrentReviewScope(Long teamId, Long eventId) {
+        if (eventId == null) {
+            return CurrentReviewScope.empty();
+        }
+        List<BoardSlot> eventSlots = boardSlotRepository.findByTeamId(teamId).stream()
+                .filter(slot -> slot.getRoundId() != null)
+                .filter(slot -> roundRepository.findById(slot.getRoundId())
+                        .map(round -> eventId.equals(round.getEventId()))
+                        .orElse(false))
+                .toList();
+        if (eventSlots.isEmpty()) {
+            return CurrentReviewScope.empty();
+        }
+
+        List<Round> eventRounds = roundRepository.findByEventId(eventId);
+        Round activeRound = resolveActiveRound(eventRounds, OffsetDateTime.now()).orElse(null);
+        BoardSlot selectedSlot = null;
+        if (activeRound != null) {
+            selectedSlot = eventSlots.stream()
+                    .filter(slot -> activeRound.getId().equals(slot.getRoundId()))
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (selectedSlot == null) {
+            selectedSlot = eventSlots.stream()
+                    .max(Comparator.comparing(
+                            slot -> roundRepository.findById(slot.getRoundId())
+                                    .map(Round::getRoundOrder)
+                                    .orElse(Integer.MIN_VALUE),
+                            Comparator.nullsLast(Integer::compareTo)))
+                    .orElse(null);
+        }
+        if (selectedSlot == null) {
+            return CurrentReviewScope.empty();
+        }
+        return new CurrentReviewScope(
+                selectedSlot.getRoundId(),
+                selectedSlot.getBoardId(),
+                resolvePrimaryProblemId(selectedSlot.getBoardId()));
+    }
+
+    private Optional<Round> resolveActiveRound(List<Round> rounds, OffsetDateTime now) {
+        if (rounds == null || rounds.isEmpty()) {
+            return Optional.empty();
+        }
+        List<Round> sorted = rounds.stream()
+                .sorted(Comparator.comparing(Round::getRoundOrder, Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+        Optional<Round> running = sorted.stream()
+                .filter(round -> round.getStartAt() != null
+                        && round.getEndAt() != null
+                        && !now.isBefore(round.getStartAt())
+                        && now.isBefore(round.getEndAt()))
+                .findFirst();
+        if (running.isPresent()) {
+            return running;
+        }
+        Optional<Round> upcoming = sorted.stream()
+                .filter(round -> round.getStartAt() != null && now.isBefore(round.getStartAt()))
+                .min(Comparator.comparing(Round::getStartAt));
+        return upcoming.or(() -> Optional.of(sorted.get(sorted.size() - 1)));
+    }
+
+    private Long resolvePrimaryProblemId(Long boardId) {
+        if (boardId == null) {
+            return null;
+        }
+        return problemRepository.findByBoardId(boardId).stream()
+                .min(Comparator.comparing(Problem::getReleaseAt, Comparator.nullsLast(OffsetDateTime::compareTo))
+                        .thenComparing(Problem::getId, Comparator.nullsLast(Long::compareTo)))
+                .map(Problem::getId)
+                .orElse(null);
+    }
+
+    private boolean reviewBelongsToCurrentScope(AiReview review, CurrentReviewScope scope) {
+        if (review == null || scope == null || scope.roundId() == null) {
+            return true;
+        }
+        if (review.getTeamRepositoryId() != null) {
+            return teamRepositoryEntityRepository.findById(review.getTeamRepositoryId())
+                    .map(repository -> scope.problemId() != null
+                            ? Objects.equals(repository.getProblemId(), scope.problemId())
+                            : Objects.equals(repository.getRoundId(), scope.roundId()))
+                    .orElse(false);
+        }
+        return Objects.equals(review.getRoundId(), scope.roundId());
     }
 
     @Transactional
@@ -1202,9 +1395,10 @@ public class AiReviewService {
 
         try {
 
-            String commitHistoryJson = buildCommitHistoryJson(repository.getTeamId());
+            String commitHistoryJson = buildCommitHistoryJson(repository);
 
-            String priorReviewsJson = buildPriorPushReviewsJson(repository.getTeamId(), perPush.getId());
+            String priorReviewsJson = buildPriorPushReviewsJson(
+                    repository.getTeamId(), repository.getRoundId(), perPush.getId());
 
             String currentPushJson = perPush.getStructuredOutput();
 
@@ -1301,13 +1495,9 @@ public class AiReviewService {
 
 
 
-    private String buildCommitHistoryJson(Long teamId) throws Exception {
+    private String buildCommitHistoryJson(TeamRepository repository) throws Exception {
 
-        List<Long> repoIds = teamRepositoryEntityRepository.findAllByTeamId(teamId).stream()
-
-                .map(TeamRepository::getId)
-
-                .toList();
+        List<Long> repoIds = repository.getId() == null ? List.of() : List.of(repository.getId());
 
         if (repoIds.isEmpty()) {
 
@@ -1347,7 +1537,7 @@ public class AiReviewService {
 
 
 
-    private String buildPriorPushReviewsJson(Long teamId, Long excludeReviewId) throws Exception {
+    private String buildPriorPushReviewsJson(Long teamId, Long roundId, Long excludeReviewId) throws Exception {
 
         List<AiReview> prior = aiReviewRepository.findByTeamIdAndReviewKindOrderByReviewedAtDescCreatedAtDesc(
 
@@ -1358,6 +1548,11 @@ public class AiReviewService {
         for (AiReview review : prior) {
 
             if (review.getId().equals(excludeReviewId) || review.getStatus() != AiReviewStatus.COMPLETED) {
+
+                continue;
+
+            }
+            if (roundId != null && !roundId.equals(review.getRoundId())) {
 
                 continue;
 
@@ -1468,9 +1663,11 @@ public class AiReviewService {
 
             OffsetDateTime now) {
 
-        Optional<AiReview> existing = aiReviewRepository.findByTeamIdAndCommitShaAndReviewKind(
-
-                repository.getTeamId(), latestSavedCommit.getCommitSha(), reviewKind);
+        Optional<AiReview> existing = repository.getId() != null
+                ? aiReviewRepository.findByTeamRepositoryIdAndCommitShaAndReviewKind(
+                        repository.getId(), latestSavedCommit.getCommitSha(), reviewKind)
+                : aiReviewRepository.findByTeamIdAndCommitShaAndReviewKind(
+                        repository.getTeamId(), latestSavedCommit.getCommitSha(), reviewKind);
 
         AiReview review = existing.orElseGet(() -> AiReview.builder()
 
@@ -1485,6 +1682,8 @@ public class AiReviewService {
                 .build());
 
         review.setRoundId(repository.getRoundId());
+
+        review.setTeamRepositoryId(repository.getId());
 
         review.setRepoCommitId(latestSavedCommit.getId());
 
@@ -1814,6 +2013,26 @@ public class AiReviewService {
 
     }
 
+    private Long resolveReviewRoundId(AiReview review) {
+        if (review.getRoundId() != null) {
+            return review.getRoundId();
+        }
+        if (review.getTeamRepositoryId() != null) {
+            Optional<Long> repositoryRoundId = teamRepositoryEntityRepository.findById(review.getTeamRepositoryId())
+                    .map(TeamRepository::getRoundId);
+            if (repositoryRoundId.isPresent()) {
+                return repositoryRoundId.get();
+            }
+        }
+        if (review.getRepoCommitId() != null) {
+            return repoCommitRepository.findById(review.getRepoCommitId())
+                    .flatMap(commit -> teamRepositoryEntityRepository.findById(commit.getTeamRepositoryId()))
+                    .map(TeamRepository::getRoundId)
+                    .orElse(null);
+        }
+        return null;
+    }
+
 
 
     private AiReviewResponse toResponse(AiReview review, String teamName, String commitShaOverride) {
@@ -1828,21 +2047,7 @@ public class AiReviewService {
 
                         : latestCommitSha(review.getRepoCommitId()));
 
-        Long roundId = review.getRoundId();
-
-        if (roundId == null) {
-
-            roundId = boardSlotRepository.findByTeamId(review.getTeamId()).stream()
-
-                    .map(BoardSlot::getRoundId)
-
-                    .filter(id -> id != null)
-
-                    .findFirst()
-
-                    .orElse(null);
-
-        }
+        Long roundId = resolveReviewRoundId(review);
 
         return AiReviewResponse.builder()
 
@@ -1898,6 +2103,12 @@ public class AiReviewService {
 
                 && StringUtils.hasText(repository.getGithubRepoName());
 
+    }
+
+    private record CurrentReviewScope(Long roundId, Long boardId, Long problemId) {
+        static CurrentReviewScope empty() {
+            return new CurrentReviewScope(null, null, null);
+        }
     }
 
 }

@@ -16,4 +16,9 @@ public class AiReviewTeamRunner {
     public AiReviewResponse runForTeam(Long teamId) {
         return aiReviewService.triggerTeamReviewInternal(teamId);
     }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public AiReviewResponse runForTeam(Long teamId, Long eventId) {
+        return aiReviewService.triggerTeamReviewInternal(teamId, eventId);
+    }
 }

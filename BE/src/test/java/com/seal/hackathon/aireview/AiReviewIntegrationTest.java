@@ -314,7 +314,7 @@ class AiReviewIntegrationTest {
     }
 
     @Test
-    void participantCanViewLatestAggregateOutsiderCannot() throws Exception {
+    void participantCannotViewLatestAggregate() throws Exception {
         provisionRepository();
         stubCommitWithPatch();
 
@@ -324,8 +324,7 @@ class AiReviewIntegrationTest {
 
         mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/teams/{teamId}/ai-review", team.getId())
                         .header("Authorization", "Bearer " + participantJwt))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data.reviewKind").value("TEAM_AGGREGATE"));
+                .andExpect(MockMvcResultMatchers.status().isForbidden());
 
         mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/teams/{teamId}/ai-review", team.getId())
                         .header("Authorization", "Bearer " + outsiderJwt))

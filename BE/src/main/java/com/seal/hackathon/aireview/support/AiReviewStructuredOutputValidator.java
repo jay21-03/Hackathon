@@ -16,7 +16,7 @@ import org.springframework.util.StringUtils;
 public final class AiReviewStructuredOutputValidator {
 
     private static final Pattern QUALITATIVE_RATING = Pattern.compile(
-            "(?i)(?<![\\p{L}])(Xuất sắc|Tốt|Khá|Trung bình|Yếu|Xuáº¥t sáº¯c|Tá»‘t|KhÃ¡|Trung bÃ¬nh|Yáº¿u)(?![\\p{L}])");
+            "(?i)(?<![\\p{L}])(Xuất sắc|Tốt|Khá|Trung bình|Yếu)(?![\\p{L}])");
 
     private static final List<String> CRITERIA_KEYS =
             List.of("R1_01", "R1_02", "R1_03", "R1_04", "R1_05", "R2_01", "R2_02", "R2_03", "R2_04", "R2_05");
@@ -72,7 +72,7 @@ public final class AiReviewStructuredOutputValidator {
 
     public ValidationResult validate(JsonNode root, AiReviewKind kind) {
         if (root == null || root.isMissingNode() || !root.isObject()) {
-            return ValidationResult.fail(List.of("Pháº£n há»“i LLM pháº£i lÃ  JSON object."));
+            return ValidationResult.fail(List.of("Phản hồi LLM phải là JSON object."));
         }
         return kind == AiReviewKind.TEAM_AGGREGATE ? validateAggregate(root) : validatePerPush(root);
     }
@@ -90,12 +90,12 @@ public final class AiReviewStructuredOutputValidator {
         requireNonBlankText(root, "rag_maturity", "level", violations);
         JsonNode assessment = root.path("assessment");
         if (!assessment.isObject()) {
-            violations.add("Thiáº¿u object assessment.");
+            violations.add("Thiếu object assessment.");
         } else {
             for (String field :
                     List.of("advantages", "disadvantages", "security", "completeness", "latency", "observability", "error_handling")) {
                 if (!hasNonBlankText(assessment, field)) {
-                    violations.add("assessment." + field + " trá»‘ng.");
+                    violations.add("assessment." + field + " trống.");
                 }
             }
         }
@@ -108,18 +108,18 @@ public final class AiReviewStructuredOutputValidator {
         for (String key : CRITERIA_KEYS) {
             String value = criteria.get(key);
             if (!StringUtils.hasText(value)) {
-                violations.add("criteria_comments." + key + " trá»‘ng.");
+                violations.add("criteria_comments." + key + " trống.");
                 continue;
             }
             if (!QUALITATIVE_RATING.matcher(value).find()) {
-                violations.add("criteria_comments." + key + " thiáº¿u phÃ¢n háº¡ng (Xuáº¥t sáº¯c|Tá»‘t|KhÃ¡|Trung bÃ¬nh|Yáº¿u).");
+                violations.add("criteria_comments." + key + " thiếu phân hạng (Xuất sắc|Tốt|Khá|Trung bình|Yếu).");
             }
         }
 
         Map<String, String> smb = normalizeSmb(root.path("smb_scale_advisory"));
         for (String key : SMB_KEYS) {
             if (!StringUtils.hasText(smb.get(key))) {
-                violations.add("smb_scale_advisory." + key + " trá»‘ng.");
+                violations.add("smb_scale_advisory." + key + " trống.");
             }
         }
 
@@ -199,7 +199,7 @@ public final class AiReviewStructuredOutputValidator {
     private static void requireNonBlankText(
             JsonNode root, String objectField, String textField, List<String> violations) {
         if (!hasNonBlankText(root.path(objectField), textField)) {
-            violations.add(objectField + "." + textField + " trá»‘ng.");
+            violations.add(objectField + "." + textField + " trống.");
         }
     }
 
