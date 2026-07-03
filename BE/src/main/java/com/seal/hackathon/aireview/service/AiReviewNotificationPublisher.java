@@ -11,9 +11,6 @@ import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.registration.entity.Team;
-import com.seal.hackathon.registration.entity.TeamMember;
-import com.seal.hackathon.registration.repository.TeamMemberRepository;
-import com.seal.hackathon.common.enums.TeamMemberStatus;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +28,6 @@ public class AiReviewNotificationPublisher {
     private final EventRepository eventRepository;
     private final MentorAssignmentRepository mentorAssignmentRepository;
     private final BoardSlotRepository boardSlotRepository;
-    private final TeamMemberRepository teamMemberRepository;
 
     @Value("${app.ai.review.notifications-enabled:true}")
     private boolean notificationsEnabled;
@@ -46,39 +42,18 @@ public class AiReviewNotificationPublisher {
         }
 
         String teamLabel = StringUtils.hasText(team.getName()) ? team.getName() : ("Đội #" + team.getId());
-        String link = "/organizer/ai-reviews?teamId=" + team.getId();
+        String link = "/organizer/ai-reviews?teamId=" + team.getId() + "&eventId=" + team.getEventId();
 
         if (review.getStatus() == AiReviewStatus.FAILED) {
             notifyUser(
                     event.getCreatedBy(),
                     event.getId(),
                     NotificationType.GENERAL,
-                    "AI Review lỗi — " + teamLabel,
+                    "AI Review lỗi - " + teamLabel,
                     "Đánh giá AI thất bại. Kiểm tra AI_API_KEY hoặc chạy lại thủ công.",
                     link,
                     "ai-review-failed:" + review.getId());
             return;
-        }
-
-        if (review.getStatus() == AiReviewStatus.COMPLETED) {
-            String completedDedupe = "ai-review-completed:" + team.getId() + ":" + review.getId();
-            String participantLink = "/me/ai-review";
-            String summarySnippet = StringUtils.hasText(review.getSummary())
-                    ? review.getSummary()
-                    : "Xem chi tiết rubric và gợi ý cải thiện.";
-            if (summarySnippet.length() > 180) {
-                summarySnippet = summarySnippet.substring(0, 177) + "...";
-            }
-            for (Long participantUserId : participantUserIdsForTeam(team.getId())) {
-                notifyUser(
-                        participantUserId,
-                        event.getId(),
-                        NotificationType.GENERAL,
-                        "Đánh giá AI mới — " + teamLabel,
-                        summarySnippet,
-                        participantLink,
-                        completedDedupe + ":participant:" + participantUserId);
-            }
         }
 
         if (significantChange) {
@@ -87,18 +62,18 @@ public class AiReviewNotificationPublisher {
                     event.getCreatedBy(),
                     event.getId(),
                     NotificationType.GENERAL,
-                    "Thay đổi quan trọng — " + teamLabel,
+                    "Thay đổi quan trọng - " + teamLabel,
                     "AI phát hiện thay đổi đáng kể trên repository. Xem rubric và GitHub Issue.",
                     link,
                     dedupe);
-            for (Long mentorUserId : mentorUserIdsForTeam(team.getId())) {
+            for (Long mentorUserId : mentorUserIdsForTeam(team.getId(), review.getRoundId())) {
                 notifyUser(
                         mentorUserId,
                         event.getId(),
                         NotificationType.GENERAL,
-                        "Thay đổi repo — " + teamLabel,
-                        "AI đánh dấu significant_change trên repository đội bạn mentor.",
-                        "/mentor/ai-review?teamId=" + team.getId(),
+                        "Thay đổi repo - " + teamLabel,
+                        "AI đánh dấu thay đổi đáng kể trên repository đội bạn mentor.",
+                        mentorReviewLink(team, review),
                         dedupe + ":mentor:" + mentorUserId);
             }
         }
@@ -114,14 +89,17 @@ public class AiReviewNotificationPublisher {
                 NotificationType.GENERAL,
                 "Hoàn tất chạy AI hàng loạt",
                 "Đã xử lý " + succeeded + "/" + total + " đội thành công"
-                        + (failed > 0 ? (" — " + failed + " đội lỗi.") : "."),
+                        + (failed > 0 ? (" - " + failed + " đội lỗi.") : "."),
                 "/organizer/ai-reviews",
                 "ai-review-bulk:" + eventId + ":" + System.currentTimeMillis() / 60_000);
     }
 
-    private Set<Long> mentorUserIdsForTeam(Long teamId) {
+    private Set<Long> mentorUserIdsForTeam(Long teamId, Long roundId) {
         Set<Long> userIds = new LinkedHashSet<>();
         for (BoardSlot slot : boardSlotRepository.findByTeamId(teamId)) {
+            if (roundId != null && !roundId.equals(slot.getRoundId())) {
+                continue;
+            }
             if (slot.getBoardId() == null) {
                 continue;
             }
@@ -134,14 +112,24 @@ public class AiReviewNotificationPublisher {
         return userIds;
     }
 
-    private Set<Long> participantUserIdsForTeam(Long teamId) {
-        Set<Long> userIds = new LinkedHashSet<>();
-        for (TeamMember member : teamMemberRepository.findByTeamIdAndStatus(teamId, TeamMemberStatus.CONFIRMED)) {
-            if (member.getUserId() != null) {
-                userIds.add(member.getUserId());
-            }
+    private String mentorReviewLink(Team team, AiReview review) {
+        StringBuilder link = new StringBuilder("/mentor/ai-review?teamId=")
+                .append(team.getId())
+                .append("&eventId=")
+                .append(team.getEventId());
+        if (review.getRoundId() != null) {
+            link.append("&roundId=").append(review.getRoundId());
         }
-        return userIds;
+        Long boardId = boardSlotRepository.findByTeamId(team.getId()).stream()
+                .filter(slot -> review.getRoundId() == null || review.getRoundId().equals(slot.getRoundId()))
+                .map(BoardSlot::getBoardId)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+        if (boardId != null) {
+            link.append("&boardId=").append(boardId);
+        }
+        return link.toString();
     }
 
     private void notifyUser(

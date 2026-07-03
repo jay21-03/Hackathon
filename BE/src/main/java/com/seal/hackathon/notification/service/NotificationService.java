@@ -845,7 +845,7 @@ public class NotificationService {
             return;
         }
         log.info(
-                "[notification-mock] id={} type={} userId={} email={} eventId={} title={} link={}",
+                "[notification-in-app-only] mailEnabled=false id={} type={} userId={} email={} eventId={} title={} link={}",
                 notification.getId(),
                 notification.getNotificationType(),
                 notification.getUserId(),
