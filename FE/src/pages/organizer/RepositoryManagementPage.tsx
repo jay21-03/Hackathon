@@ -53,12 +53,40 @@ function isNotFoundError(error: unknown) {
   return message.includes("404") || message.toLowerCase().includes("not found") || message.includes("Chưa có mẫu");
 }
 
+type RepositoryStatusFilter = "ALL" | "OPEN" | "CLOSED" | "FAILED" | "PENDING";
+type RepositoryFilterState = {
+  selectedRoundId: number | null;
+  boardId: number | null;
+  statusFilter: RepositoryStatusFilter;
+  repoSearch: string;
+};
+const REPOSITORY_FILTER_STORAGE_KEY = "seal.organizerRepository.filters";
+
+function loadRepositoryFilters(): RepositoryFilterState {
+  try {
+    const raw = window.localStorage.getItem(REPOSITORY_FILTER_STORAGE_KEY);
+    if (!raw) throw new Error("empty");
+    const parsed = JSON.parse(raw) as Partial<RepositoryFilterState>;
+    return {
+      selectedRoundId: typeof parsed.selectedRoundId === "number" ? parsed.selectedRoundId : null,
+      boardId: typeof parsed.boardId === "number" ? parsed.boardId : null,
+      statusFilter: ["ALL", "OPEN", "CLOSED", "FAILED", "PENDING"].includes(String(parsed.statusFilter))
+        ? (parsed.statusFilter as RepositoryStatusFilter)
+        : "ALL",
+      repoSearch: typeof parsed.repoSearch === "string" ? parsed.repoSearch : ""
+    };
+  } catch {
+    return { selectedRoundId: null, boardId: null, statusFilter: "ALL", repoSearch: "" };
+  }
+}
+
 export function RepositoryManagementPage({ embedded = false }: { embedded?: boolean }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const [selectedRoundId, setSelectedRoundId] = useState<number | null>(null);
-  const [boardId, setBoardId] = useState<number | null>(null);
+  const initialFilters = useMemo(loadRepositoryFilters, []);
+  const [selectedRoundId, setSelectedRoundId] = useState<number | null>(initialFilters.selectedRoundId);
+  const [boardId, setBoardId] = useState<number | null>(initialFilters.boardId);
   const [problemId, setProblemId] = useState<number | null>(null);
   const [templateOwner, setTemplateOwner] = useState(GITHUB_REPO_TEMPLATE_DEFAULTS.templateOwner);
   const [templateRepo, setTemplateRepo] = useState(GITHUB_REPO_TEMPLATE_DEFAULTS.templateRepo);
@@ -70,8 +98,8 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
   const [locking, setLocking] = useState(false);
   const [grantingJudgeAccess, setGrantingJudgeAccess] = useState(false);
   const [retryingId, setRetryingId] = useState<number | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "CLOSED" | "FAILED" | "PENDING">("ALL");
-  const [repoSearch, setRepoSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<RepositoryStatusFilter>(initialFilters.statusFilter);
+  const [repoSearch, setRepoSearch] = useState(initialFilters.repoSearch);
   const [repoSearchDebounced, setRepoSearchDebounced] = useState("");
   const [repoPage, setRepoPage] = useState(0);
   const repoPageSize = 50;
@@ -110,6 +138,13 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
   useEffect(() => {
     setRepoPage(0);
   }, [activeRoundId, boardId, statusFilter, repoSearchDebounced]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      REPOSITORY_FILTER_STORAGE_KEY,
+      JSON.stringify({ selectedRoundId: activeRoundId, boardId, statusFilter, repoSearch })
+    );
+  }, [activeRoundId, boardId, statusFilter, repoSearch]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setRepoSearchDebounced(repoSearch.trim()), 300);
@@ -713,7 +748,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
                       <td className="py-3 pr-3">
                         {row.provisionStatus === "CREATED" ? (
                           <Link
-                            to={`/organizer/ai-reviews?teamId=${row.teamId}`}
+                            to={`/organizer/ai-reviews?teamId=${row.teamId}&eventId=${eventId}`}
                             className="font-body-sm text-primary underline-offset-2 hover:underline"
                           >
                             Rubric

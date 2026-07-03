@@ -4,6 +4,10 @@ import type { ApiResponse } from "../types/api";
 export interface SchedulerHealthResponse {
   githubSchedulerEnabled: boolean;
   aiReviewSchedulerEnabled: boolean;
+  aiReviewWebhookEnabled: boolean;
+  n8nWebhookConfigured: boolean;
+  githubWebhookConfigured: boolean;
+  mailEnabled: boolean;
   eventLifecycleSchedulerEnabled: boolean;
   recommendation?: string | null;
 }

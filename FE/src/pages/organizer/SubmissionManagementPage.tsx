@@ -26,6 +26,35 @@ import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
 
 type StatusFilter = "ALL" | "SUBMITTED" | "DRAFT" | "NONE";
 type SortKey = "team" | "status" | "submittedAt";
+const SUBMISSION_FILTER_STORAGE_KEY = "seal.organizerSubmission.filters";
+type SubmissionFilterState = {
+  roundId: number | null;
+  boardId: number | null;
+  statusFilter: StatusFilter;
+  search: string;
+  sortKey: SortKey;
+};
+
+function loadSubmissionFilters(): SubmissionFilterState {
+  try {
+    const raw = window.localStorage.getItem(SUBMISSION_FILTER_STORAGE_KEY);
+    if (!raw) throw new Error("empty");
+    const parsed = JSON.parse(raw) as Partial<SubmissionFilterState>;
+    return {
+      roundId: typeof parsed.roundId === "number" ? parsed.roundId : null,
+      boardId: typeof parsed.boardId === "number" ? parsed.boardId : null,
+      statusFilter: ["ALL", "SUBMITTED", "DRAFT", "NONE"].includes(String(parsed.statusFilter))
+        ? (parsed.statusFilter as StatusFilter)
+        : "ALL",
+      search: typeof parsed.search === "string" ? parsed.search : "",
+      sortKey: ["team", "status", "submittedAt"].includes(String(parsed.sortKey))
+        ? (parsed.sortKey as SortKey)
+        : "team"
+    };
+  } catch {
+    return { roundId: null, boardId: null, statusFilter: "ALL", search: "", sortKey: "team" };
+  }
+}
 
 function statusLabel(status: string | null | undefined) {
   if (status === "SUBMITTED") return "Đã nộp";
@@ -45,12 +74,13 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, boards, loading: boardsLoading, error: boardsError, refetch: refetchBoards } =
     useEventBoards(eventId);
-  const [roundId, setRoundId] = useState<number | null>(null);
-  const [boardId, setBoardId] = useState<number | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-  const [search, setSearch] = useState("");
+  const initialFilters = useMemo(loadSubmissionFilters, []);
+  const [roundId, setRoundId] = useState<number | null>(initialFilters.roundId);
+  const [boardId, setBoardId] = useState<number | null>(initialFilters.boardId);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilters.statusFilter);
+  const [search, setSearch] = useState(initialFilters.search);
   const [searchDebounced, setSearchDebounced] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("team");
+  const [sortKey, setSortKey] = useState<SortKey>(initialFilters.sortKey);
   const [listPage, setListPage] = useState(0);
   const [detailTeamId, setDetailTeamId] = useState<number | null>(null);
   const [detail, setDetail] = useState<AdminTeamSubmissionResponse | null>(null);
@@ -71,6 +101,13 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
   useEffect(() => {
     setListPage(0);
   }, [eventId, boardId, activeRoundId, statusFilter, searchDebounced]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      SUBMISSION_FILTER_STORAGE_KEY,
+      JSON.stringify({ roundId: activeRoundId, boardId, statusFilter, search, sortKey })
+    );
+  }, [activeRoundId, boardId, statusFilter, search, sortKey]);
 
   const { submissions, total, totalPages, loading, error, refetch: refetchSubmissions } = useEventSubmissions(
     eventId,

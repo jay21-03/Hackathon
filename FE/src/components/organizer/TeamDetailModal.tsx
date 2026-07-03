@@ -60,7 +60,7 @@ export function TeamDetailModal({
           {enableAiReview && team ? (
             <p className="font-body-sm">
               <Link
-                to={`/organizer/ai-reviews?teamId=${team.id}`}
+                to={`/organizer/ai-reviews?teamId=${team.id}&eventId=${team.eventId}`}
                 className="text-primary underline-offset-2 hover:underline"
               >
                 Xem đánh giá AI & rubric R1/R2

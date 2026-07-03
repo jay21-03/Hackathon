@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
-import { Button } from "../../components/ui/Button";
+import { Button, ButtonLink } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { ParticipantWorkflowBar } from "../../components/participant/ParticipantWorkflowBar";
@@ -19,7 +19,7 @@ import { useCommitUpdates } from "../../hooks/useCommitUpdates";
 import { CommitConnectionBadge } from "../../components/ui/CommitConnectionBadge";
 import { fetchMyProfile } from "../../services/profileService";
 import { ParticipantTeamBlocked } from "../../components/participant/ParticipantTeamBlocked";
-import { enableGithubProvisioning, enableAiReview } from "../../config/features";
+import { enableGithubProvisioning } from "../../config/features";
 import { queryKeys } from "../../lib/queryKeys";
 import {
   ACCESS_STATUS_LABELS,
@@ -437,7 +437,12 @@ export function SubmissionPage() {
     return (
       <div className="space-y-lg">
         <PageHeader eyebrow="Bài nộp" title="Chưa có đội" description="Đăng ký đội để nộp bài." />
-        <EmptyState icon="upload" title="Chưa có đội thi" description="Đăng ký đội trước khi nộp bài." />
+        <EmptyState
+          icon="upload"
+          title="Chưa có đội thi"
+          description="Đăng ký hoặc chọn cuộc thi trước khi nộp bài."
+          action={<ButtonLink to="/events">Xem cuộc thi</ButtonLink>}
+        />
       </div>
     );
   }
@@ -504,15 +509,6 @@ export function SubmissionPage() {
             <p className="mt-xs font-body-sm text-on-surface-variant">
               Ban tổ chức cấp repository GitHub khi mở đề. Bạn push code trong thời gian mở — hệ thống tự chốt
               «đã nộp» khi hết giờ đóng đề, không cần bấm nút xác nhận.
-              {enableAiReview ? (
-                <>
-                  {" "}
-                  <Link to="/me/ai-review" className="text-primary underline-offset-2 hover:underline">
-                    Xem đánh giá AI
-                  </Link>{" "}
-                  (tham khảo, cập nhật ~1 giờ/lần).
-                </>
-              ) : null}
             </p>
             <dl className="mt-md grid gap-md sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border border-outline-variant/60 bg-surface px-3 py-2">
