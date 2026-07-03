@@ -655,12 +655,37 @@ export async function mockCoreApis(page: Page) {
         {
           id: 1,
           boardId: 1,
+          boardName: "Bảng A",
+          roundId: 1,
+          roundName: "Vòng 1",
+          eventId: 1,
+          eventName: "SEAL Hackathon 2026",
           assigneeId: 1,
           assigneeName: "Giám khảo Demo",
           assigneeEmail: "judge@demo.test",
           createdAt: "2026-06-01T08:00:00+07:00",
           createdBy: 1,
           academicTermId: 1,
+          academicTermCode: "SPRING_2026",
+          academicTermName: "Spring 2026",
+          academicTermStatus: "ACTIVE"
+        },
+        {
+          id: 2,
+          boardId: 2,
+          boardName: "Bảng B",
+          roundId: 2,
+          roundName: "Vòng 2",
+          eventId: 2,
+          eventName: "AI Challenge 2026",
+          assigneeId: 1,
+          assigneeName: "Judge Demo",
+          assigneeEmail: "judge@demo.test",
+          createdAt: "2026-07-01T08:00:00+07:00",
+          createdBy: 1,
+          academicTermId: 2,
+          academicTermCode: "SUMMER_2026",
+          academicTermName: "Summer 2026",
           academicTermStatus: "ACTIVE"
         }
       ])

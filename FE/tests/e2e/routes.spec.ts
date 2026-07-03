@@ -58,3 +58,10 @@ test("participant cannot access organizer dashboard", async ({ page }) => {
   await page.goto("/organizer/dashboard");
   await expect(page).toHaveURL(/\/events$/);
 });
+
+test("participant ai review route redirects to submission", async ({ page }) => {
+  await seedAuth(page, "participant");
+  await page.goto("/me/ai-review");
+  await expect(page).toHaveURL(/\/me\/submission/);
+  await expect(page.locator("body")).toContainText(/repository|nộp bài|bài nộp/i);
+});
