@@ -31,6 +31,9 @@ public interface AiReviewRepository extends JpaRepository<AiReview, Long> {
     Optional<AiReview> findByTeamIdAndCommitShaAndReviewKind(
             Long teamId, String commitSha, AiReviewKind reviewKind);
 
+    Optional<AiReview> findByTeamRepositoryIdAndCommitShaAndReviewKind(
+            Long teamRepositoryId, String commitSha, AiReviewKind reviewKind);
+
     List<AiReview> findByTeamIdInAndStatusOrderByReviewedAtDesc(
             List<Long> teamIds, AiReviewStatus status);
 

@@ -34,6 +34,9 @@ public class AiReview {
     @Column(name = "team_id", nullable = false)
     private Long teamId;
 
+    @Column(name = "team_repository_id")
+    private Long teamRepositoryId;
+
     @Column(name = "round_id")
     private Long roundId;
 
