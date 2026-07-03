@@ -768,6 +768,35 @@ public class RepositoryProvisioningService {
                     continue;
                 }
                 try {
+                    if (!githubRepositoryClient.userExists(judgeUsername)) {
+                        failed++;
+                        grants.add(JudgeAccessGrantItem.builder()
+                                .repositoryId(repository.getId())
+                                .teamId(repository.getTeamId())
+                                .teamName(teamName)
+                                .judgeId(judgeId)
+                                .judgeUsername(judgeUsername)
+                                .access("READ")
+                                .status("FAILED")
+                                .error("GITHUB_USERNAME_NOT_FOUND")
+                                .build());
+                        continue;
+                    }
+                } catch (GitHubClientException ex) {
+                    failed++;
+                    grants.add(JudgeAccessGrantItem.builder()
+                            .repositoryId(repository.getId())
+                            .teamId(repository.getTeamId())
+                            .teamName(teamName)
+                            .judgeId(judgeId)
+                            .judgeUsername(judgeUsername)
+                            .access("READ")
+                            .status("FAILED")
+                            .error(sanitizeError(ex.getMessage()))
+                            .build());
+                    continue;
+                }
+                try {
                     githubRepositoryClient.addCollaborator(
                             repository.getGithubOwner(),
                             repository.getGithubRepoName(),
@@ -909,6 +938,24 @@ public class RepositoryProvisioningService {
             repository.setUpdatedAt(now);
             return new ProvisionOutcome(teamRepositoryEntityRepository.save(repository), false, true);
         }
+        try {
+            List<String> missingGithubUsers = findMissingGithubUsers(usernames);
+            if (!missingGithubUsers.isEmpty()) {
+                String issue = "GitHub username không tồn tại: " + String.join(", ", missingGithubUsers);
+                repository.setProvisionStatus(RepositoryProvisionStatus.FAILED);
+                repository.setAccessStatus(RepositoryAccessStatus.FAILED);
+                repository.setLastError(issue);
+                repository.setUpdatedAt(now);
+                notificationService.notifyTeamGithubProfileIncomplete(team, issue);
+                return new ProvisionOutcome(teamRepositoryEntityRepository.save(repository), false, true);
+            }
+        } catch (GitHubClientException ex) {
+            repository.setProvisionStatus(RepositoryProvisionStatus.FAILED);
+            repository.setAccessStatus(RepositoryAccessStatus.FAILED);
+            repository.setLastError(sanitizeError(ex.getMessage()));
+            repository.setUpdatedAt(now);
+            return new ProvisionOutcome(teamRepositoryEntityRepository.save(repository), false, true);
+        }
 
         String repoName = buildRepositoryName(team, scope);
         repository.setGithubOwner(githubOrg.trim());
@@ -1010,6 +1057,16 @@ public class RepositoryProvisioningService {
             }
         }
         return issues.isEmpty() ? null : String.join("; ", issues);
+    }
+
+    private List<String> findMissingGithubUsers(List<String> usernames) {
+        List<String> missing = new ArrayList<>();
+        for (String username : usernames) {
+            if (!githubRepositoryClient.userExists(username)) {
+                missing.add(username);
+            }
+        }
+        return missing;
     }
 
     private TeamRepository initializeRepository(Team team, ProblemScope scope, Long currentUserId, OffsetDateTime now) {

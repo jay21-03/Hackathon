@@ -22,6 +22,7 @@ public class FakeGitHubRepositoryClient implements GitHubRepositoryClient {
     private final Map<String, GitHubCommitDetail> commitDetails = new ConcurrentHashMap<>();
     private final Map<String, Boolean> protectedBranches = new ConcurrentHashMap<>();
     private final Map<String, String> pushWebhookUrls = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> userExistence = new ConcurrentHashMap<>();
 
     @Override
     public void ensurePushWebhook(String owner, String repo, String payloadUrl, String secret) {
@@ -77,6 +78,14 @@ public class FakeGitHubRepositoryClient implements GitHubRepositoryClient {
     @Override
     public void addCollaborator(String owner, String repo, String username, String permission) {
         updateCollaboratorPermission(owner, repo, username, permission);
+    }
+
+    @Override
+    public boolean userExists(String username) {
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+        return userExistence.getOrDefault(username.trim().toLowerCase(), true);
     }
 
     @Override
@@ -146,6 +155,10 @@ public class FakeGitHubRepositoryClient implements GitHubRepositoryClient {
     public void stubLatestCommit(String owner, String repo, String branch, GitHubCommitInfo commit) {
         String resolvedBranch = branch == null || branch.isBlank() ? "main" : branch.trim();
         latestCommits.put(commitKey(owner, repo, resolvedBranch), commit);
+    }
+
+    public void stubUserExists(String username, boolean exists) {
+        userExistence.put(username.trim().toLowerCase(), exists);
     }
 
     public String collaboratorPermission(String owner, String repo, String username) {

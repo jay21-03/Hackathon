@@ -14,6 +14,8 @@ public interface GitHubRepositoryClient {
 
     void addCollaborator(String owner, String repo, String username, String permission);
 
+    boolean userExists(String username);
+
     void updateCollaboratorPermission(String owner, String repo, String username, String permission);
 
     void protectBranchFromPush(String owner, String repo, String branch);

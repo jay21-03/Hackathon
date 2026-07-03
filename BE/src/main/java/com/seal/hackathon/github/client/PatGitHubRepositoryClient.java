@@ -81,6 +81,27 @@ public class PatGitHubRepositoryClient implements GitHubRepositoryClient {
     }
 
     @Override
+    public boolean userExists(String username) {
+        if (!StringUtils.hasText(username)) {
+            return false;
+        }
+        try {
+            Map<String, Object> response = execute(() -> restClient.get()
+                    .uri("/users/{username}", username.trim())
+                    .headers(this::authorize)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {
+                    }));
+            return response != null && StringUtils.hasText(asString(response.get("login")));
+        } catch (GitHubClientException ex) {
+            if (ex.getStatusCode() == 404) {
+                return false;
+            }
+            throw ex;
+        }
+    }
+
+    @Override
     public void updateCollaboratorPermission(String owner, String repo, String username, String permission) {
         Map<String, Object> body = Map.of("permission", permission);
         execute(() -> restClient.put()
