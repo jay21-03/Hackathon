@@ -13,10 +13,10 @@ import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
 import { useEventRound } from "../../hooks/useEventRound";
 import { useEventTeamSummary } from "../../hooks/useEventTeamSummary";
-import { useScoreProgress } from "../../hooks/useScoreProgress";
 import { enableRanking, enableScoring } from "../../config/features";
 import { fetchEventDetail } from "../../services/eventsApi";
 import { fetchEventRankings } from "../../services/rankingApi";
+import { fetchEventScoreProgress } from "../../services/scoringApi";
 import { fetchEventRounds, fetchRoundBoards } from "../../services/contestApi";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { queryKeys } from "../../lib/queryKeys";
@@ -39,13 +39,11 @@ export function OrganizerOverviewPage() {
     queryFn: async () => {
       const rounds = await fetchEventRounds(eventId!);
       let boardCount = 0;
-      let firstBoardId: number | null = null;
       for (const round of rounds) {
         const boards = await fetchRoundBoards(round.id);
         boardCount += boards.length;
-        if (!firstBoardId && boards[0]) firstBoardId = boards[0].id;
       }
-      return { roundCount: rounds.length, boardCount, firstBoardId };
+      return { roundCount: rounds.length, boardCount };
     }
   });
 
@@ -56,10 +54,12 @@ export function OrganizerOverviewPage() {
   });
 
   const boardCount = structureQuery.data?.boardCount ?? 0;
-  const firstBoardId = structureQuery.data?.firstBoardId ?? null;
-  const { progress: scoreProgress } = useScoreProgress(
-    enableScoring && boardCount > 0 ? firstBoardId : null
-  );
+  const eventScoreProgressQuery = useQuery({
+    queryKey: queryKeys.scoring.eventProgress(eventId ?? null),
+    queryFn: () => fetchEventScoreProgress(eventId!),
+    enabled: Boolean(eventId) && enableScoring && boardCount > 0
+  });
+  const scoreProgress = eventScoreProgressQuery.data ?? null;
 
   const confirmedTeams = teamSummary?.confirmedCount ?? 0;
   const pendingTeams = teamSummary?.pendingCount ?? 0;
@@ -99,7 +99,7 @@ export function OrganizerOverviewPage() {
     enableScoring &&
     setupContext.hasRubric &&
     scoreProgress &&
-    scoreProgress.summary.judgeCount === 0
+    scoreProgress.boardsWithoutJudges.length > 0
   ) {
     blockers.push({
       text: "Chưa phân công giám khảo cho bảng thi.",
@@ -110,7 +110,7 @@ export function OrganizerOverviewPage() {
   if (
     enableScoring &&
     scoreProgress &&
-    scoreProgress.summary.judgeCount > 0 &&
+    scoreProgress.summary.expectedSheets > 0 &&
     scoreProgress.summary.completionPercent < 100
   ) {
     blockers.push({
@@ -130,7 +130,9 @@ export function OrganizerOverviewPage() {
         label: "Công bố kết quả"
       });
     }
-    const uncaculated = rankingsQuery.data.boards.filter((board) => board.teamCount === 0);
+    const uncaculated = rankingsQuery.data.boards.filter(
+      (board) => board.teamCount > 0 && !board.calculatedAt && board.entries.length === 0
+    );
     if (
       uncaculated.length > 0 &&
       setupContext.hasRubric &&

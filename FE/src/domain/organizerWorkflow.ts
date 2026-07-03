@@ -18,13 +18,13 @@ export const ORGANIZER_MACRO_STEPS: OrganizerMacroStep[] = [
   {
     id: "boards",
     label: "Bảng thi",
-    detail: "Vòng, bảng, mentor/GK, đề & rubric",
+    detail: "Vòng, bảng và số slot",
     path: "/organizer/boards"
   },
   {
     id: "staff",
     label: "Giám khảo & mentor",
-    detail: "Mời staff, chuyển từ kỳ cũ",
+    detail: "Mời staff, gán vào bảng",
     path: "/organizer/staff"
   },
   {

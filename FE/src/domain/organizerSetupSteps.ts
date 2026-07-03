@@ -12,8 +12,8 @@ export type OrganizerSetupContext = {
 
 const SETUP_REQUIRES: Record<string, (ctx: OrganizerSetupContext) => boolean> = {
   basic: () => true,
-  boards: (ctx) =>
-    ctx.hasBoards && ctx.hasSlots && ctx.hasProblem && ctx.hasStaff && ctx.hasRubric,
+  boards: (ctx) => ctx.hasBoards && ctx.hasSlots,
+  staff: (ctx) => ctx.hasStaff,
   "teams-hub": (ctx) => ctx.hasTeams,
   "board-ops": (ctx) => ctx.hasTeams,
   "artifacts-hub": (ctx) => ctx.hasProblem,
