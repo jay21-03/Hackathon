@@ -1,10 +1,8 @@
 package com.seal.hackathon.assignment.service;
 
-import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.assignment.dto.AssignmentResponse;
 import com.seal.hackathon.assignment.entity.JudgeAssignment;
 import com.seal.hackathon.common.enums.JudgeBoardReadiness;
-import com.seal.hackathon.common.enums.RepositoryProvisionStatus;
 import com.seal.hackathon.common.enums.ScoreSheetStatus;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
@@ -14,19 +12,16 @@ import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.ProblemRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
-import com.seal.hackathon.github.repository.ProblemRepositoryTemplateRepository;
 import com.seal.hackathon.scoring.entity.ScoreCriteria;
 import com.seal.hackathon.scoring.entity.ScoreSheet;
 import com.seal.hackathon.scoring.repository.ScoreCriteriaRepository;
 import com.seal.hackathon.scoring.repository.ScoreSheetRepository;
+import com.seal.hackathon.scoring.service.ScoringRepositoryGuardService;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,11 +35,7 @@ public class JudgeBoardReadinessService {
     private final RoundRepository roundRepository;
     private final ScoreCriteriaRepository scoreCriteriaRepository;
     private final ScoreSheetRepository scoreSheetRepository;
-    private final TeamRepositoryEntityRepository teamRepositoryEntityRepository;
-    private final ProblemRepositoryTemplateRepository problemRepositoryTemplateRepository;
-
-    @Value("${app.github.org:}")
-    private String githubOrg;
+    private final ScoringRepositoryGuardService scoringRepositoryGuardService;
 
     @Transactional(readOnly = true)
     public AssignmentResponse enrichJudgeAssignment(AssignmentResponse response, Long judgeId) {
@@ -112,9 +103,7 @@ public class JudgeBoardReadinessService {
                     JudgeBoardReadiness.WAITING_TEAMS, teamsCount, 0, 0, releaseAt, closeAt);
         }
 
-        if (!problemClosed
-                && requiresProvisionedRepositories(problem.getId())
-                && !allTeamsHaveProvisionedRepo(problem.getId(), slots)) {
+        if (!allTeamsHaveScorableRepository(board.getId(), slots)) {
             return ReadinessSnapshot.of(
                     JudgeBoardReadiness.WAITING_REPOSITORIES, teamsCount, 0, 0, releaseAt, closeAt);
         }
@@ -186,30 +175,11 @@ public class JudgeBoardReadinessService {
         return true;
     }
 
-    private boolean requiresProvisionedRepositories(Long problemId) {
-        if (!org.springframework.util.StringUtils.hasText(githubOrg)) {
-            return false;
-        }
-        return problemRepositoryTemplateRepository.findByProblemId(problemId)
-                .map(template -> Boolean.TRUE.equals(template.getEnabled()))
-                .orElse(false);
-    }
-
-    private boolean allTeamsHaveProvisionedRepo(Long problemId, List<BoardSlot> slots) {
-        Set<Long> teamIds = slots.stream()
+    private boolean allTeamsHaveScorableRepository(Long boardId, List<BoardSlot> slots) {
+        return slots.stream()
                 .map(BoardSlot::getTeamId)
                 .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        if (teamIds.isEmpty()) {
-            return false;
-        }
-        long provisionedTeams = teamRepositoryEntityRepository.findByProblemIdOrderByTeamIdAsc(problemId).stream()
-                .filter(repo -> teamIds.contains(repo.getTeamId()))
-                .filter(repo -> repo.getProvisionStatus() == RepositoryProvisionStatus.CREATED)
-                .map(repo -> repo.getTeamId())
-                .distinct()
-                .count();
-        return provisionedTeams >= teamIds.size();
+                .allMatch(teamId -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(boardId, teamId));
     }
 
     public AssignmentResponse enrichJudgeAssignment(JudgeAssignment assignment, AssignmentResponse base) {

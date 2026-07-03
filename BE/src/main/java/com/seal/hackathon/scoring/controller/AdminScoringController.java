@@ -9,6 +9,7 @@ import com.seal.hackathon.common.idempotency.IdempotencyExecutor;
 import com.seal.hackathon.common.response.ApiResponse;
 
 import com.seal.hackathon.scoring.dto.ApplyRubricActionRequest;
+import com.seal.hackathon.scoring.dto.EventScoreProgressResponse;
 import com.seal.hackathon.scoring.dto.RubricResponse;
 import com.seal.hackathon.scoring.dto.SaveRubricRequest;
 import com.seal.hackathon.scoring.service.CriteriaTemplateService;
@@ -120,6 +121,11 @@ public class AdminScoringController {
 
         return ApiResponse.ok(scoringService.getScoreProgress(boardId));
 
+    }
+
+    @GetMapping("/events/{eventId}/score-progress")
+    public ApiResponse<EventScoreProgressResponse> getEventScoreProgress(@PathVariable Long eventId) {
+        return ApiResponse.ok(scoringService.getEventScoreProgress(eventId));
     }
 
 

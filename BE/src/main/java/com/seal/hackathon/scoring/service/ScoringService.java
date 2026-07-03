@@ -10,6 +10,7 @@ import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.enums.ScoreSheetStatus;
 import com.seal.hackathon.common.enums.TeamStatus;
+import com.seal.hackathon.common.util.ContestOrdering;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Event;
@@ -27,6 +28,7 @@ import com.seal.hackathon.scoring.dto.BoardBriefDto;
 import com.seal.hackathon.scoring.dto.ComputedScoreDto;
 import com.seal.hackathon.scoring.dto.CriteriaRequestItem;
 import com.seal.hackathon.scoring.dto.CriteriaResponse;
+import com.seal.hackathon.scoring.dto.EventScoreProgressResponse;
 import com.seal.hackathon.scoring.dto.JudgeBriefDto;
 import com.seal.hackathon.scoring.dto.JudgeProgressDto;
 import com.seal.hackathon.scoring.dto.JudgeSheetStatusDto;
@@ -98,6 +100,7 @@ public class ScoringService {
     private final OrganizerAuthorizationService organizerAuthorizationService;
     private final BoardScoringReadinessService boardScoringReadinessService;
     private final ContestPhaseGuardService contestPhaseGuardService;
+    private final ScoringRepositoryGuardService scoringRepositoryGuardService;
 
     @Transactional(readOnly = true)
     public RubricResponse getRubric(Long roundId) {
@@ -159,6 +162,7 @@ public class ScoringService {
 
         List<ScoreCriteria> criteria = requireCriteria(ctx.round.getId());
         List<BoardSlot> slots = sortedSlotsWithTeams(boardId);
+        scoringRepositoryGuardService.requireBoardRepositoriesReady(boardId);
 
         for (BoardSlot slot : slots) {
             ensureDraftSheet(boardId, slot.getTeamId(), judge.getUserId(), ctx.assignment.getId());
@@ -194,6 +198,18 @@ public class ScoringService {
 
             assertTeamInBoard(boardId, row.getTeamId());
             assertTeamScorable(row.getTeamId());
+            scoringRepositoryGuardService.requireTeamRepositoryReady(boardId, row.getTeamId());
+            if (sheet.getStatus() == ScoreSheetStatus.SUBMITTED) {
+                skipped.add(row.getTeamId());
+                rows.add(buildTeamRow(
+                        sheet,
+                        criteria,
+                        teamName(row.getTeamId()),
+                        slotNumber(boardId, row.getTeamId()),
+                        ctx.board.getId(),
+                        ctx.round.getId()));
+                continue;
+            }
 
             if (row.getGeneralFeedback() != null) {
                 sheet.setGeneralFeedback(row.getGeneralFeedback());
@@ -229,7 +245,13 @@ public class ScoringService {
             sheet.setUpdatedAt(OffsetDateTime.now());
             scoreSheetRepository.save(sheet);
             saved.add(row.getTeamId());
-            rows.add(buildTeamRow(sheet, criteria, teamName(row.getTeamId()), slotNumber(boardId, row.getTeamId())));
+            rows.add(buildTeamRow(
+                    sheet,
+                    criteria,
+                    teamName(row.getTeamId()),
+                    slotNumber(boardId, row.getTeamId()),
+                    ctx.board.getId(),
+                    ctx.round.getId()));
         }
 
         return SaveMatrixResponse.builder()
@@ -247,6 +269,7 @@ public class ScoringService {
 
         List<BoardSlot> slots = sortedSlotsWithTeams(boardId);
         List<Long> targetTeamIds = resolveSubmitTargets(request, slots);
+        scoringRepositoryGuardService.requireBoardRepositoriesReady(boardId);
 
         List<SubmittedSheetDto> submitted = new ArrayList<>();
         List<SubmitFailureDto> failed = new ArrayList<>();
@@ -288,17 +311,93 @@ public class ScoringService {
     public ScoreProgressResponse getScoreProgress(Long boardId) {
         BoardContext ctx = loadBoardContext(boardId);
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(ctx.round.getEventId());
+        return buildScoreProgress(ctx);
+    }
+
+    @Transactional(readOnly = true)
+    public EventScoreProgressResponse getEventScoreProgress(Long eventId) {
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        List<ScoreProgressResponse> boards = new ArrayList<>();
+        for (Round round : ContestOrdering.sortRounds(roundRepository.findByEventId(eventId))) {
+            for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(round.getId()))) {
+                boards.add(buildScoreProgress(new BoardContext(board, round, null)));
+            }
+        }
+
+        int teamCount = boards.stream().mapToInt(p -> p.getSummary().getTeamCount()).sum();
+        int judgeCount = boards.stream().mapToInt(p -> p.getSummary().getJudgeCount()).sum();
+        int expected = boards.stream().mapToInt(p -> p.getSummary().getExpectedSheets()).sum();
+        int submitted = boards.stream().mapToInt(p -> p.getSummary().getSubmittedSheets()).sum();
+        int draft = boards.stream().mapToInt(p -> p.getSummary().getDraftSheets()).sum();
+        int missing = boards.stream().mapToInt(p -> p.getSummary().getMissingSheets()).sum();
+        BigDecimal completion = expected == 0
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(submitted)
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(expected), 2, RoundingMode.HALF_UP);
+
+        return EventScoreProgressResponse.builder()
+                .eventId(eventId)
+                .eventName(event.getName())
+                .summary(ProgressSummaryDto.builder()
+                        .teamCount(teamCount)
+                        .judgeCount(judgeCount)
+                        .expectedSheets(expected)
+                        .submittedSheets(submitted)
+                        .draftSheets(draft)
+                        .missingSheets(missing)
+                        .completionPercent(completion)
+                        .build())
+                .boards(boards)
+                .boardsWithoutJudges(boards.stream()
+                        .filter(p -> p.getSummary().getTeamCount() > 0 && p.getSummary().getJudgeCount() == 0)
+                        .map(ScoreProgressResponse::getBoardId)
+                        .toList())
+                .boardsIncomplete(boards.stream()
+                        .filter(p -> p.getSummary().getExpectedSheets() > 0
+                                && p.getSummary().getCompletionPercent().compareTo(BigDecimal.valueOf(100)) < 0)
+                        .map(ScoreProgressResponse::getBoardId)
+                        .toList())
+                .build();
+    }
+
+    private ScoreProgressResponse buildScoreProgress(BoardContext ctx) {
+        Long boardId = ctx.board.getId();
         List<BoardSlot> slots = sortedSlotsWithTeams(boardId);
         List<JudgeAssignment> judgeAssignments = judgeAssignmentRepository.findByBoardId(boardId);
-        List<ScoreSheet> sheets = scoreSheetRepository.findByBoardId(boardId);
+        Set<Long> currentTeamIds = slots.stream()
+                .map(BoardSlot::getTeamId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> currentJudgeIds = judgeAssignments.stream()
+                .map(JudgeAssignment::getJudgeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        List<ScoreSheet> sheets = scoreSheetRepository.findByBoardId(boardId).stream()
+                .filter(sheet -> currentTeamIds.contains(sheet.getTeamId()))
+                .filter(sheet -> currentJudgeIds.contains(sheet.getJudgeId()))
+                .toList();
         List<ScoreCriteria> criteria = scoreCriteriaRepository.findByRoundIdOrderBySortOrderAsc(ctx.round.getId());
 
         int teamCount = slots.size();
         int judgeCount = judgeAssignments.size();
         int expected = teamCount * judgeCount;
-        int submitted = (int) sheets.stream().filter(s -> s.getStatus() == ScoreSheetStatus.SUBMITTED).count();
-        int draft = (int) sheets.stream().filter(s -> s.getStatus() == ScoreSheetStatus.DRAFT).count();
-        int missing = Math.max(0, expected - sheets.size());
+        Set<String> submittedPairs = sheets.stream()
+                .filter(s -> s.getStatus() == ScoreSheetStatus.SUBMITTED)
+                .map(this::scoreSheetPairKey)
+                .collect(Collectors.toSet());
+        Set<String> draftPairs = sheets.stream()
+                .filter(s -> s.getStatus() == ScoreSheetStatus.DRAFT)
+                .map(this::scoreSheetPairKey)
+                .collect(Collectors.toSet());
+        Set<String> knownPairs = sheets.stream()
+                .map(this::scoreSheetPairKey)
+                .collect(Collectors.toSet());
+        int submitted = submittedPairs.size();
+        int draft = draftPairs.size();
+        int missing = Math.max(0, expected - knownPairs.size());
 
         BigDecimal completion = expected == 0
                 ? BigDecimal.ZERO
@@ -315,6 +414,8 @@ public class ScoringService {
                     int sub = (int) sheets.stream()
                             .filter(s -> Objects.equals(s.getJudgeId(), ja.getJudgeId())
                                     && s.getStatus() == ScoreSheetStatus.SUBMITTED)
+                            .map(ScoreSheet::getTeamId)
+                            .distinct()
                             .count();
                     return JudgeProgressDto.builder()
                             .judgeId(ja.getJudgeId())
@@ -460,7 +561,13 @@ public class ScoringService {
                     if (sheet == null) {
                         return null;
                     }
-                    return buildTeamRow(sheet, criteria, teamName(slot.getTeamId()), slot.getTeamNumber());
+                    return buildTeamRow(
+                            sheet,
+                            criteria,
+                            teamName(slot.getTeamId()),
+                            slot.getTeamNumber(),
+                            ctx.board.getId(),
+                            ctx.round.getId());
                 })
                 .filter(Objects::nonNull)
                 .toList();
@@ -492,7 +599,12 @@ public class ScoringService {
     }
 
     private MatrixTeamRowResponse buildTeamRow(
-            ScoreSheet sheet, List<ScoreCriteria> criteria, String teamName, Integer slotNumber) {
+            ScoreSheet sheet,
+            List<ScoreCriteria> criteria,
+            String teamName,
+            Integer slotNumber,
+            Long boardId,
+            Long roundId) {
         Map<Long, ScoreCriteria> byId = criteria.stream().collect(Collectors.toMap(ScoreCriteria::getId, c -> c));
         List<ScoreItem> items = scoreItemRepository.findByScoreSheetId(sheet.getId());
         List<ScoreItemResponse> scores = items.stream()
@@ -510,12 +622,12 @@ public class ScoringService {
         return MatrixTeamRowResponse.builder()
                 .teamId(sheet.getTeamId())
                 .teamName(teamName)
-                .repositoryUrl(repositoryUrlForTeam(sheet.getTeamId()))
+                .repositoryUrl(repositoryUrlForTeam(sheet.getTeamId(), boardId, roundId))
                 .slotNumber(slotNumber)
                 .sheetId(sheet.getId())
                 .status(sheet.getStatus())
                 .generalFeedback(sheet.getGeneralFeedback())
-                .editable(true)
+                .editable(sheet.getStatus() != ScoreSheetStatus.SUBMITTED)
                 .scores(scores)
                 .computed(ComputedScoreDto.builder()
                         .judgeTeamScore(computeTotal(sheet.getId(), criteria))
@@ -527,6 +639,7 @@ public class ScoringService {
     private ScoreSheet ensureDraftSheet(Long boardId, Long teamId, Long judgeId, Long assignmentId) {
         assertTeamInBoard(boardId, teamId);
         assertTeamScorable(teamId);
+        scoringRepositoryGuardService.requireTeamRepositoryReady(boardId, teamId);
         return scoreSheetRepository.findByBoardIdAndTeamIdAndJudgeId(boardId, teamId, judgeId)
                 .orElseGet(() -> {
                     OffsetDateTime now = OffsetDateTime.now();
@@ -831,15 +944,42 @@ public class ScoringService {
         return List.of();
     }
 
-    private String repositoryUrlForTeam(Long teamId) {
+    private String repositoryUrlForTeam(Long teamId, Long boardId, Long roundId) {
         return teamRepositoryEntityRepository.findAllByTeamId(teamId).stream()
-                .filter(entity -> entity.getProblemId() != null && StringUtils.hasText(entity.getRepositoryUrl()))
+                .filter(entity -> java.util.Objects.equals(entity.getBoardId(), boardId)
+                        || (entity.getBoardId() == null && java.util.Objects.equals(entity.getRoundId(), roundId)))
+                .filter(entity -> StringUtils.hasText(entity.getRepositoryUrl()))
+                .filter(scoringRepositoryGuardService::isScorableRepository)
+                .sorted(Comparator
+                        .comparing((com.seal.hackathon.aireview.entity.TeamRepository entity) ->
+                                repositoryScopePriority(entity, boardId, roundId))
+                        .reversed()
+                        .thenComparing(
+                                com.seal.hackathon.aireview.entity.TeamRepository::getUpdatedAt,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(
+                                com.seal.hackathon.aireview.entity.TeamRepository::getId,
+                                Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(entity -> entity.getRepositoryUrl())
                 .findFirst()
-                .orElseGet(() -> teamRepositoryEntityRepository
-                        .findFirstByTeamIdAndProblemIdIsNullOrderByUpdatedAtDesc(teamId)
-                        .map(entity -> entity.getRepositoryUrl())
-                        .orElse(null));
+                .orElse(null);
+    }
+
+    private int repositoryScopePriority(
+            com.seal.hackathon.aireview.entity.TeamRepository entity,
+            Long boardId,
+            Long roundId) {
+        if (java.util.Objects.equals(entity.getBoardId(), boardId)) {
+            return 100;
+        }
+        if (entity.getBoardId() == null && java.util.Objects.equals(entity.getRoundId(), roundId)) {
+            return 50;
+        }
+        return 0;
+    }
+
+    private String scoreSheetPairKey(ScoreSheet sheet) {
+        return sheet.getTeamId() + ":" + sheet.getJudgeId();
     }
 
     private record BoardContext(Board board, Round round, JudgeAssignment assignment) {}
