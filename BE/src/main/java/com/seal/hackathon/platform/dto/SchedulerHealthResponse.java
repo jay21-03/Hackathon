@@ -8,6 +8,10 @@ import lombok.Data;
 public class SchedulerHealthResponse {
     private boolean githubSchedulerEnabled;
     private boolean aiReviewSchedulerEnabled;
+    private boolean aiReviewWebhookEnabled;
+    private boolean n8nWebhookConfigured;
+    private boolean githubWebhookConfigured;
+    private boolean mailEnabled;
     private boolean eventLifecycleSchedulerEnabled;
     /** Gợi ý vận hành khi scheduler tắt (n8n bridge, v.v.). */
     private String recommendation;
