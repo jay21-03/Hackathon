@@ -2,6 +2,7 @@ package com.seal.hackathon.ranking;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.authprofile.entity.User;
@@ -25,6 +26,7 @@ import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.ranking.repository.AdvancementRepository;
+import com.seal.hackathon.ranking.entity.RankingResult;
 import com.seal.hackathon.ranking.repository.RankingResultRepository;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.repository.TeamRepository;
@@ -92,6 +94,7 @@ class AdvancementIntegrationTest {
     @Autowired ScoreItemRepository scoreItemRepository;
     @Autowired RankingResultRepository rankingResultRepository;
     @Autowired AdvancementRepository advancementRepository;
+    @Autowired TeamRepositoryEntityRepository teamRepositoryEntityRepository;
     @Autowired IntegrationTestDataCleaner dataCleaner;
 
     User organizer;
@@ -112,6 +115,7 @@ class AdvancementIntegrationTest {
         scoreItemRepository.deleteAll();
         scoreSheetRepository.deleteAll();
         scoreCriteriaRepository.deleteAll();
+        teamRepositoryEntityRepository.deleteAll();
         boardSlotRepository.deleteAll();
         judgeAssignmentRepository.deleteAll();
         teamRepository.deleteAll();
@@ -229,6 +233,20 @@ class AdvancementIntegrationTest {
                 .build());
 
         orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        seedManualRepository(team);
+    }
+
+    private void seedManualRepository(Team targetTeam) {
+        teamRepositoryEntityRepository.save(com.seal.hackathon.aireview.entity.TeamRepository.builder()
+                .teamId(targetTeam.getId())
+                .roundId(groupRound.getId())
+                .boardId(groupBoard.getId())
+                .repositoryUrl("https://github.com/org/" + targetTeam.getName().toLowerCase().replace(" ", "-"))
+                .repositoryName(targetTeam.getName())
+                .createdBy(organizer.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
     }
 
     @Test
@@ -335,5 +353,97 @@ class AdvancementIntegrationTest {
                 assertThat(result.getPublishedAt()).isNotNull());
         assertThat(rankingResultRepository.findByBoardIdOrderByRankAsc(groupBoard.getId()).get(0).getAverageScore())
                 .isEqualByComparingTo(BigDecimal.valueOf(85.0));
+    }
+
+    @Test
+    void executeAdvancementRejectsWhenTargetRoundDoesNotHaveEnoughEmptySlots() throws Exception {
+        Team secondTeam = teamRepository.save(Team.builder()
+                .eventId(event.getId())
+                .name("Team Overflow")
+                .contactEmail("overflow@example.com")
+                .status(TeamStatus.CONFIRMED)
+                .confirmedAt(OffsetDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        boardSlotRepository.save(BoardSlot.builder()
+                .roundId(groupRound.getId())
+                .boardId(groupBoard.getId())
+                .teamNumber(2)
+                .teamId(secondTeam.getId())
+                .assignedAt(OffsetDateTime.now())
+                .assignedBy(organizer.getId())
+                .createdAt(OffsetDateTime.now())
+                .build());
+        seedManualRepository(secondTeam);
+
+        rankingResultRepository.save(RankingResult.builder()
+                .roundId(groupRound.getId())
+                .boardId(groupBoard.getId())
+                .teamId(team.getId())
+                .rank(1)
+                .averageScore(BigDecimal.valueOf(95.0))
+                .calculatedAt(OffsetDateTime.now())
+                .publishedAt(OffsetDateTime.now())
+                .build());
+        rankingResultRepository.save(RankingResult.builder()
+                .roundId(groupRound.getId())
+                .boardId(groupBoard.getId())
+                .teamId(secondTeam.getId())
+                .rank(2)
+                .averageScore(BigDecimal.valueOf(90.0))
+                .calculatedAt(OffsetDateTime.now())
+                .publishedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/events/" + event.getId() + "/advancements/execute")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "fromRoundId", groupRound.getId(),
+                                "toRoundId", finalsRound.getId(),
+                                "topNPerBoard", 2,
+                                "targetBoardId", finalsBoard.getId()))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("TARGET_ROUND_NOT_ENOUGH_SLOTS"));
+
+        assertThat(advancementRepository.findByToRoundIdOrderByCreatedAtDescIdDesc(finalsRound.getId())).isEmpty();
+        assertThat(boardSlotRepository.findById(finalsSlot.getId()).orElseThrow().getTeamId()).isNull();
+    }
+
+    @Test
+    void advancementIgnoresPublishedRankingWhenTeamHasNoRepository() throws Exception {
+        teamRepositoryEntityRepository.deleteAll();
+        rankingResultRepository.save(RankingResult.builder()
+                .roundId(groupRound.getId())
+                .boardId(groupBoard.getId())
+                .teamId(team.getId())
+                .rank(1)
+                .averageScore(BigDecimal.valueOf(95.0))
+                .calculatedAt(OffsetDateTime.now())
+                .publishedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/events/" + event.getId() + "/advancements/preview")
+                        .param("fromRoundId", String.valueOf(groupRound.getId()))
+                        .param("toRoundId", String.valueOf(finalsRound.getId()))
+                        .param("topNPerBoard", "1")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.candidates.length()").value(0))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams.length()").value(0));
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/events/" + event.getId() + "/advancements/execute")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "fromRoundId", groupRound.getId(),
+                                "toRoundId", finalsRound.getId(),
+                                "topNPerBoard", 1,
+                                "targetBoardId", finalsBoard.getId()))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("NO_PUBLISHED_RANKINGS_TO_ADVANCE"));
     }
 }

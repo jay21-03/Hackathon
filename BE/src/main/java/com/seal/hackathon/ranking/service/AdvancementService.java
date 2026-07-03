@@ -20,6 +20,7 @@ import com.seal.hackathon.ranking.repository.AdvancementRepository;
 import com.seal.hackathon.ranking.repository.RankingResultRepository;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.repository.TeamRepository;
+import com.seal.hackathon.scoring.service.ScoringRepositoryGuardService;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -48,13 +49,15 @@ public class AdvancementService {
     private final TeamRepository teamRepository;
     private final OrganizerAuthorizationService organizerAuthorizationService;
     private final ContestPhaseGuardService contestPhaseGuardService;
+    private final ScoringRepositoryGuardService scoringRepositoryGuardService;
 
     @Transactional(readOnly = true)
     public AdvancementPreviewResponse previewAdvancements(Long eventId, Long fromRoundId, Long toRoundId, int topN) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         contestPhaseGuardService.assertEventAllowsAdvancement(eventId);
         Round fromRound = loadRoundForEvent(fromRoundId, eventId);
-        loadRoundForEvent(toRoundId, eventId);
+        Round toRound = loadRoundForEvent(toRoundId, eventId);
+        assertForwardAdvancement(fromRound, toRound);
         List<AdvancementCandidateDto> eligibleTeams = collectAllEligibleTeams(fromRound.getId());
         List<AdvancementCandidateDto> candidates = collectSuggestedCandidates(fromRound.getId(), topN);
         return AdvancementPreviewResponse.builder()
@@ -74,6 +77,7 @@ public class AdvancementService {
         contestPhaseGuardService.assertEventAllowsAdvancement(eventId);
         Round fromRound = loadRoundForEvent(request.getFromRoundId(), eventId);
         Round toRound = loadRoundForEvent(request.getToRoundId(), eventId);
+        assertForwardAdvancement(fromRound, toRound);
         int topN = Math.max(request.getTopNPerBoard(), 1);
 
         List<AdvancementCandidateDto> candidates = resolveCandidatesForExecute(
@@ -91,12 +95,30 @@ public class AdvancementService {
         OffsetDateTime now = OffsetDateTime.now();
         List<AdvancementResponse> saved = new ArrayList<>();
         int slotsAssigned = 0;
+        List<Advancement> existingAdvancements =
+                advancementRepository.findByToRoundIdOrderByCreatedAtDescIdDesc(toRound.getId());
+        List<AdvancementCandidateDto> candidatesToAdvance = candidates.stream()
+                .filter(candidate -> existingAdvancements.stream()
+                        .noneMatch(a -> a.getTeamId().equals(candidate.getTeamId())))
+                .toList();
+        Set<Long> targetRoundTeamIds = boardSlotRepository.findByRoundId(toRound.getId()).stream()
+                .map(BoardSlot::getTeamId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        List<Long> duplicateTargetTeamIds = candidatesToAdvance.stream()
+                .map(AdvancementCandidateDto::getTeamId)
+                .filter(targetRoundTeamIds::contains)
+                .toList();
+        if (!duplicateTargetTeamIds.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "TEAM_ALREADY_IN_TARGET_ROUND:" + duplicateTargetTeamIds);
+        }
+        if (candidatesToAdvance.size() > emptySlots.size()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "TARGET_ROUND_NOT_ENOUGH_SLOTS");
+        }
 
-        for (AdvancementCandidateDto candidate : candidates) {
-            if (advancementRepository.findByToRoundIdOrderByCreatedAtDescIdDesc(toRound.getId()).stream()
-                    .anyMatch(a -> a.getTeamId().equals(candidate.getTeamId()))) {
-                continue;
-            }
+        for (AdvancementCandidateDto candidate : candidatesToAdvance) {
             Advancement advancement = Advancement.builder()
                     .fromRoundId(fromRound.getId())
                     .fromBoardId(candidate.getFromBoardId())
@@ -111,14 +133,12 @@ public class AdvancementService {
             advancement = advancementRepository.save(advancement);
             saved.add(toAdvancementResponse(advancement, candidate.getTeamName()));
 
-            if (slotsAssigned < emptySlots.size()) {
-                BoardSlot slot = emptySlots.get(slotsAssigned);
-                slot.setTeamId(candidate.getTeamId());
-                slot.setAssignedAt(now);
-                slot.setAssignedBy(currentUserId);
-                boardSlotRepository.save(slot);
-                slotsAssigned++;
-            }
+            BoardSlot slot = emptySlots.get(slotsAssigned);
+            slot.setTeamId(candidate.getTeamId());
+            slot.setAssignedAt(now);
+            slot.setAssignedBy(currentUserId);
+            boardSlotRepository.save(slot);
+            slotsAssigned++;
         }
 
         return ExecuteAdvancementResponse.builder()
@@ -169,6 +189,7 @@ public class AdvancementService {
         for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(fromRoundId))) {
             List<RankingResult> rankings = rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId()).stream()
                     .filter(r -> r.getPublishedAt() != null)
+                    .filter(r -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), r.getTeamId()))
                     .limit(topN)
                     .toList();
             for (RankingResult result : rankings) {
@@ -191,6 +212,7 @@ public class AdvancementService {
         for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(fromRoundId))) {
             List<RankingResult> rankings = rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId()).stream()
                     .filter(r -> r.getPublishedAt() != null)
+                    .filter(r -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), r.getTeamId()))
                     .toList();
             for (RankingResult result : rankings) {
                 if (!seenTeams.add(result.getTeamId())) {
@@ -238,6 +260,17 @@ public class AdvancementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ROUND_NOT_IN_EVENT");
         }
         return round;
+    }
+
+    private void assertForwardAdvancement(Round fromRound, Round toRound) {
+        if (fromRound.getId().equals(toRound.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ADVANCEMENT_SAME_ROUND");
+        }
+        Integer fromOrder = fromRound.getRoundOrder();
+        Integer toOrder = toRound.getRoundOrder();
+        if (fromOrder != null && toOrder != null && toOrder <= fromOrder) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ADVANCEMENT_TARGET_NOT_AFTER_SOURCE");
+        }
     }
 
     private AdvancementResponse toAdvancementResponse(Advancement advancement, String teamName) {

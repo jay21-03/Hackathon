@@ -17,9 +17,13 @@ import com.seal.hackathon.scoring.entity.ScoreCriteria;
 import com.seal.hackathon.scoring.entity.ScoreSheet;
 import com.seal.hackathon.scoring.repository.ScoreCriteriaRepository;
 import com.seal.hackathon.scoring.repository.ScoreSheetRepository;
+import com.seal.hackathon.scoring.service.ScoringRepositoryGuardService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -40,6 +44,7 @@ public class PublishReadinessService {
     private final ScoreCriteriaRepository scoreCriteriaRepository;
     private final ScoreSheetRepository scoreSheetRepository;
     private final RankingResultRepository rankingResultRepository;
+    private final ScoringRepositoryGuardService scoringRepositoryGuardService;
 
     @Transactional(readOnly = true)
     public PublishReadinessResponse evaluateEvent(Long eventId) {
@@ -104,6 +109,11 @@ public class PublishReadinessService {
         List<BoardSlot> slots = boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(board.getId());
         int teamCount = (int) slots.stream().filter(s -> s.getTeamId() != null).count();
         int judgeCount = judgeAssignmentRepository.findByBoardId(board.getId()).size();
+        List<Long> missingRepoTeamIds = slots.stream()
+                .map(BoardSlot::getTeamId)
+                .filter(java.util.Objects::nonNull)
+                .filter(teamId -> !scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), teamId))
+                .toList();
 
         if (criteria.isEmpty()) {
             blockers.add("Chưa có rubric cho vòng «" + round.getName() + "».");
@@ -115,9 +125,28 @@ public class PublishReadinessService {
             blockers.add("Chưa gán đội vào slot.");
         }
 
+        if (!missingRepoTeamIds.isEmpty()) {
+            blockers.add("Có đội chưa có repository sẵn sàng: " + missingRepoTeamIds + ".");
+        }
+
         int expected = teamCount * judgeCount;
-        List<ScoreSheet> sheets = scoreSheetRepository.findByBoardId(board.getId());
-        int submitted = (int) sheets.stream().filter(s -> s.getStatus() == ScoreSheetStatus.SUBMITTED).count();
+        Set<Long> currentTeamIds = slots.stream()
+                .map(BoardSlot::getTeamId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> currentJudgeIds = judgeAssignmentRepository.findByBoardId(board.getId()).stream()
+                .map(assignment -> assignment.getJudgeId())
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        List<ScoreSheet> sheets = scoreSheetRepository.findByBoardId(board.getId()).stream()
+                .filter(sheet -> currentTeamIds.contains(sheet.getTeamId()))
+                .filter(sheet -> currentJudgeIds.contains(sheet.getJudgeId()))
+                .toList();
+        int submitted = sheets.stream()
+                .filter(s -> s.getStatus() == ScoreSheetStatus.SUBMITTED)
+                .map(sheet -> sheet.getTeamId() + ":" + sheet.getJudgeId())
+                .collect(Collectors.toSet())
+                .size();
         if (expected > 0 && submitted < expected) {
             blockers.add("Chấm điểm chưa hoàn tất (" + submitted + "/" + expected + " phiếu).");
         }

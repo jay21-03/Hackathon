@@ -14,6 +14,7 @@ import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
+import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.registration.service.AuditLogWriter;
 import com.seal.hackathon.contest.service.ContestPhaseGuardService;
@@ -32,6 +33,7 @@ import com.seal.hackathon.scoring.entity.ScoreSheet;
 import com.seal.hackathon.scoring.repository.ScoreCriteriaRepository;
 import com.seal.hackathon.scoring.repository.ScoreItemRepository;
 import com.seal.hackathon.scoring.repository.ScoreSheetRepository;
+import com.seal.hackathon.scoring.service.ScoringRepositoryGuardService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
@@ -59,12 +61,14 @@ public class RankingService {
     private final ScoreCriteriaRepository scoreCriteriaRepository;
     private final ScoreSheetRepository scoreSheetRepository;
     private final ScoreItemRepository scoreItemRepository;
+    private final JudgeAssignmentRepository judgeAssignmentRepository;
     private final OrganizerAuthorizationService organizerAuthorizationService;
     private final NotificationService notificationService;
     private final PublishReadinessService publishReadinessService;
     private final CurrentUserProvider currentUserProvider;
     private final AuditLogWriter auditLogWriter;
     private final ContestPhaseGuardService contestPhaseGuardService;
+    private final ScoringRepositoryGuardService scoringRepositoryGuardService;
 
     @Transactional(readOnly = true)
     public BoardRankingResponse getBoardRanking(Long boardId) {
@@ -80,9 +84,7 @@ public class RankingService {
         List<BoardRankingResponse> boards = new ArrayList<>();
         for (Round round : ContestOrdering.sortRounds(roundRepository.findByEventId(eventId))) {
             for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(round.getId()))) {
-                if (rankingResultRepository.existsByBoardId(board.getId())) {
-                    boards.add(buildBoardRankingResponse(board, false));
-                }
+                boards.add(buildBoardRankingResponse(board, false));
             }
         }
         boolean anyPublished = boards.stream().anyMatch(BoardRankingResponse::isPublished);
@@ -135,7 +137,7 @@ public class RankingService {
         organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
         Board board = loadBoard(boardId);
         contestPhaseGuardService.assertRoundAllowsRankingCalculation(board.getRoundId());
-        if (!force && rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(boardId)) {
+        if (rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(boardId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "RANKING_PUBLISHED");
         }
         persistBoardRanking(board);
@@ -151,7 +153,10 @@ public class RankingService {
         int boardsCalculated = 0;
         int teamsRanked = 0;
         for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(roundId))) {
-            if (!force && rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(board.getId())) {
+            if (rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(board.getId())) {
+                if (force) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "RANKING_PUBLISHED:" + board.getId());
+                }
                 continue;
             }
             BoardRankingResponse result = persistBoardRanking(board);
@@ -239,12 +244,14 @@ public class RankingService {
     }
 
     private BoardRankingResponse persistBoardRanking(Board board) {
+        scoringRepositoryGuardService.requireBoardRepositoriesReady(board.getId());
         Round round = roundRepository.findById(board.getRoundId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Round not found"));
         List<ScoreCriteria> criteria = scoreCriteriaRepository.findByRoundIdOrderBySortOrderAsc(round.getId());
         if (criteria.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "RUBRIC_NOT_CONFIGURED");
         }
+        requireBoardScoringComplete(board);
 
         List<ScoredTeam> scoredTeams = new ArrayList<>();
         for (BoardSlot slot : boardSlotRepository.findByBoardId(board.getId())) {
@@ -310,6 +317,33 @@ public class RankingService {
         return buildBoardRankingResponse(board, false);
     }
 
+    private void requireBoardScoringComplete(Board board) {
+        int judgeCount = judgeAssignmentRepository.findByBoardId(board.getId()).size();
+        if (judgeCount == 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "SCORING_NOT_COMPLETE:NO_JUDGES");
+        }
+        List<Long> scorableTeamIds = boardSlotRepository.findByBoardId(board.getId()).stream()
+                .map(BoardSlot::getTeamId)
+                .filter(id -> id != null)
+                .filter(teamId -> teamRepository.findById(teamId)
+                        .map(team -> team.getStatus() != TeamStatus.DISQUALIFIED)
+                        .orElse(false))
+                .toList();
+        if (scorableTeamIds.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "SCORING_NOT_COMPLETE:NO_TEAMS");
+        }
+        int expected = scorableTeamIds.size() * judgeCount;
+        int submitted = (int) scoreSheetRepository.findByBoardId(board.getId()).stream()
+                .filter(sheet -> scorableTeamIds.contains(sheet.getTeamId()))
+                .filter(sheet -> sheet.getStatus() == ScoreSheetStatus.SUBMITTED)
+                .count();
+        if (submitted < expected) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "SCORING_NOT_COMPLETE:" + submitted + "/" + expected);
+        }
+    }
+
     private BoardRankingResponse buildBoardRankingResponse(Board board, boolean publishedOnly) {
         Round round = roundRepository.findById(board.getRoundId()).orElse(null);
         Event event = round != null && round.getEventId() != null
@@ -363,7 +397,7 @@ public class RankingService {
                 .published(published)
                 .calculatedAt(calculatedAt)
                 .publishedAt(publishedAt)
-                .teamCount(entries.size())
+                .teamCount(publishedOnly ? entries.size() : slotByTeam.size())
                 .entries(entries)
                 .build();
     }

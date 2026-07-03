@@ -2,6 +2,7 @@ package com.seal.hackathon.ranking;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.support.IntegrationTestDataCleaner;
 import com.seal.hackathon.academic.repository.AcademicTermRepository;
@@ -122,6 +123,9 @@ class RankingIntegrationTest {
     RankingResultRepository rankingResultRepository;
 
     @Autowired
+    TeamRepositoryEntityRepository teamRepositoryEntityRepository;
+
+    @Autowired
     IntegrationTestDataCleaner dataCleaner;
 
     User organizer;
@@ -137,6 +141,7 @@ class RankingIntegrationTest {
         scoreItemRepository.deleteAll();
         scoreSheetRepository.deleteAll();
         scoreCriteriaRepository.deleteAll();
+        teamRepositoryEntityRepository.deleteAll();
         boardSlotRepository.deleteAll();
         judgeAssignmentRepository.deleteAll();
         teamRepository.deleteAll();
@@ -232,6 +237,20 @@ class RankingIntegrationTest {
                 .assignedBy(organizer.getId())
                 .createdAt(OffsetDateTime.now())
                 .build());
+        seedManualRepository(team, board);
+    }
+
+    private void seedManualRepository(Team targetTeam, Board targetBoard) {
+        teamRepositoryEntityRepository.save(com.seal.hackathon.aireview.entity.TeamRepository.builder()
+                .teamId(targetTeam.getId())
+                .roundId(round.getId())
+                .boardId(targetBoard.getId())
+                .repositoryUrl("https://github.com/org/" + targetTeam.getName().toLowerCase().replace(" ", "-"))
+                .repositoryName(targetTeam.getName())
+                .createdBy(organizer.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
     }
 
     @Test
@@ -276,6 +295,34 @@ class RankingIntegrationTest {
         long criteriaId = matrix.path("data").path("criteria").get(0).path("id").asLong();
         long teamId = matrix.path("data").path("teams").get(0).path("teamId").asLong();
 
+        Board boardWithoutRanking = boardRepository.save(Board.builder()
+                .roundId(round.getId())
+                .name("Board B")
+                .boardOrder(2)
+                .description("")
+                .status(BoardStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        Team teamWithoutRanking = teamRepository.save(Team.builder()
+                .eventId(event.getId())
+                .name("Team Beta")
+                .contactEmail("team-beta@example.com")
+                .status(TeamStatus.CONFIRMED)
+                .confirmedAt(OffsetDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        boardSlotRepository.save(BoardSlot.builder()
+                .roundId(round.getId())
+                .boardId(boardWithoutRanking.getId())
+                .teamNumber(1)
+                .teamId(teamWithoutRanking.getId())
+                .assignedAt(OffsetDateTime.now())
+                .assignedBy(organizer.getId())
+                .createdAt(OffsetDateTime.now())
+                .build());
+
         mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/judge/boards/" + board.getId() + "/score-matrix")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("Authorization", "Bearer " + judgeJwt)
@@ -299,6 +346,14 @@ class RankingIntegrationTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.teamCount").value(1))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].rank").value(1))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].averageScore").value(80.0));
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/events/" + event.getId() + "/rankings")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.boards.length()").value(2))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.boards[1].boardId").value(boardWithoutRanking.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.boards[1].teamCount").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.boards[1].entries.length()").value(0));
 
         mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/events/" + event.getId() + "/results"))
                 .andExpect(MockMvcResultMatchers.status().isOk())
@@ -334,5 +389,18 @@ class RankingIntegrationTest {
                         .header("Authorization", "Bearer " + orgJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.published").value(false));
+    }
+
+    @Test
+    void calculateRankingFailsWhenBoardTeamHasNoRepository() throws Exception {
+        teamRepositoryEntityRepository.deleteAll();
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/boards/" + board.getId() + "/rankings/calculate")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value(
+                        org.hamcrest.Matchers.startsWith("BOARD_REPOSITORIES_NOT_READY")));
     }
 }
