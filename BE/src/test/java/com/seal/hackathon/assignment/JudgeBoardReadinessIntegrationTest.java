@@ -424,6 +424,70 @@ class JudgeBoardReadinessIntegrationTest {
     }
 
     @Test
+    void readinessCountsOnlyConfirmedTeams() throws Exception {
+        Team staleTeam = teamRepository.save(Team.builder()
+                .eventId(event.getId())
+                .name("Đội Stale")
+                .contactEmail("stale@example.com")
+                .status(TeamStatus.DISQUALIFIED)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        boardSlotRepository.save(BoardSlot.builder()
+                .roundId(round.getId())
+                .boardId(board.getId())
+                .teamNumber(2)
+                .teamId(staleTeam.getId())
+                .assignedAt(OffsetDateTime.now())
+                .assignedBy(organizer.getId())
+                .createdAt(OffsetDateTime.now())
+                .build());
+
+        OffsetDateTime now = OffsetDateTime.now();
+        problemRepository.save(Problem.builder()
+                .boardId(board.getId())
+                .title("Đề A")
+                .description("Mô tả")
+                .releaseAt(now.minusHours(1))
+                .closeAt(now.plusDays(1))
+                .createdBy(organizer.getId())
+                .createdAt(now)
+                .updatedAt(now)
+                .build());
+        scoreCriteriaRepository.save(ScoreCriteria.builder()
+                .roundId(round.getId())
+                .code("R1_01")
+                .name("Ý tưởng")
+                .weight(new BigDecimal("100"))
+                .minScore(new BigDecimal("0"))
+                .maxScore(new BigDecimal("10"))
+                .sortOrder(1)
+                .levelDescriptors(List.of(LevelDescriptorDto.builder()
+                        .level("GOOD")
+                        .label("Tốt")
+                        .minScore(new BigDecimal("7"))
+                        .maxScore(new BigDecimal("10"))
+                        .description("B")
+                        .build()))
+                .createdAt(now)
+                .build());
+
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        String judgeJwt = jwtService.generateToken(judge, Set.of("JUDGE"));
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/boards/" + board.getId() + "/judges")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of("userId", judge.getId()))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/judges/assignments")
+                        .header("Authorization", "Bearer " + judgeJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data[0].teamsCount").value(1));
+    }
+
+    @Test
     void unreleasedProblemShowsWaitingRelease() throws Exception {
         OffsetDateTime now = OffsetDateTime.now();
         problemRepository.save(Problem.builder()

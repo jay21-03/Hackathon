@@ -4,6 +4,7 @@ import com.seal.hackathon.assignment.dto.AssignmentResponse;
 import com.seal.hackathon.assignment.entity.JudgeAssignment;
 import com.seal.hackathon.common.enums.JudgeBoardReadiness;
 import com.seal.hackathon.common.enums.ScoreSheetStatus;
+import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Problem;
@@ -12,6 +13,8 @@ import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.ProblemRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.registration.entity.Team;
+import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.scoring.entity.ScoreCriteria;
 import com.seal.hackathon.scoring.entity.ScoreSheet;
 import com.seal.hackathon.scoring.repository.ScoreCriteriaRepository;
@@ -21,6 +24,8 @@ import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +38,7 @@ public class JudgeBoardReadinessService {
     private final BoardSlotRepository boardSlotRepository;
     private final ProblemRepository problemRepository;
     private final RoundRepository roundRepository;
+    private final TeamRepository teamRepository;
     private final ScoreCriteriaRepository scoreCriteriaRepository;
     private final ScoreSheetRepository scoreSheetRepository;
     private final ScoringRepositoryGuardService scoringRepositoryGuardService;
@@ -67,8 +73,19 @@ public class JudgeBoardReadinessService {
 
     private ReadinessSnapshot computeReadiness(Board board, Long judgeId) {
         OffsetDateTime now = OffsetDateTime.now();
-        List<BoardSlot> slots = boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(board.getId()).stream()
+        List<BoardSlot> occupiedSlots = boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(board.getId()).stream()
                 .filter(slot -> slot.getTeamId() != null)
+                .toList();
+        Set<Long> confirmedTeamIds = teamRepository.findAllById(occupiedSlots.stream()
+                        .map(BoardSlot::getTeamId)
+                        .filter(Objects::nonNull)
+                        .toList())
+                .stream()
+                .filter(team -> team.getStatus() == TeamStatus.CONFIRMED)
+                .map(Team::getId)
+                .collect(Collectors.toSet());
+        List<BoardSlot> slots = occupiedSlots.stream()
+                .filter(slot -> confirmedTeamIds.contains(slot.getTeamId()))
                 .toList();
         int teamsCount = slots.size();
 
@@ -113,9 +130,11 @@ public class JudgeBoardReadinessService {
         if (judgeId != null) {
             List<ScoreSheet> sheets = scoreSheetRepository.findByBoardIdAndJudgeId(board.getId(), judgeId);
             submittedCount = (int) sheets.stream()
+                    .filter(sheet -> confirmedTeamIds.contains(sheet.getTeamId()))
                     .filter(sheet -> sheet.getStatus() == ScoreSheetStatus.SUBMITTED)
                     .count();
             draftCount = (int) sheets.stream()
+                    .filter(sheet -> confirmedTeamIds.contains(sheet.getTeamId()))
                     .filter(sheet -> sheet.getStatus() == ScoreSheetStatus.DRAFT)
                     .count();
         }
