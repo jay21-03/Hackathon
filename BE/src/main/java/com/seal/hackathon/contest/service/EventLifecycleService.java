@@ -4,12 +4,23 @@ import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
 import com.seal.hackathon.academic.entity.AcademicTerm;
 import com.seal.hackathon.academic.repository.AcademicTermRepository;
+import com.seal.hackathon.award.entity.TeamAward;
+import com.seal.hackathon.award.repository.TeamAwardRepository;
 import com.seal.hackathon.common.enums.EventStatus;
+import com.seal.hackathon.common.enums.RoundStatus;
+import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.contest.dto.EventResponse;
+import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.Event;
+import com.seal.hackathon.contest.entity.Round;
+import com.seal.hackathon.contest.repository.BoardRepository;
+import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
+import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.notification.service.NotificationService;
+import com.seal.hackathon.ranking.repository.RankingResultRepository;
+import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.registration.service.AuditLogWriter;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -34,6 +45,12 @@ public class EventLifecycleService {
     private final EventRepository eventRepository;
     private final OrganizerAuthorizationService organizerAuthorizationService;
     private final AcademicTermRepository academicTermRepository;
+    private final RoundRepository roundRepository;
+    private final BoardRepository boardRepository;
+    private final BoardSlotRepository boardSlotRepository;
+    private final RankingResultRepository rankingResultRepository;
+    private final TeamAwardRepository teamAwardRepository;
+    private final TeamRepository teamRepository;
     private final ContestPhaseGuardService contestPhaseGuardService;
     private final NotificationService notificationService;
     private final AuditLogWriter auditLogWriter;
@@ -108,6 +125,7 @@ public class EventLifecycleService {
         if (event.getStatus() != EventStatus.IN_PROGRESS) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event must be IN_PROGRESS to complete");
         }
+        requireCompetitionCompletionReady(event.getId(), OffsetDateTime.now());
 
         return applyManualTransition(event, EventStatus.COMPLETED, OffsetDateTime.now());
     }
@@ -133,6 +151,9 @@ public class EventLifecycleService {
             EventStatus before = event.getStatus();
             EventStatus next = resolveScheduledStatus(event, now, today);
             if (next != null && next != before) {
+                if (next == EventStatus.COMPLETED && !isCompetitionCompletionReady(event.getId(), now)) {
+                    continue;
+                }
                 applyScheduledTransition(event, next, now);
                 transitions++;
                 log.info(
@@ -191,6 +212,66 @@ public class EventLifecycleService {
 
     private boolean shouldAutoComplete(Event event, LocalDate today) {
         return autoCompleteCompetition && event.getEndDate() != null && today.isAfter(event.getEndDate());
+    }
+
+    private boolean isCompetitionCompletionReady(Long eventId, OffsetDateTime now) {
+        try {
+            requireCompetitionCompletionReady(eventId, now);
+            return true;
+        } catch (ResponseStatusException ex) {
+            log.info("Event completion readiness blocked: eventId={}, reason={}", eventId, ex.getReason());
+            return false;
+        }
+    }
+
+    private void requireCompetitionCompletionReady(Long eventId, OffsetDateTime now) {
+        List<String> blockers = new java.util.ArrayList<>();
+        List<Round> rounds = roundRepository.findByEventId(eventId);
+        if (rounds.isEmpty()) {
+            blockers.add("NO_ROUNDS");
+        }
+        for (Round round : rounds) {
+            boolean roundHasConfirmedTeams = boardRepository.findByRoundId(round.getId()).stream()
+                    .anyMatch(board -> hasConfirmedTeam(board.getId()));
+            if (!roundHasConfirmedTeams) {
+                continue;
+            }
+            boolean endedByTime = round.getEndAt() != null && !round.getEndAt().isAfter(now);
+            if (round.getStatus() != RoundStatus.COMPLETED && !endedByTime) {
+                blockers.add("ROUND_NOT_COMPLETED:" + round.getId());
+            }
+            for (Board board : boardRepository.findByRoundId(round.getId())) {
+                boolean hasTeams = hasConfirmedTeam(board.getId());
+                if (hasTeams && !rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(board.getId())) {
+                    blockers.add("RANKING_NOT_PUBLISHED:" + board.getId());
+                }
+            }
+        }
+        List<TeamAward> awards = teamAwardRepository.findByEventIdOrderByAwardCategoryIdAscIdAsc(eventId);
+        boolean hasUnpublishedAwards = awards.stream().anyMatch(award -> !Boolean.TRUE.equals(award.getPublished()));
+        if (!awards.isEmpty() && hasUnpublishedAwards) {
+            blockers.add("AWARDS_NOT_PUBLISHED");
+        }
+        boolean hasIneligibleAwardWinners = awards.stream()
+                .filter(award -> Boolean.TRUE.equals(award.getPublished()))
+                .anyMatch(award -> teamRepository.findById(award.getTeamId())
+                        .map(team -> team.getStatus() != TeamStatus.CONFIRMED)
+                        .orElse(true));
+        if (hasIneligibleAwardWinners) {
+            blockers.add("AWARDS_INCLUDE_INELIGIBLE_TEAMS");
+        }
+        if (!blockers.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "COMPETITION_NOT_READY:" + String.join(",", blockers));
+        }
+    }
+
+    private boolean hasConfirmedTeam(Long boardId) {
+        return boardSlotRepository.findByBoardId(boardId).stream()
+                .map(slot -> slot.getTeamId())
+                .filter(teamId -> teamId != null)
+                .anyMatch(teamId -> teamRepository.findById(teamId)
+                        .map(team -> team.getStatus() == TeamStatus.CONFIRMED)
+                        .orElse(false));
     }
 
     private Event requireEvent(Long eventId) {

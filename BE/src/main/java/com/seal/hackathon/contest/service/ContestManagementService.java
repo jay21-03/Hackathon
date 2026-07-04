@@ -573,7 +573,6 @@ public class ContestManagementService {
         Round round = getRoundEntity(roundId);
         eventLifecycleService.assertEventAllowsBoardAssignment(requireEventEntity(round.getEventId()));
         BoardSlot slot = getBoardSlotEntity(slotId);
-        assertBoardStructureMutable(slot.getBoardId());
         if (!slot.getRoundId().equals(roundId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slot does not belong to round");
         }
@@ -582,6 +581,12 @@ public class ContestManagementService {
         }
 
         Long previous = slot.getTeamId();
+        Team previousTeam = teamRepository.findById(previous).orElse(null);
+        boolean ineligibleTeam = previousTeam == null || previousTeam.getStatus() != TeamStatus.CONFIRMED;
+        // Allow clearing DQ/rejected teams even when scoring/ranking has started.
+        if (!ineligibleTeam) {
+            assertBoardStructureMutable(slot.getBoardId());
+        }
         OffsetDateTime now = OffsetDateTime.now();
         deleteScoreSheetsForSlotTeam(slot.getBoardId(), previous);
         slot.setTeamId(null);
@@ -1179,7 +1184,7 @@ public class ContestManagementService {
 
         BoardSlot slot = findTeamSlotForEvent(teamId, eventId);
         if (slot == null) {
-            return MyBoardResponse.notAssigned("NOT_ASSIGNED");
+            return MyBoardResponse.notAssigned(hasTeamSlotForEvent(teamId, eventId) ? "ROUND_NOT_STARTED" : "NOT_ASSIGNED");
         }
 
         Board board = getBoardEntity(slot.getBoardId());
@@ -1327,58 +1332,35 @@ public class ContestManagementService {
         List<Round> eventRounds = roundRepository.findByEventId(eventId);
         Round activeRound = resolveActiveRound(eventRounds, OffsetDateTime.now()).orElse(null);
         if (activeRound == null) {
-            return eventSlots.stream()
-                    .min(Comparator.comparing(
-                            slot -> roundRepository.findById(slot.getRoundId())
-                                    .map(Round::getRoundOrder)
-                                    .orElse(Integer.MAX_VALUE),
-                            Comparator.nullsLast(Integer::compareTo)))
-                    .orElse(null);
+            return null;
         }
 
         return eventSlots.stream()
                 .filter(slot -> activeRound.getId().equals(slot.getRoundId()))
                 .findFirst()
-                .orElseGet(() -> eventSlots.stream()
-                        .max(Comparator.comparing(
-                                slot -> roundRepository.findById(slot.getRoundId())
-                                        .map(Round::getRoundOrder)
-                                        .orElse(Integer.MIN_VALUE),
-                                Comparator.nullsLast(Integer::compareTo)))
-                        .orElse(null));
+                .orElse(null);
     }
 
-    /**
-     * Running round (startAt <= now < endAt, lowest roundOrder),
-     * else nearest upcoming, else latest by roundOrder.
-     */
+    private boolean hasTeamSlotForEvent(Long teamId, Long eventId) {
+        return boardSlotRepository.findByTeamId(teamId).stream()
+                .anyMatch(slot -> roundRepository.findById(slot.getRoundId())
+                        .map(round -> eventId.equals(round.getEventId()))
+                        .orElse(false));
+    }
+
+    /** Running round only: startAt <= now < endAt, lowest roundOrder. */
     private Optional<Round> resolveActiveRound(List<Round> rounds, OffsetDateTime now) {
         if (rounds == null || rounds.isEmpty()) {
             return Optional.empty();
         }
 
-        List<Round> sorted = rounds.stream()
+        return rounds.stream()
                 .sorted(Comparator.comparing(Round::getRoundOrder, Comparator.nullsLast(Integer::compareTo)))
-                .toList();
-
-        List<Round> running = sorted.stream()
                 .filter(round -> round.getStartAt() != null
                         && round.getEndAt() != null
                         && !now.isBefore(round.getStartAt())
                         && now.isBefore(round.getEndAt()))
-                .toList();
-        if (!running.isEmpty()) {
-            return Optional.of(running.get(0));
-        }
-
-        Optional<Round> upcoming = sorted.stream()
-                .filter(round -> round.getStartAt() != null && now.isBefore(round.getStartAt()))
-                .min(Comparator.comparing(Round::getStartAt));
-        if (upcoming.isPresent()) {
-            return upcoming;
-        }
-
-        return Optional.of(sorted.get(sorted.size() - 1));
+                .findFirst();
     }
 
     /** Cho phep gan doi khi vong chua cham diem / chua ket thuc. */

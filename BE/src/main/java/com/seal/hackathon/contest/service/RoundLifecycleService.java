@@ -2,14 +2,18 @@ package com.seal.hackathon.contest.service;
 
 import com.seal.hackathon.common.enums.EventStatus;
 import com.seal.hackathon.common.enums.RoundStatus;
+import com.seal.hackathon.common.enums.TeamStatus;
+import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.Event;
 import com.seal.hackathon.contest.entity.Problem;
 import com.seal.hackathon.contest.entity.Round;
 import com.seal.hackathon.contest.repository.BoardRepository;
+import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.ProblemRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.ranking.repository.RankingResultRepository;
+import com.seal.hackathon.registration.repository.TeamRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -25,8 +29,10 @@ public class RoundLifecycleService {
     private final EventRepository eventRepository;
     private final RoundRepository roundRepository;
     private final BoardRepository boardRepository;
+    private final BoardSlotRepository boardSlotRepository;
     private final ProblemRepository problemRepository;
     private final RankingResultRepository rankingResultRepository;
+    private final TeamRepository teamRepository;
 
     @Transactional
     public int syncRoundStatuses() {
@@ -65,13 +71,18 @@ public class RoundLifecycleService {
             return null;
         }
 
-        List<Long> boardIds = boardRepository.findByRoundId(round.getId()).stream()
-                .map(board -> board.getId())
+        List<Board> boards = boardRepository.findByRoundId(round.getId());
+        List<Long> boardIds = boards.stream()
+                .map(Board::getId)
                 .toList();
         List<Problem> problems = boardIds.isEmpty() ? List.of() : problemRepository.findByBoardIdIn(boardIds);
+        List<Long> boardsWithConfirmedTeams = boards.stream()
+                .filter(board -> hasConfirmedTeam(board.getId()))
+                .map(Board::getId)
+                .toList();
 
-        boolean allRankingsPublished = !boardIds.isEmpty()
-                && boardIds.stream()
+        boolean allRankingsPublished = !boardsWithConfirmedTeams.isEmpty()
+                && boardsWithConfirmedTeams.stream()
                         .allMatch(boardId -> rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(boardId));
         if (allRankingsPublished) {
             return RoundStatus.COMPLETED;
@@ -96,5 +107,14 @@ public class RoundLifecycleService {
         }
 
         return null;
+    }
+
+    private boolean hasConfirmedTeam(Long boardId) {
+        return boardSlotRepository.findByBoardId(boardId).stream()
+                .map(slot -> slot.getTeamId())
+                .filter(teamId -> teamId != null)
+                .anyMatch(teamId -> teamRepository.findById(teamId)
+                        .map(team -> team.getStatus() == TeamStatus.CONFIRMED)
+                        .orElse(false));
     }
 }
