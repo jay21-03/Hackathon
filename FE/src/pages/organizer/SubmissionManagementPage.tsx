@@ -87,6 +87,18 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
   const [detailLoading, setDetailLoading] = useState(false);
   const activeRoundId = resolveDefaultRoundId(rounds, roundId);
   const roundNameById = useMemo(() => buildRoundNameById(rounds), [rounds]);
+  const activeRound = useMemo(
+    () => (activeRoundId != null ? rounds.find((round) => round.id === activeRoundId) ?? null : null),
+    [activeRoundId, rounds]
+  );
+  const runningRound = useMemo(() => {
+    const now = Date.now();
+    return rounds.find((round) => {
+      const start = new Date(round.startAt).getTime();
+      const end = new Date(round.endAt).getTime();
+      return Number.isFinite(start) && Number.isFinite(end) && start <= now && now < end;
+    });
+  }, [rounds]);
 
   const boardsInRound = useMemo(
     () => (activeRoundId != null ? boards.filter((b) => b.roundId === activeRoundId) : []),
@@ -287,6 +299,16 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
           </select>
         </label>
       </section>
+
+      {activeRound ? (
+        <div className="rounded-lg border border-outline-variant bg-surface-container-low p-md">
+          <p className="font-body-sm text-on-surface-variant">
+            Đang xem bài nộp của <strong className="text-on-surface">{activeRound.name}</strong>
+            {boardId != null ? " theo bảng đã chọn" : " trên toàn bộ bảng trong vòng"}.
+            {!runningRound ? " Hiện không có vòng đang chạy; nếu không chọn thủ công, hệ thống ưu tiên vòng mới nhất." : null}
+          </p>
+        </div>
+      ) : null}
 
       {pageError ? (
         <RetryPanel
