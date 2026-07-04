@@ -12,6 +12,7 @@ export interface TeamAward {
   awardCategoryCode: string;
   teamId: number;
   teamName: string;
+  teamStatus?: string | null;
   awardedBy?: number | null;
   awardedAt: string;
   note?: string | null;

@@ -17,22 +17,34 @@ export function EventAwardsView({
 }: EventAwardsViewProps) {
   const categoryGroups = useMemo(() => {
     const withWinners = awards.categories
-      .filter((c) => c.winners.length > 0)
       .map((c) => ({
         ...c,
-        winners: [...c.winners].sort(
-          (a, b) => new Date(a.awardedAt).getTime() - new Date(b.awardedAt).getTime() || a.id - b.id
-        )
-      }));
+        winners: [...c.winners]
+          .filter((w) => !w.teamStatus || w.teamStatus === "CONFIRMED")
+          .sort(
+            (a, b) => new Date(a.awardedAt).getTime() - new Date(b.awardedAt).getTime() || a.id - b.id
+          )
+      }))
+      .filter((c) => c.winners.length > 0);
     return groupAwardCategoriesByRound(withWinners, roundNameById);
   }, [awards.categories, roundNameById]);
 
-  if (!awards.published || categoryGroups.length === 0) {
+  if (!awards.published) {
     return (
       <EmptyState
         icon="emoji_events"
         title="Chưa công bố giải thưởng"
         description="Ban tổ chức sẽ công bố danh sách giải sau khi hoàn tất chấm điểm."
+      />
+    );
+  }
+
+  if (categoryGroups.length === 0) {
+    return (
+      <EmptyState
+        icon="emoji_events"
+        title="Chưa có đội nhận giải"
+        description="Giải đã công bố nhưng chưa có đội được gán, hoặc các đội nhận giải không còn đủ điều kiện."
       />
     );
   }

@@ -37,6 +37,7 @@ import {
 } from "../../utils/awardLabels";
 import { buildRoundNameById, formatBoardRankingLabel, groupBoardRankingsByRound } from "../../utils/boardLabels";
 import { awardCategorySchema, assignTeamAwardSchema } from "../../domain/schemas";
+import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { resolveApiError } from "../../utils/apiError";
 import { firstZodError } from "../../utils/zodFieldErrors";
 import { resolveDefaultRoundId } from "../../utils/pickActiveRound";
@@ -175,11 +176,33 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
     () => groupAwardCategoriesByRound(categories, roundNameById),
     [categories, roundNameById]
   );
-  const sortedTeams = useMemo(() => sortByName(teams), [teams]);
+  const eligibleTeams = useMemo(
+    () => sortByName(teams.filter((team) => team.status === "CONFIRMED")),
+    [teams]
+  );
   const anyPublished = awardsQuery.data?.published ?? false;
+  const awardsLocked = anyPublished;
   const hasRankCategories = categories.some((c) => c.awardType === "RANK");
+  const hasIneligibleWinners = categories.some((category) =>
+    category.winners.some((winner) => winner.teamStatus && winner.teamStatus !== "CONFIRMED")
+  );
+  const suggestDisabledReason = awardsLocked
+    ? "Thu hồi công bố trước khi gợi ý giải."
+    : !hasRankCategories
+      ? "Cần hạng mục giải loại Hạng (Nhất/Nhì/Ba)."
+      : rankingRows.length === 0
+        ? "Chưa có BXH đã công bố trong phạm vi đang chọn."
+        : null;
+  const publishDisabledReason = awardsLocked
+    ? null
+    : categories.every((c) => c.winnerCount === 0)
+      ? "Gán ít nhất một đội nhận giải trước khi công bố."
+      : hasIneligibleWinners
+        ? "Có đội nhận giải không còn đủ điều kiện — gỡ giải của đội đó trước."
+        : null;
 
   function openCreateCategoryModal() {
+    if (awardsLocked) return;
     setEditingCategoryId(null);
     setCategoryForm({
       ...EMPTY_CATEGORY_FORM,
@@ -189,6 +212,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
   }
 
   function openEditCategoryModal(category: AwardCategory) {
+    if (awardsLocked) return;
     setEditingCategoryId(category.id);
     setCategoryForm({
       name: category.name,
@@ -211,6 +235,10 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
 
   async function handleSeedDefaults() {
     if (!eventId) return;
+    if (awardsLocked) {
+      notify("Giải đã công bố — thu hồi công bố trước khi chỉnh sửa.", "warning");
+      return;
+    }
     setBusy(true);
     try {
       const existingCodes = new Set(categories.map((c) => c.code));
@@ -231,6 +259,10 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
 
   async function handleSaveCategory() {
     if (!eventId) return;
+    if (awardsLocked) {
+      notify("Giải đã công bố — thu hồi công bố trước khi chỉnh sửa.", "warning");
+      return;
+    }
     const parsed = awardCategorySchema.safeParse({
       ...categoryForm,
       description: categoryForm.description?.trim() || undefined,
@@ -265,6 +297,10 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
   }
 
   async function handleDeleteCategory(category: AwardCategory) {
+    if (awardsLocked) {
+      notify("Giải đã công bố — thu hồi công bố trước khi chỉnh sửa.", "warning");
+      return;
+    }
     setBusy(true);
     try {
       await deleteAwardCategory(category.id);
@@ -279,6 +315,10 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
 
   async function handleAssign() {
     if (!eventId) return;
+    if (awardsLocked) {
+      notify("Giải đã công bố — thu hồi công bố trước khi chỉnh sửa.", "warning");
+      return;
+    }
     const parsed = assignTeamAwardSchema.safeParse({
       awardCategoryId: assignCategoryId === "" ? undefined : assignCategoryId,
       teamId: assignTeamId === "" ? undefined : assignTeamId,
@@ -306,6 +346,10 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
   }
 
   async function handleRemoveAward(awardId: number) {
+    if (awardsLocked) {
+      notify("Giải đã công bố — thu hồi công bố trước khi chỉnh sửa.", "warning");
+      return;
+    }
     setBusy(true);
     try {
       await removeTeamAward(awardId);
@@ -320,6 +364,10 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
 
   async function handleSuggestFromRanking() {
     if (!eventId) return;
+    if (awardsLocked) {
+      notify("Giải đã công bố — thu hồi công bố trước khi chỉnh sửa.", "warning");
+      return;
+    }
     setBusy(true);
     try {
       const result = await suggestAwardsFromRanking(eventId, {
@@ -394,15 +442,21 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
         <>
           <div className="flex flex-wrap items-center gap-sm">
             <Badge tone={anyPublished ? "active" : "neutral"}>
-              {anyPublished ? "ĐÃ CÔNG BỐ" : "NHÁP"}
+              {anyPublished ? "Đã công bố" : "Nháp"}
             </Badge>
-            <Button variant="secondary" size="sm" disabled={busy} onClick={() => void handleSeedDefaults()}>
+            <Button variant="secondary" size="sm" disabled={busy || awardsLocked} onClick={() => void handleSeedDefaults()}>
               Khởi tạo giải mặc định
             </Button>
-            <Button variant="secondary" size="sm" disabled={busy || !hasRankCategories || rankingRows.length === 0} onClick={() => void handleSuggestFromRanking()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy || Boolean(suggestDisabledReason)}
+              title={suggestDisabledReason ?? undefined}
+              onClick={() => void handleSuggestFromRanking()}
+            >
               Gợi ý Nhất/Nhì/Ba ({scopeHint})
             </Button>
-            <Button size="sm" disabled={busy} onClick={openCreateCategoryModal}>
+            <Button size="sm" disabled={busy || awardsLocked} onClick={openCreateCategoryModal}>
               Thêm loại giải
             </Button>
             {anyPublished ? (
@@ -423,12 +477,46 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                 confirmLabel="Công bố"
                 onConfirm={handlePublish}
               >
-                <Button size="sm" disabled={busy || categories.every((c) => c.winnerCount === 0)}>
+                <Button
+                  size="sm"
+                  disabled={busy || Boolean(publishDisabledReason)}
+                  title={publishDisabledReason ?? undefined}
+                >
                   Công bố giải
                 </Button>
               </ConfirmAction>
             )}
           </div>
+
+          {awardsLocked ? (
+            <div className="rounded-lg border border-primary/30 bg-primary-container/40 p-md">
+              <p className="font-label-md text-on-primary-container">Giải thưởng đã công bố</p>
+              <p className="mt-xs font-body-sm text-on-primary-container/80">
+                Thu hồi công bố trước khi khởi tạo, gợi ý, thêm, sửa, gán hoặc xóa giải.
+              </p>
+            </div>
+          ) : null}
+
+          {hasIneligibleWinners ? (
+            <div className="rounded-lg border border-warning/40 bg-warning-container/30 p-md space-y-sm">
+              <p className="font-label-md text-on-warning-container">Có đội nhận giải không còn đủ điều kiện</p>
+              <p className="font-body-sm text-on-warning-container/90">
+                {awardsLocked
+                  ? "Thu hồi công bố trước, rồi gỡ giải của đội không hợp lệ (hoặc gợi ý lại từ BXH) và công bố lại."
+                  : "Gỡ giải của đội không hợp lệ hoặc gán lại đội còn xác nhận trước khi công bố."}
+              </p>
+              {awardsLocked ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => void handleUnpublish()}
+                >
+                  Thu hồi công bố giải
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="grid gap-lg lg:grid-cols-2">
             <section className="rounded-xl border border-outline-variant p-lg space-y-md">
@@ -536,9 +624,9 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                     title="Chưa có BXH trong phạm vi này"
                     description="Tính và công bố xếp hạng cho vòng/bảng đang chọn trước khi gợi ý giải theo hạng."
                   />
-                  {teams.length > 0 ? (
+                  {eligibleTeams.length > 0 ? (
                     <ul className="space-y-xs font-body-sm max-h-80 overflow-y-auto">
-                      {sortedTeams.map((team) => (
+                      {eligibleTeams.map((team) => (
                         <li key={team.id} className="rounded-lg border border-outline-variant px-md py-sm">
                           {team.name}
                         </li>
@@ -547,8 +635,8 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                   ) : (
                     <EmptyState
                       icon="groups"
-                      title="Chưa có đội"
-                      description="Đội đăng ký sẽ hiện ở đây để gán giải thủ công."
+                      title="Chưa có đội đủ điều kiện"
+                      description="Chỉ đội đã xác nhận mới được gán giải."
                     />
                   )}
                 </>
@@ -561,6 +649,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                     className="rounded-lg border border-outline-variant p-sm font-body-sm"
                     value={assignCategoryId}
                     onChange={(e) => setAssignCategoryId(e.target.value ? Number(e.target.value) : "")}
+                    disabled={awardsLocked}
                   >
                     <option value="">Chọn giải</option>
                     {categories.map((c) => (
@@ -573,16 +662,26 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                     className="rounded-lg border border-outline-variant p-sm font-body-sm"
                     value={assignTeamId}
                     onChange={(e) => setAssignTeamId(e.target.value ? Number(e.target.value) : "")}
+                    disabled={awardsLocked}
                   >
-                    <option value="">Chọn đội</option>
-                    {sortedTeams.map((team) => (
+                    <option value="">Chọn đội đã xác nhận</option>
+                    {eligibleTeams.map((team) => (
                       <option key={team.id} value={team.id}>
                         {team.name}
                       </option>
                     ))}
                   </select>
                 </div>
-                <Button size="sm" disabled={busy} onClick={() => void handleAssign()}>
+                <Button
+                  size="sm"
+                  disabled={busy || awardsLocked || eligibleTeams.length === 0}
+                  title={
+                    eligibleTeams.length === 0
+                      ? "Chỉ đội đã xác nhận mới được nhận giải."
+                      : undefined
+                  }
+                  onClick={() => void handleAssign()}
+                >
                   Gán đội nhận giải
                 </Button>
               </div>
@@ -627,7 +726,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                                 <Button
                                   variant="secondary"
                                   size="sm"
-                                  disabled={busy}
+                                  disabled={busy || awardsLocked}
                                   onClick={() => openEditCategoryModal(category)}
                                 >
                                   Sửa
@@ -638,7 +737,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                                   confirmLabel="Xóa"
                                   onConfirm={() => void handleDeleteCategory(category)}
                                 >
-                                  <Button variant="secondary" size="sm" disabled={busy}>
+                                  <Button variant="secondary" size="sm" disabled={busy || awardsLocked}>
                                     Xóa
                                   </Button>
                                 </ConfirmAction>
@@ -646,13 +745,21 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                             </div>
                             {category.winners.length > 0 ? (
                               <ul className="space-y-xs font-body-sm">
-                                {category.winners.map((winner) => (
+                                {category.winners.map((winner) => {
+                                  const ineligible =
+                                    winner.teamStatus != null && winner.teamStatus !== "CONFIRMED";
+                                  return (
                                   <li
                                     key={winner.id}
                                     className="flex flex-wrap items-center justify-between gap-sm rounded-md bg-surface-container-low px-sm py-xs"
                                   >
-                                    <span>
+                                    <span className="flex flex-wrap items-center gap-sm">
                                       {winner.teamName}
+                                      {ineligible && winner.teamStatus ? (
+                                        <Badge tone={getStatusTone(winner.teamStatus)}>
+                                          {getStatusLabel(winner.teamStatus)}
+                                        </Badge>
+                                      ) : null}
                                       {winner.note ? (
                                         <span className="text-on-surface-variant"> — {winner.note}</span>
                                       ) : null}
@@ -665,11 +772,12 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                                     >
                                       <RemoveIconButton
                                         label={`Xóa giải ${category.name} khỏi ${winner.teamName}`}
-                                        disabled={busy}
+                                        disabled={busy || awardsLocked}
                                       />
                                     </ConfirmAction>
                                   </li>
-                                ))}
+                                  );
+                                })}
                               </ul>
                             ) : (
                               <p className="font-body-sm text-on-surface-variant">Chưa gán đội.</p>
@@ -791,7 +899,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
             <Button variant="secondary" onClick={() => setCategoryModalOpen(false)}>
               Hủy
             </Button>
-            <Button disabled={busy} onClick={() => void handleSaveCategory()}>
+            <Button disabled={busy || awardsLocked} onClick={() => void handleSaveCategory()}>
               {editingCategoryId != null ? "Lưu" : "Tạo"}
             </Button>
           </div>
