@@ -12,6 +12,15 @@ const organizerErrorMap: Record<string, string> = {
   SLOT_OCCUPIED: "Vị trí đã có đội — bật «Ghi đè» hoặc xóa đội trước.",
   TEAM_NOT_CONFIRMED: "Chỉ gán đội ở trạng thái đã xác nhận.",
   EVENT_NOT_IN_PROGRESS: "Cuộc thi chưa ở giai đoạn đang diễn ra.",
+  AWARDS_INCLUDE_INELIGIBLE_TEAMS:
+    "Còn giải gắn với đội không còn đủ điều kiện — thu hồi công bố giải, gỡ giải và công bố lại.",
+  EVENT_IN_PROGRESS: "Cuộc thi đang diễn ra — không tự promote đội từ waitlist.",
+  EVENT_NOT_ELIGIBLE: "Trạng thái cuộc thi hiện tại không cho phép promote waitlist tự động.",
+  NO_CAPACITY: "Không còn suất trống để promote waitlist.",
+  COMPETITION_NOT_READY:
+    "Cuộc thi chưa sẵn sàng hoàn tất: cần kết thúc các vòng, công bố xếp hạng cho bảng có đội và xử lý giải thưởng nếu đã cấu hình.",
+  STAFF_INVITATION_BOARD_LOCKED:
+    "Bảng đã khóa phân công vì đã bắt đầu chấm hoặc đã có xếp hạng — không thể gửi lại hay chấp nhận lời mời staff.",
   EVENT_REGISTRATION_NOT_CLOSED: "Cần đóng đăng ký trước khi chia bảng.",
   ROUND_NOT_READY_FOR_RANKING: "Chưa đến lúc tính ranking — đợi đóng đề hoặc kết thúc vòng.",
   EVENT_NOT_READY_FOR_ADVANCEMENT: "Cuộc thi chưa sẵn sàng để chọn đội vào vòng sau.",
@@ -133,9 +142,18 @@ const organizerErrorMap: Record<string, string> = {
   MAX_WINNERS_EXCEEDED: "Đã đủ số đội tối đa cho loại giải này.",
   MAX_WINNERS_BELOW_CURRENT_COUNT: "Số giải tối đa không thể nhỏ hơn số đội đã gán.",
   NO_AWARDS_TO_PUBLISH: "Chưa có giải nào để công bố.",
+  AWARDS_ALREADY_PUBLISHED_UNPUBLISH_FIRST:
+    "Giải đã công bố — thu hồi công bố trước khi chỉnh sửa.",
+  TEAM_NOT_ELIGIBLE_FOR_AWARD: "Chỉ đội đã xác nhận và còn hợp lệ mới được nhận giải.",
+  TEAM_NOT_PUBLISHED_IN_ROUND_RANKING:
+    "Đội chưa có trong BXH đã công bố của vòng nhận giải.",
   NO_PUBLISHED_RANKINGS: "Chưa có bảng xếp hạng đã công bố.",
-  RANKING_PUBLISHED: "Bảng đã công bố — không thể tính lại nếu chưa có luồng hủy công bố.",
+  RANKING_PUBLISHED:
+    "Bảng đã công bố — dùng «Thu hồi công bố» hoặc «Tính lại bảng» (sẽ bỏ công bố rồi tính lại).",
+  RANKING_NOT_PUBLISHED: "Bảng chưa công bố xếp hạng.",
   RANKING_NOT_CALCULATED: "Chưa tính xếp hạng — tính xếp hạng trước khi công bố.",
+  RANKING_HAS_NO_CONFIRMED_TEAMS:
+    "BXH hiện không còn đội hợp lệ để công bố — kiểm tra trạng thái đội và tính lại nếu cần.",
   NO_BOARDS_CALCULATED:
     "Không bảng nào được tính — thiếu phiếu chấm đã nộp hoặc bảng đã công bố (dùng tính lại).",
   SCORING_NOT_COMPLETE: "Chưa thể tính xếp hạng - cần hoàn tất toàn bộ phiếu chấm trước.",
@@ -146,7 +164,12 @@ const organizerErrorMap: Record<string, string> = {
   CONCURRENT_MODIFICATION: "Dữ liệu vừa được cập nhật bởi người khác — tải lại và thử lại.",
   TEAM_WAITLIST: "Đội đang trong danh sách chờ.",
   TEAM_REJECTED: "Hồ sơ đội đã bị từ chối.",
-  PUBLISH_NOT_READY: "Chưa đủ điều kiện công bố — hoàn tất tiêu chí chấm, phân công GK và chấm điểm trước.",
+  TEAM_ROSTER_LOCKED_AFTER_ASSIGNMENT:
+    "Đội đã được phân bảng — bỏ phân bảng trước khi đổi thành viên.",
+  TEAM_ROSTER_LOCKED_AFTER_OPERATION:
+    "Đội đã có dữ liệu vận hành thi (repo/phiếu chấm/xếp hạng) — không thể đổi thành viên.",
+  PUBLISH_NOT_READY:
+    "Chưa đủ điều kiện công bố — hoàn tất tiêu chí chấm, phân công giám khảo và chấm điểm trước.",
   "Chưa phân công giám khảo.": "Chưa phân công giám khảo cho bảng này.",
   "Chưa gán đội vào slot.": "Chưa gán đội vào bảng thi.",
   "Chấm điểm chưa hoàn tất": "Chấm điểm chưa hoàn tất — còn phiếu chưa nộp.",

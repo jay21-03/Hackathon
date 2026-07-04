@@ -7,6 +7,7 @@ import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { DataTable, tableActionCellClass, tableFirstCellStickyClass, tableRowClass } from "../../components/ui/DataTable";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -43,10 +44,32 @@ function getApproveDisabledReason(registration: {
   status: string;
   readyForOrganizerApproval?: boolean;
 }): string | null {
-  if (registration.status !== "PENDING") return null;
+  if (registration.status !== "PENDING") {
+    return "Chỉ duyệt đội đang chờ BTC.";
+  }
   if (!registration.readyForOrganizerApproval) {
     return "Còn thành viên chưa xác nhận email — đợi đội xác nhận trước khi duyệt.";
   }
+  return null;
+}
+
+function getWaitlistDisabledReason(registration: { status: string }): string | null {
+  if (registration.status === "CONFIRMED") return "Đội đã được duyệt — không đưa vào danh sách chờ.";
+  if (registration.status === "REJECTED") return "Đội đã bị từ chối.";
+  if (registration.status === "DISQUALIFIED") return "Đội đã bị loại.";
+  if (registration.status === "WAITLIST") return "Đội đã ở danh sách chờ.";
+  return null;
+}
+
+function getRejectDisabledReason(registration: { status: string }): string | null {
+  if (registration.status === "REJECTED") return "Đội đã bị từ chối.";
+  if (registration.status === "DISQUALIFIED") return "Đội đã bị loại — không thể từ chối lại.";
+  return null;
+}
+
+function getDisqualifyDisabledReason(registration: { status: string }): string | null {
+  if (registration.status === "DISQUALIFIED") return "Đội đã bị loại.";
+  if (registration.status === "REJECTED") return "Đội đã bị từ chối.";
   return null;
 }
 
@@ -148,6 +171,8 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
     }
   }
 
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+
   async function updateStatus(id: number | null, status: string, reason?: string) {
     const currentRegistration = id ? registrations.find((registration) => registration.id === id) : undefined;
     if (
@@ -173,15 +198,42 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
       });
     }
 
+    setUpdatingId(targetId);
     try {
-      const updated = await updateTeamStatus(targetId, status, reason);
+      const result = await updateTeamStatus(targetId, status, reason);
       await invalidateAfterTeamMutation(queryClient);
-      if (updated && detailTeam?.id === targetId) {
-        setDetailTeam(updated);
+      const updatedTeam = result?.team;
+      if (updatedTeam && detailTeam?.id === targetId) {
+        setDetailTeam(updatedTeam);
       }
-      const actualStatus = updated?.status ?? status;
+      const actualStatus = updatedTeam?.status ?? status;
       if (status === "CONFIRMED" && actualStatus === "WAITLIST") {
         notify("Quota đã đầy — đội được đưa vào danh sách chờ.", "warning");
+      } else if (result?.competitionCleanupApplied) {
+        const parts: string[] = [`Đã cập nhật đội (${getStatusLabel(actualStatus)}).`];
+        if (result.boardsCleared > 0) {
+          parts.push(`Đã xóa BXH ${result.boardsCleared} bảng.`);
+        }
+        if (result.awardsRevoked > 0) {
+          parts.push(`Đã thu hồi ${result.awardsRevoked} giải của đội.`);
+        }
+        if (result.awardsEventUnpublished) {
+          parts.push("Giải event đã về nháp.");
+        }
+        const promotion = result.waitlistPromotion;
+        if (promotion?.promotedCount) {
+          const names = (promotion.promotedTeams ?? []).map((t) => t.name).join(", ");
+          parts.push(`Đã promote waitlist: ${names || promotion.promotedCount + " đội"}.`);
+        } else if (promotion?.skippedReason === "EVENT_IN_PROGRESS") {
+          parts.push("Cuộc thi đang diễn ra — không tự promote waitlist.");
+        } else if ((promotion?.skippedIncompleteTeams?.length ?? 0) > 0) {
+          const names = promotion!.skippedIncompleteTeams!.map((t) => t.name).join(", ");
+          parts.push(`Waitlist chưa lên vì thiếu xác nhận TV: ${names}.`);
+        }
+        const actions = result.nextActions?.length
+          ? ` Tiếp theo: ${result.nextActions.join(" → ")}.`
+          : "";
+        notify(parts.join(" ") + actions, "success");
       } else {
         notify(`Đã cập nhật hồ sơ: ${getStatusLabel(actualStatus)}.`, "success");
       }
@@ -197,6 +249,8 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
       }
       const msg = resolveApiError(err, "Không cập nhật được trạng thái đội.");
       notify(msg, "danger");
+    } finally {
+      setUpdatingId(null);
     }
   }
 
@@ -290,12 +344,23 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
           }
           actions={
             <Button variant="ghost" icon={<Icon name="download" />} onClick={exportCsv}>
-              Xuất CSV
+              Xuất file CSV
             </Button>
           }
         />
+        {sortedRegistrations.length === 0 ? (
+          <EmptyState
+            icon="groups"
+            title="Không có đội phù hợp"
+            description="Thử đổi bộ lọc hoặc từ khóa tìm kiếm."
+          />
+        ) : (
         <DataTable headers={["Đội thi", "Thành viên", "Cập nhật", "Trạng thái", "Thao tác"]} stickyFirstColumn>
-          {sortedRegistrations.map((registration) => (
+          {sortedRegistrations.map((registration) => {
+            const waitlistDisabled = getWaitlistDisabledReason(registration);
+            const rejectDisabled = getRejectDisabledReason(registration);
+            const disqualifyDisabled = getDisqualifyDisabledReason(registration);
+            return (
             <tr key={registration.id} className={tableRowClass}>
               <td className={tableFirstCellStickyClass}>
                 <p className="font-label-md">{registration.name}</p>
@@ -322,8 +387,11 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
                     <Button
                       type="button"
                       variant="ghost"
+                      loading={updatingId === registration.id}
                       disabled={
-                        registration.status !== "PENDING" || !registration.readyForOrganizerApproval
+                        updatingId != null ||
+                        registration.status !== "PENDING" ||
+                        !registration.readyForOrganizerApproval
                       }
                       onClick={() => updateStatus(registration.id, "CONFIRMED")}
                       data-testid={`approve-registration-${registration.id}`}
@@ -331,46 +399,61 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
                       Duyệt
                     </Button>
                   </span>
+                  <span title={waitlistDisabled ?? undefined} className="inline-flex">
                     <Button
                       type="button"
                       variant="secondary"
-                      disabled={registration.status === "CONFIRMED" || registration.status === "REJECTED"}
+                      loading={updatingId === registration.id}
+                      disabled={updatingId != null || Boolean(waitlistDisabled)}
                       onClick={() => updateStatus(registration.id, "WAITLIST")}
                     >
                       Chờ
                     </Button>
-                  <ReasonConfirmAction
-                    title="Từ chối hồ sơ?"
-                    message="Đội sẽ không được tính vào danh sách tham gia hợp lệ. Nên liên hệ đội trước khi từ chối."
-                    confirmLabel="Từ chối"
-                    reasonPlaceholder="Ví dụ: Hồ sơ không đủ điều kiện tham gia…"
-                    onConfirm={(reason) => updateStatus(registration.id, "REJECTED", reason)}
-                  >
-                    <Button type="button" variant="danger">
-                      Từ chối
-                    </Button>
-                  </ReasonConfirmAction>
-                  <ReasonConfirmAction
-                    title="Loại đội khỏi cuộc thi?"
-                    message="Đội bị loại sẽ không được chấm điểm. Cần ghi rõ lý do vi phạm."
-                    confirmLabel="Loại đội"
-                    reasonLabel="Lý do vi phạm"
-                    reasonPlaceholder="Ví dụ: Vi phạm quy chế nộp bài…"
-                    onConfirm={(reason) => updateStatus(registration.id, "DISQUALIFIED", reason)}
-                  >
-                    <Button
-                      type="button"
-                      variant="danger"
-                      disabled={registration.status === "DISQUALIFIED"}
+                  </span>
+                  <span title={rejectDisabled ?? undefined} className="inline-flex">
+                    <ReasonConfirmAction
+                      title="Từ chối hồ sơ?"
+                      message="Đội sẽ không được tính vào danh sách tham gia hợp lệ. Nên liên hệ đội trước khi từ chối."
+                      confirmLabel="Từ chối"
+                      reasonPlaceholder="Ví dụ: Hồ sơ không đủ điều kiện tham gia…"
+                      onConfirm={(reason) => updateStatus(registration.id, "REJECTED", reason)}
                     >
-                      Loại đội
-                    </Button>
-                  </ReasonConfirmAction>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        loading={updatingId === registration.id}
+                        disabled={updatingId != null || Boolean(rejectDisabled)}
+                      >
+                        Từ chối
+                      </Button>
+                    </ReasonConfirmAction>
+                  </span>
+                  <span title={disqualifyDisabled ?? undefined} className="inline-flex">
+                    <ReasonConfirmAction
+                      title="Loại đội khỏi cuộc thi?"
+                      message="Đội bị loại sẽ bị gỡ khỏi bảng, phiếu chấm và giải thưởng liên quan bị thu hồi, BXH bảng đó bị xóa để tính lại."
+                      confirmLabel="Loại đội"
+                      reasonLabel="Lý do vi phạm"
+                      reasonPlaceholder="Ví dụ: Vi phạm quy chế nộp bài…"
+                      onConfirm={(reason) => updateStatus(registration.id, "DISQUALIFIED", reason)}
+                    >
+                      <Button
+                        type="button"
+                        variant="danger"
+                        loading={updatingId === registration.id}
+                        disabled={updatingId != null || Boolean(disqualifyDisabled)}
+                      >
+                        Loại đội
+                      </Button>
+                    </ReasonConfirmAction>
+                  </span>
                 </div>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </DataTable>
+        )}
 
         {totalPages > 1 ? (
           <div className="flex flex-wrap items-center justify-between gap-sm pt-sm">

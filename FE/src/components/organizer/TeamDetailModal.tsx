@@ -3,7 +3,12 @@ import { Badge } from "../ui/Badge";
 import { Modal } from "../ui/Modal";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
 import { enableAiReview } from "../../config/features";
-import { getStatusLabel, getStatusTone } from "../../domain/status";
+import {
+  getStatusLabel,
+  getStatusTone,
+  getTeamRegistrationStatusLabel,
+  getTeamRegistrationStatusTone
+} from "../../domain/status";
 import type { TeamDetailResponse } from "../../services/registrationService";
 
 interface TeamDetailModalProps {
@@ -44,7 +49,9 @@ export function TeamDetailModal({
             {contextLabel ? (
               <p className="font-body-sm text-on-surface-variant">{contextLabel}</p>
             ) : null}
-            <Badge tone={getStatusTone(team.status)}>{getStatusLabel(team.status)}</Badge>
+            <Badge tone={getTeamRegistrationStatusTone(team)}>
+              {getTeamRegistrationStatusLabel(team)}
+            </Badge>
             {memberStats ? (
               <span className="font-body-sm text-on-surface-variant">
                 {memberStats.confirmed}/{memberStats.total} thành viên đã xác nhận
@@ -56,6 +63,14 @@ export function TeamDetailModal({
               </span>
             ) : null}
           </div>
+
+          {team.rejectedReason &&
+          (team.status === "REJECTED" || team.status === "DISQUALIFIED") ? (
+            <div className="rounded-lg border border-danger/30 bg-danger-container/30 px-md py-sm">
+              <p className="font-label-sm text-on-danger-container">Lý do</p>
+              <p className="mt-xs font-body-sm text-on-danger-container">{team.rejectedReason}</p>
+            </div>
+          ) : null}
 
           {enableAiReview && team ? (
             <p className="font-body-sm">
