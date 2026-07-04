@@ -86,7 +86,8 @@ public class TeamQueryController {
 
     @PatchMapping("/teams/{teamId}/status")
     @SecurityRequirement(name = "bearerAuth")
-    public ResponseEntity<ApiResponse<TeamDetailDto>> updateTeamStatus(@PathVariable Long teamId, @Valid @RequestBody UpdateTeamStatusRequest request) {
+    public ResponseEntity<ApiResponse<com.seal.hackathon.registration.dto.UpdateTeamStatusResponse>> updateTeamStatus(
+            @PathVariable Long teamId, @Valid @RequestBody UpdateTeamStatusRequest request) {
         CurrentUserPrincipal currentUser = currentUserProvider.getCurrentUser();
         boolean organizer = currentUser.getRoles() != null && currentUser.getRoles().contains("ORGANIZER");
         return ResponseEntity.ok(ApiResponse.ok(registrationService.updateTeamStatus(

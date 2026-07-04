@@ -8,6 +8,7 @@ import com.seal.hackathon.registration.dto.RegisterTeamRequest;
 import com.seal.hackathon.common.response.PagedResult;
 import com.seal.hackathon.registration.dto.TeamDetailDto;
 import com.seal.hackathon.registration.dto.TeamRegistrationSummaryDto;
+import com.seal.hackathon.registration.dto.UpdateTeamStatusResponse;
 import java.util.List;
 
 public interface RegistrationService {
@@ -15,7 +16,7 @@ public interface RegistrationService {
 
     TeamDetailDto getTeam(Long teamId, Long requesterUserId, boolean organizer);
 
-    TeamDetailDto updateTeamStatus(Long teamId, com.seal.hackathon.common.enums.TeamStatus status, String reason, Long actorUserId, String actorEmail, boolean organizer);
+    UpdateTeamStatusResponse updateTeamStatus(Long teamId, com.seal.hackathon.common.enums.TeamStatus status, String reason, Long actorUserId, String actorEmail, boolean organizer);
 
     TeamDetailDto confirmInvitation(String token, Long actorUserId, String actorEmail);
 

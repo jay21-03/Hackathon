@@ -12,6 +12,10 @@ public class TeamDetailDto {
     private OffsetDateTime confirmedAt;
     private String rejectedReason;
     private Boolean readyForOrganizerApproval;
+    /** False when team is assigned to a board or has operational data (repo/scores/ranking). */
+    private Boolean rosterEditable;
+    /** TEAM_ROSTER_LOCKED_AFTER_ASSIGNMENT or TEAM_ROSTER_LOCKED_AFTER_OPERATION when locked. */
+    private String rosterLockCode;
 
     public TeamDetailDto() {
     }
@@ -78,5 +82,21 @@ public class TeamDetailDto {
 
     public void setReadyForOrganizerApproval(Boolean readyForOrganizerApproval) {
         this.readyForOrganizerApproval = readyForOrganizerApproval;
+    }
+
+    public Boolean getRosterEditable() {
+        return rosterEditable;
+    }
+
+    public void setRosterEditable(Boolean rosterEditable) {
+        this.rosterEditable = rosterEditable;
+    }
+
+    public String getRosterLockCode() {
+        return rosterLockCode;
+    }
+
+    public void setRosterLockCode(String rosterLockCode) {
+        this.rosterLockCode = rosterLockCode;
     }
 }

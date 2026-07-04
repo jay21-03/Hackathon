@@ -11,6 +11,7 @@ import com.seal.hackathon.common.exception.BusinessException;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.response.PagedResult;
 import com.seal.hackathon.common.util.PageRequestUtils;
+import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Event;
@@ -19,6 +20,13 @@ import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.award.entity.TeamAward;
+import com.seal.hackathon.award.repository.TeamAwardRepository;
+import com.seal.hackathon.ranking.entity.RankingResult;
+import com.seal.hackathon.ranking.repository.AdvancementRepository;
+import com.seal.hackathon.ranking.repository.RankingResultRepository;
+import com.seal.hackathon.scoring.entity.ScoreSheet;
+import com.seal.hackathon.scoring.repository.ScoreItemRepository;
 import com.seal.hackathon.registration.dto.BulkInviteTeamMembersRequest;
 import com.seal.hackathon.registration.dto.BulkTeamInvitationFailure;
 import com.seal.hackathon.registration.dto.BulkTeamInvitationResponse;
@@ -27,6 +35,8 @@ import com.seal.hackathon.registration.dto.MemberRequest;
 import com.seal.hackathon.registration.dto.RegisterTeamRequest;
 import com.seal.hackathon.registration.dto.TeamDetailDto;
 import com.seal.hackathon.registration.dto.TeamMemberDto;
+import com.seal.hackathon.registration.dto.UpdateTeamStatusResponse;
+import com.seal.hackathon.registration.dto.WaitlistPromotionResult;
 import com.seal.hackathon.registration.entity.IdempotencyKey;
 import com.seal.hackathon.registration.entity.AuditLog;
 import com.seal.hackathon.registration.entity.DomainEvent;
@@ -40,6 +50,7 @@ import com.seal.hackathon.registration.repository.OutboxMessageRepository;
 import com.seal.hackathon.registration.repository.TeamMemberRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.notification.service.NotificationService;
+import com.seal.hackathon.scoring.repository.ScoreSheetRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.ZoneOffset;
@@ -69,6 +80,12 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final RoundRepository roundRepository;
     private final BoardRepository boardRepository;
     private final BoardSlotRepository boardSlotRepository;
+    private final TeamRepositoryEntityRepository teamRepositoryEntityRepository;
+    private final ScoreSheetRepository scoreSheetRepository;
+    private final ScoreItemRepository scoreItemRepository;
+    private final RankingResultRepository rankingResultRepository;
+    private final AdvancementRepository advancementRepository;
+    private final TeamAwardRepository teamAwardRepository;
     private final UserRepository userRepository;
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
@@ -87,6 +104,12 @@ public class RegistrationServiceImpl implements RegistrationService {
             RoundRepository roundRepository,
             BoardRepository boardRepository,
             BoardSlotRepository boardSlotRepository,
+            TeamRepositoryEntityRepository teamRepositoryEntityRepository,
+            ScoreSheetRepository scoreSheetRepository,
+            ScoreItemRepository scoreItemRepository,
+            RankingResultRepository rankingResultRepository,
+            AdvancementRepository advancementRepository,
+            TeamAwardRepository teamAwardRepository,
             UserRepository userRepository,
             TeamRepository teamRepository,
             TeamMemberRepository teamMemberRepository,
@@ -103,6 +126,12 @@ public class RegistrationServiceImpl implements RegistrationService {
         this.roundRepository = roundRepository;
         this.boardRepository = boardRepository;
         this.boardSlotRepository = boardSlotRepository;
+        this.teamRepositoryEntityRepository = teamRepositoryEntityRepository;
+        this.scoreSheetRepository = scoreSheetRepository;
+        this.scoreItemRepository = scoreItemRepository;
+        this.rankingResultRepository = rankingResultRepository;
+        this.advancementRepository = advancementRepository;
+        this.teamAwardRepository = teamAwardRepository;
         this.userRepository = userRepository;
         this.teamRepository = teamRepository;
         this.teamMemberRepository = teamMemberRepository;
@@ -293,9 +322,155 @@ public class RegistrationServiceImpl implements RegistrationService {
         return loadTeamDetail(team);
     }
 
+    private record CompetitionCleanupResult(
+            int boardsCleared,
+            int awardsRevoked,
+            boolean awardsEventUnpublished,
+            int advancementsRemoved) {
+        static CompetitionCleanupResult empty() {
+            return new CompetitionCleanupResult(0, 0, false, 0);
+        }
+    }
+
+    private UpdateTeamStatusResponse applyTeamStatusSideEffects(Team team, TeamStatus beforeStatus) {
+        notificationService.notifyTeamStatusChanged(team, team.getStatus());
+        notificationService.notifyAwardEligibilityWithdrawn(team, team.getStatus());
+
+        boolean lostEligibility = beforeStatus == TeamStatus.CONFIRMED
+                && team.getStatus() != TeamStatus.CONFIRMED
+                && (team.getStatus() == TeamStatus.REJECTED
+                        || team.getStatus() == TeamStatus.DISQUALIFIED
+                        || team.getStatus() == TeamStatus.WAITLIST);
+
+        CompetitionCleanupResult cleanup = CompetitionCleanupResult.empty();
+        WaitlistPromotionResult waitlistPromotion = null;
+        List<String> nextActions = new ArrayList<>();
+
+        if (lostEligibility) {
+            int publishedBoardsBefore = (int) rankingResultRepository
+                    .findByTeamIdAndPublishedAtIsNotNullOrderByBoardIdAscRankAsc(team.getId())
+                    .stream()
+                    .map(RankingResult::getBoardId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .count();
+            cleanup = clearIneligibleTeamFromCompetition(team);
+            notificationService.notifyRankingEligibilityWithdrawn(
+                    team,
+                    team.getStatus(),
+                    publishedBoardsBefore > 0 || cleanup.boardsCleared() > 0);
+            notificationService.notifyOrganizerTeamRemovedFromCompetition(
+                    team, team.getStatus(), cleanup.boardsCleared());
+            waitlistPromotion = waitlistPromotionService.promoteWaitlistIfSlotsAvailable(team.getEventId());
+
+            if (cleanup.boardsCleared() > 0) {
+                nextActions.add("Tính lại bảng xếp hạng đã bị xóa");
+                nextActions.add("Công bố lại BXH");
+            }
+            if (cleanup.awardsRevoked() > 0 || cleanup.awardsEventUnpublished()) {
+                nextActions.add("Gợi ý/gán lại giải và công bố giải nếu cần");
+            }
+            if (waitlistPromotion != null && waitlistPromotion.getPromotedCount() > 0) {
+                nextActions.add("Phân bảng cho đội vừa lên từ waitlist (nếu đang chia bảng)");
+            }
+            if (waitlistPromotion != null
+                    && "EVENT_IN_PROGRESS".equals(waitlistPromotion.getSkippedReason())) {
+                nextActions.add("Cuộc thi đang diễn ra — không tự promote waitlist; duyệt thủ công nếu cần");
+            }
+            if (waitlistPromotion != null
+                    && waitlistPromotion.getSkippedIncompleteTeams() != null
+                    && !waitlistPromotion.getSkippedIncompleteTeams().isEmpty()
+                    && waitlistPromotion.getPromotedCount() < waitlistPromotion.getAvailableSlots()) {
+                nextActions.add("Nhắc đội waitlist hoàn tất xác nhận thành viên để lên suất trống");
+            }
+        }
+
+        return UpdateTeamStatusResponse.builder()
+                .team(loadTeamDetail(team))
+                .competitionCleanupApplied(lostEligibility)
+                .boardsCleared(cleanup.boardsCleared())
+                .awardsRevoked(cleanup.awardsRevoked())
+                .awardsEventUnpublished(cleanup.awardsEventUnpublished())
+                .advancementsRemoved(cleanup.advancementsRemoved())
+                .waitlistPromotion(waitlistPromotion)
+                .nextActions(nextActions)
+                .build();
+    }
+
+    /**
+     * When a confirmed team loses eligibility: clear board slots (even if scoring/ranking locked),
+     * remove score sheets, delete board rankings (force full recalc), revoke advancements and awards.
+     */
+    private CompetitionCleanupResult clearIneligibleTeamFromCompetition(Team team) {
+        if (team == null || team.getId() == null) {
+            return CompetitionCleanupResult.empty();
+        }
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        Set<Long> boardsToClear = rankingResultRepository.findByTeamId(team.getId()).stream()
+                .map(RankingResult::getBoardId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+
+        for (BoardSlot slot : boardSlotRepository.findByTeamId(team.getId())) {
+            if (!slotBelongsToEvent(slot, team.getEventId())) {
+                continue;
+            }
+            if (slot.getBoardId() != null) {
+                boardsToClear.add(slot.getBoardId());
+                deleteScoreSheetsForTeamOnBoard(slot.getBoardId(), team.getId());
+            }
+            slot.setTeamId(null);
+            slot.setAssignedAt(now);
+            boardSlotRepository.save(slot);
+        }
+
+        int boardsCleared = 0;
+        for (Long boardId : boardsToClear) {
+            if (rankingResultRepository.existsByBoardId(boardId)) {
+                rankingResultRepository.deleteByBoardId(boardId);
+                boardsCleared++;
+            }
+        }
+
+        int advancementsRemoved = advancementRepository.findByTeamId(team.getId()).size();
+        advancementRepository.deleteByTeamId(team.getId());
+
+        List<TeamAward> teamAwards = teamAwardRepository.findByTeamId(team.getId());
+        int awardsRevoked = teamAwards.size();
+        boolean hadPublishedAward = teamAwards.stream().anyMatch(a -> Boolean.TRUE.equals(a.getPublished()));
+        if (!teamAwards.isEmpty()) {
+            teamAwardRepository.deleteByTeamId(team.getId());
+        }
+        boolean awardsEventUnpublished = false;
+        if (hadPublishedAward) {
+            OffsetDateTime awardNow = OffsetDateTime.now(ZoneOffset.UTC);
+            for (TeamAward award : teamAwardRepository.findByEventIdOrderByAwardCategoryIdAscIdAsc(team.getEventId())) {
+                if (Boolean.TRUE.equals(award.getPublished())) {
+                    award.setPublished(false);
+                    award.setUpdatedAt(awardNow);
+                    teamAwardRepository.save(award);
+                    awardsEventUnpublished = true;
+                }
+            }
+        }
+        return new CompetitionCleanupResult(
+                boardsCleared, awardsRevoked, awardsEventUnpublished, advancementsRemoved);
+    }
+
+    private void deleteScoreSheetsForTeamOnBoard(Long boardId, Long teamId) {
+        List<ScoreSheet> sheets = scoreSheetRepository.findByBoardIdAndTeamId(boardId, teamId);
+        for (ScoreSheet sheet : sheets) {
+            scoreItemRepository.deleteByScoreSheetId(sheet.getId());
+        }
+        if (!sheets.isEmpty()) {
+            scoreSheetRepository.deleteByBoardIdAndTeamId(boardId, teamId);
+        }
+    }
+
     @Override
     @Transactional
-    public TeamDetailDto updateTeamStatus(Long teamId, TeamStatus status, String reason, Long actorUserId, String actorEmail, boolean organizer) {
+    public UpdateTeamStatusResponse updateTeamStatus(
+            Long teamId, TeamStatus status, String reason, Long actorUserId, String actorEmail, boolean organizer) {
         if (!organizer) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
@@ -308,7 +483,15 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         TeamStatus currentStatus = team.getStatus();
         if (currentStatus == status) {
-            return loadTeamDetail(team);
+            return UpdateTeamStatusResponse.builder()
+                    .team(loadTeamDetail(team))
+                    .competitionCleanupApplied(false)
+                    .boardsCleared(0)
+                    .awardsRevoked(0)
+                    .awardsEventUnpublished(false)
+                    .advancementsRemoved(0)
+                    .nextActions(List.of())
+                    .build();
         }
 
         if (status == TeamStatus.PENDING) {
@@ -374,14 +557,7 @@ public class RegistrationServiceImpl implements RegistrationService {
                 .createdAt(now)
                 .build());
 
-        notificationService.notifyTeamStatusChanged(team, team.getStatus());
-
-        if (beforeStatus == TeamStatus.CONFIRMED
-                && (team.getStatus() == TeamStatus.REJECTED || team.getStatus() == TeamStatus.DISQUALIFIED)) {
-            waitlistPromotionService.promoteWaitlistIfSlotsAvailable(team.getEventId());
-        }
-
-        return loadTeamDetail(team);
+        return applyTeamStatusSideEffects(team, beforeStatus);
     }
 
     @Override
@@ -458,8 +634,10 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         Team team = teamRepository.findByIdAndEventId(parts.teamId(), member.getEventId())
                 .orElseThrow(() -> new BusinessException("Team not found"));
+        TeamStatus beforeStatus = team.getStatus();
         team.setStatus(TeamStatus.REJECTED);
         team.setRejectedReason("Member declined invitation");
+        team.setConfirmedAt(null);
         team.setUpdatedAt(now);
         teamRepository.save(team);
 
@@ -467,6 +645,18 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         appendLifecycleArtifacts(team, "INVITATION_DECLINED", "InvitationDeclined", actorUserId, actorEmail, now,
                 "{\"teamId\": " + team.getId() + ", \"teamMemberId\": " + member.getId() + ", \"teamStatus\": \"" + team.getStatus() + "\"}");
+        auditLogRepository.save(AuditLog.builder()
+                .actorId(actorUserId)
+                .actorEmail(actorEmail)
+                .action("TEAM_REJECTED")
+                .entityType("Team")
+                .entityId(team.getId())
+                .beforeState("{\"status\":\"" + beforeStatus + "\"}")
+                .afterState("{\"teamId\": " + team.getId() + ", \"teamStatus\": \"" + team.getStatus()
+                        + "\", \"reason\": \"Member declined invitation\"}")
+                .createdAt(now)
+                .build());
+        applyTeamStatusSideEffects(team, beforeStatus);
 
         return toDetailDto(team, teamMembers);
     }
@@ -486,6 +676,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         if (member.getStatus() == TeamMemberStatus.CONFIRMED) {
             throw new BusinessException("Cannot resend confirmed invitation");
         }
+        assertTeamRosterEditable(team);
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         member.setStatus(TeamMemberStatus.INVITED);
@@ -584,6 +775,7 @@ public class RegistrationServiceImpl implements RegistrationService {
                 .orElseThrow(() -> new BusinessException("Event not found"));
 
         validateRegistrationWindow(event);
+        assertTeamRosterEditable(team);
 
         List<TeamMember> existingMembers = teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(teamId);
         if (existingMembers.size() >= event.getMaxTeamSize()) {
@@ -669,6 +861,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         if (member.getStatus() == TeamMemberStatus.CONFIRMED) {
             throw new BusinessException("Cannot cancel confirmed member");
         }
+        assertTeamRosterEditable(team);
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         teamMemberRepository.delete(member);
@@ -762,6 +955,52 @@ public class RegistrationServiceImpl implements RegistrationService {
         }
         team.setUpdatedAt(now);
         teamRepository.save(team);
+    }
+
+    private void assertTeamRosterEditable(Team team) {
+        String lockCode = resolveRosterLockCode(team);
+        if (lockCode != null) {
+            throw new BusinessException(lockCode);
+        }
+    }
+
+    private String resolveRosterLockCode(Team team) {
+        if (team == null || team.getId() == null) {
+            return null;
+        }
+        if (!teamRepositoryEntityRepository.findAllByTeamId(team.getId()).isEmpty()) {
+            return "TEAM_ROSTER_LOCKED_AFTER_OPERATION";
+        }
+        boolean assignedInEvent = false;
+        for (BoardSlot slot : boardSlotRepository.findByTeamId(team.getId())) {
+            if (!slotBelongsToEvent(slot, team.getEventId())) {
+                continue;
+            }
+            if (slot.getBoardId() != null
+                    && (!scoreSheetRepository.findByBoardIdAndTeamId(slot.getBoardId(), team.getId()).isEmpty()
+                            || rankingResultRepository.findByBoardIdOrderByRankAsc(slot.getBoardId()).stream()
+                                    .anyMatch(result -> team.getId().equals(result.getTeamId())))) {
+                return "TEAM_ROSTER_LOCKED_AFTER_OPERATION";
+            }
+            assignedInEvent = true;
+        }
+        if (assignedInEvent) {
+            return "TEAM_ROSTER_LOCKED_AFTER_ASSIGNMENT";
+        }
+        return null;
+    }
+
+    private boolean slotBelongsToEvent(BoardSlot slot, Long eventId) {
+        if (slot == null || eventId == null) {
+            return false;
+        }
+        Long roundId = slot.getRoundId();
+        if (roundId == null && slot.getBoardId() != null) {
+            roundId = boardRepository.findById(slot.getBoardId()).map(Board::getRoundId).orElse(null);
+        }
+        return roundId != null && roundRepository.findById(roundId)
+                .map(round -> eventId.equals(round.getEventId()))
+                .orElse(false);
     }
 
     private boolean areAllMembersConfirmed(Long teamId) {
@@ -1157,6 +1396,9 @@ public class RegistrationServiceImpl implements RegistrationService {
         dto.setRejectedReason(team.getRejectedReason());
         dto.setReadyForOrganizerApproval(
                 team.getStatus() == TeamStatus.PENDING && areAllMembersConfirmed(team.getId()));
+        String rosterLockCode = resolveRosterLockCode(team);
+        dto.setRosterEditable(rosterLockCode == null);
+        dto.setRosterLockCode(rosterLockCode);
         dto.setMembers(members.stream()
                 .sorted(Comparator
                         .comparing(TeamMember::getContactPerson, Comparator.nullsLast(Boolean::compareTo))

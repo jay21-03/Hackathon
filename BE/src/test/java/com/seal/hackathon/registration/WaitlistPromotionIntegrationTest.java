@@ -19,6 +19,7 @@ import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.entity.TeamMember;
 import com.seal.hackathon.registration.repository.TeamMemberRepository;
 import com.seal.hackathon.registration.repository.TeamRepository;
+import com.seal.hackathon.notification.repository.NotificationRepository;
 import com.seal.hackathon.registration.service.WaitlistPromotionService;
 import com.seal.hackathon.support.IntegrationTestConfig;
 import com.seal.hackathon.support.IntegrationTestFixtures;
@@ -76,12 +77,16 @@ class WaitlistPromotionIntegrationTest {
     @Autowired
     AcademicTermRepository academicTermRepository;
 
+    @Autowired
+    NotificationRepository notificationRepository;
+
     Event event;
     Team confirmedTeam;
     Team waitlistTeam;
 
     @BeforeEach
     void setUp() {
+        notificationRepository.deleteAll();
         teamMemberRepository.deleteAll();
         teamRepository.deleteAll();
         eventRepository.deleteAll();
@@ -159,11 +164,49 @@ class WaitlistPromotionIntegrationTest {
         confirmedTeam.setRejectedReason("Removed");
         teamRepository.save(confirmedTeam);
 
-        int promoted = waitlistPromotionService.promoteWaitlistIfSlotsAvailable(event.getId());
-        assertThat(promoted).isEqualTo(1);
+        var result = waitlistPromotionService.promoteWaitlistIfSlotsAvailable(event.getId());
+        assertThat(result.getPromotedCount()).isEqualTo(1);
+        assertThat(result.getSkippedReason()).isNull();
+        assertThat(result.getPromotedTeams()).extracting("id").containsExactly(waitlistTeam.getId());
 
         Team updated = teamRepository.findById(waitlistTeam.getId()).orElseThrow();
         assertThat(updated.getStatus()).isEqualTo(TeamStatus.CONFIRMED);
         assertThat(updated.getConfirmedAt()).isNotNull();
+    }
+
+    @Test
+    void doesNotPromoteWhenEventIsInProgress() {
+        event.setStatus(EventStatus.IN_PROGRESS);
+        eventRepository.save(event);
+        confirmedTeam.setStatus(TeamStatus.DISQUALIFIED);
+        confirmedTeam.setRejectedReason("Removed");
+        teamRepository.save(confirmedTeam);
+
+        var result = waitlistPromotionService.promoteWaitlistIfSlotsAvailable(event.getId());
+        assertThat(result.getPromotedCount()).isEqualTo(0);
+        assertThat(result.getSkippedReason()).isEqualTo("EVENT_IN_PROGRESS");
+        assertThat(teamRepository.findById(waitlistTeam.getId()).orElseThrow().getStatus())
+                .isEqualTo(TeamStatus.WAITLIST);
+    }
+
+    @Test
+    void reportsIncompleteWaitlistTeamsWhenMembersNotConfirmed() {
+        teamMemberRepository.deleteAll();
+        teamMemberRepository.save(TeamMember.builder()
+                .eventId(event.getId())
+                .teamId(waitlistTeam.getId())
+                .email("waitlist@example.com")
+                .fullName("Wait Captain")
+                .status(TeamMemberStatus.INVITED)
+                .contactPerson(true)
+                .build());
+        confirmedTeam.setStatus(TeamStatus.DISQUALIFIED);
+        confirmedTeam.setRejectedReason("Removed");
+        teamRepository.save(confirmedTeam);
+
+        var result = waitlistPromotionService.promoteWaitlistIfSlotsAvailable(event.getId());
+        assertThat(result.getPromotedCount()).isEqualTo(0);
+        assertThat(result.getAvailableSlots()).isEqualTo(1);
+        assertThat(result.getSkippedIncompleteTeams()).extracting("id").containsExactly(waitlistTeam.getId());
     }
 }
