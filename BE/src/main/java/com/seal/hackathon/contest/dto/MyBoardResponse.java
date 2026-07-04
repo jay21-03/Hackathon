@@ -8,7 +8,7 @@ import lombok.Data;
 @Builder
 public class MyBoardResponse {
     private boolean assigned;
-    /** NO_TEAM | TEAM_NOT_CONFIRMED | NOT_ASSIGNED */
+    /** NO_TEAM | TEAM_NOT_CONFIRMED | TEAM_WAITLIST | TEAM_REJECTED | TEAM_DISQUALIFIED | NOT_ASSIGNED | ROUND_NOT_STARTED */
     private String reason;
     private Long teamId;
     private Long roundId;
