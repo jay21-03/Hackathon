@@ -32,7 +32,9 @@ import com.seal.hackathon.notification.repository.NotificationRepository;
 import com.seal.hackathon.award.entity.AwardCategory;
 import com.seal.hackathon.award.entity.TeamAward;
 import com.seal.hackathon.award.repository.AwardCategoryRepository;
+import com.seal.hackathon.award.repository.TeamAwardRepository;
 import com.seal.hackathon.ranking.entity.RankingResult;
+import com.seal.hackathon.ranking.repository.RankingResultRepository;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.entity.TeamMember;
 import com.seal.hackathon.registration.repository.TeamMemberRepository;
@@ -80,6 +82,8 @@ public class NotificationService {
     private final JudgeAssignmentRepository judgeAssignmentRepository;
     private final UserRepository userRepository;
     private final AwardCategoryRepository awardCategoryRepository;
+    private final TeamAwardRepository teamAwardRepository;
+    private final RankingResultRepository rankingResultRepository;
 
     @Value("${app.mail.enabled:false}")
     private boolean mailEnabled;
@@ -707,6 +711,160 @@ public class NotificationService {
                         dedupeKey);
             }
         }
+    }
+
+    @Transactional
+    public void notifyAwardEligibilityWithdrawn(Team team, TeamStatus newStatus) {
+        if (team == null || (newStatus != TeamStatus.REJECTED && newStatus != TeamStatus.DISQUALIFIED)) {
+            return;
+        }
+        List<TeamAward> publishedAwards = teamAwardRepository
+                .findByEventIdAndPublishedTrueOrderByAwardCategoryIdAscIdAsc(team.getEventId())
+                .stream()
+                .filter(award -> team.getId().equals(award.getTeamId()))
+                .toList();
+        if (publishedAwards.isEmpty()) {
+            return;
+        }
+
+        Event event = eventRepository.findById(team.getEventId()).orElse(null);
+        String eventName = event != null ? event.getName() : "cuộc thi";
+        String title = "Cập nhật giải thưởng của đội";
+        String content = "Đội «" + team.getName() + "» tại " + eventName
+                + (newStatus == TeamStatus.DISQUALIFIED ? " đã bị loại" : " đã bị từ chối")
+                + ", nên giải thưởng công khai có thể đã được thu hồi khỏi trang kết quả.";
+        String linkUrl = "/me/results?eventId=" + team.getEventId();
+        for (TeamMember member : teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId())) {
+            if (member.getStatus() != TeamMemberStatus.CONFIRMED) {
+                continue;
+            }
+            String dedupeKey = member.getUserId() != null
+                    ? "awards-withdrawn:e" + team.getEventId() + ":t" + team.getId() + ":u" + member.getUserId()
+                    : "awards-withdrawn:e" + team.getEventId() + ":t" + team.getId() + ":e"
+                            + member.getEmail().toLowerCase(Locale.ROOT);
+            create(
+                    member.getUserId(),
+                    member.getEmail(),
+                    team.getEventId(),
+                    NotificationType.AWARDS_PUBLISHED,
+                    title,
+                    content,
+                    linkUrl,
+                    dedupeKey);
+        }
+    }
+
+    @Transactional
+    public void notifyRankingEligibilityWithdrawn(Team team, TeamStatus newStatus, boolean rankingWasAffected) {
+        if (team == null
+                || (newStatus != TeamStatus.REJECTED
+                        && newStatus != TeamStatus.DISQUALIFIED
+                        && newStatus != TeamStatus.WAITLIST)
+                || !rankingWasAffected) {
+            return;
+        }
+
+        Event event = eventRepository.findById(team.getEventId()).orElse(null);
+        String eventName = event != null ? event.getName() : "cuộc thi";
+        String title = "Cập nhật kết quả xếp hạng";
+        String statusPhrase = newStatus == TeamStatus.DISQUALIFIED
+                ? " đã bị loại"
+                : newStatus == TeamStatus.WAITLIST ? " đã chuyển sang danh sách chờ" : " đã bị từ chối";
+        String content = "Đội «" + team.getName() + "» tại " + eventName
+                + statusPhrase
+                + ". Bảng xếp hạng liên quan đã được thu hồi để ban tổ chức tính lại.";
+        String linkUrl = "/me/results?eventId=" + team.getEventId();
+        for (TeamMember member : teamMemberRepository.findByTeamIdOrderByContactPersonDescFullNameAscIdAsc(team.getId())) {
+            if (member.getStatus() != TeamMemberStatus.CONFIRMED) {
+                continue;
+            }
+            String dedupeKey = member.getUserId() != null
+                    ? "ranking-withdrawn:e" + team.getEventId() + ":t" + team.getId() + ":u" + member.getUserId()
+                    : "ranking-withdrawn:e" + team.getEventId() + ":t" + team.getId() + ":e"
+                            + member.getEmail().toLowerCase(Locale.ROOT);
+            create(
+                    member.getUserId(),
+                    member.getEmail(),
+                    team.getEventId(),
+                    NotificationType.RANKING_PUBLISHED,
+                    title,
+                    content,
+                    linkUrl,
+                    dedupeKey);
+        }
+    }
+
+    @Transactional
+    public void notifyOrganizerWaitlistPromotionBlocked(
+            Event event,
+            int remainingSlots,
+            List<com.seal.hackathon.registration.dto.WaitlistPromotionResult.TeamBriefDto> incompleteTeams) {
+        if (event == null || event.getCreatedBy() == null || incompleteTeams == null || incompleteTeams.isEmpty()) {
+            return;
+        }
+        User organizer = userRepository.findById(event.getCreatedBy()).orElse(null);
+        if (organizer == null) {
+            return;
+        }
+        String names = incompleteTeams.stream()
+                .map(team -> "«" + team.getName() + "»")
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("");
+        String title = "Waitlist chưa lên được — thiếu xác nhận thành viên";
+        String content = "Còn " + remainingSlots + " suất trống nhưng các đội chờ "
+                + names
+                + " chưa đủ thành viên xác nhận email. Nhắc đội hoàn tất hoặc duyệt thủ công khi sẵn sàng.";
+        create(
+                organizer.getId(),
+                organizer.getEmail(),
+                event.getId(),
+                NotificationType.GENERAL,
+                title,
+                content,
+                "/organizer/teams-hub?eventId=" + event.getId(),
+                "waitlist-incomplete:e" + event.getId() + ":s" + remainingSlots);
+    }
+
+    /**
+     * Guides organizer through: clear slot → rankings draft → recalculate → republish (and awards if needed).
+     */
+    @Transactional
+    public void notifyOrganizerTeamRemovedFromCompetition(
+            Team team, TeamStatus newStatus, int boardsUnpublished) {
+        if (team == null
+                || (newStatus != TeamStatus.REJECTED
+                        && newStatus != TeamStatus.DISQUALIFIED
+                        && newStatus != TeamStatus.WAITLIST)) {
+            return;
+        }
+        Event event = eventRepository.findById(team.getEventId()).orElse(null);
+        if (event == null || event.getCreatedBy() == null) {
+            return;
+        }
+        User organizer = userRepository.findById(event.getCreatedBy()).orElse(null);
+        if (organizer == null) {
+            return;
+        }
+        String action = newStatus == TeamStatus.DISQUALIFIED
+                ? "loại"
+                : newStatus == TeamStatus.WAITLIST ? "đưa vào danh sách chờ" : "từ chối";
+        String title = "Đội đã " + action + " — cần cập nhật kết quả";
+        String content = "Đội «" + team.getName() + "» đã được gỡ khỏi bảng"
+                + (boardsUnpublished > 0
+                        ? (" và " + boardsUnpublished + " bảng xếp hạng đã xóa (cần tính lại).")
+                        : ".")
+                + " Giải thưởng của đội (nếu có) đã thu hồi."
+                + " Bước tiếp: Tính lại bảng → Công bố lại → Gợi ý/công bố giải nếu cần.";
+        String linkUrl = "/organizer/results-hub#results-step-ranking";
+        create(
+                organizer.getId(),
+                organizer.getEmail(),
+                team.getEventId(),
+                NotificationType.GENERAL,
+                title,
+                content,
+                linkUrl,
+                "team-removed-recalc:e" + team.getEventId() + ":t" + team.getId());
     }
 
     @Transactional(readOnly = true)
