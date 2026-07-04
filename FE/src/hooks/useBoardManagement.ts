@@ -45,9 +45,10 @@ export function useBoardManagement(eventId: number | null) {
   });
 
   const teamsQuery = useQuery({
-    queryKey: [...queryKeys.teams.byEvent(eventId ?? 0), "board-mgmt", "confirmed"],
+    queryKey: [...queryKeys.teams.byEvent(eventId ?? 0), "board-mgmt", "all"],
     queryFn: async () => {
-      const paged = await fetchEventTeams(eventId!, { status: "CONFIRMED", size: 1000 });
+      // Load all statuses so slots keep names/badges after DQ/reject; assign UI still uses confirmedTeams.
+      const paged = await fetchEventTeams(eventId!, { size: 1000 });
       return Array.isArray(paged) ? paged : paged.items;
     },
     enabled: Boolean(eventId)

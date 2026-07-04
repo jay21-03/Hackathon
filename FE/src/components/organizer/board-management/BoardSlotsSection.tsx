@@ -274,6 +274,11 @@ export function BoardSlotsSection({
                     const pickValue = slotPickValue(slot);
                     const displayTeam =
                       pickValue ? teamById[Number(pickValue)] : slot.teamId ? teamById[slot.teamId] : null;
+                    const assignedTeam = slot.teamId ? teamById[slot.teamId] : null;
+                    const assignedLabel =
+                      assignedTeam?.name ?? (slot.teamId ? teamMap[slot.teamId] : null) ?? "Đội đã gán";
+                    const assignedNotConfirmed =
+                      assignedTeam != null && assignedTeam.status !== "CONFIRMED";
                     return (
                       <div
                         key={slot.id}
@@ -293,9 +298,11 @@ export function BoardSlotsSection({
                                 <option value="">Chọn đội đã duyệt</option>
                                 {teamsForSlot(slot.id, slot.teamId).map((team) => {
                                   const { total, confirmed } = countTeamMembers(team);
+                                  const statusSuffix =
+                                    team.status !== "CONFIRMED" ? ` · ${getStatusLabel(team.status)}` : "";
                                   return (
                                     <option key={team.id} value={team.id}>
-                                      {team.name} ({confirmed}/{total} TV)
+                                      {team.name} ({confirmed}/{total} TV){statusSuffix}
                                     </option>
                                   );
                                 })}
@@ -308,7 +315,7 @@ export function BoardSlotsSection({
                               >
                                 {slot.teamId ? "Ghi đè" : "Gán"}
                               </Button>
-                              {displayTeam ? (
+                              {assignedTeam || slot.teamId ? (
                                 <Button
                                   type="button"
                                   size="sm"
@@ -316,7 +323,7 @@ export function BoardSlotsSection({
                                   icon={<Icon name="info" className="text-[18px]" />}
                                   onClick={() =>
                                     onOpenTeamDetail(
-                                      displayTeam.id,
+                                      assignedTeam?.id ?? slot.teamId!,
                                       `Bảng «${board.name}» · Vị trí #${slot.teamNumber}`
                                     )
                                   }
@@ -324,10 +331,15 @@ export function BoardSlotsSection({
                                   Chi tiết đội
                                 </Button>
                               ) : null}
+                              {assignedNotConfirmed && assignedTeam ? (
+                                <Badge tone={getStatusTone(assignedTeam.status)}>
+                                  {getStatusLabel(assignedTeam.status)}
+                                </Badge>
+                              ) : null}
                               {slot.teamId ? (
                                 <ConfirmAction
                                   title="Xóa đội khỏi vị trí?"
-                                  message={`Xóa «${teamMap[slot.teamId] ?? "đội này"}» khỏi vị trí #${slot.teamNumber}.`}
+                                  message={`Xóa «${assignedLabel}» khỏi vị trí #${slot.teamNumber}.`}
                                   confirmLabel="Xóa đội"
                                   onConfirm={() => onUnassignSlot(slot.id)}
                                 >
@@ -353,9 +365,14 @@ export function BoardSlotsSection({
                             <>
                               <span className="font-body-sm text-on-surface-variant">
                                 {slot.teamId
-                                  ? `${teamMap[slot.teamId] ?? "Đã gán"} — gỡ tại Vận hành bảng`
+                                  ? `${assignedLabel} — gỡ tại Vận hành bảng`
                                   : "Trống"}
                               </span>
+                              {assignedNotConfirmed && assignedTeam ? (
+                                <Badge tone={getStatusTone(assignedTeam.status)}>
+                                  {getStatusLabel(assignedTeam.status)}
+                                </Badge>
+                              ) : null}
                               {!slot.teamId ? (
                                 <ConfirmAction
                                   title="Xóa vị trí trống?"

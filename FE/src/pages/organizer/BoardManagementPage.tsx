@@ -139,9 +139,14 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
   );
 
   function teamsForSlot(slotId: number, currentTeamId: number | null) {
-    return confirmedTeams.filter(
+    const options = confirmedTeams.filter(
       (team) => team.id === currentTeamId || !assignedTeamIds.has(team.id)
     );
+    if (currentTeamId != null && !options.some((team) => team.id === currentTeamId)) {
+      const current = teamById[currentTeamId];
+      if (current) return [current, ...options];
+    }
+    return options;
   }
 
   function slotPickValue(slot: BoardSlotResponse) {
