@@ -220,8 +220,8 @@ export function TeamRegistrationPage() {
         title={eventInfo?.name ?? "Đang tải cuộc thi…"}
         description={
           eventInfo
-            ? `Tạo đội ${eventInfo.minTeamSize}–${eventInfo.maxTeamSize} thành viên. Sau khi gửi, BTC duyệt và từng thành viên xác nhận qua email.`
-            : "Tạo đội theo quy mô cuộc thi. Sau khi gửi, BTC duyệt và từng thành viên xác nhận qua email."
+            ? `Tạo đội ${eventInfo.minTeamSize}–${eventInfo.maxTeamSize} thành viên. Thành viên xác nhận email trước, sau đó BTC duyệt (hoặc vào danh sách chờ nếu hết quota).`
+            : "Tạo đội theo quy mô cuộc thi. Thành viên xác nhận email trước, sau đó BTC duyệt (hoặc vào danh sách chờ nếu hết quota)."
         }
         actions={
           <Badge tone={getStatusTone(eventInfo?.status ?? "PENDING")}>
