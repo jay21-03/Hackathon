@@ -12,7 +12,13 @@ public interface RankingResultRepository extends JpaRepository<RankingResult, Lo
 
     List<RankingResult> findByRoundIdAndPublishedAtIsNotNullOrderByBoardIdAscRankAsc(Long roundId);
 
+    List<RankingResult> findByTeamIdAndPublishedAtIsNotNullOrderByBoardIdAscRankAsc(Long teamId);
+
+    List<RankingResult> findByTeamId(Long teamId);
+
     void deleteByBoardId(Long boardId);
+
+    void deleteByTeamId(Long teamId);
 
     boolean existsByBoardId(Long boardId);
 

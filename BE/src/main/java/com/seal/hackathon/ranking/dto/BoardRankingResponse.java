@@ -18,5 +18,7 @@ public class BoardRankingResponse {
     private OffsetDateTime calculatedAt;
     private OffsetDateTime publishedAt;
     private int teamCount;
+    private int hiddenTeamCount;
+    private String hiddenTeamReason;
     private List<RankingTeamEntryDto> entries;
 }

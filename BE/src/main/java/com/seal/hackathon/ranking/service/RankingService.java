@@ -138,7 +138,10 @@ public class RankingService {
         Board board = loadBoard(boardId);
         contestPhaseGuardService.assertRoundAllowsRankingCalculation(board.getRoundId());
         if (rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(boardId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "RANKING_PUBLISHED");
+            if (!force) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "RANKING_PUBLISHED");
+            }
+            clearPublishedAtForBoard(boardId);
         }
         persistBoardRanking(board);
         return buildBoardRankingResponse(board, false);
@@ -154,10 +157,10 @@ public class RankingService {
         int teamsRanked = 0;
         for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(roundId))) {
             if (rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(board.getId())) {
-                if (force) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "RANKING_PUBLISHED:" + board.getId());
+                if (!force) {
+                    continue;
                 }
-                continue;
+                clearPublishedAtForBoard(board.getId());
             }
             BoardRankingResponse result = persistBoardRanking(board);
             boardsCalculated++;
@@ -171,6 +174,56 @@ public class RankingService {
     }
 
     @Transactional
+    public BoardRankingResponse unpublishBoardRanking(Long boardId) {
+        organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
+        Board board = loadBoard(boardId);
+        if (!rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(boardId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "RANKING_NOT_PUBLISHED");
+        }
+        clearPublishedAtForBoard(boardId);
+        CurrentUserPrincipal actor = currentUserProvider.getCurrentUser();
+        auditLogWriter.write(
+                actor.getUserId(),
+                actor.getEmail(),
+                "RANKING_UNPUBLISHED",
+                "Board",
+                boardId,
+                null,
+                "{\"boardId\":" + boardId + "}");
+        return buildBoardRankingResponse(board, false);
+    }
+
+    /**
+     * Clears publishedAt on every board where the team has a published ranking row.
+     * Used when a team is rejected/disqualified so BTC can recalculate.
+     */
+    @Transactional
+    public int unpublishBoardsContainingTeam(Long teamId) {
+        if (teamId == null) {
+            return 0;
+        }
+        List<RankingResult> publishedRows =
+                rankingResultRepository.findByTeamIdAndPublishedAtIsNotNullOrderByBoardIdAscRankAsc(teamId);
+        java.util.LinkedHashSet<Long> boardIds = publishedRows.stream()
+                .map(RankingResult::getBoardId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        for (Long boardId : boardIds) {
+            clearPublishedAtForBoard(boardId);
+        }
+        return boardIds.size();
+    }
+
+    private void clearPublishedAtForBoard(Long boardId) {
+        for (RankingResult row : rankingResultRepository.findByBoardIdOrderByRankAsc(boardId)) {
+            if (row.getPublishedAt() != null) {
+                row.setPublishedAt(null);
+                rankingResultRepository.save(row);
+            }
+        }
+    }
+
+    @Transactional
     public BoardRankingResponse publishBoardRanking(Long boardId) {
         organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
         publishReadinessService.requireBoardReadyToPublish(boardId);
@@ -180,7 +233,11 @@ public class RankingService {
         }
         OffsetDateTime now = OffsetDateTime.now();
         List<RankingResult> rows = rankingResultRepository.findByBoardIdOrderByRankAsc(boardId);
-        for (RankingResult row : rows) {
+        List<RankingResult> publishableRows = filterRankingEligibleRows(rows);
+        if (publishableRows.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "RANKING_HAS_NO_CONFIRMED_TEAMS");
+        }
+        for (RankingResult row : publishableRows) {
             row.setPublishedAt(now);
             rankingResultRepository.save(row);
         }
@@ -188,7 +245,7 @@ public class RankingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Round not found"));
         Event event = eventRepository.findById(round.getEventId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
-        notificationService.notifyRankingPublished(event, board, rows);
+        notificationService.notifyRankingPublished(event, board, publishableRows);
         CurrentUserPrincipal actor = currentUserProvider.getCurrentUser();
         auditLogWriter.write(
                 actor.getUserId(),
@@ -197,7 +254,7 @@ public class RankingService {
                 "Board",
                 boardId,
                 null,
-                "{\"boardId\":" + boardId + ",\"teamCount\":" + rows.size() + "}");
+                "{\"boardId\":" + boardId + ",\"teamCount\":" + publishableRows.size() + "}");
         return buildBoardRankingResponse(board, true);
     }
 
@@ -214,7 +271,8 @@ public class RankingService {
                 }
                 if (rankingResultRepository.existsByBoardIdAndPublishedAtIsNotNull(board.getId())) {
                     publishedBoards++;
-                    teamsPublished += rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId()).size();
+                    teamsPublished += filterRankingEligibleRows(
+                            rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId())).size();
                     continue;
                 }
                 BoardRankingResponse published = publishBoardRanking(board.getId());
@@ -253,13 +311,18 @@ public class RankingService {
         }
         requireBoardScoringComplete(board);
 
+        List<BoardSlot> occupiedSlots = boardSlotRepository.findByBoardId(board.getId()).stream()
+                .filter(slot -> slot.getTeamId() != null)
+                .toList();
+        Map<Long, Team> teamsById = teamRepository.findAllById(
+                        occupiedSlots.stream().map(BoardSlot::getTeamId).toList())
+                .stream()
+                .collect(Collectors.toMap(Team::getId, t -> t));
+
         List<ScoredTeam> scoredTeams = new ArrayList<>();
-        for (BoardSlot slot : boardSlotRepository.findByBoardId(board.getId())) {
-            if (slot.getTeamId() == null) {
-                continue;
-            }
-            Team team = teamRepository.findById(slot.getTeamId()).orElse(null);
-            if (team == null || team.getStatus() == TeamStatus.DISQUALIFIED) {
+        for (BoardSlot slot : occupiedSlots) {
+            Team team = teamsById.get(slot.getTeamId());
+            if (!isRankingEligible(team)) {
                 continue;
             }
             List<ScoreSheet> sheets = scoreSheetRepository.findByBoardIdAndTeamId(board.getId(), slot.getTeamId())
@@ -322,12 +385,14 @@ public class RankingService {
         if (judgeCount == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "SCORING_NOT_COMPLETE:NO_JUDGES");
         }
-        List<Long> scorableTeamIds = boardSlotRepository.findByBoardId(board.getId()).stream()
+        List<Long> slotTeamIds = boardSlotRepository.findByBoardId(board.getId()).stream()
                 .map(BoardSlot::getTeamId)
                 .filter(id -> id != null)
-                .filter(teamId -> teamRepository.findById(teamId)
-                        .map(team -> team.getStatus() != TeamStatus.DISQUALIFIED)
-                        .orElse(false))
+                .toList();
+        Map<Long, Team> teamsById = teamRepository.findAllById(slotTeamIds).stream()
+                .collect(Collectors.toMap(Team::getId, t -> t));
+        List<Long> scorableTeamIds = slotTeamIds.stream()
+                .filter(teamId -> isRankingEligible(teamsById.get(teamId)))
                 .toList();
         if (scorableTeamIds.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "SCORING_NOT_COMPLETE:NO_TEAMS");
@@ -361,7 +426,12 @@ public class RankingService {
                 .filter(s -> s.getTeamId() != null)
                 .collect(Collectors.toMap(BoardSlot::getTeamId, BoardSlot::getTeamNumber, (a, b) -> a));
 
-        List<RankingTeamEntryDto> entries = rows.stream()
+        List<RankingResult> visibleRows = rows.stream()
+                .filter(row -> isRankingEligible(teamsById.get(row.getTeamId())))
+                .toList();
+        int hiddenTeamCount = rows.size() - visibleRows.size();
+
+        List<RankingTeamEntryDto> entries = visibleRows.stream()
                 .map(row -> {
                     Team team = teamsById.get(row.getTeamId());
                     int judgeCount = countSubmittedJudges(board.getId(), row.getTeamId());
@@ -397,9 +467,28 @@ public class RankingService {
                 .published(published)
                 .calculatedAt(calculatedAt)
                 .publishedAt(publishedAt)
-                .teamCount(publishedOnly ? entries.size() : slotByTeam.size())
+                .teamCount(rows.isEmpty() && !publishedOnly ? slotByTeam.size() : entries.size())
+                .hiddenTeamCount(hiddenTeamCount)
+                .hiddenTeamReason(hiddenTeamCount > 0 ? "TEAM_NOT_CONFIRMED" : null)
                 .entries(entries)
                 .build();
+    }
+
+    private boolean isRankingEligible(Team team) {
+        return team != null && team.getStatus() == TeamStatus.CONFIRMED;
+    }
+
+    private List<RankingResult> filterRankingEligibleRows(List<RankingResult> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Team> teamsById = teamRepository.findAllById(
+                        rows.stream().map(RankingResult::getTeamId).toList())
+                .stream()
+                .collect(Collectors.toMap(Team::getId, t -> t));
+        return rows.stream()
+                .filter(row -> isRankingEligible(teamsById.get(row.getTeamId())))
+                .toList();
     }
 
     private int countSubmittedJudges(Long boardId, Long teamId) {

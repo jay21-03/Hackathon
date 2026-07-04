@@ -247,6 +247,7 @@ class RankingIntegrationTest {
                 .boardId(targetBoard.getId())
                 .repositoryUrl("https://github.com/org/" + targetTeam.getName().toLowerCase().replace(" ", "-"))
                 .repositoryName(targetTeam.getName())
+                .reviewIntervalMinutes(60)
                 .createdBy(organizer.getId())
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
@@ -402,5 +403,57 @@ class RankingIntegrationTest {
                 .andExpect(MockMvcResultMatchers.status().isConflict())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.message").value(
                         org.hamcrest.Matchers.startsWith("BOARD_REPOSITORIES_NOT_READY")));
+    }
+
+    @Test
+    void unpublishBoardRankingClearsPublishedFlag() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        rankingResultRepository.save(com.seal.hackathon.ranking.entity.RankingResult.builder()
+                .roundId(round.getId())
+                .boardId(board.getId())
+                .teamId(team.getId())
+                .rank(1)
+                .averageScore(java.math.BigDecimal.valueOf(90.0))
+                .calculatedAt(OffsetDateTime.now())
+                .publishedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/boards/" + board.getId() + "/rankings/unpublish")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.published").value(false));
+
+        assertThat(rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId()).get(0).getPublishedAt())
+                .isNull();
+    }
+
+    @Test
+    void disqualifyTeamClearsSlotAndUnpublishesRanking() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        rankingResultRepository.save(com.seal.hackathon.ranking.entity.RankingResult.builder()
+                .roundId(round.getId())
+                .boardId(board.getId())
+                .teamId(team.getId())
+                .rank(1)
+                .averageScore(java.math.BigDecimal.valueOf(90.0))
+                .calculatedAt(OffsetDateTime.now())
+                .publishedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.patch("/api/v1/teams/" + team.getId() + "/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content("{\"status\":\"DISQUALIFIED\",\"reason\":\"Vi phạm quy chế\"}"))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.team.status").value("DISQUALIFIED"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.competitionCleanupApplied").value(true))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.boardsCleared").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.nextActions").isArray());
+
+        assertThat(boardSlotRepository.findByBoardId(board.getId()).stream()
+                        .anyMatch(slot -> team.getId().equals(slot.getTeamId())))
+                .isFalse();
+        assertThat(rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId())).isEmpty();
     }
 }

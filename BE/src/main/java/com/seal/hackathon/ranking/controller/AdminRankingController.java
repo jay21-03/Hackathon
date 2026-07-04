@@ -57,6 +57,11 @@ public class AdminRankingController {
                 () -> rankingService.publishBoardRanking(boardId)));
     }
 
+    @PostMapping("/boards/{boardId}/rankings/unpublish")
+    public ApiResponse<BoardRankingResponse> unpublishBoardRanking(@PathVariable Long boardId) {
+        return ApiResponse.ok(rankingService.unpublishBoardRanking(boardId));
+    }
+
     @PostMapping("/rounds/{roundId}/rankings/calculate")
     public ApiResponse<CalculateRankingResponse> calculateRoundRanking(
             @PathVariable Long roundId, @RequestParam(defaultValue = "false") boolean force) {

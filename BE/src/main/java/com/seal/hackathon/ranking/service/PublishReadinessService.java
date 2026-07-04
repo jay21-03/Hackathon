@@ -2,6 +2,7 @@ package com.seal.hackathon.ranking.service;
 
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.common.enums.ScoreSheetStatus;
+import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.util.ContestOrdering;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.contest.entity.Board;
@@ -18,11 +19,15 @@ import com.seal.hackathon.scoring.entity.ScoreSheet;
 import com.seal.hackathon.scoring.repository.ScoreCriteriaRepository;
 import com.seal.hackathon.scoring.repository.ScoreSheetRepository;
 import com.seal.hackathon.scoring.service.ScoringRepositoryGuardService;
+import com.seal.hackathon.registration.entity.Team;
+import com.seal.hackathon.registration.repository.TeamRepository;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -45,6 +50,7 @@ public class PublishReadinessService {
     private final ScoreSheetRepository scoreSheetRepository;
     private final RankingResultRepository rankingResultRepository;
     private final ScoringRepositoryGuardService scoringRepositoryGuardService;
+    private final TeamRepository teamRepository;
 
     @Transactional(readOnly = true)
     public PublishReadinessResponse evaluateEvent(Long eventId) {
@@ -107,11 +113,20 @@ public class PublishReadinessService {
     private BoardPublishReadinessDto evaluateBoard(Board board, Round round, List<ScoreCriteria> criteria) {
         List<String> blockers = new ArrayList<>();
         List<BoardSlot> slots = boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(board.getId());
-        int teamCount = (int) slots.stream().filter(s -> s.getTeamId() != null).count();
+        Map<Long, Team> teamsById = teamRepository.findAllById(slots.stream()
+                        .map(BoardSlot::getTeamId)
+                        .filter(Objects::nonNull)
+                        .toList())
+                .stream()
+                .collect(Collectors.toMap(Team::getId, Function.identity()));
+        List<BoardSlot> scorableSlots = slots.stream()
+                .filter(s -> s.getTeamId() != null)
+                .filter(s -> isConfirmedTeam(teamsById.get(s.getTeamId())))
+                .toList();
+        int teamCount = scorableSlots.size();
         int judgeCount = judgeAssignmentRepository.findByBoardId(board.getId()).size();
-        List<Long> missingRepoTeamIds = slots.stream()
+        List<Long> missingRepoTeamIds = scorableSlots.stream()
                 .map(BoardSlot::getTeamId)
-                .filter(java.util.Objects::nonNull)
                 .filter(teamId -> !scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), teamId))
                 .toList();
 
@@ -130,9 +145,8 @@ public class PublishReadinessService {
         }
 
         int expected = teamCount * judgeCount;
-        Set<Long> currentTeamIds = slots.stream()
+        Set<Long> currentTeamIds = scorableSlots.stream()
                 .map(BoardSlot::getTeamId)
-                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Set<Long> currentJudgeIds = judgeAssignmentRepository.findByBoardId(board.getId()).stream()
                 .map(assignment -> assignment.getJudgeId())
@@ -157,5 +171,9 @@ public class PublishReadinessService {
                 .ready(blockers.isEmpty())
                 .blockers(blockers)
                 .build();
+    }
+
+    private boolean isConfirmedTeam(Team team) {
+        return team != null && team.getStatus() == TeamStatus.CONFIRMED;
     }
 }
