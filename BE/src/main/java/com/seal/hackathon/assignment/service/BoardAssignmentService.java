@@ -244,7 +244,7 @@ public class BoardAssignmentService {
         judgeAssignmentRepository.deleteByBoardIdAndJudgeId(boardId, judgeId);
     }
 
-    private void assertStaffAssignmentsMutable(Long boardId) {
+    public void assertStaffAssignmentsMutable(Long boardId) {
         if (rankingResultRepository.existsByBoardId(boardId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "BOARD_RANKING_LOCKED");
         }

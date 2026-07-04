@@ -291,6 +291,9 @@ public class StaffInvitationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Staff invitation has no event scope");
         }
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        if (board != null) {
+            assertBoardAcceptsStaffInvitation(board.getId());
+        }
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         String rawToken = refreshInvitationToken(invitation, now);
@@ -303,7 +306,7 @@ public class StaffInvitationService {
         return toResponse(invitation, board, eventId);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public StaffInvitationResponse accept(String token) {
         CurrentUserPrincipal principal = currentUserProvider.getCurrentUser();
         if (principal == null) {
@@ -321,12 +324,20 @@ public class StaffInvitationService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "STAFF_INVITE_EMAIL_MISMATCH");
         }
 
+        if (invitation.getBoardId() != null) {
+            try {
+                boardAssignmentService.completeStaffAssignment(
+                        invitation.getBoardId(), user.getId(), invitation.getRole(), invitation.getCreatedBy());
+            } catch (ResponseStatusException ex) {
+                if (isBoardLockedInvitationFailure(ex)) {
+                    // Keep INVITED so BTC can resend after unlock; do not permanently expire.
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "STAFF_INVITATION_BOARD_LOCKED");
+                }
+                throw ex;
+            }
+        }
         activateInvitedStaffUser(user, invitation.getRole());
         ensureUserRole(user.getId(), invitation.getRole());
-        if (invitation.getBoardId() != null) {
-            boardAssignmentService.completeStaffAssignment(
-                    invitation.getBoardId(), user.getId(), invitation.getRole(), invitation.getCreatedBy());
-        }
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         invitation.setStatus(StaffInvitationStatus.ACCEPTED);
@@ -345,6 +356,25 @@ public class StaffInvitationService {
             }
         }
         return toResponse(invitation, board, eventId);
+    }
+
+    private void assertBoardAcceptsStaffInvitation(Long boardId) {
+        if (boardId == null) {
+            return;
+        }
+        try {
+            boardAssignmentService.assertStaffAssignmentsMutable(boardId);
+        } catch (ResponseStatusException ex) {
+            if (isBoardLockedInvitationFailure(ex)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "STAFF_INVITATION_BOARD_LOCKED");
+            }
+            throw ex;
+        }
+    }
+
+    private boolean isBoardLockedInvitationFailure(ResponseStatusException ex) {
+        String reason = ex.getReason();
+        return "BOARD_SCORING_LOCKED".equals(reason) || "BOARD_RANKING_LOCKED".equals(reason);
     }
 
     @Transactional
@@ -417,6 +447,7 @@ public class StaffInvitationService {
     private StaffInvitationResponse createSingle(
             Board board, Long eventId, Long actorId, String rawEmail, SystemRole role) {
         validateStaffRole(role);
+        assertBoardAcceptsStaffInvitation(board.getId());
         String email = normalizeEmail(rawEmail);
         Optional<StaffInvitationResponse> carried = tryCarryoverInvitation(eventId, board, actorId, email, role);
         if (carried.isPresent()) {

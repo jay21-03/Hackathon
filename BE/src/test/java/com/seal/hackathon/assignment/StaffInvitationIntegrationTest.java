@@ -23,10 +23,17 @@ import com.seal.hackathon.contest.entity.Round;
 import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.common.enums.TeamStatus;
+import com.seal.hackathon.notification.repository.NotificationRepository;
+import com.seal.hackathon.ranking.entity.RankingResult;
+import com.seal.hackathon.ranking.repository.RankingResultRepository;
 import com.seal.hackathon.registration.entity.OutboxMessage;
+import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.repository.OutboxMessageRepository;
+import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.support.IntegrationTestConfig;
 import com.seal.hackathon.support.IntegrationTestFixtures;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
@@ -42,6 +49,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -108,17 +116,30 @@ class StaffInvitationIntegrationTest {
     @Autowired
     OutboxMessageRepository outboxMessageRepository;
 
+    @Autowired
+    RankingResultRepository rankingResultRepository;
+
+    @Autowired
+    TeamRepository teamRepository;
+
+    @Autowired
+    NotificationRepository notificationRepository;
+
     User organizer;
     User guestJudge;
     Event event;
     Board board;
+    Round round;
 
     @BeforeEach
     void setUp() {
         outboxMessageRepository.deleteAll();
+        notificationRepository.deleteAll();
         staffInvitationRepository.deleteAll();
         mentorAssignmentRepository.deleteAll();
         judgeAssignmentRepository.deleteAll();
+        rankingResultRepository.deleteAll();
+        teamRepository.deleteAll();
         boardRepository.deleteAll();
         roundRepository.deleteAll();
         eventRepository.deleteAll();
@@ -166,7 +187,7 @@ class StaffInvitationIntegrationTest {
                 .updatedAt(now)
                 .build());
 
-        Round round = roundRepository.save(Round.builder()
+        round = roundRepository.save(Round.builder()
                 .eventId(event.getId())
                 .name("Final")
                 .roundType(RoundType.GROUP_STAGE)
@@ -222,6 +243,84 @@ class StaffInvitationIntegrationTest {
         assertThat(userRoleRepository.existsByUserIdAndRole(guestJudge.getId(), SystemRole.JUDGE)).isTrue();
         assertThat(judgeAssignmentRepository.findByBoardIdAndJudgeId(board.getId(), guestJudge.getId()))
                 .isPresent();
+    }
+
+    @Test
+    void createStaffInvitationBlockedWhenBoardHasRanking() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        Team rankedTeam = teamRepository.save(Team.builder()
+                .eventId(event.getId())
+                .name("Ranked Team Create")
+                .contactEmail("ranked-create@example.com")
+                .status(TeamStatus.CONFIRMED)
+                .confirmedAt(OffsetDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        rankingResultRepository.save(RankingResult.builder()
+                .roundId(round.getId())
+                .boardId(board.getId())
+                .teamId(rankedTeam.getId())
+                .rank(1)
+                .averageScore(BigDecimal.valueOf(90.0))
+                .calculatedAt(OffsetDateTime.now())
+                .publishedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/boards/" + board.getId() + "/staff-invitations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "email", guestJudge.getEmail(),
+                                "role", "JUDGE"))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("STAFF_INVITATION_BOARD_LOCKED"));
+    }
+
+    @Test
+    void resendStaffInvitationBlockedWhenBoardHasRanking() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        MvcResult createResult = mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/boards/" + board.getId() + "/staff-invitations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "email", guestJudge.getEmail(),
+                                "role", "JUDGE"))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andReturn();
+        long invitationId = objectMapper
+                .readTree(createResult.getResponse().getContentAsString())
+                .path("data")
+                .path("id")
+                .asLong();
+
+        Team rankedTeam = teamRepository.save(Team.builder()
+                .eventId(event.getId())
+                .name("Ranked Team")
+                .contactEmail("ranked@example.com")
+                .status(TeamStatus.CONFIRMED)
+                .confirmedAt(OffsetDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        rankingResultRepository.save(RankingResult.builder()
+                .roundId(round.getId())
+                .boardId(board.getId())
+                .teamId(rankedTeam.getId())
+                .rank(1)
+                .averageScore(BigDecimal.valueOf(90.0))
+                .calculatedAt(OffsetDateTime.now())
+                .publishedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/staff-invitations/resend")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of("staffInvitationId", invitationId))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("STAFF_INVITATION_BOARD_LOCKED"));
     }
 
     private String extractLatestStaffInviteToken(String email) throws Exception {
