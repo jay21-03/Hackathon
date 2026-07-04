@@ -18,6 +18,7 @@ import {
   type AdvancementCandidate
 } from "../../services/advancementApi";
 import { advancementExecuteSchema } from "../../domain/schemas";
+import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { formatBoardWithRoundLabel } from "../../utils/boardLabels";
 
@@ -217,7 +218,7 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
               </select>
             </label>
             <label className="space-y-xs font-body-sm">
-              Top N / bảng
+              Top N mỗi bảng
               <input
                 type="number"
                 min={1}
@@ -260,7 +261,7 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                 </div>
                 <div className="flex flex-wrap gap-sm">
                   <Button variant="secondary" size="sm" onClick={applySuggestedSelection}>
-                    Chọn top {topN} / bảng
+                    Chọn top {topN} mỗi bảng
                   </Button>
                   <Button variant="secondary" size="sm" onClick={clearSelection}>
                     Bỏ chọn tất cả
@@ -290,6 +291,7 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                     {eligibleTeams.map((team) => {
                       const checked = selectedTeamIds.has(team.teamId);
                       const suggested = suggestedTeamIds.has(team.teamId);
+                      const selectable = !team.teamStatus || team.teamStatus === "CONFIRMED";
                       return (
                         <tr
                           key={`${team.teamId}-${team.fromBoardId}`}
@@ -300,6 +302,12 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                               type="checkbox"
                               className="size-4 rounded border-outline-variant"
                               checked={checked}
+                              disabled={!selectable}
+                              title={
+                                selectable
+                                  ? undefined
+                                  : "Chỉ đội đã xác nhận mới được chuyển vòng."
+                              }
                               onChange={(e) => toggleTeam(team.teamId, e.target.checked)}
                               aria-label={`Chọn ${team.teamName}`}
                             />
@@ -307,6 +315,11 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                           <td className="px-md py-sm tabular-nums">{team.rank}</td>
                           <td className="px-md py-sm">
                             <span className="font-medium">{team.teamName}</span>
+                            {team.teamStatus && team.teamStatus !== "CONFIRMED" ? (
+                              <Badge tone={getStatusTone(team.teamStatus)} className="ml-sm align-middle">
+                                {getStatusLabel(team.teamStatus)}
+                              </Badge>
+                            ) : null}
                             {suggested ? (
                               <Badge tone="active" className="ml-sm align-middle">
                                 Top {topN}

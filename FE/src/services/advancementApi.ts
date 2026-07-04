@@ -4,6 +4,7 @@ import { apiClient } from "./apiClient";
 export interface AdvancementCandidate {
   teamId: number;
   teamName: string;
+  teamStatus?: string | null;
   fromBoardId: number;
   fromBoardName: string;
   rank: number;
