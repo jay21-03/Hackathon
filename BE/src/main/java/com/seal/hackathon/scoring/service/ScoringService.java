@@ -813,14 +813,23 @@ public class ScoringService {
     private void assertTeamScorable(Long teamId) {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TEAM_NOT_FOUND"));
-        if (team.getStatus() == TeamStatus.DISQUALIFIED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "TEAM_DISQUALIFIED");
+        if (team.getStatus() != TeamStatus.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "TEAM_NOT_CONFIRMED");
         }
     }
 
     private List<BoardSlot> sortedSlotsWithTeams(Long boardId) {
-        return boardSlotRepository.findByBoardId(boardId).stream()
+        List<BoardSlot> occupiedSlots = boardSlotRepository.findByBoardId(boardId).stream()
                 .filter(slot -> slot.getTeamId() != null)
+                .toList();
+        Set<Long> confirmedTeamIds = teamRepository.findAllById(
+                        occupiedSlots.stream().map(BoardSlot::getTeamId).toList())
+                .stream()
+                .filter(team -> team.getStatus() == TeamStatus.CONFIRMED)
+                .map(Team::getId)
+                .collect(Collectors.toSet());
+        return occupiedSlots.stream()
+                .filter(slot -> confirmedTeamIds.contains(slot.getTeamId()))
                 .sorted(Comparator.comparing(BoardSlot::getTeamNumber))
                 .toList();
     }

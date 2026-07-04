@@ -3,12 +3,16 @@ package com.seal.hackathon.scoring.service;
 import com.seal.hackathon.aireview.entity.TeamRepository;
 import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.common.enums.RepositoryProvisionStatus;
+import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
+import com.seal.hackathon.registration.entity.Team;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -23,12 +27,20 @@ public class ScoringRepositoryGuardService {
     private final BoardSlotRepository boardSlotRepository;
     private final BoardRepository boardRepository;
     private final TeamRepositoryEntityRepository teamRepositoryEntityRepository;
+    private final com.seal.hackathon.registration.repository.TeamRepository teamRepository;
 
     @Transactional(readOnly = true)
     public void requireBoardRepositoriesReady(Long boardId) {
-        List<Long> missingTeamIds = boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(boardId).stream()
+        List<Long> slotTeamIds = boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(boardId).stream()
                 .map(BoardSlot::getTeamId)
                 .filter(Objects::nonNull)
+                .toList();
+        Set<Long> confirmedTeamIds = teamRepository.findAllById(slotTeamIds).stream()
+                .filter(team -> team.getStatus() == TeamStatus.CONFIRMED)
+                .map(Team::getId)
+                .collect(Collectors.toSet());
+        List<Long> missingTeamIds = slotTeamIds.stream()
+                .filter(confirmedTeamIds::contains)
                 .filter(teamId -> !hasScorableRepositoryForBoard(boardId, teamId))
                 .toList();
         if (!missingTeamIds.isEmpty()) {

@@ -247,6 +247,7 @@ class ScoringIntegrationTest {
                 .repositoryName(targetTeam.getName())
                 .accessStatus(RepositoryAccessStatus.OPEN)
                 .provisionStatus(RepositoryProvisionStatus.CREATED)
+                .reviewIntervalMinutes(60)
                 .createdBy(organizer.getId())
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
@@ -468,6 +469,70 @@ class ScoringIntegrationTest {
                 .andExpect(MockMvcResultMatchers.status().isConflict())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.message").value(
                         org.hamcrest.Matchers.startsWith("BOARD_REPOSITORIES_NOT_READY")));
+    }
+
+    @Test
+    void repoGuardOnlyRequiresRepositoriesForConfirmedTeams() throws Exception {
+        teamRepositoryEntityRepository.deleteAll();
+        team.setStatus(TeamStatus.DISQUALIFIED);
+        teamRepository.save(team);
+
+        Team confirmedTeam = teamRepository.save(Team.builder()
+                .eventId(event.getId())
+                .name("Đội Beta")
+                .contactEmail("beta@example.com")
+                .status(TeamStatus.CONFIRMED)
+                .confirmedAt(OffsetDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        boardSlotRepository.save(BoardSlot.builder()
+                .roundId(round.getId())
+                .boardId(board.getId())
+                .teamNumber(2)
+                .teamId(confirmedTeam.getId())
+                .assignedAt(OffsetDateTime.now())
+                .assignedBy(organizer.getId())
+                .createdAt(OffsetDateTime.now())
+                .build());
+        seedManualRepository(confirmedTeam);
+
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        String judgeJwt = jwtService.generateToken(judge, Set.of("JUDGE"));
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/boards/" + board.getId() + "/judges")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of("userId", judge.getId()))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        List<Map<String, Object>> levels = List.of(
+                Map.of("level", "EXCELLENT", "label", "Excellent", "minScore", 9, "maxScore", 10, "description", "A"),
+                Map.of("level", "GOOD", "label", "Good", "minScore", 7, "maxScore", 8.9, "description", "B"),
+                Map.of("level", "SATISFACTORY", "label", "OK", "minScore", 5, "maxScore", 6.9, "description", "C"),
+                Map.of("level", "UNSATISFACTORY", "label", "No", "minScore", 0, "maxScore", 4.9, "description", "D"));
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/rounds/" + round.getId() + "/criteria")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "replaceExisting", true,
+                                "criteria", List.of(Map.of(
+                                        "code", "R1_01",
+                                        "name", "Idea",
+                                        "weight", 100,
+                                        "minScore", 0,
+                                        "maxScore", 10,
+                                        "sortOrder", 1,
+                                        "levelDescriptors", levels))))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.get(
+                                "/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .header("Authorization", "Bearer " + judgeJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.teams.length()").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.teams[0].teamId").value(confirmedTeam.getId()));
     }
 
     @Test
