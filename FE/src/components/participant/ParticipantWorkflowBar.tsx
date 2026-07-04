@@ -30,6 +30,7 @@ export function ParticipantWorkflowBar({ active }: ParticipantWorkflowBarProps) 
         active,
         isConfirmed: Boolean(isConfirmed),
         hasBoard,
+        boardReason: board?.reason,
         hasSubmitted,
         resultsPublished,
         teamStatus: team?.status,

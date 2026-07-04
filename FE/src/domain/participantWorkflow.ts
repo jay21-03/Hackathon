@@ -7,13 +7,15 @@ export function buildParticipantWorkflowSteps(input: {
   active: ParticipantWorkflowPhase;
   isConfirmed: boolean;
   hasBoard: boolean;
+  boardReason?: string | null;
   hasSubmitted?: boolean;
   resultsPublished?: boolean;
   teamStatus?: string | null;
   githubProvisioning?: boolean;
 }): WorkflowStep[] {
-  const { active, isConfirmed, hasBoard, hasSubmitted, resultsPublished, teamStatus, githubProvisioning } =
+  const { active, isConfirmed, hasBoard, boardReason, hasSubmitted, resultsPublished, teamStatus, githubProvisioning } =
     input;
+  const roundScheduled = boardReason === "ROUND_NOT_STARTED";
   const blockedByStatus =
     teamStatus === "DISQUALIFIED" ||
     teamStatus === "REJECTED" ||
@@ -58,7 +60,11 @@ export function buildParticipantWorkflowSteps(input: {
     },
     {
       label: "Bảng thi",
-      detail: hasBoard ? "Đã được gán bảng." : "Chờ ban tổ chức gán bảng.",
+      detail: hasBoard
+        ? "Đã được gán bảng."
+        : roundScheduled
+          ? "Đã có lịch vòng, chờ đến giờ mở vòng."
+          : "Chờ ban tổ chức gán bảng.",
       to: "/me/board",
       state: stateFor("board")
     },

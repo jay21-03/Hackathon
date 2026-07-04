@@ -43,6 +43,7 @@ const blockReasonLabels: Record<string, string> = {
   TEAM_REJECTED: "Hồ sơ đội đã bị từ chối.",
   TEAM_DISQUALIFIED: "Đội đã bị loại.",
   TEAM_NOT_CONFIRMED: "Đội chưa được xác nhận.",
+  ROUND_NOT_STARTED: "Vòng thi chưa bắt đầu — repository sẽ mở khi đến thời gian thi.",
   NOT_ASSIGNED: "Chưa được phân bảng.",
   NO_PROBLEM: "Ban tổ chức chưa cấu hình đề cho bảng của bạn.",
   NOT_RELEASED: "Đề chưa mở — repository sẽ được cấp khi ban tổ chức mở đề.",

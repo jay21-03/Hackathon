@@ -76,6 +76,21 @@ export function WorkflowSteps({ title, description, steps, activeHref, onStepSel
             .filter(Boolean)
             .join(" ");
 
+          const blocked = step.state === "blocked";
+
+          if (blocked) {
+            return (
+              <div
+                key={`${step.label}-${index}`}
+                className={className}
+                title="Hoàn tất bước trước để mở bước này"
+                aria-disabled="true"
+              >
+                {content}
+              </div>
+            );
+          }
+
           return step.to ? (
             <Link key={`${step.label}-${index}`} to={step.to} className={className}>
               {content}

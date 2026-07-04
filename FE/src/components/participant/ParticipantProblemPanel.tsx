@@ -27,6 +27,7 @@ const reasonLabels: Record<string, string> = {
   TEAM_REJECTED: "Hồ sơ đội đã bị từ chối.",
   TEAM_DISQUALIFIED: "Đội đã bị loại.",
   TEAM_NOT_CONFIRMED: "Đội chưa xác nhận.",
+  ROUND_NOT_STARTED: "Vòng thi chưa bắt đầu — đề sẽ hiển thị khi đến thời gian thi.",
   NO_TEAM: "Chưa có đội thi."
 };
 
@@ -66,11 +67,12 @@ export function ParticipantProblemPanel() {
   }
 
   if (!board?.assigned) {
+    const reason = board?.reason ?? "NOT_ASSIGNED";
     return (
       <EmptyState
-        icon="grid_view"
-        title="Chưa có bảng thi"
-        description={reasonLabels.NOT_ASSIGNED}
+        icon={reason === "ROUND_NOT_STARTED" ? "lock_clock" : "grid_view"}
+        title={reason === "ROUND_NOT_STARTED" ? "Vòng thi chưa bắt đầu" : "Chưa có bảng thi"}
+        description={reasonLabels[reason] ?? reasonLabels.NOT_ASSIGNED}
       />
     );
   }

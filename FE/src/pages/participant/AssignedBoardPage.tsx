@@ -22,6 +22,7 @@ const reasonMessages: Record<string, string> = {
   TEAM_REJECTED: "Hồ sơ đội đã bị từ chối.",
   TEAM_DISQUALIFIED: "Đội đã bị loại khỏi cuộc thi.",
   TEAM_NOT_CONFIRMED: "Đội chưa được xác nhận — chờ ban tổ chức duyệt hoặc thành viên xác nhận email.",
+  ROUND_NOT_STARTED: "Vòng thi chưa bắt đầu — bảng thi sẽ hiển thị khi đến thời gian thi.",
   NOT_ASSIGNED: "Ban tổ chức chưa gán đội bạn vào bảng. Hãy quay lại sau khi BTC hoàn tất phân bảng."
 };
 

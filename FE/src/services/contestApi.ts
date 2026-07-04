@@ -69,7 +69,14 @@ export interface MyBoardPeer {
 
 export interface MyBoardResponse {
   assigned: boolean;
-  reason?: "NO_TEAM" | "TEAM_NOT_CONFIRMED" | "NOT_ASSIGNED";
+  reason?:
+    | "NO_TEAM"
+    | "TEAM_WAITLIST"
+    | "TEAM_REJECTED"
+    | "TEAM_DISQUALIFIED"
+    | "TEAM_NOT_CONFIRMED"
+    | "ROUND_NOT_STARTED"
+    | "NOT_ASSIGNED";
   teamId?: number;
   roundId?: number;
   roundName?: string;
