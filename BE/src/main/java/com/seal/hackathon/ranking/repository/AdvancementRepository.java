@@ -6,4 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AdvancementRepository extends JpaRepository<Advancement, Long> {
 	List<Advancement> findByToRoundIdOrderByCreatedAtDescIdDesc(Long toRoundId);
+
+	List<Advancement> findByTeamId(Long teamId);
+
+	void deleteByTeamId(Long teamId);
 }

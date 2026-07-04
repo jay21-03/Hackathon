@@ -1,6 +1,7 @@
 package com.seal.hackathon.ranking.service;
 
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
+import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.util.ContestOrdering;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
@@ -152,9 +153,12 @@ public class AdvancementService {
     public List<AdvancementResponse> listAdvancements(Long eventId, Long toRoundId) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
         loadRoundForEvent(toRoundId, eventId);
-        return advancementRepository.findByToRoundIdOrderByCreatedAtDescIdDesc(toRoundId).stream()
+        List<Advancement> advancements =
+                advancementRepository.findByToRoundIdOrderByCreatedAtDescIdDesc(toRoundId);
+        Map<Long, Team> teamsById = loadTeamsById(advancements.stream().map(Advancement::getTeamId).toList());
+        return advancements.stream()
                 .map(adv -> {
-                    Team team = teamRepository.findById(adv.getTeamId()).orElse(null);
+                    Team team = teamsById.get(adv.getTeamId());
                     return toAdvancementResponse(adv, team != null ? team.getName() : "Team #" + adv.getTeamId());
                 })
                 .toList();
@@ -184,59 +188,80 @@ public class AdvancementService {
     }
 
     private List<AdvancementCandidateDto> collectSuggestedCandidates(Long fromRoundId, int topN) {
-        List<AdvancementCandidateDto> candidates = new ArrayList<>();
-        Set<Long> seenTeams = new LinkedHashSet<>();
-        for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(fromRoundId))) {
-            List<RankingResult> rankings = rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId()).stream()
-                    .filter(r -> r.getPublishedAt() != null)
-                    .filter(r -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), r.getTeamId()))
-                    .limit(topN)
-                    .toList();
-            for (RankingResult result : rankings) {
-                if (!seenTeams.add(result.getTeamId())) {
-                    continue;
-                }
-                candidates.add(toCandidateDto(board, result));
-            }
-        }
-        candidates.sort(Comparator
-                .comparing(AdvancementCandidateDto::getFromBoardName, Comparator.nullsLast(String::compareToIgnoreCase))
-                .thenComparing(AdvancementCandidateDto::getRank, Comparator.nullsLast(Integer::compareTo))
-                .thenComparing(AdvancementCandidateDto::getTeamName, Comparator.nullsLast(String::compareToIgnoreCase)));
-        return candidates;
+        return collectEligibleCandidates(fromRoundId, topN, true);
     }
 
     private List<AdvancementCandidateDto> collectAllEligibleTeams(Long fromRoundId) {
-        List<AdvancementCandidateDto> all = new ArrayList<>();
-        Set<Long> seenTeams = new LinkedHashSet<>();
-        for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(fromRoundId))) {
-            List<RankingResult> rankings = rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId()).stream()
+        return collectEligibleCandidates(fromRoundId, Integer.MAX_VALUE, false);
+    }
+
+    private List<AdvancementCandidateDto> collectEligibleCandidates(Long fromRoundId, int topNPerBoard, boolean sortByName) {
+        List<Board> boards = ContestOrdering.sortBoards(boardRepository.findByRoundId(fromRoundId));
+        Map<Long, List<RankingResult>> rankingsByBoard = new LinkedHashMap<>();
+        Set<Long> teamIds = new LinkedHashSet<>();
+        for (Board board : boards) {
+            List<RankingResult> published = rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId()).stream()
                     .filter(r -> r.getPublishedAt() != null)
+                    .toList();
+            rankingsByBoard.put(board.getId(), published);
+            published.forEach(r -> teamIds.add(r.getTeamId()));
+        }
+        Map<Long, Team> teamsById = loadTeamsById(teamIds);
+
+        List<AdvancementCandidateDto> candidates = new ArrayList<>();
+        Set<Long> seenTeams = new LinkedHashSet<>();
+        for (Board board : boards) {
+            List<RankingResult> rankings = rankingsByBoard.getOrDefault(board.getId(), List.of()).stream()
+                    .filter(r -> isConfirmedTeam(teamsById.get(r.getTeamId())))
                     .filter(r -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), r.getTeamId()))
+                    .limit(topNPerBoard)
                     .toList();
             for (RankingResult result : rankings) {
                 if (!seenTeams.add(result.getTeamId())) {
                     continue;
                 }
-                all.add(toCandidateDto(board, result));
+                candidates.add(toCandidateDto(board, result, teamsById.get(result.getTeamId())));
             }
         }
-        all.sort(Comparator
+        Comparator<AdvancementCandidateDto> comparator = Comparator
                 .comparing(AdvancementCandidateDto::getFromBoardName, Comparator.nullsLast(String::compareToIgnoreCase))
-                .thenComparing(AdvancementCandidateDto::getRank, Comparator.nullsLast(Integer::compareTo)));
-        return all;
+                .thenComparing(AdvancementCandidateDto::getRank, Comparator.nullsLast(Integer::compareTo));
+        if (sortByName) {
+            comparator = comparator.thenComparing(
+                    AdvancementCandidateDto::getTeamName, Comparator.nullsLast(String::compareToIgnoreCase));
+        }
+        candidates.sort(comparator);
+        return candidates;
     }
 
-    private AdvancementCandidateDto toCandidateDto(Board board, RankingResult result) {
-        Team team = teamRepository.findById(result.getTeamId()).orElse(null);
+    private AdvancementCandidateDto toCandidateDto(Board board, RankingResult result, Team team) {
         return AdvancementCandidateDto.builder()
                 .teamId(result.getTeamId())
                 .teamName(team != null ? team.getName() : "Team #" + result.getTeamId())
+                .teamStatus(team != null && team.getStatus() != null ? team.getStatus().name() : null)
                 .fromBoardId(board.getId())
                 .fromBoardName(board.getName())
                 .rank(result.getRank())
                 .averageScore(result.getAverageScore())
                 .build();
+    }
+
+    private Map<Long, Team> loadTeamsById(Iterable<Long> teamIds) {
+        Set<Long> ids = new LinkedHashSet<>();
+        teamIds.forEach(id -> {
+            if (id != null) {
+                ids.add(id);
+            }
+        });
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return teamRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Team::getId, Function.identity()));
+    }
+
+    private boolean isConfirmedTeam(Team team) {
+        return team != null && team.getStatus() == TeamStatus.CONFIRMED;
     }
 
     private Board resolveTargetBoard(Long toRoundId, Long targetBoardId) {
