@@ -635,6 +635,41 @@ export async function mockCoreApis(page: Page) {
     await json(route, ok(sampleScoreProgress));
   });
 
+  await page.route("**/api/v1/admin/events/*/score-progress**", async (route) => {
+    await json(
+      route,
+      ok({
+        eventId: 1,
+        eventName: "SEAL Hackathon 2026",
+        summary: sampleScoreProgress.summary,
+        boards: [sampleScoreProgress],
+        boardsWithoutJudges: [],
+        boardsIncomplete: [1]
+      })
+    );
+  });
+
+  await page.route("**/api/v1/admin/events/*/award-categories**", async (route) => {
+    await json(route, ok([]));
+  });
+
+  await page.route("**/api/v1/admin/events/*/awards**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(
+        route,
+        ok({
+          eventId: 1,
+          eventName: "SEAL Hackathon 2026",
+          published: false,
+          publishedAt: null,
+          categories: []
+        })
+      );
+      return;
+    }
+    await json(route, ok({ suggestions: [], created: 0, message: "ok" }));
+  });
+
   const sampleSubmission = {
     teamId: 10,
     teamName: "Đội E2E Alpha",
