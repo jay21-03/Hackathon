@@ -30,6 +30,8 @@ export interface TeamDetailResponse {
   confirmedAt?: string | null;
   rejectedReason?: string | null;
   readyForOrganizerApproval?: boolean;
+  rosterEditable?: boolean;
+  rosterLockCode?: string | null;
 }
 
 export async function fetchEventTeams(eventId: number): Promise<TeamDetailResponse[]>;
@@ -84,11 +86,35 @@ export async function fetchEventTeamSummary(eventId: number): Promise<TeamRegist
   );
 }
 
+export interface TeamBrief {
+  id: number;
+  name: string;
+}
+
+export interface WaitlistPromotionResult {
+  availableSlots: number;
+  promotedCount: number;
+  skippedReason?: string | null;
+  promotedTeams?: TeamBrief[];
+  skippedIncompleteTeams?: TeamBrief[];
+}
+
+export interface UpdateTeamStatusResponse {
+  team: TeamDetailResponse;
+  competitionCleanupApplied: boolean;
+  boardsCleared: number;
+  awardsRevoked: number;
+  awardsEventUnpublished: boolean;
+  advancementsRemoved: number;
+  waitlistPromotion?: WaitlistPromotionResult | null;
+  nextActions?: string[];
+}
+
 export async function updateTeamStatus(teamId: number, status: string, reason?: string) {
-  const { data } = await apiClient.patch<ApiResponse<TeamDetailResponse>>(`/v1/teams/${teamId}/status`, {
-    status,
-    reason
-  });
+  const { data } = await apiClient.patch<ApiResponse<UpdateTeamStatusResponse>>(
+    `/v1/teams/${teamId}/status`,
+    { status, reason }
+  );
   return data.data;
 }
 

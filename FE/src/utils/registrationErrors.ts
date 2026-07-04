@@ -18,6 +18,10 @@ const registrationErrorMap: Record<string, string> = {
   "Team has reached the maximum size of": "Đội đã đủ số thành viên tối đa.",
   "Email already belongs to this team": "Email này đã có trong đội.",
   "Team registration is closed": "Không thể thay đổi đội ở trạng thái hiện tại.",
+  TEAM_ROSTER_LOCKED_AFTER_ASSIGNMENT:
+    "Đội đã được phân bảng — bỏ phân bảng trước khi đổi thành viên.",
+  TEAM_ROSTER_LOCKED_AFTER_OPERATION:
+    "Đội đã có dữ liệu vận hành thi (repo/phiếu chấm/xếp hạng) — không thể đổi thành viên.",
   "Cannot resend confirmed invitation": "Thành viên đã xác nhận, không gửi lại được.",
   "Idempotency key already used for a different request":
     "Yêu cầu trùng khóa. Hãy tải lại trang và thử lại.",

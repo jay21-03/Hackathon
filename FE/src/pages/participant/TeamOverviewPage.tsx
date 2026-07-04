@@ -111,8 +111,15 @@ export function TeamOverviewPage() {
   );
   const teamLocked =
     team.status === "REJECTED" || team.status === "DISQUALIFIED";
+  const rosterLocked = team.rosterEditable === false;
+  const rosterLockMessage =
+    team.rosterLockCode === "TEAM_ROSTER_LOCKED_AFTER_OPERATION"
+      ? "Đội đã có dữ liệu vận hành thi (repo/phiếu chấm/xếp hạng) — không thể đổi thành viên."
+      : team.rosterLockCode === "TEAM_ROSTER_LOCKED_AFTER_ASSIGNMENT"
+        ? "Đội đã được phân bảng — không thể đổi thành viên. Liên hệ BTC nếu cần điều chỉnh."
+        : "Danh sách thành viên đã khóa.";
   const isCaptain = isTeamCaptain(members, session.email);
-  const canManageInvites = isCaptain && registrationOpen && !teamLocked;
+  const canManageInvites = isCaptain && registrationOpen && !teamLocked && !rosterLocked;
   const canAddMember = canManageInvites && members.length < maxTeamSize;
   const slotsRemaining = Math.max(maxTeamSize - members.length, 0);
 
@@ -263,6 +270,10 @@ export function TeamOverviewPage() {
                 </Button>
               </div>
             </form>
+          ) : isCaptain && rosterLocked ? (
+            <p className="border-b border-outline-variant bg-warning-container/30 p-lg font-body-sm text-on-warning-container">
+              {rosterLockMessage}
+            </p>
           ) : isCaptain && !registrationOpen && !teamLocked ? (
             <p className="border-b border-outline-variant bg-surface-container-low p-lg font-body-sm text-on-surface-variant">
               Cuộc thi đã đóng đăng ký — không thể mời thêm thành viên.
