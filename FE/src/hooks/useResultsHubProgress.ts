@@ -72,8 +72,8 @@ export function useResultsHubProgress({
 
     microSteps.push({
       label: "Xuất kết quả",
-      detail: "CSV / PDF",
-      state: hasPublished ? "done" : "blocked",
+      detail: "Tải file CSV / PDF",
+      state: hasPublished ? "next" : "blocked",
       anchor: "#results-step-export"
     });
 
@@ -88,14 +88,14 @@ export function useResultsHubProgress({
     } else if (!hasRubric) {
       nextAction = {
         title: "Bước tiếp: Tiêu chí chấm",
-        description: "Thiết lập rubric trong mục Bài nộp & repo trước khi giám khảo chấm.",
+        description: "Thiết lập tiêu chí chấm trong mục Bài nộp & repo trước khi giám khảo chấm.",
         to: "/organizer/artifacts-hub",
         cta: "Đi tới Bài nộp & repo"
       };
     } else if (!scoringComplete) {
       nextAction = {
         title: "Bước tiếp: Tiến độ chấm",
-        description: "Theo dõi phiếu chấm và nhắc GK nếu cần.",
+        description: "Theo dõi phiếu chấm và nhắc giám khảo nếu cần.",
         href: "#results-step-scoring",
         cta: "Đi tới tiến độ chấm"
       };
@@ -130,7 +130,7 @@ export function useResultsHubProgress({
     } else {
       nextAction = {
         title: "Hoàn tất — xuất hoặc xem kết quả công khai",
-        description: "Tải CSV/PDF hoặc mở cổng kết quả.",
+        description: "Tải file CSV/PDF hoặc mở cổng kết quả.",
         href: "#results-step-export",
         cta: "Đi tới xuất kết quả"
       };

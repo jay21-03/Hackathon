@@ -87,7 +87,13 @@ function FilterPills<T extends string | number>({
 }
 
 export function EventResultsView({ results, participantView, highlightTeamId }: EventResultsViewProps) {
-  const sortedBoards = useMemo(() => sortBoardRankings(results.boards), [results.boards]);
+  const sortedBoards = useMemo(
+    () =>
+      sortBoardRankings(
+        results.boards.filter((board) => board.published && (board.entries?.length ?? 0) > 0)
+      ),
+    [results.boards]
+  );
   const roundGroups = useMemo(() => groupBoardsByRound(sortedBoards), [sortedBoards]);
   const myBoard = useMemo(
     () => findBoardForTeam(sortedBoards, highlightTeamId),
@@ -123,7 +129,7 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
     }
   }, [activeRound?.key, boardsInRound, boardIdSelected]);
 
-  if (!results.published || results.boards.length === 0) {
+  if (!results.published || sortedBoards.length === 0) {
     return (
       <EmptyState
         icon="leaderboard"
@@ -131,13 +137,14 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
         description={
           participantView
             ? "Ban tổ chức sẽ công bố bảng xếp hạng sau khi hoàn tất chấm điểm."
-            : "Cuộc thi này chưa công bố kết quả chính thức."
+            : "Cuộc thi này chưa công bố kết quả chính thức, hoặc các bảng đã được thu hồi để tính lại."
         }
       />
     );
   }
 
   const totalTeams = results.boards.reduce((sum, board) => sum + board.entries.length, 0);
+  const hiddenTeams = results.boards.reduce((sum, board) => sum + (board.hiddenTeamCount ?? 0), 0);
 
   function jumpToMyBoard() {
     if (!myBoard) return;
@@ -163,6 +170,15 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
           {roundGroups.length} vòng · {results.boards.length} bảng · {totalTeams} lượt xếp hạng
         </p>
       </div>
+
+      {hiddenTeams > 0 ? (
+        <div className="rounded-xl border border-warning/40 bg-warning-container px-md py-sm text-on-warning-container">
+          <p className="font-label-md">Đã ẩn {hiddenTeams} đội không còn đủ điều kiện khỏi kết quả công khai.</p>
+          <p className="font-body-sm opacity-85">
+            Các đội bị từ chối, bị loại hoặc chưa xác nhận sẽ không xuất hiện trong bảng xếp hạng đã công bố.
+          </p>
+        </div>
+      ) : null}
 
       <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
         {roundGroups.length === 1 ? (
@@ -203,7 +219,12 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
           <div className="flex flex-wrap items-center justify-between gap-sm border-b border-outline-variant px-md py-sm">
             <div>
               <h2 className="font-headline-sm text-on-surface">{formatBoardRankingLabel(activeBoard)}</h2>
-              <p className="font-body-sm text-on-surface-variant">{activeBoard.entries.length} đội</p>
+              <p className="font-body-sm text-on-surface-variant">
+                {activeBoard.entries.length} đội
+                {(activeBoard.hiddenTeamCount ?? 0) > 0
+                  ? ` · đã ẩn ${activeBoard.hiddenTeamCount} đội không hợp lệ`
+                  : ""}
+              </p>
             </div>
           </div>
           <div className="overflow-x-auto">

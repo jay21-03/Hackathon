@@ -19,6 +19,7 @@ import {
   calculateBoardRanking,
   calculateRoundRanking,
   fetchBoardRanking,
+  unpublishBoardRanking,
   type BoardRanking
 } from "../../services/rankingApi";
 import { resolveApiError } from "../../utils/apiError";
@@ -159,6 +160,20 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
     scoringComplete
   ]);
 
+  async function handleUnpublishBoard() {
+    if (!activeBoardId) return;
+    setCalculating(true);
+    try {
+      await unpublishBoardRanking(activeBoardId);
+      await invalidateRankingQueries();
+      notify("Đã thu hồi công bố xếp hạng. Có thể tính lại rồi công bố lại.", "success");
+    } catch (err) {
+      notify(resolveApiError(err, "Thu hồi công bố thất bại."), "danger");
+    } finally {
+      setCalculating(false);
+    }
+  }
+
   async function handleCalculateRound(force = false) {
     const targetRound = activeRoundId;
     if (!targetRound) return;
@@ -168,7 +183,9 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
       await invalidateRankingQueries();
       if (result.message === "NO_BOARDS_CALCULATED" || result.boardsCalculated === 0) {
         notify(
-          "Không bảng nào được tính - có thể đã công bố hoặc chưa đủ phiếu chấm.",
+          force
+            ? "Không bảng nào được tính — kiểm tra phiếu chấm đã nộp đủ chưa."
+            : "Không bảng nào được tính — bảng đã công bố bị bỏ qua (dùng «Tính lại cả vòng») hoặc chưa đủ phiếu chấm.",
           "warning"
         );
       } else {
@@ -282,7 +299,19 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
             ))}
           </select>
         </label>
-        <Button type="button" loading={calculating} disabled={!activeBoardId || !scoringComplete} onClick={() => void handleCalculateBoard()}>
+        <Button
+          type="button"
+          loading={calculating}
+          disabled={!activeBoardId || !scoringComplete || ranking?.published}
+          title={
+            ranking?.published
+              ? "Bảng đã công bố — dùng «Thu hồi công bố» hoặc «Tính lại bảng»."
+              : !scoringComplete
+                ? "Còn phiếu chưa nộp — xem Tiến độ chấm."
+                : undefined
+          }
+          onClick={() => void handleCalculateBoard()}
+        >
           Tính bảng này
         </Button>
         <Button
@@ -290,6 +319,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
           variant="secondary"
           loading={calculating}
           disabled={!rounds.length || !scoringComplete}
+          title={!scoringComplete ? "Còn phiếu chưa nộp — xem Tiến độ chấm." : undefined}
           onClick={() => void handleCalculateRound()}
         >
           Tính cả vòng
@@ -307,16 +337,28 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
           </ConfirmAction>
         ) : null}
         {ranking?.published ? (
-          <ConfirmAction
-            title="Tính lại xếp hạng?"
-            message="Bảng đã công bố — tính lại sẽ ghi đè bản nháp và bỏ trạng thái công bố."
-            confirmLabel="Tính lại"
-            onConfirm={() => void handleCalculateBoard(true)}
-          >
-            <Button type="button" variant="ghost">
-              Tính lại bảng
-            </Button>
-          </ConfirmAction>
+          <>
+            <ConfirmAction
+              title="Thu hồi công bố xếp hạng?"
+              message="Kết quả công khai sẽ ẩn BXH bảng này. Có thể tính lại rồi công bố lại."
+              confirmLabel="Thu hồi công bố"
+              onConfirm={() => void handleUnpublishBoard()}
+            >
+              <Button type="button" variant="secondary" loading={calculating}>
+                Thu hồi công bố
+              </Button>
+            </ConfirmAction>
+            <ConfirmAction
+              title="Tính lại xếp hạng?"
+              message="Bảng đã công bố — tính lại sẽ ghi đè bản nháp và bỏ trạng thái công bố."
+              confirmLabel="Tính lại"
+              onConfirm={() => void handleCalculateBoard(true)}
+            >
+              <Button type="button" variant="ghost">
+                Tính lại bảng
+              </Button>
+            </ConfirmAction>
+          </>
         ) : null}
       </section>
 
@@ -382,6 +424,13 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
                   Tính lúc {new Date(ranking.calculatedAt).toLocaleString("vi-VN")}
                 </span>
               ) : null}
+              {(ranking.hiddenTeamCount ?? 0) > 0 ? (
+                <p className="mt-xs text-warning">
+                  Đã ẩn {ranking.hiddenTeamCount} đội không còn đủ điều kiện. Nên thu hồi công bố (nếu
+                  đang công bố) rồi tính lại bảng để hạng liên tục; gợi ý giải sẽ dồn hạng trong đội còn
+                  hợp lệ.
+                </p>
+              ) : null}
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left">
@@ -391,7 +440,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
                     <th className="px-md py-sm">Đội</th>
                     <th className="px-md py-sm">Vị trí</th>
                     <th className="px-md py-sm">Điểm TB</th>
-                    <th className="px-md py-sm">GK đã nộp</th>
+                    <th className="px-md py-sm">Giám khảo đã nộp</th>
                   </tr>
                 </thead>
                 <tbody className="table-divider">
@@ -413,7 +462,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
                           {required != null ? ` / ${required}` : ""}
                           {incomplete ? (
                             <Badge tone="warning" className="ml-sm">
-                              Thiếu GK
+                              Thiếu giám khảo
                             </Badge>
                           ) : null}
                         </td>

@@ -19,7 +19,8 @@ import {
   fetchEventRankings,
   fetchPublishReadiness,
   publishBoardRanking,
-  publishEventRankings
+  publishEventRankings,
+  unpublishBoardRanking
 } from "../../services/rankingApi";
 import { createIdempotencyKey } from "../../utils/idempotency";
 import { invalidateAfterPublish } from "../../lib/invalidateRankingQueries";
@@ -133,6 +134,19 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
       notify("Đã công bố bảng này.", "success");
     } catch (err) {
       notify(resolveApiError(err, "Công bố thất bại."), "danger");
+    } finally {
+      setPublishingBoardId(null);
+    }
+  }
+
+  async function handleUnpublishBoard(boardId: number) {
+    setPublishingBoardId(boardId);
+    try {
+      await unpublishBoardRanking(boardId);
+      await invalidateRankings();
+      notify("Đã thu hồi công bố bảng này. Có thể tính lại rồi công bố lại.", "success");
+    } catch (err) {
+      notify(resolveApiError(err, "Thu hồi công bố thất bại."), "danger");
     } finally {
       setPublishingBoardId(null);
     }
@@ -261,7 +275,12 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
                 <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-md py-xs [&::-webkit-details-marker]:hidden">
                   <div>
                     <p className="font-label-md text-on-surface">{board.boardName}</p>
-                    <p className="font-body-sm text-on-surface-variant">{board.teamCount} đội xếp hạng</p>
+                    <p className="font-body-sm text-on-surface-variant">
+                      {board.teamCount} đội xếp hạng
+                      {(board.hiddenTeamCount ?? 0) > 0
+                        ? ` · ẩn ${board.hiddenTeamCount} đội không đủ điều kiện`
+                        : ""}
+                    </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-sm">
                     <Badge tone={board.published ? "success" : "warning"}>
@@ -273,6 +292,13 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
                         variant="secondary"
                         loading={publishingBoardId === board.boardId}
                         disabled={!isBoardPublishReady(board.boardId)}
+                        title={
+                          !isBoardPublishReady(board.boardId)
+                            ? (readinessQuery.data?.boards.find((row) => row.boardId === board.boardId)
+                                ?.blockers ?? []
+                              ).join(" · ") || "Chưa đủ điều kiện công bố"
+                            : undefined
+                        }
                         onClick={(e) => {
                           e.preventDefault();
                           void handlePublishBoard(board.boardId);
@@ -280,6 +306,23 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
                       >
                         Công bố bảng này
                       </Button>
+                    ) : null}
+                    {board.published ? (
+                      <ConfirmAction
+                        title="Thu hồi công bố bảng này?"
+                        message="Kết quả công khai sẽ ẩn BXH bảng này. Có thể tính lại rồi công bố lại."
+                        confirmLabel="Thu hồi công bố"
+                        onConfirm={() => void handleUnpublishBoard(board.boardId)}
+                      >
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          loading={publishingBoardId === board.boardId}
+                          onClick={(e) => e.preventDefault()}
+                        >
+                          Thu hồi công bố
+                        </Button>
+                      </ConfirmAction>
                     ) : null}
                   </div>
                 </summary>
@@ -291,7 +334,7 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
                           <th className="px-sm py-xs">Hạng</th>
                           <th className="px-sm py-xs">Đội</th>
                           <th className="px-sm py-xs">Điểm TB</th>
-                          <th className="px-sm py-xs">GK đã nộp</th>
+                          <th className="px-sm py-xs">Giám khảo đã nộp</th>
                         </tr>
                       </thead>
                       <tbody>

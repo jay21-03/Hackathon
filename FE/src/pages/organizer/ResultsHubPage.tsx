@@ -66,8 +66,8 @@ export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps
   });
 
   const rankingBoards = rankingsQuery.data?.boards ?? [];
-  const hasRankings = rankingBoards.some((b) => b.entries.length > 0);
-  const hasPublished = rankingBoards.some((b) => b.published);
+  const hasRankings = rankingBoards.some((b) => (b.entries?.length ?? 0) > 0);
+  const hasPublished = rankingBoards.some((b) => Boolean(b.published));
   const scoreProgress = eventScoreProgressQuery.data ?? null;
   const scoringComplete =
     (scoreProgress?.summary.expectedSheets ?? 0) > 0 &&

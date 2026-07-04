@@ -20,6 +20,8 @@ export interface BoardRanking {
   calculatedAt?: string | null;
   publishedAt?: string | null;
   teamCount: number;
+  hiddenTeamCount?: number;
+  hiddenTeamReason?: string | null;
   entries: RankingTeamEntry[];
 }
 
@@ -89,6 +91,14 @@ export async function publishBoardRanking(boardId: number, idempotencyKey?: stri
     { headers }
   );
   if (!data.data) throw new Error(data.message || "Công bố thất bại.");
+  return data.data;
+}
+
+export async function unpublishBoardRanking(boardId: number) {
+  const { data } = await apiClient.post<ApiResponse<BoardRanking>>(
+    `/v1/admin/boards/${boardId}/rankings/unpublish`
+  );
+  if (!data.data) throw new Error(data.message || "Thu hồi công bố thất bại.");
   return data.data;
 }
 

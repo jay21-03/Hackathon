@@ -35,8 +35,14 @@ function cellLabel(cell: JudgeSheetStatusDto): string {
   return "—";
 }
 
+function sheetStatusLabel(status: string): string {
+  if (status === "SUBMITTED") return "Đã nộp";
+  if (status === "DRAFT") return "Nháp";
+  return status;
+}
+
 function cellTitle(cell: JudgeSheetStatusDto, judgeName: string, teamName: string): string {
-  const base = `${teamName} · ${judgeName}: ${cell.status}`;
+  const base = `${teamName} · ${judgeName}: ${sheetStatusLabel(cell.status)}`;
   if (cell.status === "SUBMITTED" && cell.judgeTeamScore != null) {
     return `${base} — ${Number(cell.judgeTeamScore).toFixed(2)} điểm`;
   }
