@@ -23,9 +23,18 @@ export function getTeamScoreStatus(
   if (team.status === "SUBMITTED") {
     return {
       label: "Đã nộp phiếu chấm",
-      description: "Bạn có thể mở phiếu để chỉnh sửa điểm và nộp lại khi cần.",
+      description: "Phiếu đã nộp và đang khóa. Liên hệ BTC nếu cần mở lại để chỉnh sửa.",
       tone: "success",
       icon: "task_alt"
+    };
+  }
+
+  if (!team.editable) {
+    return {
+      label: "Không thể chấm",
+      description: "Đội không còn đủ điều kiện chấm (ví dụ bị loại) hoặc bảng đã khóa.",
+      tone: "danger",
+      icon: "lock"
     };
   }
 
@@ -34,7 +43,7 @@ export function getTeamScoreStatus(
   if (scoredCount === 0) {
     return {
       label: "Chưa chấm điểm",
-      description: "Bạn chưa nhập điểm cho đội này. Mở phiếu chấm và nhập điểm theo rubric.",
+      description: "Bạn chưa nhập điểm cho đội này. Mở phiếu chấm và nhập điểm theo tiêu chí.",
       tone: "neutral",
       icon: "edit_note"
     };

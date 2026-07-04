@@ -16,7 +16,7 @@ export type JudgeBoardReadiness =
 const READINESS_LABELS: Record<JudgeBoardReadiness, string> = {
   NO_PROBLEM: "Chưa có đề",
   WAITING_PROBLEM_RELEASE: "Chờ công bố đề",
-  WAITING_RUBRIC: "Chờ rubric",
+  WAITING_RUBRIC: "Chờ tiêu chí chấm",
   WAITING_TEAMS: "Chờ gán đội",
   WAITING_REPOSITORIES: "Chờ repo GitHub",
   READY_TO_SCORE: "Sẵn sàng chấm",
@@ -88,7 +88,7 @@ export function readinessGuidance(readiness?: JudgeBoardReadiness | null): strin
     case "WAITING_PROBLEM_RELEASE":
       return "Đề chưa mở — phiếu chấm sẽ khả dụng khi BTC công bố đề theo lịch.";
     case "WAITING_RUBRIC":
-      return "Chưa cấu hình tiêu chí chấm — BTC cần thiết lập rubric trước.";
+      return "Chưa cấu hình tiêu chí chấm — BTC cần thiết lập tiêu chí trước.";
     case "WAITING_TEAMS":
       return "Chưa gán đội vào bảng — đợi BTC hoàn tất phân bổ đội.";
     case "WAITING_REPOSITORIES":
