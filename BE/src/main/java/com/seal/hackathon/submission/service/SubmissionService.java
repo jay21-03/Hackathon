@@ -131,19 +131,8 @@ public class SubmissionService {
     @Transactional(readOnly = true)
     public EventSubmissionSummaryResponse summarizeEventSubmissions(Long eventId) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
-        Map<Long, BoardSlot> slotByTeamId = new LinkedHashMap<>();
-        Map<Long, Board> boardById = new HashMap<>();
-        for (Round round : roundRepository.findByEventId(eventId)) {
-            for (BoardSlot slot : boardSlotRepository.findByRoundId(round.getId())) {
-                if (slot.getTeamId() == null) {
-                    continue;
-                }
-                slotByTeamId.putIfAbsent(slot.getTeamId(), slot);
-                if (slot.getBoardId() != null && !boardById.containsKey(slot.getBoardId())) {
-                    boardRepository.findById(slot.getBoardId()).ifPresent(b -> boardById.put(b.getId(), b));
-                }
-            }
-        }
+        Map<Long, BoardSlot> slotByTeamId = collectPreferredSlotsForEvent(eventId);
+        Map<Long, Board> boardById = loadBoardsForSlots(slotByTeamId.values().stream().toList());
 
         long submittedCount = 0;
         long draftCount = 0;
@@ -190,19 +179,8 @@ public class SubmissionService {
                                     BoardSlot::getTeamNumber, Comparator.nullsLast(Integer::compareTo)))
                             .toList());
         }
-        Map<Long, BoardSlot> slotByTeamId = new LinkedHashMap<>();
-        Map<Long, Board> boardById = new HashMap<>();
-        for (Round round : roundRepository.findByEventId(eventId)) {
-            for (BoardSlot slot : boardSlotRepository.findByRoundId(round.getId())) {
-                if (slot.getTeamId() == null) {
-                    continue;
-                }
-                slotByTeamId.putIfAbsent(slot.getTeamId(), slot);
-                if (slot.getBoardId() != null && !boardById.containsKey(slot.getBoardId())) {
-                    boardRepository.findById(slot.getBoardId()).ifPresent(b -> boardById.put(b.getId(), b));
-                }
-            }
-        }
+        Map<Long, BoardSlot> slotByTeamId = collectPreferredSlotsForEvent(eventId);
+        Map<Long, Board> boardById = loadBoardsForSlots(slotByTeamId.values().stream().toList());
         List<BoardSlot> allSlots = slotByTeamId.values().stream()
                 .sorted(Comparator.comparing(
                         BoardSlot::getTeamNumber, Comparator.nullsLast(Integer::compareTo)))
@@ -224,6 +202,72 @@ public class SubmissionService {
             items.add(toAdminSubmissionRow(slot, boardById.get(slot.getBoardId())));
         }
         return items;
+    }
+
+    private Map<Long, BoardSlot> collectPreferredSlotsForEvent(Long eventId) {
+        List<Round> rounds = roundRepository.findByEventId(eventId).stream()
+                .sorted(Comparator.comparing(Round::getRoundOrder, Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+        Long runningRoundId = rounds.stream()
+                .filter(round -> isRoundRunning(round, OffsetDateTime.now()))
+                .map(Round::getId)
+                .findFirst()
+                .orElse(null);
+
+        Map<Long, BoardSlot> selected = new LinkedHashMap<>();
+        for (Round round : rounds) {
+            for (BoardSlot slot : boardSlotRepository.findByRoundId(round.getId())) {
+                if (slot.getTeamId() == null) {
+                    continue;
+                }
+                BoardSlot current = selected.get(slot.getTeamId());
+                if (current == null || shouldPreferSlot(slot, current, runningRoundId)) {
+                    selected.put(slot.getTeamId(), slot);
+                }
+            }
+        }
+        return selected;
+    }
+
+    private boolean shouldPreferSlot(BoardSlot candidate, BoardSlot current, Long runningRoundId) {
+        if (runningRoundId != null) {
+            boolean candidateRunning = runningRoundId.equals(candidate.getRoundId());
+            boolean currentRunning = runningRoundId.equals(current.getRoundId());
+            if (candidateRunning != currentRunning) {
+                return candidateRunning;
+            }
+        }
+
+        Integer candidateOrder = roundOrderForSlot(candidate);
+        Integer currentOrder = roundOrderForSlot(current);
+        int orderCompare = Comparator.nullsLast(Integer::compareTo).compare(candidateOrder, currentOrder);
+        if (orderCompare != 0) {
+            return orderCompare > 0;
+        }
+
+        int slotCompare = Comparator.nullsLast(Integer::compareTo)
+                .compare(candidate.getTeamNumber(), current.getTeamNumber());
+        if (slotCompare != 0) {
+            return slotCompare < 0;
+        }
+        return Comparator.nullsLast(Long::compareTo).compare(candidate.getId(), current.getId()) < 0;
+    }
+
+    private boolean isRoundRunning(Round round, OffsetDateTime now) {
+        return round.getStartAt() != null
+                && round.getEndAt() != null
+                && !now.isBefore(round.getStartAt())
+                && now.isBefore(round.getEndAt());
+    }
+
+    private Map<Long, Board> loadBoardsForSlots(List<BoardSlot> slots) {
+        Map<Long, Board> boardById = new HashMap<>();
+        for (BoardSlot slot : slots) {
+            if (slot.getBoardId() != null && !boardById.containsKey(slot.getBoardId())) {
+                boardRepository.findById(slot.getBoardId()).ifPresent(board -> boardById.put(board.getId(), board));
+            }
+        }
+        return boardById;
     }
 
     private List<AdminTeamSubmissionResponse> filterSubmissionRows(
@@ -269,19 +313,8 @@ public class SubmissionService {
 
     private PagedResult<AdminTeamSubmissionResponse> listDedupedSubmissionsPaged(
             Long eventId, int page, int size) {
-        Map<Long, BoardSlot> slotByTeamId = new LinkedHashMap<>();
-        Map<Long, Board> boardById = new HashMap<>();
-        for (Round round : roundRepository.findByEventId(eventId)) {
-            for (BoardSlot slot : boardSlotRepository.findByRoundId(round.getId())) {
-                if (slot.getTeamId() == null) {
-                    continue;
-                }
-                slotByTeamId.putIfAbsent(slot.getTeamId(), slot);
-                if (slot.getBoardId() != null && !boardById.containsKey(slot.getBoardId())) {
-                    boardRepository.findById(slot.getBoardId()).ifPresent(b -> boardById.put(b.getId(), b));
-                }
-            }
-        }
+        Map<Long, BoardSlot> slotByTeamId = collectPreferredSlotsForEvent(eventId);
+        Map<Long, Board> boardById = loadBoardsForSlots(slotByTeamId.values().stream().toList());
 
         List<BoardSlot> allSlots = slotByTeamId.values().stream()
                 .sorted(Comparator.comparing(
@@ -348,7 +381,7 @@ public class SubmissionService {
     public List<AdminTeamSubmissionResponse> listSubmissionsForOrganizer(Long eventId, Long boardId) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
 
-        Map<Long, BoardSlot> slotByTeamId = new HashMap<>();
+        Map<Long, BoardSlot> slotByTeamId = new LinkedHashMap<>();
         Map<Long, Board> boardById = new HashMap<>();
 
         if (boardId != null) {
@@ -366,16 +399,8 @@ public class SubmissionService {
                 }
             }
         } else {
-            for (Round round : roundRepository.findByEventId(eventId)) {
-                for (BoardSlot slot : boardSlotRepository.findByRoundId(round.getId())) {
-                    if (slot.getTeamId() != null) {
-                        slotByTeamId.putIfAbsent(slot.getTeamId(), slot);
-                        if (slot.getBoardId() != null && !boardById.containsKey(slot.getBoardId())) {
-                            boardRepository.findById(slot.getBoardId()).ifPresent(b -> boardById.put(b.getId(), b));
-                        }
-                    }
-                }
-            }
+            slotByTeamId.putAll(collectPreferredSlotsForEvent(eventId));
+            boardById.putAll(loadBoardsForSlots(slotByTeamId.values().stream().toList()));
         }
 
         List<AdminTeamSubmissionResponse> results = new ArrayList<>();
