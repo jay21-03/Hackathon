@@ -16,6 +16,7 @@ public class TeamAwardResponse {
     private String awardCategoryCode;
     private Long teamId;
     private String teamName;
+    private String teamStatus;
     private Long awardedBy;
     private OffsetDateTime awardedAt;
     private String note;

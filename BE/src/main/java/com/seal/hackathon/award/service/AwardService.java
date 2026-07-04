@@ -17,6 +17,7 @@ import com.seal.hackathon.award.repository.TeamAwardRepository;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.util.ContestOrdering;
 import com.seal.hackathon.notification.service.NotificationService;
+import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.Event;
 import com.seal.hackathon.contest.entity.Round;
@@ -66,6 +67,7 @@ public class AwardService {
     @Transactional
     public AwardCategoryResponse createCategory(Long eventId, CreateAwardCategoryRequest request) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        assertAwardsEditable(eventId);
         validateRoundBelongsToEvent(request.getRoundId(), eventId);
         String code = normalizeCode(request.getCode());
         if (awardCategoryRepository.existsByEventIdAndCode(eventId, code)) {
@@ -96,6 +98,7 @@ public class AwardService {
         AwardCategory category = awardCategoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AWARD_CATEGORY_NOT_FOUND"));
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(category.getEventId());
+        assertAwardsEditable(category.getEventId());
         if (request.getRoundId() != null) {
             validateRoundBelongsToEvent(request.getRoundId(), category.getEventId());
             category.setRoundId(request.getRoundId());
@@ -146,6 +149,7 @@ public class AwardService {
         AwardCategory category = awardCategoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AWARD_CATEGORY_NOT_FOUND"));
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(category.getEventId());
+        assertAwardsEditable(category.getEventId());
         teamAwardRepository.deleteAll(
                 teamAwardRepository.findByAwardCategoryIdOrderByAwardedAtAscIdAsc(categoryId));
         awardCategoryRepository.delete(category);
@@ -160,6 +164,7 @@ public class AwardService {
     @Transactional
     public TeamAwardResponse assignAward(Long eventId, CreateTeamAwardRequest request, Long awardedBy) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        assertAwardsEditable(eventId);
         AwardCategory category = awardCategoryRepository.findByIdAndEventId(request.getAwardCategoryId(), eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AWARD_CATEGORY_NOT_FOUND"));
         if (!Boolean.TRUE.equals(category.getIsActive())) {
@@ -170,6 +175,7 @@ public class AwardService {
         if (!eventId.equals(team.getEventId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TEAM_EVENT_MISMATCH");
         }
+        assertTeamAwardEligible(team);
         if (teamAwardRepository.existsByAwardCategoryIdAndTeamId(category.getId(), team.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "TEAM_ALREADY_AWARDED_IN_CATEGORY");
         }
@@ -180,6 +186,7 @@ public class AwardService {
         Long roundId = request.getRoundId() != null ? request.getRoundId() : category.getRoundId();
         if (roundId != null) {
             validateRoundBelongsToEvent(roundId, eventId);
+            assertTeamRankedInRound(team.getId(), roundId);
         }
         OffsetDateTime now = OffsetDateTime.now();
         TeamAward award = TeamAward.builder()
@@ -203,6 +210,7 @@ public class AwardService {
         TeamAward award = teamAwardRepository.findById(awardId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TEAM_AWARD_NOT_FOUND"));
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(award.getEventId());
+        assertAwardsEditable(award.getEventId());
         teamAwardRepository.delete(award);
     }
 
@@ -212,6 +220,14 @@ public class AwardService {
         List<TeamAward> awards = teamAwardRepository.findByEventIdOrderByAwardCategoryIdAscIdAsc(eventId);
         if (awards.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "NO_AWARDS_TO_PUBLISH");
+        }
+        Map<Long, Team> teamsById = loadTeams(awards);
+        for (TeamAward award : awards) {
+            Team team = teamsById.get(award.getTeamId());
+            assertTeamAwardEligible(team);
+            if (award.getRoundId() != null) {
+                assertTeamRankedInRound(award.getTeamId(), award.getRoundId());
+            }
         }
         OffsetDateTime now = OffsetDateTime.now();
         for (TeamAward award : awards) {
@@ -249,7 +265,7 @@ public class AwardService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND"));
         List<TeamAward> publishedAwards =
-                teamAwardRepository.findByEventIdAndPublishedTrueOrderByAwardCategoryIdAscIdAsc(eventId);
+                filterEligibleAwards(teamAwardRepository.findByEventIdAndPublishedTrueOrderByAwardCategoryIdAscIdAsc(eventId));
         if (publishedAwards.isEmpty()) {
             return EventAwardsResponse.builder()
                     .eventId(eventId)
@@ -293,6 +309,7 @@ public class AwardService {
     public SuggestAwardsFromRankingResponse suggestFromRanking(
             Long eventId, SuggestAwardsFromRankingRequest request, Long awardedBy) {
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        assertAwardsEditable(eventId);
         List<RankingResult> rankedTeams = collectPublishedRankings(eventId, request);
         if (rankedTeams.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "NO_PUBLISHED_RANKINGS");
@@ -305,23 +322,26 @@ public class AwardService {
         if (rankCategories.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "NO_RANK_AWARD_CATEGORIES");
         }
-        Map<Integer, RankingResult> topByRank = buildGlobalRankMap(rankedTeams);
-        List<TeamAwardResponse> suggestions = new ArrayList<>();
-        int created = 0;
-        OffsetDateTime now = OffsetDateTime.now();
         Map<Long, Team> teamsById = teamRepository.findAllById(
                         rankedTeams.stream().map(RankingResult::getTeamId).collect(Collectors.toSet()))
                 .stream()
                 .collect(Collectors.toMap(Team::getId, Function.identity()));
+        List<RankingResult> eligibleRankedTeams = rankedTeams.stream()
+                .filter(result -> isAwardEligibleTeam(teamsById.get(result.getTeamId())))
+                .toList();
+        if (eligibleRankedTeams.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "NO_PUBLISHED_RANKINGS");
+        }
+        Map<Integer, RankingResult> topByRank = buildGlobalRankMap(eligibleRankedTeams);
+        List<TeamAwardResponse> suggestions = new ArrayList<>();
+        int created = 0;
+        OffsetDateTime now = OffsetDateTime.now();
         for (AwardCategory category : rankCategories) {
             RankingResult match = topByRank.get(category.getRankOrder());
             if (match == null) {
                 continue;
             }
             Team team = teamsById.get(match.getTeamId());
-            if (team == null) {
-                continue;
-            }
             if (teamAwardRepository.existsByAwardCategoryIdAndTeamId(category.getId(), team.getId())) {
                 suggestions.add(toTeamAwardResponse(
                         teamAwardRepository.findByAwardCategoryIdOrderByAwardedAtAscIdAsc(category.getId()).stream()
@@ -457,6 +477,7 @@ public class AwardService {
                 .awardCategoryCode(category.getCode())
                 .teamId(award.getTeamId())
                 .teamName(team != null ? team.getName() : null)
+                .teamStatus(team != null && team.getStatus() != null ? team.getStatus().name() : null)
                 .awardedBy(award.getAwardedBy())
                 .awardedAt(award.getAwardedAt())
                 .note(award.getNote())
@@ -473,6 +494,46 @@ public class AwardService {
         }
         return teamRepository.findAllById(teamIds).stream()
                 .collect(Collectors.toMap(Team::getId, Function.identity()));
+    }
+
+    private List<TeamAward> filterEligibleAwards(List<TeamAward> awards) {
+        Map<Long, Team> teamsById = loadTeams(awards);
+        return awards.stream()
+                .filter(award -> isAwardEligibleTeam(teamsById.get(award.getTeamId())))
+                .toList();
+    }
+
+    private void assertAwardsEditable(Long eventId) {
+        boolean hasPublished = teamAwardRepository.findByEventIdOrderByAwardCategoryIdAscIdAsc(eventId).stream()
+                .anyMatch(award -> Boolean.TRUE.equals(award.getPublished()));
+        if (hasPublished) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "AWARDS_ALREADY_PUBLISHED_UNPUBLISH_FIRST");
+        }
+    }
+
+    private boolean isAwardEligibleTeam(Team team) {
+        return team != null && team.getStatus() == TeamStatus.CONFIRMED;
+    }
+
+    private void assertTeamAwardEligible(Team team) {
+        if (!isAwardEligibleTeam(team)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "TEAM_NOT_ELIGIBLE_FOR_AWARD");
+        }
+    }
+
+    private void assertTeamRankedInRound(Long teamId, Long roundId) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TEAM_NOT_FOUND"));
+        boolean ranked = rankingResultRepository.findByRoundIdAndPublishedAtIsNotNullOrderByBoardIdAscRankAsc(roundId)
+                .stream()
+                .anyMatch(result -> teamId.equals(result.getTeamId()) && isPublicVisibleRankingResult(result, team));
+        if (!ranked) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "TEAM_NOT_PUBLISHED_IN_ROUND_RANKING");
+        }
+    }
+
+    private boolean isPublicVisibleRankingResult(RankingResult result, Team team) {
+        return result != null && result.getPublishedAt() != null && isAwardEligibleTeam(team);
     }
 
     private List<RankingResult> collectPublishedRankings(Long eventId, SuggestAwardsFromRankingRequest request) {

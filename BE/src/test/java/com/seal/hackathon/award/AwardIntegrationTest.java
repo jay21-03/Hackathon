@@ -11,12 +11,21 @@ import com.seal.hackathon.authprofile.security.JwtService;
 import com.seal.hackathon.award.repository.AwardCategoryRepository;
 import com.seal.hackathon.award.repository.TeamAwardRepository;
 import com.seal.hackathon.notification.repository.NotificationRepository;
+import com.seal.hackathon.common.enums.BoardStatus;
 import com.seal.hackathon.common.enums.EventStatus;
+import com.seal.hackathon.common.enums.RoundStatus;
+import com.seal.hackathon.common.enums.RoundType;
 import com.seal.hackathon.common.enums.SystemRole;
 import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.enums.UserStatus;
+import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.Event;
+import com.seal.hackathon.contest.entity.Round;
+import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
+import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.ranking.entity.RankingResult;
+import com.seal.hackathon.ranking.repository.RankingResultRepository;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.entity.TeamMember;
 import com.seal.hackathon.registration.repository.TeamMemberRepository;
@@ -25,6 +34,7 @@ import com.seal.hackathon.common.enums.TeamMemberStatus;
 import com.seal.hackathon.support.IntegrationTestConfig;
 import com.seal.hackathon.support.IntegrationTestDataCleaner;
 import com.seal.hackathon.support.IntegrationTestFixtures;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -71,6 +81,9 @@ class AwardIntegrationTest {
     @Autowired UserRoleRepository userRoleRepository;
     @Autowired EventRepository eventRepository;
     @Autowired AcademicTermRepository academicTermRepository;
+    @Autowired RoundRepository roundRepository;
+    @Autowired BoardRepository boardRepository;
+    @Autowired RankingResultRepository rankingResultRepository;
     @Autowired TeamRepository teamRepository;
     @Autowired TeamMemberRepository teamMemberRepository;
     @Autowired AwardCategoryRepository awardCategoryRepository;
@@ -91,8 +104,11 @@ class AwardIntegrationTest {
         notificationRepository.deleteAll();
         teamAwardRepository.deleteAll();
         awardCategoryRepository.deleteAll();
+        rankingResultRepository.deleteAll();
         teamMemberRepository.deleteAll();
         teamRepository.deleteAll();
+        boardRepository.deleteAll();
+        roundRepository.deleteAll();
         dataCleaner.clearNotifications();
         eventRepository.deleteAll();
         userRoleRepository.deleteAll();
@@ -234,6 +250,121 @@ class AwardIntegrationTest {
         mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/events/" + event.getId() + "/award-categories")
                         .header("Authorization", "Bearer " + participantJwt))
                 .andExpect(MockMvcResultMatchers.status().isForbidden());
+    }
+
+    @Test
+    void suggestFromRankingConsolidatesRanksAfterTopTeamEliminated() throws Exception {
+        Round round = roundRepository.save(Round.builder()
+                .eventId(event.getId())
+                .name("Chung kết")
+                .roundType(RoundType.FINAL)
+                .roundOrder(1)
+                .status(RoundStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        Board board = boardRepository.save(Board.builder()
+                .roundId(round.getId())
+                .name("BXH")
+                .boardOrder(1)
+                .status(BoardStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        rankingResultRepository.save(RankingResult.builder()
+                .roundId(round.getId())
+                .boardId(board.getId())
+                .teamId(teamAlpha.getId())
+                .rank(1)
+                .averageScore(BigDecimal.valueOf(95.0))
+                .calculatedAt(OffsetDateTime.now())
+                .publishedAt(OffsetDateTime.now())
+                .build());
+        rankingResultRepository.save(RankingResult.builder()
+                .roundId(round.getId())
+                .boardId(board.getId())
+                .teamId(teamBeta.getId())
+                .rank(2)
+                .averageScore(BigDecimal.valueOf(90.0))
+                .calculatedAt(OffsetDateTime.now())
+                .publishedAt(OffsetDateTime.now())
+                .build());
+
+        teamAlpha.setStatus(TeamStatus.DISQUALIFIED);
+        teamRepository.save(teamAlpha);
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/events/" + event.getId() + "/award-categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "name", "Giải nhất",
+                                "code", "FIRST_PRIZE",
+                                "awardType", "RANK",
+                                "rankOrder", 1,
+                                "maxWinners", 1))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/events/" + event.getId() + "/award-categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "name", "Giải nhì",
+                                "code", "SECOND_PRIZE",
+                                "awardType", "RANK",
+                                "rankOrder", 2,
+                                "maxWinners", 1))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        MvcResult suggestResult = mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/events/" + event.getId() + "/awards/suggest-from-ranking")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of("roundId", round.getId()))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.created").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.suggestions.length()").value(1))
+                .andReturn();
+
+        JsonNode suggestions = objectMapper.readTree(suggestResult.getResponse().getContentAsString())
+                .path("data")
+                .path("suggestions");
+        assertThat(suggestions.get(0).path("teamId").asLong()).isEqualTo(teamBeta.getId());
+        assertThat(suggestions.get(0).path("awardCategoryCode").asText()).isEqualTo("FIRST_PRIZE");
+    }
+
+    @Test
+    void assignAwardRejectsNonConfirmedTeam() throws Exception {
+        teamAlpha.setStatus(TeamStatus.DISQUALIFIED);
+        teamRepository.save(teamAlpha);
+
+        MvcResult categoryResult = mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/events/" + event.getId() + "/award-categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "name", "Giải nhất",
+                                "code", "FIRST_PRIZE",
+                                "awardType", "RANK",
+                                "rankOrder", 1,
+                                "maxWinners", 1))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andReturn();
+        long categoryId = objectMapper
+                .readTree(categoryResult.getResponse().getContentAsString())
+                .path("data")
+                .path("id")
+                .asLong();
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/events/" + event.getId() + "/awards")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "awardCategoryId", categoryId,
+                                "teamId", teamAlpha.getId()))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("TEAM_NOT_ELIGIBLE_FOR_AWARD"));
     }
 
     @Test

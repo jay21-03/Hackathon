@@ -17,4 +17,8 @@ public interface TeamAwardRepository extends JpaRepository<TeamAward, Long> {
     boolean existsByAwardCategoryIdAndTeamId(Long awardCategoryId, Long teamId);
 
     Optional<TeamAward> findByIdAndEventId(Long id, Long eventId);
+
+    List<TeamAward> findByTeamId(Long teamId);
+
+    void deleteByTeamId(Long teamId);
 }
