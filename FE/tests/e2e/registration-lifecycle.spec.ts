@@ -7,6 +7,22 @@ test.beforeEach(async ({ page }) => {
   await mockCoreApis(page);
 });
 
+test("team registration pre-fills captain student profile", async ({ page }) => {
+  await seedAuth(page, "participant");
+  await page.route("**/api/v1/my/teams**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, message: "ok", data: [] })
+    });
+  });
+
+  await page.goto("/events/1/register");
+
+  await expect(page.getByTestId("member-email-0")).toHaveValue("participant@seal.edu.vn");
+  await expect(page.getByTestId("member-student-id-0")).toHaveValue("SE123456");
+  await expect(page.getByTestId("member-university-0")).toHaveValue("FPT University");
+});
+
 test("organizer can approve pending team (BTC duyệt)", async ({ page }) => {
   await seedAuth(page, "organizer");
   const pendingTeam = {

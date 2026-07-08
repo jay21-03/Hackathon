@@ -13,6 +13,7 @@ import { zodFieldErrors } from "../../utils/zodFieldErrors";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { useEventDetail } from "../../hooks/useEventDetail";
 import { registerTeam } from "../../services/registrationService";
+import { fetchMyProfile } from "../../services/profileService";
 import { setStoredActiveEventId } from "../../hooks/useActiveEvent";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
@@ -28,13 +29,22 @@ import {
 } from "../../utils/registrationErrors";
 
 type MemberFormRow = { email: string; studentId: string; university: string };
+type LeaderProfile = { email: string; studentId: string; university: string };
 
-function buildInitialMembers(contactEmail: string): MemberFormRow[] {
+function buildInitialMembers(profile: LeaderProfile): MemberFormRow[] {
   return Array.from({ length: 5 }, (_, index) => ({
-    email: index === 0 ? contactEmail.trim() : "",
+    email: index === 0 ? profile.email.trim() : "",
+    studentId: index === 0 ? profile.studentId.trim() : "",
+    university: index === 0 ? profile.university.trim() : ""
+  }));
+}
+
+function initialLeaderProfile(): LeaderProfile {
+  return {
+    email: getAuthSession().email,
     studentId: "",
     university: ""
-  }));
+  };
 }
 
 export function TeamRegistrationPage() {
@@ -45,31 +55,22 @@ export function TeamRegistrationPage() {
   const { team, loading: teamLoading } = useMyTeam(eventId);
   const { event: eventInfo, loading: loadingEvent, error: eventError } = useEventDetail(eventId);
   const [teamName, setTeamName] = useState("");
-  const [members, setMembers] = useState<MemberFormRow[]>(() =>
-    buildInitialMembers(getAuthSession().email)
-  );
+  const [leaderProfile, setLeaderProfile] = useState<LeaderProfile>(() => initialLeaderProfile());
+  const [members, setMembers] = useState<MemberFormRow[]>(() => buildInitialMembers(initialLeaderProfile()));
   const [errors, setErrors] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [memberFieldErrors, setMemberFieldErrors] = useState<
-    Record<number, Record<string, string>>
-  >({});
+  const [memberFieldErrors, setMemberFieldErrors] = useState<Record<number, Record<string, string>>>({});
   const [submittedStatus, setSubmittedStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const memberCount = useMemo(
-    () => members.filter((member) => member.email.trim()).length,
-    [members]
-  );
+  const memberCount = useMemo(() => members.filter((member) => member.email.trim()).length, [members]);
   const statusOpen = isRegistrationStatusOpen(eventInfo?.status);
   const registrationOpen = canRegisterForEvent(
     eventInfo?.status,
     eventInfo?.registrationStartAt,
     eventInfo?.registrationEndAt
   );
-  const windowHint = registrationWindowHint(
-    eventInfo?.registrationStartAt,
-    eventInfo?.registrationEndAt
-  );
+  const windowHint = registrationWindowHint(eventInfo?.registrationStartAt, eventInfo?.registrationEndAt);
   const minTeamSize = eventInfo?.minTeamSize ?? 1;
   const maxTeamSize = eventInfo?.maxTeamSize ?? 5;
 
@@ -82,6 +83,45 @@ export function TeamRegistrationPage() {
   useEffect(() => {
     if (eventError) notify(eventError, "danger");
   }, [eventError, notify]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchMyProfile()
+      .then((profile) => {
+        if (cancelled) return;
+
+        const nextProfile = {
+          email: profile.email ?? getAuthSession().email,
+          studentId: profile.studentId ?? "",
+          university: profile.university ?? ""
+        };
+        setLeaderProfile(nextProfile);
+        setMembers((current) =>
+          current.map((row, index) => {
+            if (index !== 0) return row;
+
+            const canUseProfileEmail =
+              !row.email.trim() || row.email.trim().toLowerCase() === nextProfile.email.trim().toLowerCase();
+
+            if (!canUseProfileEmail) return row;
+
+            return {
+              email: row.email.trim() ? row.email : nextProfile.email,
+              studentId: row.studentId.trim() ? row.studentId : nextProfile.studentId,
+              university: row.university.trim() ? row.university : nextProfile.university
+            };
+          })
+        );
+      })
+      .catch(() => {
+        /* Registration still works if the profile prefill endpoint is unavailable. */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function updateMember(index: number, patch: Partial<MemberFormRow>) {
     setMembers((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
@@ -182,22 +222,13 @@ export function TeamRegistrationPage() {
   }
 
   if (!teamLoading && team) {
-    return (
-      <Navigate
-        to="/me"
-        replace
-        state={{ message: "Bạn đã có đội trong cuộc thi này." }}
-      />
-    );
+    return <Navigate to="/me" replace state={{ message: "Bạn đã có đội trong cuộc thi này." }} />;
   }
 
   if (!loadingEvent && eventInfo && !statusOpen) {
     return (
       <div className="mx-auto max-w-5xl space-y-lg">
-        <Link
-          to={`/events/${eventId}`}
-          className="inline-flex items-center gap-1 font-label-md text-primary"
-        >
+        <Link to={`/events/${eventId}`} className="inline-flex items-center gap-1 font-label-md text-primary">
           ← Chi tiết cuộc thi
         </Link>
         <p className="rounded-xl border border-outline-variant bg-surface-container p-lg font-body-md text-on-surface-variant">
@@ -209,10 +240,7 @@ export function TeamRegistrationPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-lg">
-      <Link
-        to={`/events/${eventId}`}
-        className="inline-flex items-center gap-1 font-label-md text-primary"
-      >
+      <Link to={`/events/${eventId}`} className="inline-flex items-center gap-1 font-label-md text-primary">
         ← Chi tiết cuộc thi
       </Link>
       <PageHeader
@@ -265,51 +293,53 @@ export function TeamRegistrationPage() {
             {members.map((member, index) => {
               const rowErrors = memberFieldErrors[index] ?? {};
               return (
-              <div
-                key={index}
-                className="grid gap-sm rounded-lg border border-outline-variant/60 p-sm md:grid-cols-4"
-              >
-                <label className="flex flex-col gap-xs md:col-span-2">
-                  <span className="font-label-sm normal-case text-on-surface-variant">
-                    {index === 0 ? "Đội trưởng — Email" : `Thành viên ${index + 1} — Email`}
-                  </span>
-                  <input
-                    data-testid={`member-email-${index}`}
-                    value={member.email}
-                    onChange={(event) => updateMember(index, { email: event.target.value })}
-                    className={`form-input${rowErrors.email ? " border-error" : ""}`}
-                    placeholder="email@seal.edu.vn"
-                    type="email"
-                  />
-                  {rowErrors.email ? (
-                    <span className="font-body-sm text-error">{rowErrors.email}</span>
-                  ) : null}
-                </label>
-                <label className="flex flex-col gap-xs">
-                  <span className="font-label-sm normal-case text-on-surface-variant">MSSV</span>
-                  <input
-                    value={member.studentId}
-                    onChange={(event) => updateMember(index, { studentId: event.target.value })}
-                    className={`form-input${rowErrors.studentId ? " border-error" : ""}`}
-                    placeholder="SE123456"
-                  />
-                  {rowErrors.studentId ? (
-                    <span className="font-body-sm text-error">{rowErrors.studentId}</span>
-                  ) : null}
-                </label>
-                <label className="flex flex-col gap-xs">
-                  <span className="font-label-sm normal-case text-on-surface-variant">Trường</span>
-                  <input
-                    value={member.university}
-                    onChange={(event) => updateMember(index, { university: event.target.value })}
-                    className={`form-input${rowErrors.university ? " border-error" : ""}`}
-                    placeholder="Đại học …"
-                  />
-                  {rowErrors.university ? (
-                    <span className="font-body-sm text-error">{rowErrors.university}</span>
-                  ) : null}
-                </label>
-              </div>
+                <div
+                  key={index}
+                  className="grid gap-sm rounded-lg border border-outline-variant/60 p-sm md:grid-cols-4"
+                >
+                  <label className="flex flex-col gap-xs md:col-span-2">
+                    <span className="font-label-sm normal-case text-on-surface-variant">
+                      {index === 0 ? "Đội trưởng — Email" : `Thành viên ${index + 1} — Email`}
+                    </span>
+                    <input
+                      data-testid={`member-email-${index}`}
+                      value={member.email}
+                      onChange={(event) => updateMember(index, { email: event.target.value })}
+                      className={`form-input${rowErrors.email ? " border-error" : ""}`}
+                      placeholder="email@seal.edu.vn"
+                      type="email"
+                    />
+                    {rowErrors.email ? (
+                      <span className="font-body-sm text-error">{rowErrors.email}</span>
+                    ) : null}
+                  </label>
+                  <label className="flex flex-col gap-xs">
+                    <span className="font-label-sm normal-case text-on-surface-variant">MSSV</span>
+                    <input
+                      data-testid={`member-student-id-${index}`}
+                      value={member.studentId}
+                      onChange={(event) => updateMember(index, { studentId: event.target.value })}
+                      className={`form-input${rowErrors.studentId ? " border-error" : ""}`}
+                      placeholder="SE123456"
+                    />
+                    {rowErrors.studentId ? (
+                      <span className="font-body-sm text-error">{rowErrors.studentId}</span>
+                    ) : null}
+                  </label>
+                  <label className="flex flex-col gap-xs">
+                    <span className="font-label-sm normal-case text-on-surface-variant">Trường</span>
+                    <input
+                      data-testid={`member-university-${index}`}
+                      value={member.university}
+                      onChange={(event) => updateMember(index, { university: event.target.value })}
+                      className={`form-input${rowErrors.university ? " border-error" : ""}`}
+                      placeholder="Đại học …"
+                    />
+                    {rowErrors.university ? (
+                      <span className="font-body-sm text-error">{rowErrors.university}</span>
+                    ) : null}
+                  </label>
+                </div>
               );
             })}
           </div>
@@ -353,7 +383,7 @@ export function TeamRegistrationPage() {
               confirmLabel="Làm lại"
               onConfirm={() => {
                 setTeamName("");
-                setMembers(buildInitialMembers(getAuthSession().email));
+                setMembers(buildInitialMembers(leaderProfile));
                 setErrors([]);
                 setSubmittedStatus(null);
               }}

@@ -139,6 +139,7 @@ export async function mockCoreApis(page: Page) {
         fullName: "Thí sinh E2E",
         studentType: "FPT",
         studentId: "SE123456",
+        university: "FPT University",
         githubUsername: profileGithubUsername,
         status: "ACTIVE",
         profileCompleted: true,
