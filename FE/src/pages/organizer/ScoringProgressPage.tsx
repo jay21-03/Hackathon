@@ -23,10 +23,12 @@ import { resolveDefaultBoardId, resolveDefaultRoundId } from "../../utils/pickAc
 function cellTone(status: string): string {
   if (status === "SUBMITTED") return "bg-success-container text-on-success-container";
   if (status === "DRAFT") return "bg-warning-container text-on-warning-container";
+  if (status === "REPO_NOT_READY") return "bg-warning-container text-on-warning-container";
   return "bg-surface-container-high text-on-surface-variant";
 }
 
 function cellLabel(cell: JudgeSheetStatusDto): string {
+  if (cell.status === "REPO_NOT_READY") return "0.0";
   if (cell.status === "SUBMITTED" && cell.judgeTeamScore != null) {
     return Number(cell.judgeTeamScore).toFixed(1);
   }
@@ -38,11 +40,15 @@ function cellLabel(cell: JudgeSheetStatusDto): string {
 function sheetStatusLabel(status: string): string {
   if (status === "SUBMITTED") return "Đã nộp";
   if (status === "DRAFT") return "Nháp";
+  if (status === "REPO_NOT_READY") return "Thiếu repository";
   return status;
 }
 
 function cellTitle(cell: JudgeSheetStatusDto, judgeName: string, teamName: string): string {
   const base = `${teamName} · ${judgeName}: ${sheetStatusLabel(cell.status)}`;
+  if (cell.status === "REPO_NOT_READY") {
+    return `${base} — tính 0.00 điểm`;
+  }
   if (cell.status === "SUBMITTED" && cell.judgeTeamScore != null) {
     return `${base} — ${Number(cell.judgeTeamScore).toFixed(2)} điểm`;
   }
@@ -438,6 +444,11 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                         <span className="block truncate" title={team.teamName}>
                           {team.teamName}
                         </span>
+                        {team.scoringStatus === "REPO_NOT_READY" ? (
+                          <span className="mt-xs block font-body-xs text-warning">
+                            Thiếu repository · tính 0 điểm
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-md py-md text-center tabular-nums">
                         {team.submittedJudgeCount}/{team.requiredJudgeCount}
@@ -451,20 +462,22 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                             judgeTeamScore: null
                           };
                         const scoreLabel =
-                          j.status === "SUBMITTED"
-                            ? j.judgeTeamScore != null
-                              ? `${Number(j.judgeTeamScore).toFixed(1)} đ`
-                              : "Đã nộp"
-                            : j.status === "DRAFT"
-                              ? "Nháp"
-                              : "—";
+                          j.status === "REPO_NOT_READY"
+                            ? "0.0 đ"
+                            : j.status === "SUBMITTED"
+                              ? j.judgeTeamScore != null
+                                ? `${Number(j.judgeTeamScore).toFixed(1)} đ`
+                                : "Đã nộp"
+                              : j.status === "DRAFT"
+                                ? "Nháp"
+                                : "—";
                         return (
                           <td key={judge.judgeId} className="px-md py-md text-center">
                             <Badge
                               tone={
                                 j.status === "SUBMITTED"
                                   ? "success"
-                                  : j.status === "DRAFT"
+                                  : j.status === "DRAFT" || j.status === "REPO_NOT_READY"
                                     ? "warning"
                                     : "neutral"
                               }

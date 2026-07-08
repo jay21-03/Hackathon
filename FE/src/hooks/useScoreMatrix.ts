@@ -5,13 +5,14 @@ import { resolveApiError } from "../utils/apiError";
 
 export function useScoreMatrix(
   boardId: number | null,
-  options?: { refetchInterval?: number | false }
+  options?: { enabled?: boolean; refetchInterval?: number | false }
 ) {
+  const enabled = Boolean(boardId) && (options?.enabled ?? true);
   const query = useQuery({
     queryKey: queryKeys.scoring.matrix(boardId),
     queryFn: () => fetchScoreMatrix(boardId!),
-    enabled: Boolean(boardId),
-    refetchInterval: options?.refetchInterval ?? false
+    enabled,
+    refetchInterval: enabled ? (options?.refetchInterval ?? false) : false
   });
 
   return {

@@ -97,7 +97,9 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
     (progress?.teams ?? []).map((t) => [t.teamId, t.requiredJudgeCount])
   );
 
-  const scoringComplete = (progress?.summary.completionPercent ?? 0) >= 100;
+  const scoringComplete =
+    (progress?.summary.completionPercent ?? 0) >= 100 ||
+    ((progress?.summary.expectedSheets ?? 0) === 0 && (progress?.summary.judgeCount ?? 0) > 0);
 
   async function invalidateRankingQueries() {
     await queryClient.invalidateQueries({ queryKey: queryKeys.rankings.all });
@@ -241,7 +243,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
           <PageHeader
             eyebrow="Kết quả"
             title="Bảng xếp hạng"
-            description="Tính điểm trung bình từ phiếu chấm đã nộp. Đội bị loại không được xếp hạng."
+            description="Tính điểm trung bình từ phiếu chấm đã nộp. Đội không có repository được tính 0 điểm và xếp cuối."
             actions={
               <Badge tone={ranking?.published ? "success" : hasRanking ? "warning" : "neutral"}>
                 {ranking?.published ? "Đã công bố" : hasRanking ? "Bản nháp" : "Chưa tính"}
@@ -440,6 +442,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
                     <th className="px-md py-sm">Đội</th>
                     <th className="px-md py-sm">Vị trí</th>
                     <th className="px-md py-sm">Điểm TB</th>
+                    <th className="px-md py-sm">Trạng thái</th>
                     <th className="px-md py-sm">Giám khảo đã nộp</th>
                   </tr>
                 </thead>
@@ -457,6 +460,20 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
                         <td className="px-md py-md font-label-md">{row.teamName}</td>
                         <td className="px-md py-md">{row.slotNumber ?? "—"}</td>
                         <td className="px-md py-md">{Number(row.averageScore).toFixed(2)}</td>
+                        <td className="px-md py-md">
+                          {row.rankingStatus === "REPO_NOT_READY" ? (
+                            <Badge tone="warning">Thiếu repository</Badge>
+                          ) : row.rankingStatus === "NOT_SCORED" ? (
+                            <Badge tone="warning">Chưa có phiếu</Badge>
+                          ) : (
+                            <Badge tone="success">Đã chấm</Badge>
+                          )}
+                          {row.ineligibleReason ? (
+                            <p className="mt-xs max-w-xs font-body-xs text-on-surface-variant">
+                              {row.ineligibleReason}
+                            </p>
+                          ) : null}
+                        </td>
                         <td className="px-md py-md">
                           {row.submittedJudgeCount}
                           {required != null ? ` / ${required}` : ""}

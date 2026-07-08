@@ -100,10 +100,6 @@ export function JudgeScoringPage() {
   const [selectedTermId, setSelectedTermId] = useState<number | "">(storedFilters.termId);
   const [selectedEventId, setSelectedEventId] = useState<number | "">(storedFilters.eventId);
   const [boardId, setBoardId] = useState<number | null>(boardIdParam ? Number(boardIdParam) : null);
-  const { matrix, loading: matrixLoading, error: matrixError, refetch: refetchMatrix } = useScoreMatrix(
-    boardId,
-    { refetchInterval: boardId != null ? 20_000 : false }
-  );
   const [cells, setCells] = useState<Record<CellKey, string>>({});
   const [feedbackByTeam, setFeedbackByTeam] = useState<Record<number, string>>({});
   const [scoringTeamId, setScoringTeamId] = useState<number | null>(null);
@@ -152,6 +148,14 @@ export function JudgeScoringPage() {
     () => filteredAssignments.find((item) => item.boardId === boardId) ?? null,
     [filteredAssignments, boardId]
   );
+  const scoreMatrixEnabled = Boolean(selectedAssignment && canOpenScoringMatrix(selectedAssignment));
+  const { matrix, loading: matrixLoading, error: matrixError, refetch: refetchMatrix } = useScoreMatrix(
+    boardId,
+    {
+      enabled: scoreMatrixEnabled,
+      refetchInterval: scoreMatrixEnabled ? 20_000 : false
+    }
+  );
 
   const { connectionStatus } = useCommitUpdates({
     eventId: selectedAssignment?.eventId ?? null,
@@ -183,13 +187,17 @@ export function JudgeScoringPage() {
       if (boardId != null) setBoardId(null);
       return;
     }
+    const currentSelectionValid =
+      boardId != null && filteredAssignments.some((assignment) => assignment.boardId === boardId);
     const paramId = boardIdParam ? Number(boardIdParam) : null;
     const validParam =
       paramId != null && Number.isFinite(paramId) && filteredAssignments.some((a) => a.boardId === paramId)
         ? paramId
         : null;
     const nextId =
-      validParam ?? pickPriorityJudgeAssignment(filteredAssignments, boardId)?.boardId ?? null;
+      currentSelectionValid
+        ? boardId
+        : validParam ?? pickPriorityJudgeAssignment(filteredAssignments, boardId)?.boardId ?? null;
     if (nextId != null && nextId !== boardId) {
       setBoardId(nextId);
     }
@@ -528,6 +536,16 @@ export function JudgeScoringPage() {
           icon="gavel"
           title="Chưa có bảng để chấm"
           description="Ban tổ chức cần phân công giám khảo cho bảng."
+          action={<ButtonLink to="/judge/dashboard" variant="secondary">Về dashboard</ButtonLink>}
+        />
+      ) : selectedAssignment && !scoreMatrixEnabled ? (
+        <EmptyState
+          icon="hourglass_empty"
+          title="Bảng chưa sẵn sàng chấm"
+          description={
+            readinessGuidance(selectedAssignment.readiness as JudgeBoardReadiness | null) ??
+            "Chờ ban tổ chức hoàn tất thiết lập trước khi mở phiếu chấm."
+          }
           action={<ButtonLink to="/judge/dashboard" variant="secondary">Về dashboard</ButtonLink>}
         />
       ) : matrixLoading && !matrix ? (

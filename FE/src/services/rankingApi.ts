@@ -8,6 +8,8 @@ export interface RankingTeamEntry {
   slotNumber?: number | null;
   averageScore: number;
   submittedJudgeCount: number;
+  rankingStatus?: "SCORED" | "REPO_NOT_READY" | "NOT_SCORED" | string | null;
+  ineligibleReason?: string | null;
 }
 
 export interface BoardRanking {

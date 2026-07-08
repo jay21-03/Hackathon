@@ -170,6 +170,8 @@ export interface TeamProgressDto {
   judges: JudgeSheetStatusDto[];
   submittedJudgeCount: number;
   requiredJudgeCount: number;
+  scoringStatus?: "SCORABLE" | "REPO_NOT_READY" | string | null;
+  ineligibleReason?: string | null;
 }
 
 export interface ScoreProgressResponse {
