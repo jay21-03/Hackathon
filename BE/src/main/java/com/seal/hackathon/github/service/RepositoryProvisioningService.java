@@ -541,7 +541,7 @@ public class RepositoryProvisioningService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
         int safeSize = Math.min(Math.max(size, 1), MAX_REPO_PAGE_SIZE);
         int safePage = Math.max(page, 0);
-        String trimmedQuery = (q != null && !q.isBlank()) ? q.trim() : null;
+        String trimmedQuery = (q != null && !q.isBlank()) ? q.trim() : "";
         Pageable pageable = PageRequest.of(safePage, safeSize);
         Page<TeamRepository> pageResult = teamRepositoryEntityRepository.findByEventFiltered(
                 eventId, roundId, boardId, accessStatus, trimmedQuery, pageable);
@@ -581,7 +581,7 @@ public class RepositoryProvisioningService {
         eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
         return toRepositoryStatusStats(
-                teamRepositoryEntityRepository.summarizeByEventFiltered(eventId, null, null, null, null));
+                teamRepositoryEntityRepository.summarizeByEventFiltered(eventId, null, null, null, ""));
     }
 
     @Transactional(readOnly = true)

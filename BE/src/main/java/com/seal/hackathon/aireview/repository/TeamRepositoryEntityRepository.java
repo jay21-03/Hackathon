@@ -67,7 +67,7 @@ public interface TeamRepositoryEntityRepository extends JpaRepository<TeamReposi
               AND (:roundId IS NULL OR tr.roundId = :roundId)
               AND (:boardId IS NULL OR tr.boardId = :boardId)
               AND (:accessStatus IS NULL OR tr.accessStatus = :accessStatus)
-              AND (:q IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%')))
+              AND (:q = '' OR LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%')))
             ORDER BY t.name ASC, tr.problemId ASC NULLS LAST, tr.id ASC
             """)
     Page<TeamRepository> findByEventFiltered(
@@ -101,7 +101,7 @@ public interface TeamRepositoryEntityRepository extends JpaRepository<TeamReposi
               AND (:roundId IS NULL OR tr.roundId = :roundId)
               AND (:boardId IS NULL OR tr.boardId = :boardId)
               AND (:accessStatus IS NULL OR tr.accessStatus = :accessStatus)
-              AND (:q IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%')))
+              AND (:q = '' OR LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%')))
             """)
     RepositoryStatusStatsProjection summarizeByEventFiltered(
             @Param("eventId") Long eventId,

@@ -91,7 +91,7 @@ class AuthIntegrationTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.githubUsername").value("seal-student"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.profileCompleted").value(true))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.studentType").value("EXTERNAL"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data.status").value("PENDING_APPROVAL"));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.status").value("ACTIVE"));
 
         String loginBody = """
                 {"email":"%s","password":"%s"}

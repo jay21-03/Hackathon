@@ -12,4 +12,6 @@ public class TeamProgressDto {
     private List<JudgeSheetStatusDto> judges;
     private int submittedJudgeCount;
     private int requiredJudgeCount;
+    private String scoringStatus;
+    private String ineligibleReason;
 }

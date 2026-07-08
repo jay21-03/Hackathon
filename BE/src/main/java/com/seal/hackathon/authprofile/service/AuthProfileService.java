@@ -133,9 +133,7 @@ public class AuthProfileService {
             AuthCredentialPolicy.assertUsername(githubUsername);
         }
 
-        UserStatus initialStatus = isBootstrapOrganizerEmail(email)
-                ? UserStatus.ACTIVE
-                : UserStatus.PENDING_APPROVAL;
+        UserStatus initialStatus = UserStatus.ACTIVE;
 
         OffsetDateTime now = OffsetDateTime.now();
         User user = userRepository.save(User.builder()
@@ -402,7 +400,7 @@ public class AuthProfileService {
                     .googleSub(verifiedUser.getGoogleSub())
                     .fullName(verifiedUser.getFullName())
                     .avatarUrl(verifiedUser.getAvatarUrl())
-                    .status(UserStatus.PENDING_APPROVAL)
+                    .status(UserStatus.ACTIVE)
                     .profileCompleted(false)
                     .createdAt(now)
                     .updatedAt(now)

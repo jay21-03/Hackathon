@@ -73,10 +73,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.EnumSet;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -1184,7 +1187,7 @@ public class ContestManagementService {
 
         BoardSlot slot = findTeamSlotForEvent(teamId, eventId);
         if (slot == null) {
-            return MyBoardResponse.notAssigned(hasTeamSlotForEvent(teamId, eventId) ? "ROUND_NOT_STARTED" : "NOT_ASSIGNED");
+            return MyBoardResponse.notAssigned("NOT_ASSIGNED");
         }
 
         Board board = getBoardEntity(slot.getBoardId());
@@ -1329,23 +1332,31 @@ public class ContestManagementService {
             return null;
         }
 
-        List<Round> eventRounds = roundRepository.findByEventId(eventId);
-        Round activeRound = resolveActiveRound(eventRounds, OffsetDateTime.now()).orElse(null);
-        if (activeRound == null) {
-            return null;
+        Map<Long, Round> roundById = roundRepository.findByEventId(eventId).stream()
+                .collect(Collectors.toMap(Round::getId, Function.identity()));
+        Round activeRound = resolveActiveRound(new ArrayList<>(roundById.values()), OffsetDateTime.now())
+                .orElse(null);
+
+        if (activeRound != null) {
+            Optional<BoardSlot> activeSlot = eventSlots.stream()
+                    .filter(slot -> activeRound.getId().equals(slot.getRoundId()))
+                    .findFirst();
+            if (activeSlot.isPresent()) {
+                return activeSlot.get();
+            }
         }
 
         return eventSlots.stream()
-                .filter(slot -> activeRound.getId().equals(slot.getRoundId()))
+                .sorted(Comparator
+                        .comparing(
+                                (BoardSlot slot) -> Optional.ofNullable(roundById.get(slot.getRoundId()))
+                                        .map(Round::getRoundOrder)
+                                        .orElse(Integer.MAX_VALUE),
+                                Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(BoardSlot::getTeamNumber, Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(BoardSlot::getId, Comparator.nullsLast(Long::compareTo)))
                 .findFirst()
                 .orElse(null);
-    }
-
-    private boolean hasTeamSlotForEvent(Long teamId, Long eventId) {
-        return boardSlotRepository.findByTeamId(teamId).stream()
-                .anyMatch(slot -> roundRepository.findById(slot.getRoundId())
-                        .map(round -> eventId.equals(round.getEventId()))
-                        .orElse(false));
     }
 
     /** Running round only: startAt <= now < endAt, lowest roundOrder. */
