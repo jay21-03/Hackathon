@@ -79,8 +79,8 @@ export function buildParticipantWorkflowSteps(input: {
   if (enableSubmissions) {
     const submissionDetail = githubProvisioning
       ? hasSubmitted
-        ? "Repository đã cấp — push code trước hạn."
-        : "Chờ BTC cấp repository GitHub."
+        ? "Bài đã chốt để chấm."
+        : "Push code trước hạn; hệ thống tự chốt khi hết giờ."
       : hasSubmitted
         ? "Đã nộp repository."
         : "Nộp link repository trước hạn.";

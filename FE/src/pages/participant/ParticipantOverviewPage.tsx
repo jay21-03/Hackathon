@@ -13,7 +13,7 @@ import { useEventRound } from "../../hooks/useEventRound";
 import { useMyBoard } from "../../hooks/useMyBoard";
 import { useMySubmission } from "../../hooks/useMySubmission";
 import { useMyTeam } from "../../hooks/useMyTeam";
-import { enableSubmissions } from "../../config/features";
+import { enableGithubProvisioning, enableSubmissions } from "../../config/features";
 import { getStatusLabel, getStatusTone } from "../../domain/status";
 
 export function ParticipantOverviewPage() {
@@ -62,6 +62,20 @@ export function ParticipantOverviewPage() {
   const totalMembers = team.members?.length ?? 0;
   const isConfirmed = team.status === "CONFIRMED";
   const hasBoard = Boolean(board?.assigned);
+  const submissionLabel =
+    submission?.status === "SUBMITTED"
+      ? enableGithubProvisioning
+        ? "Đã chốt"
+        : "Đã nộp"
+      : submission?.status === "DRAFT"
+        ? "Bản nháp"
+        : "Chưa nộp";
+  const submissionHelper =
+    submission?.status === "SUBMITTED" && enableGithubProvisioning
+      ? "Bài đã khóa để chấm"
+      : submission?.repositoryUrl
+        ? "Đã có link repository"
+        : "Nộp tại mục Bài nộp";
 
   return (
     <div className="space-y-lg">
@@ -112,8 +126,8 @@ export function ParticipantOverviewPage() {
         {enableSubmissions ? (
           <StatCard
             label="Bài nộp"
-            value={submission?.status === "SUBMITTED" ? "Đã nộp" : submission?.status === "DRAFT" ? "Bản nháp" : "Chưa nộp"}
-            helper={submission?.repositoryUrl ? "Đã có link repository" : "Nộp tại mục Bài nộp"}
+            value={submissionLabel}
+            helper={submissionHelper}
             icon="upload"
             tone={submission?.status === "SUBMITTED" ? "success" : "warning"}
           />

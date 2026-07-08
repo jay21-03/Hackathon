@@ -10,6 +10,8 @@ const STORAGE_KEY = "seal.activeTermId";
 
 export const ACTIVE_TERM_CHANGE_EVENT = "seal-active-term-change";
 
+const EMPTY_TERMS: Awaited<ReturnType<typeof fetchAcademicTerms>> = [];
+
 function readStoredTermId(): number | null {
   if (typeof window === "undefined") return null;
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -38,7 +40,7 @@ export function useActiveTerm() {
     enabled: canManageTerms && !rolesLoading
   });
 
-  const terms = termsQuery.data ?? [];
+  const terms = termsQuery.data ?? EMPTY_TERMS;
 
   const termId = useMemo(() => {
     if (!canManageTerms) return null;

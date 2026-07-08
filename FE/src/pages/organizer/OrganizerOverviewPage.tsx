@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "../../components/ui/Badge";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
-import { SchedulerHealthPanel } from "../../components/organizer/SchedulerHealthPanel";
 import { TermDashboardPanel } from "../../components/organizer/TermDashboardPanel";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
@@ -171,8 +170,6 @@ export function OrganizerOverviewPage() {
       ) : null}
 
       <TermDashboardPanel />
-
-      <SchedulerHealthPanel />
 
       <RoundCountdown roundId={roundId} countdown={countdown} loading={roundLoading} />
 

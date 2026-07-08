@@ -50,7 +50,7 @@ const blockReasonLabels: Record<string, string> = {
   PROBLEM_CLOSED: "Hết giờ làm bài — kiểm tra trạng thái push bên dưới.",
   PROBLEM_UNAVAILABLE: "Chưa thể nộp bài trong thời điểm hiện tại.",
   SUBMISSION_DEADLINE_PASSED: "Đã qua hạn nộp bài.",
-  SUBMISSION_ALREADY_SUBMITTED: "Bài đã nộp — không thể sửa hoặc nộp lại.",
+  SUBMISSION_ALREADY_SUBMITTED: "Bài đã được ghi nhận — không thể sửa hoặc nộp lại.",
   INVALID_REPOSITORY_URL: "Link phải là GitHub hoặc GitLab hợp lệ.",
   REPOSITORY_URL_REQUIRED: "Nhập link repository trước khi nộp."
 };
@@ -70,8 +70,8 @@ function mapSubmissionError(error: unknown, fallback: string) {
   return resolveApiError(error, fallback);
 }
 
-function statusLabel(status: string | null | undefined) {
-  if (status === "SUBMITTED") return "Đã nộp";
+function statusLabel(status: string | null | undefined, autoFinalized = false) {
+  if (status === "SUBMITTED") return autoFinalized ? "Đã chốt" : "Đã nộp";
   if (status === "DRAFT") return "Bản nháp";
   return "Chưa nộp";
 }
@@ -468,7 +468,7 @@ export function SubmissionPage() {
 
   const blocked = submission?.blockReason;
   const editable = submission?.editable ?? false;
-  const displayStatus = statusLabel(submission?.status ?? null);
+  const displayStatus = statusLabel(submission?.status ?? null, provisionedMode);
   const displayAccessStatus = overviewAccessStatus(
     primaryRepo,
     submission?.status ?? null,
@@ -509,7 +509,7 @@ export function SubmissionPage() {
             <h2 className="font-title-sm text-on-surface">Tổng quan bài nộp</h2>
             <p className="mt-xs font-body-sm text-on-surface-variant">
               Ban tổ chức cấp repository GitHub khi mở đề. Bạn push code trong thời gian mở — hệ thống tự chốt
-              «đã nộp» khi hết giờ đóng đề, không cần bấm nút xác nhận.
+              bài khi hết giờ đóng đề, không cần bấm nút xác nhận.
             </p>
             <dl className="mt-md grid gap-md sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border border-outline-variant/60 bg-surface px-3 py-2">
@@ -631,7 +631,7 @@ export function SubmissionPage() {
 
           {submission?.submittedAt ? (
             <p className="font-body-sm text-on-surface-variant">
-              Nộp lúc: {formatRepositoryTimestamp(submission.submittedAt)}
+              Ghi nhận lúc: {formatRepositoryTimestamp(submission.submittedAt)}
             </p>
           ) : null}
 

@@ -38,8 +38,19 @@ interface StaffCarryoverSectionProps {
   onApplied?: () => void;
 }
 
+const EMPTY_TERMS: Awaited<ReturnType<typeof fetchAcademicTerms>> = [];
+const EMPTY_ROSTER_PEOPLE: CarryoverPerson[] = [];
+
 function roleLabel(role: CarryoverRole) {
   return role === "JUDGE" ? "Giám khảo" : "Mentor";
+}
+
+function sameSet(left: Set<string>, right: Set<string>) {
+  if (left.size !== right.size) return false;
+  for (const value of left) {
+    if (!right.has(value)) return false;
+  }
+  return true;
 }
 
 export function StaffCarryoverSection({
@@ -65,7 +76,7 @@ export function StaffCarryoverSection({
   });
 
   const sourceTerms = useMemo(() => {
-    const all = termsQuery.data ?? activeTerms;
+    const all = termsQuery.data ?? activeTerms ?? EMPTY_TERMS;
     return all.filter((term) => term.id !== currentTermId);
   }, [termsQuery.data, activeTerms, currentTermId]);
 
@@ -124,7 +135,7 @@ export function StaffCarryoverSection({
     }
   });
 
-  const rosterPeople = rosterQuery.data?.people ?? [];
+  const rosterPeople = rosterQuery.data?.people ?? EMPTY_ROSTER_PEOPLE;
   const rosterTruncated = rosterQuery.data?.truncated ?? false;
 
   const filteredPeople = useMemo(() => {
@@ -155,7 +166,7 @@ export function StaffCarryoverSection({
   );
 
   useEffect(() => {
-    setSelectedIds(new Set());
+    setSelectedIds((prev) => (prev.size === 0 ? prev : new Set()));
   }, [sourceId]);
 
   useEffect(() => {
@@ -167,7 +178,7 @@ export function StaffCarryoverSection({
       for (const key of prev) {
         if (validKeys.has(key)) next.add(key);
       }
-      return next;
+      return sameSet(prev, next) ? prev : next;
     });
   }, [roleFilter, newTermFilter, nameFilter, emailFilter, rosterPeople]);
 

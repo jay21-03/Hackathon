@@ -57,7 +57,7 @@ function loadSubmissionFilters(): SubmissionFilterState {
 }
 
 function statusLabel(status: string | null | undefined) {
-  if (status === "SUBMITTED") return "Đã nộp";
+  if (status === "SUBMITTED") return "Đã chốt";
   if (status === "DRAFT") return "Bản nháp";
   return "Chưa nộp";
 }
@@ -271,7 +271,7 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           >
             <option value="ALL">Tất cả</option>
-            <option value="SUBMITTED">Đã nộp</option>
+            <option value="SUBMITTED">Đã chốt</option>
             <option value="DRAFT">Bản nháp</option>
             <option value="NONE">Chưa nộp</option>
           </select>
@@ -321,7 +321,7 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
       ) : null}
 
       <section className="grid gap-md md:grid-cols-3">
-        <StatCard label="Đã nộp" value={submittedCount} helper="Bài đã gửi chính thức" icon="task_alt" tone="success" />
+        <StatCard label="Đã chốt" value={submittedCount} helper="Bài đã khóa để chấm" icon="task_alt" tone="success" />
         <StatCard label="Bản nháp" value={draftCount} helper="Chưa nộp chính thức" icon="edit_note" tone="warning" />
         <StatCard
           label="Chưa nộp"

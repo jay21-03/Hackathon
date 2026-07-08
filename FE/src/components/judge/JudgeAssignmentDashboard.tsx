@@ -96,7 +96,13 @@ export function JudgeAssignmentDashboard({
     return [...map.entries()].map(([id, name]) => ({ id, name }));
   }, [tabAssignments, eventFilter]);
 
-  const showRoundFilter = roundOptions.length > 1;
+  useEffect(() => {
+    setRoundFilter((prev) =>
+      prev !== "" && roundOptions.some((round) => round.id === prev) ? prev : ""
+    );
+  }, [roundOptions]);
+
+  const showRoundFilter = roundOptions.length > 0;
 
   const errorMessage = error
     ? resolveApiError(error, "Không tải được danh sách phân công.")

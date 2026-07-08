@@ -9,6 +9,8 @@ import {
 import { fetchAdminUsers, type UserSummaryResponse } from "../services/userService";
 
 const POOL_PAGE_SIZE = 500;
+const EMPTY_USERS: UserSummaryResponse[] = [];
+const EMPTY_IDS: number[] = [];
 
 function toUserSummary(item: {
   id: number;
@@ -45,8 +47,8 @@ export function useTermStaffPool(options: {
   const {
     academicTermId,
     enabled = true,
-    assignedMentorIds = [],
-    assignedJudgeIds = []
+    assignedMentorIds = EMPTY_IDS,
+    assignedJudgeIds = EMPTY_IDS
   } = options;
   const termScoped = enableAcademicTerms && academicTermId != null;
 
@@ -74,7 +76,7 @@ export function useTermStaffPool(options: {
     enabled: enabled && !termScoped
   });
 
-  const userItems = allUsersQuery.data?.items ?? [];
+  const userItems = allUsersQuery.data?.items ?? EMPTY_USERS;
   const fallbackMentors = useMemo(
     () => userItems.filter((user) => user.roles.includes("MENTOR")),
     [userItems]
@@ -85,12 +87,12 @@ export function useTermStaffPool(options: {
   );
 
   const mentors = useMemo(() => {
-    const pool = termScoped ? (termMentorsQuery.data ?? []) : fallbackMentors;
+    const pool = termScoped ? (termMentorsQuery.data ?? EMPTY_USERS) : fallbackMentors;
     return excludeAssigned(pool, assignedMentorIds);
   }, [termScoped, termMentorsQuery.data, fallbackMentors, assignedMentorIds]);
 
   const judges = useMemo(() => {
-    const pool = termScoped ? (termJudgesQuery.data ?? []) : fallbackJudges;
+    const pool = termScoped ? (termJudgesQuery.data ?? EMPTY_USERS) : fallbackJudges;
     const excludeIds = [...assignedJudgeIds, ...assignedMentorIds];
     return excludeAssigned(pool, excludeIds);
   }, [termScoped, termJudgesQuery.data, fallbackJudges, assignedJudgeIds, assignedMentorIds]);

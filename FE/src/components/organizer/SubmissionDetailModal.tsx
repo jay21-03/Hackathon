@@ -16,7 +16,7 @@ interface SubmissionDetailModalProps {
 }
 
 function statusLabel(status: string | null | undefined) {
-  if (status === "SUBMITTED") return "Đã nộp";
+  if (status === "SUBMITTED") return "Đã chốt";
   if (status === "DRAFT") return "Bản nháp";
   return "Chưa nộp";
 }
