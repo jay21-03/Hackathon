@@ -161,8 +161,10 @@ public class ScoringService {
         BoardContext ctx = loadBoardContextForJudge(boardId, judge.getUserId());
 
         List<ScoreCriteria> criteria = requireCriteria(ctx.round.getId());
-        List<BoardSlot> slots = sortedSlotsWithTeams(boardId);
-        scoringRepositoryGuardService.requireBoardRepositoriesReady(boardId);
+        List<BoardSlot> slots = sortedScorableSlotsWithTeams(boardId);
+        if (slots.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "BOARD_REPOSITORIES_NOT_READY:[]");
+        }
 
         for (BoardSlot slot : slots) {
             ensureDraftSheet(boardId, slot.getTeamId(), judge.getUserId(), ctx.assignment.getId());
@@ -267,9 +269,11 @@ public class ScoringService {
         BoardContext ctx = loadBoardContextForJudge(boardId, judge.getUserId());
         List<ScoreCriteria> criteria = requireCriteria(ctx.round.getId());
 
-        List<BoardSlot> slots = sortedSlotsWithTeams(boardId);
+        List<BoardSlot> slots = sortedScorableSlotsWithTeams(boardId);
+        if (slots.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "BOARD_REPOSITORIES_NOT_READY:[]");
+        }
         List<Long> targetTeamIds = resolveSubmitTargets(request, slots);
-        scoringRepositoryGuardService.requireBoardRepositoriesReady(boardId);
 
         List<SubmittedSheetDto> submitted = new ArrayList<>();
         List<SubmitFailureDto> failed = new ArrayList<>();
@@ -366,8 +370,13 @@ public class ScoringService {
     private ScoreProgressResponse buildScoreProgress(BoardContext ctx) {
         Long boardId = ctx.board.getId();
         List<BoardSlot> slots = sortedSlotsWithTeams(boardId);
+        Set<Long> scorableTeamIds = slots.stream()
+                .map(BoardSlot::getTeamId)
+                .filter(teamId -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(boardId, teamId))
+                .collect(Collectors.toSet());
         List<JudgeAssignment> judgeAssignments = judgeAssignmentRepository.findByBoardId(boardId);
-        Set<Long> currentTeamIds = slots.stream()
+        Set<Long> currentTeamIds = scorableTeamIds;
+        Set<Long> displayTeamIds = slots.stream()
                 .map(BoardSlot::getTeamId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
@@ -381,9 +390,9 @@ public class ScoringService {
                 .toList();
         List<ScoreCriteria> criteria = scoreCriteriaRepository.findByRoundIdOrderBySortOrderAsc(ctx.round.getId());
 
-        int teamCount = slots.size();
+        int teamCount = displayTeamIds.size();
         int judgeCount = judgeAssignments.size();
-        int expected = teamCount * judgeCount;
+        int expected = scorableTeamIds.size() * judgeCount;
         Set<String> submittedPairs = sheets.stream()
                 .filter(s -> s.getStatus() == ScoreSheetStatus.SUBMITTED)
                 .map(this::scoreSheetPairKey)
@@ -421,15 +430,24 @@ public class ScoringService {
                             .judgeId(ja.getJudgeId())
                             .fullName(user != null ? user.getFullName() : "Judge " + ja.getJudgeId())
                             .submittedCount(sub)
-                            .totalTeams(teamCount)
+                            .totalTeams(scorableTeamIds.size())
                             .build();
                 })
                 .toList();
 
         List<TeamProgressDto> teamProgress = slots.stream()
                 .map(slot -> {
+                    boolean scorable = scorableTeamIds.contains(slot.getTeamId());
                     List<JudgeSheetStatusDto> judgeStatuses = judgeAssignments.stream()
                             .map(ja -> {
+                                if (!scorable) {
+                                    return JudgeSheetStatusDto.builder()
+                                            .judgeId(ja.getJudgeId())
+                                            .status("REPO_NOT_READY")
+                                            .sheetId(null)
+                                            .judgeTeamScore(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
+                                            .build();
+                                }
                                 ScoreSheet sheet = sheetIndex.get(slot.getTeamId() + ":" + ja.getJudgeId());
                                 String status = sheet == null ? "MISSING" : sheet.getStatus().name();
                                 BigDecimal score = sheet != null && sheet.getStatus() == ScoreSheetStatus.SUBMITTED
@@ -449,7 +467,9 @@ public class ScoringService {
                             .teamName(teamName(slot.getTeamId()))
                             .judges(judgeStatuses)
                             .submittedJudgeCount(subCount)
-                            .requiredJudgeCount(judgeCount)
+                            .requiredJudgeCount(scorable ? judgeCount : 0)
+                            .scoringStatus(scorable ? "SCORABLE" : "REPO_NOT_READY")
+                            .ineligibleReason(scorable ? null : "Repository chưa sẵn sàng nên đội được tính 0 điểm.")
                             .build();
                 })
                 .toList();
@@ -831,6 +851,12 @@ public class ScoringService {
         return occupiedSlots.stream()
                 .filter(slot -> confirmedTeamIds.contains(slot.getTeamId()))
                 .sorted(Comparator.comparing(BoardSlot::getTeamNumber))
+                .toList();
+    }
+
+    private List<BoardSlot> sortedScorableSlotsWithTeams(Long boardId) {
+        return sortedSlotsWithTeams(boardId).stream()
+                .filter(slot -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(boardId, slot.getTeamId()))
                 .toList();
     }
 

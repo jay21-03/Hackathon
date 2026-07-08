@@ -3,6 +3,7 @@ package com.seal.hackathon.ranking;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
+import com.seal.hackathon.assignment.entity.JudgeAssignment;
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.support.IntegrationTestDataCleaner;
 import com.seal.hackathon.academic.repository.AcademicTermRepository;
@@ -15,6 +16,7 @@ import com.seal.hackathon.authprofile.repository.UserRoleRepository;
 import com.seal.hackathon.authprofile.security.JwtService;
 import com.seal.hackathon.common.enums.BoardStatus;
 import com.seal.hackathon.common.enums.EventStatus;
+import com.seal.hackathon.common.enums.RepositoryProvisionStatus;
 import com.seal.hackathon.common.enums.RoundStatus;
 import com.seal.hackathon.common.enums.RoundType;
 import com.seal.hackathon.common.enums.SystemRole;
@@ -31,9 +33,11 @@ import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.ranking.repository.RankingResultRepository;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.repository.TeamRepository;
+import com.seal.hackathon.scoring.entity.ScoreCriteria;
 import com.seal.hackathon.scoring.repository.ScoreCriteriaRepository;
 import com.seal.hackathon.scoring.repository.ScoreItemRepository;
 import com.seal.hackathon.scoring.repository.ScoreSheetRepository;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -247,6 +251,7 @@ class RankingIntegrationTest {
                 .boardId(targetBoard.getId())
                 .repositoryUrl("https://github.com/org/" + targetTeam.getName().toLowerCase().replace(" ", "-"))
                 .repositoryName(targetTeam.getName())
+                .provisionStatus(RepositoryProvisionStatus.CREATED)
                 .reviewIntervalMinutes(60)
                 .createdBy(organizer.getId())
                 .createdAt(OffsetDateTime.now())
@@ -393,16 +398,37 @@ class RankingIntegrationTest {
     }
 
     @Test
-    void calculateRankingFailsWhenBoardTeamHasNoRepository() throws Exception {
+    void calculateRankingIncludesNoRepositoryTeamWithZeroScore() throws Exception {
         teamRepositoryEntityRepository.deleteAll();
+        judgeAssignmentRepository.save(JudgeAssignment.builder()
+                .boardId(board.getId())
+                .judgeId(judge.getId())
+                .createdAt(OffsetDateTime.now())
+                .createdBy(organizer.getId())
+                .build());
+        scoreCriteriaRepository.save(ScoreCriteria.builder()
+                .roundId(round.getId())
+                .code("R1_01")
+                .name("Idea")
+                .weight(BigDecimal.valueOf(100))
+                .minScore(BigDecimal.ZERO)
+                .maxScore(BigDecimal.TEN)
+                .sortOrder(1)
+                .levelDescriptors(List.of())
+                .createdAt(OffsetDateTime.now())
+                .build());
         String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
 
         mockMvc.perform(MockMvcRequestBuilders.post(
                                 "/api/v1/admin/boards/" + board.getId() + "/rankings/calculate")
                         .header("Authorization", "Bearer " + orgJwt))
-                .andExpect(MockMvcResultMatchers.status().isConflict())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value(
-                        org.hamcrest.Matchers.startsWith("BOARD_REPOSITORIES_NOT_READY")));
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.teamCount").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].rank").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].averageScore").value(0.0))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].submittedJudgeCount").value(0))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].rankingStatus").value("REPO_NOT_READY"));
     }
 
     @Test

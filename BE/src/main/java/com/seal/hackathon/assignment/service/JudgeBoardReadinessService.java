@@ -120,21 +120,28 @@ public class JudgeBoardReadinessService {
                     JudgeBoardReadiness.WAITING_TEAMS, teamsCount, 0, 0, releaseAt, closeAt);
         }
 
-        if (!allTeamsHaveScorableRepository(board.getId(), slots)) {
+        List<BoardSlot> scorableSlots = scorableSlotsForBoard(board.getId(), slots);
+        if (scorableSlots.isEmpty()) {
             return ReadinessSnapshot.of(
                     JudgeBoardReadiness.WAITING_REPOSITORIES, teamsCount, 0, 0, releaseAt, closeAt);
         }
+        slots = scorableSlots;
+        teamsCount = slots.size();
+        Set<Long> scorableTeamIds = slots.stream()
+                .map(BoardSlot::getTeamId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
         int submittedCount = 0;
         int draftCount = 0;
         if (judgeId != null) {
             List<ScoreSheet> sheets = scoreSheetRepository.findByBoardIdAndJudgeId(board.getId(), judgeId);
             submittedCount = (int) sheets.stream()
-                    .filter(sheet -> confirmedTeamIds.contains(sheet.getTeamId()))
+                    .filter(sheet -> scorableTeamIds.contains(sheet.getTeamId()))
                     .filter(sheet -> sheet.getStatus() == ScoreSheetStatus.SUBMITTED)
                     .count();
             draftCount = (int) sheets.stream()
-                    .filter(sheet -> confirmedTeamIds.contains(sheet.getTeamId()))
+                    .filter(sheet -> scorableTeamIds.contains(sheet.getTeamId()))
                     .filter(sheet -> sheet.getStatus() == ScoreSheetStatus.DRAFT)
                     .count();
         }
@@ -194,11 +201,11 @@ public class JudgeBoardReadinessService {
         return true;
     }
 
-    private boolean allTeamsHaveScorableRepository(Long boardId, List<BoardSlot> slots) {
+    private List<BoardSlot> scorableSlotsForBoard(Long boardId, List<BoardSlot> slots) {
         return slots.stream()
-                .map(BoardSlot::getTeamId)
-                .filter(Objects::nonNull)
-                .allMatch(teamId -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(boardId, teamId));
+                .filter(slot -> slot.getTeamId() != null)
+                .filter(slot -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(boardId, slot.getTeamId()))
+                .toList();
     }
 
     public AssignmentResponse enrichJudgeAssignment(JudgeAssignment assignment, AssignmentResponse base) {

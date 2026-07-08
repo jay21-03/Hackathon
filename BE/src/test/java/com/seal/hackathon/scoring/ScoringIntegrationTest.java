@@ -25,10 +25,12 @@ import com.seal.hackathon.common.enums.UserStatus;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Event;
+import com.seal.hackathon.contest.entity.Problem;
 import com.seal.hackathon.contest.entity.Round;
 import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.BoardSlotRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
+import com.seal.hackathon.contest.repository.ProblemRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.registration.entity.Team;
 import com.seal.hackathon.registration.repository.TeamRepository;
@@ -107,6 +109,9 @@ class ScoringIntegrationTest {
     BoardSlotRepository boardSlotRepository;
 
     @Autowired
+    ProblemRepository problemRepository;
+
+    @Autowired
     TeamRepository teamRepository;
 
     @Autowired
@@ -140,6 +145,7 @@ class ScoringIntegrationTest {
         scoreSheetRepository.deleteAll();
         scoreCriteriaRepository.deleteAll();
         teamRepositoryEntityRepository.deleteAll();
+        problemRepository.deleteAll();
         boardSlotRepository.deleteAll();
         judgeAssignmentRepository.deleteAll();
         teamRepository.deleteAll();
@@ -469,6 +475,15 @@ class ScoringIntegrationTest {
                 .andExpect(MockMvcResultMatchers.status().isConflict())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.message").value(
                         org.hamcrest.Matchers.startsWith("BOARD_REPOSITORIES_NOT_READY")));
+
+        mockMvc.perform(MockMvcRequestBuilders.get(
+                                "/api/v1/admin/boards/" + board.getId() + "/score-progress")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.teams[0].scoringStatus").value("REPO_NOT_READY"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.teams[0].requiredJudgeCount").value(0))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.teams[0].judges[0].status").value("REPO_NOT_READY"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.teams[0].judges[0].judgeTeamScore").value(0.0));
     }
 
     @Test
@@ -561,15 +576,37 @@ class ScoringIntegrationTest {
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build());
+        Problem previousProblem = problemRepository.save(Problem.builder()
+                .boardId(previousBoard.getId())
+                .title("Previous Problem")
+                .description("Previous")
+                .releaseAt(OffsetDateTime.now().minusDays(2))
+                .closeAt(OffsetDateTime.now().minusDays(1))
+                .createdBy(organizer.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        Problem currentProblem = problemRepository.save(Problem.builder()
+                .boardId(board.getId())
+                .title("Current Problem")
+                .description("Current")
+                .releaseAt(OffsetDateTime.now().minusHours(1))
+                .closeAt(OffsetDateTime.now().plusHours(1))
+                .createdBy(organizer.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
 
         teamRepositoryEntityRepository.save(com.seal.hackathon.aireview.entity.TeamRepository.builder()
                 .teamId(team.getId())
                 .roundId(previousRound.getId())
                 .boardId(previousBoard.getId())
+                .problemId(previousProblem.getId())
                 .repositoryUrl("https://github.com/org/team-alpha-old-round")
                 .repositoryName("old-round")
                 .accessStatus(RepositoryAccessStatus.OPEN)
                 .provisionStatus(RepositoryProvisionStatus.CREATED)
+                .reviewIntervalMinutes(60)
                 .createdBy(organizer.getId())
                 .createdAt(OffsetDateTime.now().minusDays(2))
                 .updatedAt(OffsetDateTime.now().plusDays(1))
@@ -578,10 +615,12 @@ class ScoringIntegrationTest {
                 .teamId(team.getId())
                 .roundId(round.getId())
                 .boardId(board.getId())
+                .problemId(currentProblem.getId())
                 .repositoryUrl("https://github.com/org/team-alpha-final-round")
                 .repositoryName("final-round")
                 .accessStatus(RepositoryAccessStatus.OPEN)
                 .provisionStatus(RepositoryProvisionStatus.CREATED)
+                .reviewIntervalMinutes(60)
                 .createdBy(organizer.getId())
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())

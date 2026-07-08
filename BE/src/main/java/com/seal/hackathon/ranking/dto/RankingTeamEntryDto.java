@@ -14,4 +14,6 @@ public class RankingTeamEntryDto {
     private Integer slotNumber;
     private BigDecimal averageScore;
     private Integer submittedJudgeCount;
+    private String rankingStatus;
+    private String ineligibleReason;
 }

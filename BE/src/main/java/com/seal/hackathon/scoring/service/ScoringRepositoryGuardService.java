@@ -30,16 +30,17 @@ public class ScoringRepositoryGuardService {
     private final com.seal.hackathon.registration.repository.TeamRepository teamRepository;
 
     @Transactional(readOnly = true)
+    public boolean hasAnyScorableRepositoryForBoard(Long boardId) {
+        return confirmedTeamIdsForBoard(boardId).stream()
+                .anyMatch(teamId -> hasScorableRepositoryForBoard(boardId, teamId));
+    }
+
+    @Transactional(readOnly = true)
     public void requireBoardRepositoriesReady(Long boardId) {
-        List<Long> slotTeamIds = boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(boardId).stream()
+        Set<Long> confirmedTeamIds = confirmedTeamIdsForBoard(boardId);
+        List<Long> missingTeamIds = boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(boardId).stream()
                 .map(BoardSlot::getTeamId)
                 .filter(Objects::nonNull)
-                .toList();
-        Set<Long> confirmedTeamIds = teamRepository.findAllById(slotTeamIds).stream()
-                .filter(team -> team.getStatus() == TeamStatus.CONFIRMED)
-                .map(Team::getId)
-                .collect(Collectors.toSet());
-        List<Long> missingTeamIds = slotTeamIds.stream()
                 .filter(confirmedTeamIds::contains)
                 .filter(teamId -> !hasScorableRepositoryForBoard(boardId, teamId))
                 .toList();
@@ -48,6 +49,17 @@ public class ScoringRepositoryGuardService {
                     HttpStatus.CONFLICT,
                     "BOARD_REPOSITORIES_NOT_READY:" + missingTeamIds);
         }
+    }
+
+    private Set<Long> confirmedTeamIdsForBoard(Long boardId) {
+        List<Long> slotTeamIds = boardSlotRepository.findByBoardIdOrderByTeamNumberAsc(boardId).stream()
+                .map(BoardSlot::getTeamId)
+                .filter(Objects::nonNull)
+                .toList();
+        return teamRepository.findAllById(slotTeamIds).stream()
+                .filter(team -> team.getStatus() == TeamStatus.CONFIRMED)
+                .map(Team::getId)
+                .collect(Collectors.toSet());
     }
 
     @Transactional(readOnly = true)

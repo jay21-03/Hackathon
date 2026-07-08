@@ -122,13 +122,14 @@ public class PublishReadinessService {
         List<BoardSlot> scorableSlots = slots.stream()
                 .filter(s -> s.getTeamId() != null)
                 .filter(s -> isConfirmedTeam(teamsById.get(s.getTeamId())))
+                .filter(s -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), s.getTeamId()))
                 .toList();
-        int teamCount = scorableSlots.size();
+        int teamCount = slots.stream()
+                .filter(s -> s.getTeamId() != null)
+                .filter(s -> isConfirmedTeam(teamsById.get(s.getTeamId())))
+                .toList()
+                .size();
         int judgeCount = judgeAssignmentRepository.findByBoardId(board.getId()).size();
-        List<Long> missingRepoTeamIds = scorableSlots.stream()
-                .map(BoardSlot::getTeamId)
-                .filter(teamId -> !scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), teamId))
-                .toList();
 
         if (criteria.isEmpty()) {
             blockers.add("Chưa có rubric cho vòng «" + round.getName() + "».");
@@ -140,11 +141,7 @@ public class PublishReadinessService {
             blockers.add("Chưa gán đội vào slot.");
         }
 
-        if (!missingRepoTeamIds.isEmpty()) {
-            blockers.add("Có đội chưa có repository sẵn sàng: " + missingRepoTeamIds + ".");
-        }
-
-        int expected = teamCount * judgeCount;
+        int expected = scorableSlots.size() * judgeCount;
         Set<Long> currentTeamIds = scorableSlots.stream()
                 .map(BoardSlot::getTeamId)
                 .collect(Collectors.toSet());

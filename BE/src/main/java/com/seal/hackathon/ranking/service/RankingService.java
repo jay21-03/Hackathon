@@ -52,6 +52,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class RankingService {
 
+    private static final BigDecimal ZERO_SCORE = new BigDecimal("0.00");
+
     private final RankingResultRepository rankingResultRepository;
     private final BoardRepository boardRepository;
     private final BoardSlotRepository boardSlotRepository;
@@ -302,7 +304,6 @@ public class RankingService {
     }
 
     private BoardRankingResponse persistBoardRanking(Board board) {
-        scoringRepositoryGuardService.requireBoardRepositoriesReady(board.getId());
         Round round = roundRepository.findById(board.getRoundId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Round not found"));
         List<ScoreCriteria> criteria = scoreCriteriaRepository.findByRoundIdOrderBySortOrderAsc(round.getId());
@@ -323,6 +324,16 @@ public class RankingService {
         for (BoardSlot slot : occupiedSlots) {
             Team team = teamsById.get(slot.getTeamId());
             if (!isRankingEligible(team)) {
+                continue;
+            }
+            if (!scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), slot.getTeamId())) {
+                scoredTeams.add(new ScoredTeam(
+                        team.getId(),
+                        team.getName(),
+                        slot.getTeamNumber(),
+                        ZERO_SCORE,
+                        0,
+                        false));
                 continue;
             }
             List<ScoreSheet> sheets = scoreSheetRepository.findByBoardIdAndTeamId(board.getId(), slot.getTeamId())
@@ -348,11 +359,13 @@ public class RankingService {
                     team.getName(),
                     slot.getTeamNumber(),
                     average,
-                    judgeScores.size()));
+                    judgeScores.size(),
+                    true));
         }
 
         scoredTeams.sort(Comparator
-                .comparing(ScoredTeam::averageScore, Comparator.reverseOrder())
+                .comparing(ScoredTeam::scorable, Comparator.reverseOrder())
+                .thenComparing(ScoredTeam::averageScore, Comparator.reverseOrder())
                 .thenComparing(ScoredTeam::teamName, String.CASE_INSENSITIVE_ORDER));
 
         rankingResultRepository.deleteByBoardId(board.getId());
@@ -360,11 +373,15 @@ public class RankingService {
         OffsetDateTime now = OffsetDateTime.now();
         int rank = 0;
         BigDecimal previousScore = null;
+        Boolean previousScorable = null;
         for (int i = 0; i < scoredTeams.size(); i++) {
             ScoredTeam scored = scoredTeams.get(i);
-            if (previousScore == null || scored.averageScore().compareTo(previousScore) != 0) {
+            if (previousScore == null
+                    || scored.averageScore().compareTo(previousScore) != 0
+                    || !java.util.Objects.equals(scored.scorable(), previousScorable)) {
                 rank = i + 1;
                 previousScore = scored.averageScore();
+                previousScorable = scored.scorable();
             }
             rankingResultRepository.save(RankingResult.builder()
                     .roundId(round.getId())
@@ -393,11 +410,17 @@ public class RankingService {
                 .collect(Collectors.toMap(Team::getId, t -> t));
         List<Long> scorableTeamIds = slotTeamIds.stream()
                 .filter(teamId -> isRankingEligible(teamsById.get(teamId)))
+                .filter(teamId -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), teamId))
                 .toList();
-        if (scorableTeamIds.isEmpty()) {
+        boolean hasConfirmedTeam = slotTeamIds.stream()
+                .anyMatch(teamId -> isRankingEligible(teamsById.get(teamId)));
+        if (!hasConfirmedTeam) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "SCORING_NOT_COMPLETE:NO_TEAMS");
         }
         int expected = scorableTeamIds.size() * judgeCount;
+        if (expected == 0) {
+            return;
+        }
         int submitted = (int) scoreSheetRepository.findByBoardId(board.getId()).stream()
                 .filter(sheet -> scorableTeamIds.contains(sheet.getTeamId()))
                 .filter(sheet -> sheet.getStatus() == ScoreSheetStatus.SUBMITTED)
@@ -442,6 +465,8 @@ public class RankingService {
                             .slotNumber(slotByTeam.get(row.getTeamId()))
                             .averageScore(row.getAverageScore())
                             .submittedJudgeCount(judgeCount)
+                            .rankingStatus(resolveRankingStatus(board.getId(), row.getTeamId(), judgeCount))
+                            .ineligibleReason(resolveIneligibleReason(board.getId(), row.getTeamId(), judgeCount))
                             .build();
                 })
                 .toList();
@@ -497,6 +522,26 @@ public class RankingService {
                 .count();
     }
 
+    private String resolveRankingStatus(Long boardId, Long teamId, int submittedJudgeCount) {
+        if (submittedJudgeCount > 0) {
+            return "SCORED";
+        }
+        if (!scoringRepositoryGuardService.hasScorableRepositoryForBoard(boardId, teamId)) {
+            return "REPO_NOT_READY";
+        }
+        return "NOT_SCORED";
+    }
+
+    private String resolveIneligibleReason(Long boardId, Long teamId, int submittedJudgeCount) {
+        if (submittedJudgeCount > 0) {
+            return null;
+        }
+        if (!scoringRepositoryGuardService.hasScorableRepositoryForBoard(boardId, teamId)) {
+            return "Repository chưa sẵn sàng nên đội được tính 0 điểm.";
+        }
+        return "Chưa có phiếu chấm đã nộp.";
+    }
+
     private BigDecimal computeJudgeTeamScore(Long sheetId, List<ScoreCriteria> criteria) {
         Map<Long, BigDecimal> weights = criteria.stream()
                 .collect(Collectors.toMap(ScoreCriteria::getId, ScoreCriteria::getWeight));
@@ -531,5 +576,5 @@ public class RankingService {
     }
 
     private record ScoredTeam(
-            Long teamId, String teamName, Integer slotNumber, BigDecimal averageScore, int judgeCount) {}
+            Long teamId, String teamName, Integer slotNumber, BigDecimal averageScore, int judgeCount, boolean scorable) {}
 }
