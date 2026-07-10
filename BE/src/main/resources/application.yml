@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8085}
+  port: ${PORT:${SERVER_PORT:8085}}
 
 spring:
   application:
@@ -9,9 +9,13 @@ spring:
       max-file-size: 20MB
       max-request-size: 25MB
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5433/seal_hackathon}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://localhost:5433/seal_hackathon}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:postgres}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:postgres}}
+    hikari:
+      maximum-pool-size: ${DB_MAX_POOL_SIZE:5}
+      minimum-idle: ${DB_MIN_IDLE:1}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -46,6 +50,7 @@ springdoc:
     path: /swagger-ui.html
 
 app:
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
   jwt:
     secret: ${JWT_SECRET:change_me}
     expiration-minutes: ${JWT_EXPIRATION_MINUTES:1440}
@@ -57,7 +62,7 @@ app:
     password-reset-expiration-minutes: ${PASSWORD_RESET_EXPIRATION_MINUTES:60}
     dev-auth-enabled: ${DEV_AUTH_ENABLED:false}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:${APP_FRONTEND_URL:http://localhost:5173}}
   github:
     mode: ${GITHUB_MODE:pat}
     org: ${GITHUB_ORG:}
@@ -82,7 +87,7 @@ app:
   mail:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:${MAIL_USERNAME:no-reply@seal-hackathon.local}}
-    invitation-base-url: ${INVITATION_BASE_URL:http://localhost:5173}
+    invitation-base-url: ${INVITATION_BASE_URL:${APP_FRONTEND_URL:http://localhost:5173}}
     api-base-url: ${MAIL_API_BASE_URL:http://localhost:8085}
   invitation:
     token-secret: ${APP_INVITATION_TOKEN_SECRET:dev-invite-secret-change-me}
