@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "../ui/Badge";
 import { EmptyState } from "../ui/EmptyState";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
@@ -12,6 +13,9 @@ import { useMyTeam } from "../../hooks/useMyTeam";
 import { useParticipantTeamGuard } from "../../hooks/useParticipantTeamGuard";
 import { ParticipantTeamBlocked } from "./ParticipantTeamBlocked";
 import { ProblemContentView } from "./ProblemContentView";
+import { queryKeys } from "../../lib/queryKeys";
+import { fetchMyProblemRubric } from "../../services/scoringApi";
+import { resolveApiError } from "../../utils/apiError";
 
 function formatReleaseAt(iso?: string) {
   if (!iso) return "—";
@@ -43,6 +47,11 @@ export function ParticipantProblemPanel() {
     () => (activeRoundId ? rounds.find((item) => item.id === activeRoundId) ?? round : round),
     [activeRoundId, round, rounds]
   );
+  const rubricQuery = useQuery({
+    queryKey: [...queryKeys.scoring.rubric(activeRoundId), "my-problem", eventId] as const,
+    queryFn: () => fetchMyProblemRubric(eventId!),
+    enabled: Boolean(eventId && activeRoundId && problemState?.available)
+  });
 
   if (eventLoading || teamLoading || boardLoading || problemLoading) {
     return <ModuleSkeleton rows={3} />;
@@ -106,6 +115,13 @@ export function ParticipantProblemPanel() {
           description={problem.description}
           externalLink={problem.externalLink}
           attachmentUrl={problem.attachmentUrl}
+          criteria={rubricQuery.data?.criteria ?? []}
+          rubricLoading={rubricQuery.isLoading}
+          rubricError={
+            rubricQuery.isError
+              ? resolveApiError(rubricQuery.error, "Không tải được rubric/thang điểm.")
+              : null
+          }
         />
       </div>
     );

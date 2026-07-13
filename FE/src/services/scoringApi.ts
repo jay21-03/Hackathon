@@ -396,6 +396,27 @@ export async function fetchRubric(roundId: number) {
   return data.data;
 }
 
+export async function fetchPublicRubric(roundId: number) {
+  const { data } = await apiClient.get<ApiResponse<RubricResponse>>(
+    `/v1/rounds/${roundId}/criteria`
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Không tải được tiêu chí chấm.");
+  }
+  return data.data;
+}
+
+export async function fetchMyProblemRubric(eventId: number) {
+  const { data } = await apiClient.get<ApiResponse<RubricResponse>>(
+    "/v1/my/problem-rubric",
+    { params: { eventId } }
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Không tải được tiêu chí chấm.");
+  }
+  return data.data;
+}
+
 export async function saveRubric(roundId: number, body: SaveRubricRequest) {
   const { data } = await apiClient.post<ApiResponse<RubricResponse>>(
     `/v1/admin/rounds/${roundId}/criteria`,

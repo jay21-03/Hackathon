@@ -67,7 +67,7 @@ public class AdminScoringController {
 
     public ApiResponse<RubricResponse> getRubric(@PathVariable Long roundId) {
 
-        return ApiResponse.ok(scoringService.getRubric(roundId));
+        return ApiResponse.ok(scoringService.getOrganizerRubric(roundId));
 
     }
 

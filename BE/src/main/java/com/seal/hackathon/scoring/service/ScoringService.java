@@ -104,9 +104,14 @@ public class ScoringService {
 
     @Transactional(readOnly = true)
     public RubricResponse getRubric(Long roundId) {
-        organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
         List<ScoreCriteria> criteria = scoreCriteriaRepository.findByRoundIdOrderBySortOrderAsc(roundId);
         return buildRubricResponse(roundId, criteria);
+    }
+
+    @Transactional(readOnly = true)
+    public RubricResponse getOrganizerRubric(Long roundId) {
+        organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
+        return getRubric(roundId);
     }
 
     @Transactional
