@@ -14,6 +14,8 @@ import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
 import com.seal.hackathon.authprofile.security.CurrentUserPrincipal;
 import com.seal.hackathon.authprofile.security.CurrentUserProvider;
+import com.seal.hackathon.authprofile.entity.User;
+import com.seal.hackathon.authprofile.repository.UserRepository;
 import com.seal.hackathon.assignment.repository.JudgeAssignmentRepository;
 import com.seal.hackathon.notification.service.NotificationService;
 import com.seal.hackathon.registration.service.AuditLogWriter;
@@ -22,6 +24,8 @@ import com.seal.hackathon.ranking.dto.BoardRankingResponse;
 import com.seal.hackathon.ranking.dto.CalculateRankingResponse;
 import com.seal.hackathon.ranking.dto.EventRankingsResponse;
 import com.seal.hackathon.ranking.dto.PublicEventResultsResponse;
+import com.seal.hackathon.ranking.dto.RankingCriterionScoreDto;
+import com.seal.hackathon.ranking.dto.RankingJudgeScoreDto;
 import com.seal.hackathon.ranking.dto.RankingTeamEntryDto;
 import com.seal.hackathon.ranking.entity.RankingResult;
 import com.seal.hackathon.ranking.repository.RankingResultRepository;
@@ -39,8 +43,10 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -60,6 +66,7 @@ public class RankingService {
     private final RoundRepository roundRepository;
     private final EventRepository eventRepository;
     private final TeamRepository teamRepository;
+    private final UserRepository userRepository;
     private final ScoreCriteriaRepository scoreCriteriaRepository;
     private final ScoreSheetRepository scoreSheetRepository;
     private final ScoreItemRepository scoreItemRepository;
@@ -448,6 +455,9 @@ public class RankingService {
         Map<Long, Integer> slotByTeam = boardSlotRepository.findByBoardId(board.getId()).stream()
                 .filter(s -> s.getTeamId() != null)
                 .collect(Collectors.toMap(BoardSlot::getTeamId, BoardSlot::getTeamNumber, (a, b) -> a));
+        List<ScoreCriteria> criteria = round != null
+                ? scoreCriteriaRepository.findByRoundIdOrderBySortOrderAsc(round.getId())
+                : List.of();
 
         List<RankingResult> visibleRows = rows.stream()
                 .filter(row -> isRankingEligible(teamsById.get(row.getTeamId())))
@@ -467,6 +477,8 @@ public class RankingService {
                             .submittedJudgeCount(judgeCount)
                             .rankingStatus(resolveRankingStatus(board.getId(), row.getTeamId(), judgeCount))
                             .ineligibleReason(resolveIneligibleReason(board.getId(), row.getTeamId(), judgeCount))
+                            .judgeScores(buildJudgeScoreDetails(board.getId(), row.getTeamId(), criteria))
+                            .criteriaScores(buildCriteriaScoreDetails(board.getId(), row.getTeamId(), criteria))
                             .build();
                 })
                 .toList();
@@ -520,6 +532,97 @@ public class RankingService {
         return (int) scoreSheetRepository.findByBoardIdAndTeamId(boardId, teamId).stream()
                 .filter(s -> s.getStatus() == ScoreSheetStatus.SUBMITTED)
                 .count();
+    }
+
+    private List<RankingJudgeScoreDto> buildJudgeScoreDetails(
+            Long boardId, Long teamId, List<ScoreCriteria> criteria) {
+        List<ScoreSheet> submittedSheets = submittedSheetsForTeam(boardId, teamId);
+        if (submittedSheets.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, User> judgesById = userRepository.findAllById(
+                        submittedSheets.stream().map(ScoreSheet::getJudgeId).filter(Objects::nonNull).toList())
+                .stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        return submittedSheets.stream()
+                .sorted(Comparator
+                        .comparing(ScoreSheet::getSubmittedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(ScoreSheet::getId))
+                .map(sheet -> {
+                    User judge = judgesById.get(sheet.getJudgeId());
+                    String judgeName = judge != null && judge.getFullName() != null && !judge.getFullName().isBlank()
+                            ? judge.getFullName()
+                            : "Giám khảo #" + sheet.getJudgeId();
+                    return RankingJudgeScoreDto.builder()
+                            .judgeId(sheet.getJudgeId())
+                            .judgeName(judgeName)
+                            .totalScore(computeJudgeTeamScore(sheet.getId(), criteria))
+                            .feedback(sheet.getGeneralFeedback())
+                            .submittedAt(sheet.getSubmittedAt())
+                            .build();
+                })
+                .toList();
+    }
+
+    private List<RankingCriterionScoreDto> buildCriteriaScoreDetails(
+            Long boardId, Long teamId, List<ScoreCriteria> criteria) {
+        if (criteria.isEmpty()) {
+            return List.of();
+        }
+        List<ScoreSheet> submittedSheets = submittedSheetsForTeam(boardId, teamId);
+        if (submittedSheets.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, List<ScoreItem>> itemsByCriteria = new HashMap<>();
+        for (ScoreSheet sheet : submittedSheets) {
+            for (ScoreItem item : scoreItemRepository.findByScoreSheetId(sheet.getId())) {
+                if (item.getCriteriaId() == null || item.getScoreValue() == null) {
+                    continue;
+                }
+                itemsByCriteria.computeIfAbsent(item.getCriteriaId(), ignored -> new ArrayList<>()).add(item);
+            }
+        }
+        return criteria.stream()
+                .map(criterion -> {
+                    List<ScoreItem> items = itemsByCriteria.getOrDefault(criterion.getId(), List.of());
+                    BigDecimal averageScore = averageScoreItems(items);
+                    BigDecimal weightedScore = averageScore == null
+                            ? null
+                            : averageScore.multiply(criterion.getWeight())
+                                    .divide(BigDecimal.TEN, 2, RoundingMode.HALF_UP);
+                    List<String> comments = items.stream()
+                            .map(ScoreItem::getComment)
+                            .filter(comment -> comment != null && !comment.isBlank())
+                            .map(String::trim)
+                            .distinct()
+                            .toList();
+                    return RankingCriterionScoreDto.builder()
+                            .criteriaId(criterion.getId())
+                            .criteriaName(criterion.getName())
+                            .weight(criterion.getWeight())
+                            .averageScore(averageScore)
+                            .weightedScore(weightedScore)
+                            .comments(comments)
+                            .build();
+                })
+                .toList();
+    }
+
+    private List<ScoreSheet> submittedSheetsForTeam(Long boardId, Long teamId) {
+        return scoreSheetRepository.findByBoardIdAndTeamId(boardId, teamId).stream()
+                .filter(sheet -> sheet.getStatus() == ScoreSheetStatus.SUBMITTED)
+                .toList();
+    }
+
+    private BigDecimal averageScoreItems(List<ScoreItem> items) {
+        List<BigDecimal> values = items.stream()
+                .map(ScoreItem::getScoreValue)
+                .filter(Objects::nonNull)
+                .toList();
+        if (values.isEmpty()) {
+            return null;
+        }
+        return average(values);
     }
 
     private String resolveRankingStatus(Long boardId, Long teamId, int submittedJudgeCount) {

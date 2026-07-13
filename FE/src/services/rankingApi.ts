@@ -1,6 +1,23 @@
 import type { ApiResponse } from "../types/api";
 import { apiClient } from "./apiClient";
 
+export interface RankingJudgeScore {
+  judgeId: number;
+  judgeName: string;
+  totalScore?: number | null;
+  feedback?: string | null;
+  submittedAt?: string | null;
+}
+
+export interface RankingCriterionScore {
+  criteriaId: number;
+  criteriaName: string;
+  weight: number;
+  averageScore?: number | null;
+  weightedScore?: number | null;
+  comments?: string[];
+}
+
 export interface RankingTeamEntry {
   rank: number;
   teamId: number;
@@ -10,6 +27,8 @@ export interface RankingTeamEntry {
   submittedJudgeCount: number;
   rankingStatus?: "SCORED" | "REPO_NOT_READY" | "NOT_SCORED" | string | null;
   ineligibleReason?: string | null;
+  judgeScores?: RankingJudgeScore[];
+  criteriaScores?: RankingCriterionScore[];
 }
 
 export interface BoardRanking {

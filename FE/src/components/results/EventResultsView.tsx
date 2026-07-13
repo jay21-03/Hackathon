@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
-import type { BoardRanking, PublicEventResults } from "../../services/rankingApi";
+import type { BoardRanking, PublicEventResults, RankingTeamEntry } from "../../services/rankingApi";
 import { formatBoardRankingLabel } from "../../utils/boardLabels";
 import { sortBoardRankings } from "../../utils/sortContestData";
 
@@ -48,6 +48,16 @@ function findBoardForTeam(boards: BoardRanking[], teamId: number | null | undefi
   return boards.find((board) => board.entries.some((entry) => entry.teamId === teamId)) ?? null;
 }
 
+function formatScore(value: number | null | undefined, digits = 2) {
+  if (value == null) return "Chưa có";
+  return Number(value).toFixed(digits);
+}
+
+function formatSubmittedAt(value?: string | null) {
+  if (!value) return null;
+  return new Date(value).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
+}
+
 function FilterPills<T extends string | number>({
   label,
   options,
@@ -87,6 +97,18 @@ function FilterPills<T extends string | number>({
 }
 
 export function EventResultsView({ results, participantView, highlightTeamId }: EventResultsViewProps) {
+  const [detailEntry, setDetailEntry] = useState<{
+    board: BoardRanking;
+    entry: RankingTeamEntry;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!participantView || !detailEntry || highlightTeamId == null) return;
+    if (detailEntry.entry.teamId !== highlightTeamId) {
+      setDetailEntry(null);
+    }
+  }, [detailEntry, highlightTeamId, participantView]);
+
   const sortedBoards = useMemo(
     () =>
       sortBoardRankings(
@@ -115,10 +137,10 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
         : preferredRound.boards[0];
     setRoundKeySelected(preferredRound.key);
     setBoardIdSelected(boardInRound?.boardId ?? preferredRound.boards[0]?.boardId ?? null);
-  }, [results.eventId, roundGroups, myBoard?.boardId]);
+  }, [results.eventId, roundGroups, myBoard]);
 
   const activeRound = roundGroups.find((group) => group.key === roundKeySelected) ?? roundGroups[0];
-  const boardsInRound = activeRound?.boards ?? [];
+  const boardsInRound = useMemo(() => activeRound?.boards ?? [], [activeRound]);
   const activeBoard =
     boardsInRound.find((board) => board.boardId === boardIdSelected) ?? boardsInRound[0] ?? null;
 
@@ -127,7 +149,7 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
     if (!boardsInRound.some((board) => board.boardId === boardIdSelected)) {
       setBoardIdSelected(boardsInRound[0]?.boardId ?? null);
     }
-  }, [activeRound?.key, boardsInRound, boardIdSelected]);
+  }, [activeRound, boardsInRound, boardIdSelected]);
 
   if (!results.published || sortedBoards.length === 0) {
     return (
@@ -228,12 +250,13 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left table-fixed">
+            <table className="min-w-full table-fixed text-left">
               <colgroup>
-                <col className="w-24" />
+                <col className="w-20" />
                 <col />
-                <col className="w-28" />
-                <col className="w-28" />
+                <col className="w-32" />
+                <col className="w-32" />
+                {participantView ? <col className="w-32" /> : null}
               </colgroup>
               <thead className="table-header-bg">
                 <tr className="font-label-sm text-on-surface-variant">
@@ -241,6 +264,7 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
                   <th className="px-md py-sm">Đội</th>
                   <th className="px-md py-sm text-right">Điểm TB</th>
                   <th className="px-md py-sm text-right">GK đã nộp</th>
+                  {participantView ? <th className="px-md py-sm text-right">Chi tiết</th> : null}
                 </tr>
               </thead>
               <tbody className="table-divider">
@@ -251,25 +275,164 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
                       key={row.teamId}
                       className={`font-body-sm text-on-surface ${isOwnTeam ? "bg-primary-container/30" : ""}`}
                     >
-                      <td className="px-md py-md font-headline-sm tabular-nums">
+                      <td className="px-md py-md align-middle font-headline-sm tabular-nums">
                         {row.rank}
-                        {isOwnTeam ? (
-                          <Badge tone="active" className="ml-sm align-middle">
-                            Đội bạn
-                          </Badge>
-                        ) : null}
                       </td>
-                      <td className="px-md py-md font-label-md">{row.teamName}</td>
-                      <td className="px-md py-md text-right tabular-nums">
+                      <td className="px-md py-md align-middle">
+                        <div className="flex flex-wrap items-center gap-sm">
+                          <span className="font-label-md">{row.teamName}</span>
+                          {isOwnTeam ? <Badge tone="active">Đội bạn</Badge> : null}
+                        </div>
+                      </td>
+                      <td className="px-md py-md align-middle text-right tabular-nums">
                         {Number(row.averageScore).toFixed(2)}
                       </td>
-                      <td className="px-md py-md text-right tabular-nums">{row.submittedJudgeCount}</td>
+                      <td className="px-md py-md align-middle text-right tabular-nums">{row.submittedJudgeCount}</td>
+                      {participantView ? (
+                        <td className="px-md py-md align-middle text-right">
+                          {isOwnTeam ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="primary"
+                              onClick={() =>
+                                setDetailEntry((current) =>
+                                  current?.entry.teamId === row.teamId && current.board.boardId === activeBoard.boardId
+                                    ? null
+                                    : { board: activeBoard, entry: row }
+                                )
+                              }
+                            >
+                              Chi tiết
+                            </Button>
+                          ) : (
+                            <span className="font-body-sm text-on-surface-variant">—</span>
+                          )}
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+        </section>
+      ) : null}
+
+      {detailEntry ? (
+        <section className="rounded-xl border border-primary/40 bg-primary-container/20 p-md">
+          <div className="flex flex-wrap items-start justify-between gap-sm">
+            <div>
+              <h3 className="font-title-md text-on-surface">Chi tiết kết quả</h3>
+              <p className="font-body-sm text-on-surface-variant">
+                {detailEntry.entry.teamName} · {formatBoardRankingLabel(detailEntry.board)}
+              </p>
+            </div>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setDetailEntry(null)}>
+              Đóng
+            </Button>
+          </div>
+          <dl className="mt-md grid gap-sm sm:grid-cols-3">
+            <div className="rounded-lg border border-outline-variant bg-surface px-md py-sm">
+              <dt className="font-label-sm text-on-surface-variant">Hạng</dt>
+              <dd className="font-headline-sm tabular-nums">{detailEntry.entry.rank}</dd>
+            </div>
+            <div className="rounded-lg border border-outline-variant bg-surface px-md py-sm">
+              <dt className="font-label-sm text-on-surface-variant">Điểm trung bình</dt>
+              <dd className="font-headline-sm tabular-nums">
+                {Number(detailEntry.entry.averageScore).toFixed(2)}
+              </dd>
+            </div>
+            <div className="rounded-lg border border-outline-variant bg-surface px-md py-sm">
+              <dt className="font-label-sm text-on-surface-variant">Giám khảo đã nộp</dt>
+              <dd className="font-headline-sm tabular-nums">{detailEntry.entry.submittedJudgeCount}</dd>
+            </div>
+          </dl>
+
+          {detailEntry.entry.judgeScores?.length ? (
+            <div className="mt-md overflow-x-auto rounded-lg border border-outline-variant bg-surface">
+              <table className="min-w-full table-fixed text-left">
+                <colgroup>
+                  <col />
+                  <col className="w-28" />
+                  <col className="w-36" />
+                </colgroup>
+                <thead className="table-header-bg">
+                  <tr className="font-label-sm text-on-surface-variant">
+                    <th className="px-md py-sm">Giám khảo</th>
+                    <th className="px-md py-sm text-right">Điểm</th>
+                    <th className="px-md py-sm text-right">Thời gian nộp</th>
+                  </tr>
+                </thead>
+                <tbody className="table-divider font-body-sm">
+                  {detailEntry.entry.judgeScores.map((judge) => (
+                    <tr key={judge.judgeId}>
+                      <td className="px-md py-sm">
+                        <span className="font-label-md text-on-surface">{judge.judgeName}</span>
+                        {judge.feedback ? (
+                          <span className="mt-xs block text-on-surface-variant">{judge.feedback}</span>
+                        ) : null}
+                      </td>
+                      <td className="px-md py-sm text-right tabular-nums">{formatScore(judge.totalScore)}</td>
+                      <td className="px-md py-sm text-right text-on-surface-variant">
+                        {formatSubmittedAt(judge.submittedAt) ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-md rounded-lg border border-outline-variant bg-surface px-md py-sm font-body-sm text-on-surface-variant">
+              {detailEntry.entry.submittedJudgeCount > 0
+                ? "Backend hiện chưa trả dữ liệu chi tiết phiếu chấm cho kết quả này. Hãy tải lại sau khi backend được cập nhật/restart."
+                : "Chưa có bảng điểm giám khảo chi tiết được công bố."}
+            </p>
+          )}
+
+          {detailEntry.entry.criteriaScores?.length ? (
+            <div className="mt-md overflow-x-auto rounded-lg border border-outline-variant bg-surface">
+              <table className="min-w-full table-fixed text-left">
+                <colgroup>
+                  <col />
+                  <col className="w-24" />
+                  <col className="w-28" />
+                  <col className="w-28" />
+                </colgroup>
+                <thead className="table-header-bg">
+                  <tr className="font-label-sm text-on-surface-variant">
+                    <th className="px-md py-sm">Tiêu chí</th>
+                    <th className="px-md py-sm text-right">Trọng số</th>
+                    <th className="px-md py-sm text-right">Điểm TB</th>
+                    <th className="px-md py-sm text-right">Điểm quy đổi</th>
+                  </tr>
+                </thead>
+                <tbody className="table-divider font-body-sm">
+                  {detailEntry.entry.criteriaScores.map((criterion) => (
+                    <tr key={criterion.criteriaId}>
+                      <td className="px-md py-sm">
+                        <span className="font-label-md text-on-surface">{criterion.criteriaName}</span>
+                        {criterion.comments?.length ? (
+                          <ul className="mt-xs list-disc space-y-1 pl-md text-on-surface-variant">
+                            {criterion.comments.map((comment, index) => (
+                              <li key={`${criterion.criteriaId}-${index}`}>{comment}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </td>
+                      <td className="px-md py-sm text-right tabular-nums">{criterion.weight}%</td>
+                      <td className="px-md py-sm text-right tabular-nums">
+                        {formatScore(criterion.averageScore)}
+                      </td>
+                      <td className="px-md py-sm text-right tabular-nums">
+                        {formatScore(criterion.weightedScore)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>
