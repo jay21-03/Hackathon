@@ -750,6 +750,14 @@ public class ContestManagementService {
             deleteScoreSheetsForSlotTeam(a.getBoardId(), aPrev);
             deleteScoreSheetsForSlotTeam(b.getBoardId(), bPrev);
         }
+
+        // Clear first so the round-level unique constraint on team_id is not
+        // violated while two occupied slots trade teams in the same transaction.
+        a.setTeamId(null);
+        b.setTeamId(null);
+        boardSlotRepository.saveAll(List.of(a, b));
+        boardSlotRepository.flush();
+
         a.setTeamId(bPrev);
         a.setAssignedAt(now);
         a.setAssignedBy(currentUserProvider.getCurrentUser().getUserId());
@@ -758,8 +766,7 @@ public class ContestManagementService {
         b.setAssignedAt(now);
         b.setAssignedBy(currentUserProvider.getCurrentUser().getUserId());
 
-        boardSlotRepository.save(a);
-        boardSlotRepository.save(b);
+        boardSlotRepository.saveAll(List.of(a, b));
 
         BoardSlotAssignmentAudit auditA = BoardSlotAssignmentAudit.builder()
                 .roundId(roundId)

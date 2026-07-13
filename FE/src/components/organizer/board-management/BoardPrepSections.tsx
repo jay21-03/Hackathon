@@ -299,6 +299,8 @@ export function BoardPrepSections({
           assigned={boardJudges}
           staffPool={judges}
           userNameById={resolvedUserNameById}
+          blockedAssigneeIds={boardMentors.map((row) => row.assigneeId)}
+          blockedAssigneeReason="đang là mentor bảng này"
           staffPoolScope={staffPoolTermScoped ? staffTermLabel : null}
           pickValue={judgePick}
           pickError={judgePickError}

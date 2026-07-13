@@ -8,7 +8,6 @@ import { useBoardManagement } from "../../../hooks/useBoardManagement";
 import { invalidateAfterBoardMutation } from "../../../lib/invalidateBoardQueries";
 import {
   assignTeamToSlot,
-  moveTeamBetweenSlots,
   randomAssignTeams,
   swapBoardSlots,
   unassignTeamFromSlot,
@@ -46,10 +45,7 @@ export function BoardTeamAssignmentSection({
     invalidate
   } = useBoardManagement(eventId);
   const [busy, setBusy] = useState(false);
-  const [forceReplace, setForceReplace] = useState(false);
   const [slotTeamNumber, setSlotTeamNumber] = useState<Record<number, string>>({});
-  const [moveFromId, setMoveFromId] = useState("");
-  const [moveToId, setMoveToId] = useState("");
   const [swapAId, setSwapAId] = useState("");
   const [swapBId, setSwapBId] = useState("");
   const [detailTeam, setDetailTeam] = useState<TeamDetailResponse | null>(null);
@@ -125,7 +121,7 @@ export function BoardTeamAssignmentSection({
         roundId,
         slotId,
         teamId,
-        slotOccupied && forceReplace,
+        slotOccupied,
         createIdempotencyKey(`assign-slot-${slotId}`)
       );
       await invalidate();
@@ -206,45 +202,20 @@ export function BoardTeamAssignmentSection({
         stats={stats}
         busy={busy}
         selectedRoundId={selectedRoundId}
-        forceReplace={forceReplace}
         slotTeamNumber={slotTeamNumber}
-        moveFromId={moveFromId}
-        moveToId={moveToId}
         swapAId={swapAId}
         swapBId={swapBId}
-        onForceReplaceChange={setForceReplace}
         onSlotTeamNumberChange={(boardId, value) =>
           setSlotTeamNumber((current) => ({ ...current, [boardId]: value }))
         }
         onSlotTeamPickChange={(slotId, value) =>
           setSlotTeamPick((current) => ({ ...current, [slotId]: value }))
         }
-        onMoveFromIdChange={setMoveFromId}
-        onMoveToIdChange={setMoveToId}
         onSwapAIdChange={setSwapAId}
         onSwapBIdChange={setSwapBId}
         slotPickValue={slotPickValue}
         teamsForSlot={teamsForSlot}
         onRandomAssign={() => void handleRandomAssign()}
-        onMove={async () => {
-          const roundId = selectedRoundId;
-          if (!roundId || !moveFromId || !moveToId) return;
-          setBusy(true);
-          try {
-            await moveTeamBetweenSlots(
-              roundId,
-              Number(moveFromId),
-              Number(moveToId),
-              createIdempotencyKey(`move-${moveFromId}-${moveToId}`)
-            );
-            await invalidate();
-            notify("Đã di chuyển đội giữa các vị trí.", "success");
-          } catch (err) {
-            notify(resolveApiError(err, "Di chuyển thất bại."), "danger");
-          } finally {
-            setBusy(false);
-          }
-        }}
         onSwap={async () => {
           const roundId = selectedRoundId;
           if (!roundId || !swapAId || !swapBId) return;

@@ -1,9 +1,7 @@
 import { ProblemFileUploadZone } from "../ProblemFileUploadZone";
 import { ProblemLivePreview } from "../ProblemLivePreview";
-import { ProblemRepoTemplateSection } from "../ProblemRepoTemplateSection";
 import { ProblemRichTextEditor } from "../ProblemRichTextEditor";
 import { ConfirmAction } from "../../feedback/ConfirmAction";
-import { enableGithubProvisioning } from "../../../config/features";
 import { Button } from "../../ui/Button";
 import type { BoardResponse, ProblemResponse, RoundResponse } from "../../../services/contestApi";
 
@@ -213,10 +211,6 @@ export function BoardProblemSection({
           </div>
         </aside>
       </section>
-
-      {problem && enableGithubProvisioning ? (
-        <ProblemRepoTemplateSection problemId={problem.id} problemTitle={problem.title} />
-      ) : null}
     </div>
   );
 }

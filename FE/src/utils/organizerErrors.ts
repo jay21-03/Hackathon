@@ -9,7 +9,7 @@ const organizerErrorMap: Record<string, string> = {
   TARGET_NOT_JUDGE: "Người được chọn chưa có vai trò giám khảo.",
   MENTOR_CANNOT_JUDGE_OWN_BOARD:
     "Mentor của bảng này không thể làm giám khảo cùng bảng — gán giám khảo ở bảng khác.",
-  SLOT_OCCUPIED: "Vị trí đã có đội — bật «Ghi đè» hoặc xóa đội trước.",
+  SLOT_OCCUPIED: "Vị trí đã có đội — hãy gỡ đội hiện tại hoặc dùng nút Gán lại.",
   TEAM_NOT_CONFIRMED: "Chỉ gán đội ở trạng thái đã xác nhận.",
   EVENT_NOT_IN_PROGRESS: "Cuộc thi chưa ở giai đoạn đang diễn ra.",
   AWARDS_INCLUDE_INELIGIBLE_TEAMS:

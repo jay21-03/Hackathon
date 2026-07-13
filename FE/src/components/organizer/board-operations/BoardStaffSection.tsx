@@ -19,6 +19,8 @@ interface BoardStaffSectionProps {
   assigned: AssignmentResponse[];
   staffPool: UserSummaryResponse[];
   userNameById: Record<number, string>;
+  blockedAssigneeIds?: number[];
+  blockedAssigneeReason?: string;
   pickValue: string;
   pickError?: string | null;
   busy: boolean;
@@ -45,6 +47,8 @@ export function BoardStaffSection({
   assigned,
   staffPool,
   userNameById,
+  blockedAssigneeIds = [],
+  blockedAssigneeReason,
   pickValue,
   pickError,
   busy,
@@ -60,6 +64,9 @@ export function BoardStaffSection({
   const roleLabel = isMentor ? "Mentor" : "Giám khảo";
   const emptyLabel = isMentor ? "Chưa có mentor trên bảng này." : "Chưa có giám khảo trên bảng này.";
   const addLabel = isMentor ? "Thêm mentor" : "Thêm giám khảo";
+  const blockedIds = new Set(blockedAssigneeIds);
+  const selectableStaffCount = staffPool.filter((user) => !blockedIds.has(user.id)).length;
+  const hasStaffOptions = selectableStaffCount > 0;
 
   return (
     <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
@@ -155,21 +162,39 @@ export function BoardStaffSection({
             <select
               className={`form-input${pickError ? " border-error" : ""}`}
               value={pickValue}
+              disabled={staffPool.length === 0 || busy}
               onChange={(e) => onPickChange(e.target.value)}
             >
-              <option value="">{addLabel}</option>
-              {staffPool.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.fullName}
-                </option>
-              ))}
+              <option value="">
+                {staffPool.length > 0 ? addLabel : `Chưa có ${roleLabel.toLowerCase()}`}
+              </option>
+              {staffPool.map((user) => {
+                const blocked = blockedIds.has(user.id);
+                return (
+                  <option key={user.id} value={user.id} disabled={blocked}>
+                    {user.fullName}
+                    {blocked && blockedAssigneeReason ? ` (${blockedAssigneeReason})` : ""}
+                  </option>
+                );
+              })}
             </select>
             {pickError ? <span className="font-body-sm text-error">{pickError}</span> : null}
           </label>
-          <Button type="button" size="sm" className="mt-[1.35rem]" disabled={busy} onClick={onAssign}>
+          <Button
+            type="button"
+            size="sm"
+            className="mt-[1.35rem]"
+            disabled={busy || !pickValue || !hasStaffOptions}
+            onClick={onAssign}
+          >
             Gán
           </Button>
         </div>
+        {staffPool.length > 0 && !hasStaffOptions ? (
+          <p className="font-body-sm text-on-surface-variant">
+            Các {roleLabel.toLowerCase()} còn lại đang bị chặn cho bảng này.
+          </p>
+        ) : null}
         {staffPool.length === 0 ? (
           <p className="font-body-sm text-on-surface-variant">
             {staffPoolScope

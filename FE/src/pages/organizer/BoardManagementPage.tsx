@@ -7,7 +7,6 @@ import { BoardListSection } from "../../components/organizer/board-management/Bo
 import { BoardRoundSection } from "../../components/organizer/board-management/BoardRoundSection";
 import { BoardSlotsSection } from "../../components/organizer/board-management/BoardSlotsSection";
 import { TeamDetailModal } from "../../components/organizer/TeamDetailModal";
-import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { ButtonLink } from "../../components/ui/Button";
@@ -38,7 +37,6 @@ import {
   deleteBoard,
   deleteBoardSlot,
   deleteRound,
-  moveTeamBetweenSlots,
   randomAssignTeams,
   swapBoardSlots,
   unassignTeamFromSlot,
@@ -118,11 +116,8 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
   const [boardName, setBoardName] = useState("");
   const [boardOrder, setBoardOrder] = useState(1);
   const [slotTeamNumber, setSlotTeamNumber] = useState<Record<number, string>>({});
-  const [moveFromId, setMoveFromId] = useState("");
-  const [moveToId, setMoveToId] = useState("");
   const [swapAId, setSwapAId] = useState("");
   const [swapBId, setSwapBId] = useState("");
-  const [forceReplace, setForceReplace] = useState(false);
   const [detailTeam, setDetailTeam] = useState<TeamDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailContext, setDetailContext] = useState<string | undefined>();
@@ -319,18 +314,30 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
 
   async function handleCreateSlot(boardId: number) {
     const raw = slotTeamNumber[boardId] ?? "";
-    const teamNumber = Number(raw);
-    const parsed = slotNumberSchema.safeParse(teamNumber);
+    const quantity = Number(raw);
+    const parsed = slotNumberSchema.safeParse(quantity);
     if (!selectedRoundId || !parsed.success) {
       notify(parsed.success ? "Nhập số vị trí hợp lệ." : zodFirstError(parsed.error), "warning");
       return;
     }
+    const targetBoard = boards.find(({ board }) => board.id === boardId);
+    if (!targetBoard) return;
+    const usedNumbers = new Set(targetBoard.slots.map((slot) => slot.teamNumber));
+    let nextTeamNumber = Math.max(0, ...usedNumbers);
+    const teamNumbers: number[] = [];
+    while (teamNumbers.length < quantity) {
+      nextTeamNumber += 1;
+      if (!usedNumbers.has(nextTeamNumber)) {
+        teamNumbers.push(nextTeamNumber);
+        usedNumbers.add(nextTeamNumber);
+      }
+    }
     setBusy(true);
     try {
-      await createBoardSlot(boardId, teamNumber);
+      await Promise.all(teamNumbers.map((teamNumber) => createBoardSlot(boardId, teamNumber)));
       setSlotTeamNumber((current) => ({ ...current, [boardId]: "" }));
       await invalidate();
-      notify("Đã thêm vị trí — chọn đội ngay bên dưới hoặc dùng phân công ngẫu nhiên.", "success");
+      notify(`Đã thêm ${quantity} vị trí.`, "success");
     } catch (err) {
       notify(resolveApiError(err, "Thêm vị trí thất bại."), "danger");
     } finally {
@@ -432,10 +439,6 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
       notify("Chọn đội để gán vào vị trí.", "warning");
       return;
     }
-    if (slotOccupied && !forceReplace) {
-      notify("Vị trí đã có đội — bật «Ghi đè» hoặc chọn vị trí trống.", "warning");
-      return;
-    }
     const boardKey = queryKeys.boards.roundDetail(eventId, selectedRoundId);
     const previousBoards = queryClient.getQueryData<BoardWithSlots[]>(boardKey);
     if (previousBoards) {
@@ -455,7 +458,7 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
         selectedRoundId,
         slotId,
         teamId,
-        slotOccupied && forceReplace,
+        slotOccupied,
         createIdempotencyKey(`assign-slot-${slotId}`)
       );
       await invalidate();
@@ -583,32 +586,6 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
       }
     } catch (err) {
       notify(resolveApiError(err, "Phân công ngẫu nhiên thất bại."), "danger");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleMove() {
-    if (!selectedRoundId || !moveFromId || !moveToId) {
-      notify("Chọn vị trí nguồn và vị trí đích.", "warning");
-      return;
-    }
-    if (moveFromId === moveToId) {
-      notify("Vị trí nguồn và đích phải khác nhau.", "warning");
-      return;
-    }
-    setBusy(true);
-    try {
-      await moveTeamBetweenSlots(
-        selectedRoundId,
-        Number(moveFromId),
-        Number(moveToId),
-        createIdempotencyKey(`move-${moveFromId}-${moveToId}`)
-      );
-      await invalidate();
-      notify("Đã di chuyển đội giữa các vị trí.", "success");
-    } catch (err) {
-      notify(resolveApiError(err, "Di chuyển thất bại."), "danger");
     } finally {
       setBusy(false);
     }
@@ -807,27 +784,20 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
               stats={stats}
               busy={busy}
               selectedRoundId={selectedRoundId}
-              forceReplace={forceReplace}
               slotTeamNumber={slotTeamNumber}
-              moveFromId={moveFromId}
-              moveToId={moveToId}
               swapAId={swapAId}
               swapBId={swapBId}
-              onForceReplaceChange={setForceReplace}
               onSlotTeamNumberChange={(boardId, value) =>
                 setSlotTeamNumber((current) => ({ ...current, [boardId]: value }))
               }
               onSlotTeamPickChange={(slotId, value) =>
                 setSlotTeamPick((current) => ({ ...current, [slotId]: value }))
               }
-              onMoveFromIdChange={setMoveFromId}
-              onMoveToIdChange={setMoveToId}
               onSwapAIdChange={setSwapAId}
               onSwapBIdChange={setSwapBId}
               slotPickValue={slotPickValue}
               teamsForSlot={teamsForSlot}
               onRandomAssign={() => void handleRandomAssign()}
-              onMove={() => void handleMove()}
               onSwap={() => void handleSwap()}
               onCreateSlot={(boardId) => void handleCreateSlot(boardId)}
               onAssignSlot={(slotId, occupied) => void handleAssignSlot(slotId, occupied)}

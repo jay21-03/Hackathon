@@ -27,23 +27,16 @@ export interface BoardSlotsSectionProps {
   stats: { assignedCount: number; slotsCount: number };
   busy: boolean;
   selectedRoundId: number | null;
-  forceReplace: boolean;
   slotTeamNumber: Record<number, string>;
-  moveFromId: string;
-  moveToId: string;
   swapAId: string;
   swapBId: string;
-  onForceReplaceChange: (value: boolean) => void;
   onSlotTeamNumberChange: (boardId: number, value: string) => void;
   onSlotTeamPickChange: (slotId: number, value: string) => void;
-  onMoveFromIdChange: (value: string) => void;
-  onMoveToIdChange: (value: string) => void;
   onSwapAIdChange: (value: string) => void;
   onSwapBIdChange: (value: string) => void;
   slotPickValue: (slot: BoardSlotResponse) => string;
   teamsForSlot: (slotId: number, currentTeamId: number | null) => TeamDetailResponse[];
   onRandomAssign: () => void;
-  onMove: () => void;
   onSwap: () => void;
   onCreateSlot: (boardId: number) => void;
   onAssignSlot: (slotId: number, slotOccupied: boolean) => void;
@@ -63,23 +56,16 @@ export function BoardSlotsSection({
   stats,
   busy,
   selectedRoundId,
-  forceReplace,
   slotTeamNumber,
-  moveFromId,
-  moveToId,
   swapAId,
   swapBId,
-  onForceReplaceChange,
   onSlotTeamNumberChange,
   onSlotTeamPickChange,
-  onMoveFromIdChange,
-  onMoveToIdChange,
   onSwapAIdChange,
   onSwapBIdChange,
   slotPickValue,
   teamsForSlot,
   onRandomAssign,
-  onMove,
   onSwap,
   onCreateSlot,
   onAssignSlot,
@@ -132,59 +118,10 @@ export function BoardSlotsSection({
         </div>
       )}
 
-      {showAssignment ? (
-        <label className="inline-flex items-center gap-sm font-body-sm text-on-surface-variant">
-          <input
-            type="checkbox"
-            checked={forceReplace}
-            onChange={(e) => onForceReplaceChange(e.target.checked)}
-            className="h-4 w-4 rounded border-outline-variant"
-          />
-          Ghi đè khi gán vào vị trí đã có đội
-        </label>
-      ) : null}
-
       {showAssignment && allSlots.length > 1 ? (
         <>
-          <h3 className="font-label-md text-on-surface">Di chuyển / hoán đổi vị trí</h3>
+          <h3 className="font-label-md text-on-surface">Hoán đổi vị trí</h3>
           <div className="flex flex-wrap gap-md items-end">
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Từ vị trí
-              <select
-                className="form-input min-w-[220px]"
-                value={moveFromId}
-                onChange={(e) => onMoveFromIdChange(e.target.value)}
-              >
-                <option value="">—</option>
-                {allSlots.map(({ slot, label }) => (
-                  <option key={slot.id} value={slot.id}>
-                    {label}
-                    {slot.teamId ? ` · ${teamMap[slot.teamId]}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-              Đến vị trí
-              <select
-                className="form-input min-w-[220px]"
-                value={moveToId}
-                onChange={(e) => onMoveToIdChange(e.target.value)}
-              >
-                <option value="">—</option>
-                {allSlots.map(({ slot, label }) => (
-                  <option key={slot.id} value={slot.id}>
-                    {label}
-                    {slot.teamId ? ` · ${teamMap[slot.teamId]}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button type="button" variant="secondary" disabled={busy} onClick={onMove}>
-              Di chuyển
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-md items-end border-t border-outline-variant pt-md">
             <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
               Vị trí A
               <select
@@ -196,6 +133,7 @@ export function BoardSlotsSection({
                 {allSlots.map(({ slot, label }) => (
                   <option key={slot.id} value={slot.id}>
                     {label}
+                    {slot.teamId ? ` · ${teamMap[slot.teamId]}` : ""}
                   </option>
                 ))}
               </select>
@@ -211,6 +149,7 @@ export function BoardSlotsSection({
                 {allSlots.map(({ slot, label }) => (
                   <option key={slot.id} value={slot.id}>
                     {label}
+                    {slot.teamId ? ` · ${teamMap[slot.teamId]}` : ""}
                   </option>
                 ))}
               </select>
@@ -242,7 +181,7 @@ export function BoardSlotsSection({
 
               <div className="flex flex-wrap items-end gap-sm rounded-lg border border-dashed border-outline-variant bg-surface-container px-md py-sm">
                 <label className="grid gap-xs font-label-sm normal-case text-on-surface-variant">
-                  Số vị trí mới
+                  Số lượng vị trí cần thêm
                   <input
                     type="number"
                     min={1}
@@ -258,7 +197,7 @@ export function BoardSlotsSection({
                   disabled={busy}
                   onClick={() => onCreateSlot(board.id)}
                 >
-                  Thêm vị trí
+                  Tạo vị trí
                 </Button>
               </div>
 
@@ -272,8 +211,6 @@ export function BoardSlotsSection({
                 <div className="space-y-sm">
                   {slots.map((slot) => {
                     const pickValue = slotPickValue(slot);
-                    const displayTeam =
-                      pickValue ? teamById[Number(pickValue)] : slot.teamId ? teamById[slot.teamId] : null;
                     const assignedTeam = slot.teamId ? teamById[slot.teamId] : null;
                     const assignedLabel =
                       assignedTeam?.name ?? (slot.teamId ? teamMap[slot.teamId] : null) ?? "Đội đã gán";
@@ -313,7 +250,7 @@ export function BoardSlotsSection({
                                 disabled={busy || !pickValue}
                                 onClick={() => onAssignSlot(slot.id, Boolean(slot.teamId))}
                               >
-                                {slot.teamId ? "Ghi đè" : "Gán"}
+                                {slot.teamId ? "Gán lại" : "Gán"}
                               </Button>
                               {assignedTeam || slot.teamId ? (
                                 <Button
