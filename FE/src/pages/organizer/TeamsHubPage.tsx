@@ -6,7 +6,6 @@ import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
 import { useEventTeamSummary } from "../../hooks/useEventTeamSummary";
 import { useTeamsHubProgress } from "../../hooks/useTeamsHubProgress";
-import { InvitationManagementPage } from "./InvitationManagementPage";
 import { RegistrationManagementPage } from "./RegistrationManagementPage";
 import { handleEmbeddedNextStep, type HubEmbedProps } from "../../utils/hubEmbedUtils";
 import { macroPathToWizardStep } from "./eventWizardUtils";
@@ -88,9 +87,6 @@ export function TeamsHubPage({ embedded = false, onWizardStep }: HubEmbedProps =
       />
 
       {currentStep === "#teams-step-registrations" ? <RegistrationManagementPage embedded /> : null}
-      {currentStep === "#teams-step-invitations-members" ? (
-        <InvitationManagementPage embedded forcedTab="members" />
-      ) : null}
     </div>
   );
 }

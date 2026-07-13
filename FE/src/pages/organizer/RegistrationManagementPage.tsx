@@ -21,7 +21,7 @@ import { useEventTeamSummary } from "../../hooks/useEventTeamSummary";
 import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
 import { queryKeys } from "../../lib/queryKeys";
 import { fetchEventDetail } from "../../services/eventsApi";
-import { getStatusLabel, getStatusTone, getTeamRegistrationStatusLabel, getTeamRegistrationStatusTone } from "../../domain/status";
+import { getStatusLabel, getTeamRegistrationStatusLabel, getTeamRegistrationStatusTone } from "../../domain/status";
 import {
   fetchTeam,
   updateTeamStatus,
@@ -30,10 +30,8 @@ import {
 import { downloadTeamsCsv } from "../../utils/exportTeamsCsv";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { mapRegistrationErrorMessage } from "../../utils/registrationErrors";
-import { formatAuditAction } from "../../utils/auditActionLabels";
 import { Icon } from "../../components/ui/Icon";
 import { TeamDetailModal } from "../../components/organizer/TeamDetailModal";
-import { fetchEventAuditLogs } from "../../services/auditApi";
 type Filter = "ALL" | "PENDING" | "CONFIRMED" | "WAITLIST" | "REJECTED" | "DISQUALIFIED";
 
 function formatDate(value: string) {
@@ -71,27 +69,6 @@ function getDisqualifyDisabledReason(registration: { status: string }): string |
   if (registration.status === "DISQUALIFIED") return "Đội đã bị loại.";
   if (registration.status === "REJECTED") return "Đội đã bị từ chối.";
   return null;
-}
-
-function summarizeAuditDetail(raw: string) {
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (typeof parsed.teamStatus === "string") {
-      return `Trạng thái mới: ${getStatusLabel(parsed.teamStatus)}`;
-    }
-    if (typeof parsed.eventStatus === "string") {
-      return `Trạng thái cuộc thi: ${getStatusLabel(parsed.eventStatus)}`;
-    }
-    if (typeof parsed.boardId === "number" && typeof parsed.teamCount === "number") {
-      return `Bảng #${parsed.boardId} · ${parsed.teamCount} đội`;
-    }
-    if (typeof parsed.eventId === "number" && typeof parsed.boardsPublished === "number") {
-      return `Cuộc thi #${parsed.eventId} · ${parsed.boardsPublished} bảng đã công bố`;
-    }
-  } catch {
-    return raw;
-  }
-  return raw.length > 120 ? `${raw.slice(0, 120)}…` : raw;
 }
 
 export function RegistrationManagementPage({ embedded = false }: { embedded?: boolean } = {}) {
@@ -142,11 +119,6 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
   const [detailTeam, setDetailTeam] = useState<TeamDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
-  const auditQuery = useQuery({
-    queryKey: [...queryKeys.events.detail(eventId ?? ""), "audit-logs"],
-    queryFn: () => fetchEventAuditLogs(eventId!),
-    enabled: Boolean(eventId)
-  });
 
   function memberCount(team: TeamDetailResponse) {
     return team.members?.length ?? 0;
@@ -364,7 +336,6 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
             <tr key={registration.id} className={tableRowClass}>
               <td className={tableFirstCellStickyClass}>
                 <p className="font-label-md">{registration.name}</p>
-                <p className="text-on-surface-variant">Cuộc thi #{registration.eventId}</p>
               </td>
               <td className="px-md py-md">{memberCount(registration)}/{maxTeamSize}</td>
               <td className="px-md py-md">
@@ -483,27 +454,6 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
           </div>
         ) : null}
       </section>
-
-      {auditQuery.data && auditQuery.data.length > 0 ? (
-        <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-          <h2 className="font-headline-sm text-on-surface">Nhật ký thao tác</h2>
-          <ul className="mt-sm max-h-64 space-y-xs overflow-y-auto font-body-sm text-on-surface-variant">
-            {auditQuery.data.map((log) => (
-              <li key={log.id} className="border-b border-outline-variant/40 py-xs">
-                <span className="font-label-sm text-on-surface">{formatAuditAction(log.action)}</span>
-                {" · "}
-                {log.actorEmail ?? "hệ thống"} —{" "}
-                {new Date(log.createdAt).toLocaleString("vi-VN")}
-                {log.afterState ? (
-                  <span className="mt-xs block font-body-sm text-on-surface-variant">
-                    {summarizeAuditDetail(log.afterState)}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
 
       <TeamDetailModal
         open={detailOpen}

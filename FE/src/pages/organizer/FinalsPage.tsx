@@ -53,7 +53,7 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const queryClient = useQueryClient();
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, loading: roundsLoading } = useEventRounds(eventId);
-  const initialFilters = useMemo(loadFinalsFilters, []);
+  const initialFilters = useMemo(() => loadFinalsFilters(), []);
   const [fromRoundId, setFromRoundId] = useState<number | "">(initialFilters.fromRoundId);
   const [toRoundId, setToRoundId] = useState<number | "">(initialFilters.toRoundId);
   const [topN, setTopN] = useState(initialFilters.topN);
@@ -97,7 +97,6 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
     queryFn: () => fetchAdvancements(eventId!, toId!),
     enabled: eventId != null && toId != null
   });
-
   const eligibleTeams: AdvancementCandidate[] = useMemo(() => {
     if (!previewQuery.data) return [];
     return previewQuery.data.eligibleTeams?.length

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ModuleSkeleton } from "../../components/ui/ModuleSkeleton";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { PageHeader } from "../../components/ui/PageHeader";

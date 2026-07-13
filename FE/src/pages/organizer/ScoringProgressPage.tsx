@@ -81,8 +81,9 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
   const [searchParams, setSearchParams] = useSearchParams();
   const eventIdParam = searchParams.get("eventId");
   const boardIdParam = searchParams.get("boardId");
-  const storedFilters = useMemo(loadScoringProgressFilters, []);
+  const storedFilters = useMemo(() => loadScoringProgressFilters(), []);
   const deepLinkEventApplied = useRef(false);
+  const appliedBoardParamRef = useRef<string | null>(null);
   const { eventId, events, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, boards, loading: boardsLoading, error: boardsError, refetch: refetchBoards } = useEventBoards(eventId);
   const [roundId, setRoundId] = useState<number | null>(storedFilters.roundId);
@@ -128,7 +129,13 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
 
   useEffect(() => {
     const urlBoardId = boardIdParam ? Number(boardIdParam) : null;
-    if (urlBoardId && boards.some((board) => board.id === urlBoardId)) {
+    if (
+      boardIdParam &&
+      appliedBoardParamRef.current !== boardIdParam &&
+      urlBoardId &&
+      boards.some((board) => board.id === urlBoardId)
+    ) {
+      appliedBoardParamRef.current = boardIdParam;
       const matched = boards.find((board) => board.id === urlBoardId);
       if (matched) setRoundId(matched.roundId);
       setBoardId(urlBoardId);
@@ -229,7 +236,10 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
           <select
             className="w-full min-w-0 rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
             value={activeRoundId ?? ""}
-            onChange={(e) => setRoundId(e.target.value ? Number(e.target.value) : null)}
+            onChange={(e) => {
+              setRoundId(e.target.value ? Number(e.target.value) : null);
+              setBoardId(null);
+            }}
             disabled={!rounds.length}
           >
             {rounds.length === 0 ? <option value="">Chưa có vòng</option> : null}
@@ -360,9 +370,6 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                     ))}
                   </tbody>
                 </table>
-                <p className="mt-sm font-body-sm text-on-surface-variant">
-                  ✓/số = đã nộp · … = nháp · — = chưa chấm
-                </p>
               </div>
             </section>
           ) : null}

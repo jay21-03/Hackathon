@@ -28,12 +28,6 @@ export function useTeamsHubProgress({ confirmedTeams, pendingTeams }: TeamsHubPr
         anchor: "#teams-step-registrations"
       },
       {
-        label: "Lời mời thành viên",
-        detail: "Theo dõi email mời đội",
-        state: hasTeams ? "done" : "next",
-        anchor: "#teams-step-invitations-members"
-      },
-      {
         label: "Tiếp theo",
         detail: "Vận hành bảng",
         state: hasTeams ? "next" : "blocked",

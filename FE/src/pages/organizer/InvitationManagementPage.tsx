@@ -104,8 +104,8 @@ export function InvitationManagementPage({
   const [memberEmailFilter, setMemberEmailFilter] = useState("");
   const [memberEmailDebounced, setMemberEmailDebounced] = useState("");
   const [memberPage, setMemberPage] = useState(0);
-  const cell = getDensityCellClass(density);
   const pageSize = 25;
+  const showDensityToggle = !(forcedTab === "staff");
 
   useEffect(() => {
     const timer = window.setTimeout(() => setMemberEmailDebounced(memberEmailFilter), 300);
@@ -272,7 +272,7 @@ export function InvitationManagementPage({
             actions={
               <>
                 <OrganizerContextBar />
-                <TableDensityToggle value={density} onChange={setDensity} />
+                {showDensityToggle ? <TableDensityToggle value={density} onChange={setDensity} /> : null}
               </>
             }
           />
@@ -284,9 +284,11 @@ export function InvitationManagementPage({
           />
         </>
       ) : (
-        <div className="flex justify-end">
-          <TableDensityToggle value={density} onChange={setDensity} />
-        </div>
+        showDensityToggle ? (
+          <div className="flex justify-end">
+            <TableDensityToggle value={density} onChange={setDensity} />
+          </div>
+        ) : null
       )}
 
       {!embedded && !forcedTab ? (

@@ -25,6 +25,7 @@ export function UserManagementPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING_APPROVAL">("ALL");
+  const [roleFilter, setRoleFilter] = useState<"ALL" | "PARTICIPANT" | "MENTOR" | "JUDGE" | "ORGANIZER">("ALL");
   const [listPage, setListPage] = useState(0);
   const [assigningId, setAssigningId] = useState<number | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
@@ -37,9 +38,12 @@ export function UserManagementPage() {
   const cell = getDensityCellClass(density);
 
   const filteredUsers = useMemo(() => {
-    if (statusFilter === "ALL") return users;
-    return users.filter((user) => user.status === statusFilter);
-  }, [users, statusFilter]);
+    return users.filter((user) => {
+      const statusMatch = statusFilter === "ALL" || user.status === statusFilter;
+      const roleMatch = roleFilter === "ALL" || user.roles.includes(roleFilter);
+      return statusMatch && roleMatch;
+    });
+  }, [roleFilter, statusFilter, users]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -114,6 +118,19 @@ export function UserManagementPage() {
               >
                 <option value="ALL">Tất cả trạng thái</option>
                 <option value="PENDING_APPROVAL">Chờ duyệt</option>
+              </select>
+              <select
+                className="rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 font-body-sm"
+                value={roleFilter}
+                onChange={(e) =>
+                  setRoleFilter(e.target.value as "ALL" | "PARTICIPANT" | "MENTOR" | "JUDGE" | "ORGANIZER")
+                }
+              >
+                <option value="ALL">Tất cả vai trò</option>
+                <option value="PARTICIPANT">Thí sinh</option>
+                <option value="MENTOR">Mentor</option>
+                <option value="JUDGE">Giám khảo</option>
+                <option value="ORGANIZER">Ban tổ chức</option>
               </select>
               <TableDensityToggle value={density} onChange={setDensity} />
             </div>

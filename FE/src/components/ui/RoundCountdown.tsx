@@ -45,6 +45,7 @@ export function RoundCountdown({
   if (!roundId) return null;
   if (loading) return <ModuleSkeleton rows={1} />;
   if (!countdown && !phaseStatus) return null;
+  const visiblePhaseStatus = countdown?.status === "ENDED" ? null : phaseStatus;
 
   return (
     <div
@@ -53,8 +54,8 @@ export function RoundCountdown({
       <span className="font-label-sm normal-case text-on-surface-variant">
         {phaseName ? `Vòng: ${phaseName}` : "Vòng thi"}
       </span>
-      {phaseStatus ? (
-        <Badge tone={getStatusTone(phaseStatus)}>{getStatusLabel(phaseStatus)}</Badge>
+      {visiblePhaseStatus ? (
+        <Badge tone={getStatusTone(visiblePhaseStatus)}>{getStatusLabel(visiblePhaseStatus)}</Badge>
       ) : null}
       {countdown ? (
         <>
