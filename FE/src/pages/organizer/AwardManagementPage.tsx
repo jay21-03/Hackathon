@@ -47,6 +47,19 @@ function formatScore(score: number) {
   return Number.isInteger(score) ? String(score) : score.toFixed(2);
 }
 
+function makeAwardCode(name: string, fallback = "AWARD") {
+  const normalized = name
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+  return normalized || fallback;
+}
+
 const EMPTY_CATEGORY_FORM: CreateAwardCategoryPayload = {
   name: "",
   code: "",
@@ -82,7 +95,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
   const { rounds, boards, loading: boardsLoading } = useEventBoards(eventId);
   const { teams, loading: teamsLoading } = useEventTeams(eventId, { size: 200 });
   const [busy, setBusy] = useState(false);
-  const initialFilters = useMemo(loadAwardFilters, []);
+  const initialFilters = useMemo(() => loadAwardFilters(), []);
   const [roundId, setRoundId] = useState<number | null>(initialFilters.roundId);
   const [boardId, setBoardId] = useState<number | null>(initialFilters.boardId);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
@@ -223,7 +236,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
       maxWinners: category.maxWinners,
       prizeValue: category.prizeValue ?? "",
       sortOrder: category.sortOrder,
-      roundId: category.roundId ?? undefined,
+      roundId: category.roundId ?? null,
       isActive: category.isActive
     });
     setCategoryModalOpen(true);
@@ -263,8 +276,13 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
       notify("Giải đã công bố — thu hồi công bố trước khi chỉnh sửa.", "warning");
       return;
     }
+    const normalizedCode =
+      editingCategoryId != null && categoryForm.code.trim()
+        ? categoryForm.code
+        : makeAwardCode(categoryForm.name);
     const parsed = awardCategorySchema.safeParse({
       ...categoryForm,
+      code: normalizedCode,
       description: categoryForm.description?.trim() || undefined,
       prizeValue: categoryForm.prizeValue?.trim() || undefined
     });
@@ -274,7 +292,10 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
     }
     setBusy(true);
     try {
-      const payload = parsed.data;
+      const payload = {
+        ...parsed.data,
+        clearRoundId: parsed.data.roundId == null
+      };
       if (editingCategoryId != null) {
         await updateAwardCategory(editingCategoryId, payload);
         notify("Đã cập nhật loại giải.", "success");
@@ -319,10 +340,12 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
       notify("Giải đã công bố — thu hồi công bố trước khi chỉnh sửa.", "warning");
       return;
     }
+    const selectedCategory =
+      assignCategoryId === "" ? null : categories.find((category) => category.id === assignCategoryId) ?? null;
     const parsed = assignTeamAwardSchema.safeParse({
       awardCategoryId: assignCategoryId === "" ? undefined : assignCategoryId,
       teamId: assignTeamId === "" ? undefined : assignTeamId,
-      roundId: activeRoundId ?? undefined
+      roundId: selectedCategory?.roundId ?? undefined
     });
     if (!parsed.success) {
       notify(firstZodError(parsed.error), "warning");
@@ -760,9 +783,6 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                                           {getStatusLabel(winner.teamStatus)}
                                         </Badge>
                                       ) : null}
-                                      {winner.note ? (
-                                        <span className="text-on-surface-variant"> — {winner.note}</span>
-                                      ) : null}
                                     </span>
                                     <ConfirmAction
                                       title="Xóa giải đã gán?"
@@ -809,14 +829,6 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
             />
           </label>
           <label className="block space-y-xs">
-            Mã (code)
-            <input
-              className="w-full rounded-lg border border-outline-variant p-sm"
-              value={categoryForm.code}
-              onChange={(e) => setCategoryForm((f) => ({ ...f, code: e.target.value }))}
-            />
-          </label>
-          <label className="block space-y-xs">
             Mô tả
             <textarea
               className="w-full rounded-lg border border-outline-variant p-sm"
@@ -833,7 +845,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
               onChange={(e) =>
                 setCategoryForm((f) => ({
                   ...f,
-                  roundId: e.target.value ? Number(e.target.value) : undefined
+                  roundId: e.target.value ? Number(e.target.value) : null
                 }))
               }
             >

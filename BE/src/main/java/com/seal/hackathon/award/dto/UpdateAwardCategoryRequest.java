@@ -33,5 +33,7 @@ public class UpdateAwardCategoryRequest {
 
     private Long roundId;
 
+    private Boolean clearRoundId;
+
     private Boolean isActive;
 }

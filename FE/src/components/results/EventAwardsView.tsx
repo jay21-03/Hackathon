@@ -80,9 +80,6 @@ export function EventAwardsView({
                           className={highlighted ? "font-medium text-primary" : undefined}
                         >
                           {winner.teamName}
-                          {winner.note ? (
-                            <span className="text-on-surface-variant"> — {winner.note}</span>
-                          ) : null}
                           {highlighted ? (
                             <Badge tone="active" className="ml-sm align-middle">
                               Đội của bạn

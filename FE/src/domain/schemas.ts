@@ -784,7 +784,7 @@ export const awardCategorySchema = z.object({
   maxWinners: z.number().int().min(1, "Số giải tối đa phải ≥ 1.").default(1),
   prizeValue: z.string().trim().max(255, "Giá trị giải tối đa 255 ký tự.").optional(),
   sortOrder: z.number().int().optional(),
-  roundId: z.number().int().positive().optional(),
+  roundId: z.number().int().positive().nullable().optional(),
   isActive: z.boolean().optional()
 });
 

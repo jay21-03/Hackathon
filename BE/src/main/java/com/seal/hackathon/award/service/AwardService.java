@@ -99,7 +99,9 @@ public class AwardService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AWARD_CATEGORY_NOT_FOUND"));
         organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(category.getEventId());
         assertAwardsEditable(category.getEventId());
-        if (request.getRoundId() != null) {
+        if (Boolean.TRUE.equals(request.getClearRoundId())) {
+            category.setRoundId(null);
+        } else if (request.getRoundId() != null) {
             validateRoundBelongsToEvent(request.getRoundId(), category.getEventId());
             category.setRoundId(request.getRoundId());
         }
@@ -362,7 +364,7 @@ public class AwardService {
                     .teamId(team.getId())
                     .awardedBy(awardedBy)
                     .awardedAt(now)
-                    .note("Gợi ý từ BXH hạng " + category.getRankOrder())
+                    .note(null)
                     .published(false)
                     .createdAt(now)
                     .updatedAt(now)

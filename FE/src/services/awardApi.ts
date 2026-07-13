@@ -57,7 +57,7 @@ export interface CreateAwardCategoryPayload {
   maxWinners?: number;
   prizeValue?: string;
   sortOrder?: number;
-  roundId?: number;
+  roundId?: number | null;
   isActive?: boolean;
 }
 
@@ -70,7 +70,8 @@ export interface UpdateAwardCategoryPayload {
   maxWinners?: number;
   prizeValue?: string;
   sortOrder?: number;
-  roundId?: number;
+  roundId?: number | null;
+  clearRoundId?: boolean;
   isActive?: boolean;
 }
 
