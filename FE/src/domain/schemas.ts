@@ -451,9 +451,17 @@ const eventDescriptionField = z
   .max(10000, "Mô tả tối đa 10.000 ký tự.")
   .optional();
 
+const eventRulesField = z
+  .string()
+  .trim()
+  .max(20000, "Quy chế thi tối đa 20.000 ký tự.")
+  .optional();
+
 const eventConfigBaseSchema = z
   .object({
     name: eventNameField,
+    description: eventDescriptionField,
+    rules: eventRulesField,
     quota: z.number().int().min(1, "Quota phải lớn hơn 0.")
   })
   .merge(eventDateTimeFields);
@@ -462,6 +470,7 @@ const createEventBaseSchema = z
   .object({
     name: eventNameField,
     description: eventDescriptionField,
+    rules: eventRulesField,
     maxTeams: z.number().int().min(1, "Quota đội phải lớn hơn 0."),
     academicTermId: z.number().int().positive("Học kỳ là bắt buộc.")
   })
