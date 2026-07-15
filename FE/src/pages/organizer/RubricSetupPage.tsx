@@ -58,6 +58,21 @@ function rubricToForm(criteria: CriteriaRequestItem[] | undefined): CriteriaRequ
   return toFormCriteria(criteria);
 }
 
+function roundWeight(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function applyAutoCalculatedLastWeight(items: CriteriaRequestItem[]): CriteriaRequestItem[] {
+  if (!items.length) return items;
+  const lastIndex = items.length - 1;
+  const manualTotal = items
+    .slice(0, lastIndex)
+    .reduce((sum, c) => sum + (Number(c.weight) || 0), 0);
+  return items.map((item, index) =>
+    index === lastIndex ? { ...item, weight: roundWeight(100 - manualTotal) } : item
+  );
+}
+
 const RUBRIC_FILTER_STORAGE_KEY = "seal.organizerRubric.filters";
 
 function loadRubricRoundId(): number | null {
@@ -113,33 +128,40 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
   useEffect(() => {
     if (!rubric || rubricLoading) return;
     setCriteria(
-      rubric.criteria.length
-        ? rubricToForm(
-            rubric.criteria.map((c) => ({
-              code: c.code,
-              name: c.name,
-              weight: Number(c.weight),
-              minScore: Number(c.minScore),
-              maxScore: Number(c.maxScore),
-              description: c.description ?? "",
-              sortOrder: c.sortOrder ?? undefined,
-              levelDescriptors: c.levelDescriptors
-            }))
-          )
-        : rubricToForm(undefined)
+      applyAutoCalculatedLastWeight(
+        rubric.criteria.length
+          ? rubricToForm(
+              rubric.criteria.map((c) => ({
+                code: c.code,
+                name: c.name,
+                weight: Number(c.weight),
+                minScore: Number(c.minScore),
+                maxScore: Number(c.maxScore),
+                description: c.description ?? "",
+                sortOrder: c.sortOrder ?? undefined,
+                levelDescriptors: c.levelDescriptors
+              }))
+            )
+          : rubricToForm(undefined)
+      )
     );
   }, [rubric, rubricLoading, roundId]);
 
   const locked = rubric?.locked ?? false;
   const weightSum = useMemo(
-    () => criteria.reduce((sum, c) => sum + (Number(c.weight) || 0), 0),
+    () => roundWeight(criteria.reduce((sum, c) => sum + (Number(c.weight) || 0), 0)),
     [criteria]
   );
+  const autoWeightInvalid =
+    !locked && criteria.length > 1 && Number(criteria[criteria.length - 1]?.weight) <= 0;
+  const weightComplete = weightSum === 100 && !autoWeightInvalid;
   const loadError = roundsError ?? rubricError;
   const loading = roundsLoading || rubricLoading;
 
   function updateCriteria(index: number, patch: Partial<CriteriaRequestItem>) {
-    setCriteria((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+    setCriteria((prev) =>
+      applyAutoCalculatedLastWeight(prev.map((c, i) => (i === index ? { ...c, ...patch } : c)))
+    );
   }
 
   function updateLevel(index: number, levelIndex: number, patch: Partial<LevelDescriptor>) {
@@ -181,7 +203,9 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
           levelDescriptors: sourceItem.levelDescriptors
         }
       ]);
-      setCriteria((prev) => prev.map((c, i) => (i === index ? inherited : c)));
+      setCriteria((prev) =>
+        applyAutoCalculatedLastWeight(prev.map((c, i) => (i === index ? inherited : c)))
+      );
       notify(
         `Đã kế thừa tiêu chí #${sourceIndex + 1} từ vòng nguồn vào vị trí #${index + 1}.`,
         "success"
@@ -201,8 +225,19 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
       notify("Tiêu chí chấm đã khóa vì đã có phiếu chấm được nộp.", "warning");
       return;
     }
+    const criteriaToSave = applyAutoCalculatedLastWeight(criteria);
+    const lastWeight = Number(criteriaToSave[criteriaToSave.length - 1]?.weight);
+    if (criteriaToSave.length > 1 && lastWeight <= 0) {
+      const msg =
+        lastWeight < 0
+          ? "Tổng trọng số các tiêu chí trước không được vượt quá 100%."
+          : "Tổng các tiêu chí trước đã đạt 100%, hãy giảm một trọng số để tiêu chí cuối có giá trị.";
+      setSaveError(msg);
+      notify(msg, "warning");
+      return;
+    }
     const rubricError = validateRubricCriteria(
-      criteria.map((c) => {
+      criteriaToSave.map((c) => {
         const range = deriveCriteriaScoreRange(c.levelDescriptors);
         return {
           code: c.code,
@@ -228,7 +263,7 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
     setSaveError(null);
     try {
       await saveRubric(roundId, {
-        criteria: criteria.map((c, i) => {
+        criteria: criteriaToSave.map((c, i) => {
           const range = deriveCriteriaScoreRange(c.levelDescriptors);
           return {
             ...c,
@@ -296,7 +331,7 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
             title="Tiêu chí chấm"
             description="Cấu hình tiêu chí và trọng số % cho từng vòng. Tổng trọng số phải bằng 100."
             actions={
-              <Badge tone={locked ? "warning" : weightSum === 100 ? "success" : "danger"}>
+              <Badge tone={locked ? "warning" : weightComplete ? "success" : "danger"}>
                 {locked
                   ? weightSum === 100
                     ? "Đã khóa · 100%"
@@ -358,17 +393,19 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
                     try {
                       const result = await applyCriteriaTemplate(roundId, id, true);
                       setCriteria(
-                        rubricToForm(
-                          result.criteria.map((c) => ({
-                            code: c.code,
-                            name: c.name,
-                            weight: Number(c.weight),
-                            minScore: Number(c.minScore),
-                            maxScore: Number(c.maxScore),
-                            description: c.description ?? "",
-                            sortOrder: c.sortOrder ?? undefined,
-                            levelDescriptors: c.levelDescriptors
-                          }))
+                        applyAutoCalculatedLastWeight(
+                          rubricToForm(
+                            result.criteria.map((c) => ({
+                              code: c.code,
+                              name: c.name,
+                              weight: Number(c.weight),
+                              minScore: Number(c.minScore),
+                              maxScore: Number(c.maxScore),
+                              description: c.description ?? "",
+                              sortOrder: c.sortOrder ?? undefined,
+                              levelDescriptors: c.levelDescriptors
+                            }))
+                          )
                         )
                       );
                       if (activeRoundId) {
@@ -489,7 +526,11 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
                           type="button"
                           variant="danger"
                           size="sm"
-                          onClick={() => setCriteria((prev) => prev.filter((_, i) => i !== index))}
+                          onClick={() =>
+                            setCriteria((prev) =>
+                              applyAutoCalculatedLastWeight(prev.filter((_, i) => i !== index))
+                            )
+                          }
                         >
                           Xóa
                         </Button>
@@ -518,7 +559,7 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
                     />
                   </label>
                   <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
-                    Trọng số (%)
+                    Trọng số (%) {index === criteria.length - 1 ? "(tự tính)" : ""}
                     <input
                       type="number"
                       min={0}
@@ -526,9 +567,14 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
                       step={0.1}
                       className="rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
                       value={item.weight}
-                      disabled={locked}
+                      disabled={locked || index === criteria.length - 1}
                       onChange={(e) => updateCriteria(index, { weight: Number(e.target.value) })}
                     />
+                    {!locked && index === criteria.length - 1 && criteria.length > 1 ? (
+                      <span className="font-body-xs text-on-surface-variant">
+                        Hệ thống lấy 100% trừ tổng các tiêu chí phía trên.
+                      </span>
+                    ) : null}
                   </label>
                 </div>
 
@@ -613,18 +659,29 @@ export function RubricSetupPage({ embedded = false }: { embedded?: boolean } = {
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => setCriteria((prev) => [...prev, createEmptyCriteria(prev.length)])}
+                  onClick={() =>
+                    setCriteria((prev) =>
+                      applyAutoCalculatedLastWeight([...prev, createEmptyCriteria(prev.length)])
+                    )
+                  }
                 >
                   Thêm tiêu chí
                 </Button>
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => setCriteria(createDefaultHackathonRubric())}
+                  onClick={() => setCriteria(applyAutoCalculatedLastWeight(createDefaultHackathonRubric()))}
                 >
                   Dùng mẫu 5 tiêu chí
                 </Button>
               </>
+            ) : null}
+            {autoWeightInvalid ? (
+              <p className="basis-full font-body-sm text-error">
+                {Number(criteria[criteria.length - 1]?.weight) < 0
+                  ? "Tổng trọng số các tiêu chí trước không được vượt quá 100%."
+                  : "Tổng các tiêu chí trước đã đạt 100%, hãy giảm một trọng số để tiêu chí cuối có giá trị."}
+              </p>
             ) : null}
             <Button type="button" loading={saving} disabled={locked || !criteria.length} onClick={() => void handleSave()}>
               Lưu tiêu chí
