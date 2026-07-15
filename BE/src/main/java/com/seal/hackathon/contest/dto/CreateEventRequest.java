@@ -25,6 +25,9 @@ public class CreateEventRequest {
     @Size(max = 10000, message = "description must not exceed 10000 characters")
     private String description;
 
+    @Size(max = 20000, message = "rules must not exceed 20000 characters")
+    private String rules;
+
     @NotNull(message = "startDate must not be null")
     @Schema(example = "2026-06-01")
     private LocalDate startDate;

@@ -23,6 +23,7 @@ export function CreateEventPage() {
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [rules, setRules] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [registrationStartAt, setRegistrationStartAt] = useState("");
@@ -49,6 +50,7 @@ export function CreateEventPage() {
     const parsed = createEventSchemaForTerm(selectedTerm?.startDate, selectedTerm?.endDate).safeParse({
       name,
       description: description.trim() || undefined,
+      rules: rules.trim() || undefined,
       startDate,
       endDate,
       registrationStartAt,
@@ -66,6 +68,7 @@ export function CreateEventPage() {
       const created = await createEvent({
         name: parsed.data.name,
         description: parsed.data.description,
+        rules: parsed.data.rules,
         startDate: parsed.data.startDate,
         endDate: parsed.data.endDate,
         registrationStartAt: toIsoFromLocal(parsed.data.registrationStartAt),
@@ -145,6 +148,12 @@ export function CreateEventPage() {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           error={fieldErrors.description}
+        />
+        <TextAreaField
+          label="Quy chế thi"
+          value={rules}
+          onChange={(e) => setRules(e.target.value)}
+          error={fieldErrors.rules}
         />
         <div className="grid gap-md sm:grid-cols-2">
           <TextField

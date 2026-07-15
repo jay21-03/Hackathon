@@ -316,6 +316,7 @@ public class EventLifecycleService {
                 .id(event.getId())
                 .name(event.getName())
                 .description(event.getDescription())
+                .rules(event.getRules())
                 .startDate(event.getStartDate())
                 .endDate(event.getEndDate())
                 .registrationStartAt(event.getRegistrationStartAt())

@@ -148,6 +148,7 @@ public class ContestManagementService {
         Event event = Event.builder()
                 .name(normalizedName)
                 .description(normalizeNullable(request.getDescription()))
+                .rules(normalizeNullable(request.getRules()))
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
                 .registrationStartAt(request.getRegistrationStartAt())
@@ -181,6 +182,9 @@ public class ContestManagementService {
         }
         if (request.getDescription() != null) {
             event.setDescription(normalizeNullable(request.getDescription()));
+        }
+        if (request.getRules() != null) {
+            event.setRules(normalizeNullable(request.getRules()));
         }
         if (request.getStartDate() != null) {
             event.setStartDate(request.getStartDate());
@@ -1567,6 +1571,7 @@ public class ContestManagementService {
                 .id(event.getId())
                 .name(event.getName())
                 .description(event.getDescription())
+                .rules(event.getRules())
                 .startDate(event.getStartDate())
                 .endDate(event.getEndDate())
                 .registrationStartAt(event.getRegistrationStartAt())
@@ -1608,6 +1613,7 @@ public class ContestManagementService {
                 .id(event.getId())
                 .name(event.getName())
                 .description(event.getDescription())
+                .rules(event.getRules())
                 .startDate(event.getStartDate())
                 .endDate(event.getEndDate())
                 .registrationStartAt(event.getRegistrationStartAt())

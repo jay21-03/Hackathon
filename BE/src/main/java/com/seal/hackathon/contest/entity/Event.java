@@ -30,6 +30,7 @@ public class Event {
 
     private String name;
     private String description;
+    private String rules;
     private LocalDate startDate;
     private LocalDate endDate;
     private OffsetDateTime registrationStartAt;

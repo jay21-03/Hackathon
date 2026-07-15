@@ -34,6 +34,7 @@ export interface AwardCategory {
   prizeValue?: string | null;
   sortOrder: number;
   isActive: boolean;
+  active?: boolean;
   winnerCount: number;
   winners: TeamAward[];
   createdAt: string;
@@ -59,6 +60,10 @@ export interface CreateAwardCategoryPayload {
   sortOrder?: number;
   roundId?: number | null;
   isActive?: boolean;
+}
+
+export function isAwardCategoryActive(category: AwardCategory) {
+  return category.isActive ?? category.active ?? true;
 }
 
 export interface UpdateAwardCategoryPayload {

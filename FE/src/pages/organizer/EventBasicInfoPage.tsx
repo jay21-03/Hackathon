@@ -9,7 +9,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { WorkflowSteps } from "../../components/ui/WorkflowSteps";
 import { useEventSetupProgress } from "../../hooks/useEventSetupProgress";
 import { eventConfigSaveSchemaForTerm } from "../../domain/schemas";
-import { TextField } from "../../components/ui/FormField";
+import { TextAreaField, TextField } from "../../components/ui/FormField";
 import { enableAcademicTerms } from "../../config/features";
 import { OrganizerContextBar } from "../../components/ui/OrganizerContextBar";
 import { useActiveEvent } from "../../hooks/useActiveEvent";
@@ -44,6 +44,8 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
   const { event: fetchedEvent, loading: detailLoading, error: detailQueryError, refetch } = useEventDetail(eventId);
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [rules, setRules] = useState("");
   const [quota, setQuota] = useState(0);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -63,6 +65,8 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
     if (!fetchedEvent) return;
     setEvent(fetchedEvent);
     setName(fetchedEvent.name);
+    setDescription(fetchedEvent.description ?? "");
+    setRules(fetchedEvent.rules ?? "");
     setQuota(fetchedEvent.maxTeams);
     setStartDate(toLocalDateInput(fetchedEvent.startDate));
     setEndDate(toLocalDateInput(fetchedEvent.endDate));
@@ -156,6 +160,8 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
     const selectedTerm = terms.find((term) => term.id === resolvedTermId);
     const parsed = eventConfigSaveSchemaForTerm(selectedTerm?.startDate, selectedTerm?.endDate).safeParse({
       name,
+      description: description.trim() || undefined,
+      rules: rules.trim() || undefined,
       quota,
       startDate,
       endDate,
@@ -171,6 +177,8 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
     try {
       const updated = await updateEvent(String(eventId), {
         name: parsed.data.name,
+        description: parsed.data.description,
+        rules: parsed.data.rules,
         maxTeams: parsed.data.quota,
         startDate: parsed.data.startDate,
         endDate: parsed.data.endDate,
@@ -183,6 +191,8 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
       if (updated) {
         setEvent(updated);
         setName(updated.name);
+        setDescription(updated.description ?? "");
+        setRules(updated.rules ?? "");
         setQuota(updated.maxTeams);
         setStartDate(toLocalDateInput(updated.startDate));
         setEndDate(toLocalDateInput(updated.endDate));
@@ -370,6 +380,23 @@ export function EventBasicInfoPage({ embedded = false }: HubEmbedProps = {}) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               error={fieldErrors.name}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <TextAreaField
+              label="Mô tả công khai"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              error={fieldErrors.description}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <TextAreaField
+              label="Quy chế thi"
+              value={rules}
+              onChange={(e) => setRules(e.target.value)}
+              error={fieldErrors.rules}
+              helper="Hiển thị trên trang chi tiết sự kiện cho thí sinh và khách xem."
             />
           </div>
           <TextField

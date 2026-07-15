@@ -268,18 +268,7 @@ public class AwardService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND"));
         List<TeamAward> publishedAwards =
                 filterEligibleAwards(teamAwardRepository.findByEventIdAndPublishedTrueOrderByAwardCategoryIdAscIdAsc(eventId));
-        if (publishedAwards.isEmpty()) {
-            return EventAwardsResponse.builder()
-                    .eventId(eventId)
-                    .eventName(event.getName())
-                    .published(false)
-                    .categories(List.of())
-                    .build();
-        }
-        Set<Long> categoryIds = publishedAwards.stream()
-                .map(TeamAward::getAwardCategoryId)
-                .collect(Collectors.toSet());
-        List<AwardCategory> categories = awardCategoryRepository.findAllById(categoryIds).stream()
+        List<AwardCategory> categories = awardCategoryRepository.findByEventIdOrderBySortOrderAscIdAsc(eventId).stream()
                 .filter(c -> Boolean.TRUE.equals(c.getIsActive()))
                 .sorted(Comparator.comparing(AwardCategory::getSortOrder).thenComparing(AwardCategory::getId))
                 .toList();
@@ -291,7 +280,6 @@ public class AwardService {
                             .toList();
                     return buildCategoryResponse(category, winners, teamsById, false);
                 })
-                .filter(c -> !c.getWinners().isEmpty())
                 .toList();
         OffsetDateTime publishedAt = publishedAwards.stream()
                 .map(TeamAward::getUpdatedAt)
@@ -301,7 +289,7 @@ public class AwardService {
         return EventAwardsResponse.builder()
                 .eventId(eventId)
                 .eventName(event.getName())
-                .published(true)
+                .published(!publishedAwards.isEmpty())
                 .publishedAt(publishedAt)
                 .categories(categoryResponses)
                 .build();

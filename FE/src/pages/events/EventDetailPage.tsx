@@ -9,9 +9,10 @@ import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { useMyTeam } from "../../hooks/useMyTeam";
 import { useEventDetail } from "../../hooks/useEventDetail";
 import type { EventListItem } from "../../types/entities";
-import { enableAnnouncements, enableRanking } from "../../config/features";
+import { enableAnnouncements, enableAwards, enableRanking } from "../../config/features";
 import { queryKeys } from "../../lib/queryKeys";
 import { fetchPublishedAnnouncements } from "../../services/announcementService";
+import { fetchPublicEventAwards, isAwardCategoryActive } from "../../services/awardApi";
 import { looksLikeRichHtml, sanitizeRichHtml } from "../../utils/sanitizeProblemHtml";
 import { rememberActiveEvent } from "../../utils/enterEvent";
 import {
@@ -47,6 +48,12 @@ export function EventDetailPage() {
     queryKey: queryKeys.announcements.byEvent(eventIdNum),
     queryFn: () => fetchPublishedAnnouncements(eventIdNum!),
     enabled: enableAnnouncements && eventIdNum != null && !Number.isNaN(eventIdNum)
+  });
+
+  const awardsQuery = useQuery({
+    queryKey: queryKeys.awards.public(eventIdNum),
+    queryFn: () => fetchPublicEventAwards(eventIdNum!),
+    enabled: enableAwards && eventIdNum != null && !Number.isNaN(eventIdNum)
   });
 
   const pageLoading = loading || (authenticated && session.role === "participant" && teamLoading);
@@ -95,6 +102,9 @@ export function EventDetailPage() {
     event.registrationEndAt
   );
   const publishedAnnouncements = announcementsQuery.data ?? [];
+  const awardCategories = (awardsQuery.data?.categories ?? [])
+    .filter(isAwardCategoryActive)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
 
   function handlePrimaryClick() {
     if (eventIdNum != null && !Number.isNaN(eventIdNum)) {
@@ -172,6 +182,66 @@ export function EventDetailPage() {
               <p className="text-secondary">Đang trong khung đăng ký — có thể gửi hồ sơ đội.</p>
             ) : null}
           </div>
+        ) : null}
+
+        <section className="space-y-sm border-t border-outline-variant/30 pt-md">
+          <h2 className="font-headline-sm text-on-surface">Quy chế thi</h2>
+          {event.rules ? (
+            looksLikeRichHtml(event.rules) ? (
+              <div
+                className="problem-content font-body-md text-on-surface-variant prose prose-invert max-w-none [&_a]:text-primary"
+                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(event.rules) }}
+              />
+            ) : (
+              <p className="whitespace-pre-wrap font-body-md text-on-surface-variant">{event.rules}</p>
+            )
+          ) : (
+            <p className="font-body-md text-on-surface-variant">BTC chưa cập nhật quy chế thi.</p>
+          )}
+        </section>
+
+        {enableAwards ? (
+          <section className="space-y-sm border-t border-outline-variant/30 pt-md">
+            <div className="flex flex-wrap items-center justify-between gap-sm">
+              <h2 className="font-headline-sm text-on-surface">Cơ cấu giải thưởng</h2>
+              {awardsQuery.data?.published ? <Badge tone="active">Đã công bố đội thắng</Badge> : null}
+            </div>
+            {awardsQuery.isLoading ? (
+              <ModuleSkeleton rows={2} />
+            ) : awardCategories.length > 0 ? (
+              <ul className="grid gap-sm md:grid-cols-2">
+                {awardCategories.map((category) => (
+                  <li key={category.id} className="rounded-lg border border-outline-variant/50 bg-surface-container-low p-md">
+                    <div className="flex flex-wrap items-start justify-between gap-sm">
+                      <div>
+                        <h3 className="font-label-lg text-on-surface">{category.name}</h3>
+                        <p className="font-body-sm text-on-surface-variant">
+                          {category.awardType === "RANK" ? "Giải xếp hạng" : "Giải do BTC lựa chọn"}
+                          {" · "}
+                          Tối đa {category.maxWinners} đội
+                        </p>
+                      </div>
+                      {category.prizeValue ? (
+                        <Badge tone="success">{category.prizeValue}</Badge>
+                      ) : null}
+                    </div>
+                    {category.description ? (
+                      <p className="mt-sm font-body-sm text-on-surface-variant">{category.description}</p>
+                    ) : null}
+                    {awardsQuery.data?.published && category.winners.length > 0 ? (
+                      <ul className="mt-sm space-y-xs font-body-sm text-on-surface">
+                        {category.winners.map((winner) => (
+                          <li key={winner.id}>{winner.teamName}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="font-body-md text-on-surface-variant">BTC chưa cập nhật cơ cấu giải thưởng.</p>
+            )}
+          </section>
         ) : null}
 
         <div className="flex flex-wrap gap-sm pt-md border-t border-outline-variant/30">

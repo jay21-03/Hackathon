@@ -6,6 +6,7 @@ export interface EventDetail {
   id: number;
   name: string;
   description?: string | null;
+  rules?: string | null;
   status: string;
   startDate: string;
   endDate: string;
@@ -33,6 +34,8 @@ export async function fetchEventDetail(eventId: string): Promise<EventDetail | n
 
 export interface UpdateEventPayload {
   name: string;
+  description?: string;
+  rules?: string;
   maxTeams: number;
   startDate?: string;
   endDate?: string;
@@ -85,6 +88,7 @@ export function cancelEvent(eventId: string) {
 export interface CreateEventPayload {
   name: string;
   description?: string;
+  rules?: string;
   startDate: string;
   endDate: string;
   registrationStartAt: string;
