@@ -25,6 +25,7 @@ import {
   suggestAwardsFromRanking,
   unpublishEventAwards,
   updateAwardCategory,
+  isAwardCategoryActive,
   type AwardCategory,
   type AwardType,
   type CreateAwardCategoryPayload
@@ -88,9 +89,18 @@ function loadAwardFilters(): AwardFilterState {
   }
 }
 
-export function AwardManagementPage({ embedded = false }: { embedded?: boolean } = {}) {
+type AwardManagementMode = "full" | "config";
+
+export function AwardManagementPage({
+  embedded = false,
+  mode = "full"
+}: {
+  embedded?: boolean;
+  mode?: AwardManagementMode;
+} = {}) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
+  const configOnly = mode === "config";
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, boards, loading: boardsLoading } = useEventBoards(eventId);
   const { teams, loading: teamsLoading } = useEventTeams(eventId, { size: 200 });
@@ -113,7 +123,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
   const rankingsQuery = useQuery({
     queryKey: queryKeys.rankings.event(eventId),
     queryFn: () => fetchEventRankings(eventId!),
-    enabled: Boolean(eventId)
+    enabled: Boolean(eventId) && !configOnly
   });
 
   const activeRoundId = resolveDefaultRoundId(rounds, roundId);
@@ -237,7 +247,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
       prizeValue: category.prizeValue ?? "",
       sortOrder: category.sortOrder,
       roundId: category.roundId ?? null,
-      isActive: category.isActive
+      isActive: isAwardCategoryActive(category)
     });
     setCategoryModalOpen(true);
   }
@@ -434,7 +444,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
     }
   }
 
-  const loading = eventLoading || awardsQuery.isLoading || teamsLoading || boardsLoading;
+  const loading = eventLoading || awardsQuery.isLoading || boardsLoading || (!configOnly && teamsLoading);
   const activeRoundName = resolveRoundDisplayName(activeRoundId, roundNameById);
   const scopeHint =
     boardId != null
@@ -470,6 +480,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
             <Button variant="secondary" size="sm" disabled={busy || awardsLocked} onClick={() => void handleSeedDefaults()}>
               Khởi tạo giải mặc định
             </Button>
+            {!configOnly ? (
             <Button
               variant="secondary"
               size="sm"
@@ -479,10 +490,11 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
             >
               Gợi ý Nhất/Nhì/Ba ({scopeHint})
             </Button>
+            ) : null}
             <Button size="sm" disabled={busy || awardsLocked} onClick={openCreateCategoryModal}>
               Thêm loại giải
             </Button>
-            {anyPublished ? (
+            {!configOnly && anyPublished ? (
               <ConfirmAction
                 title="Thu hồi công bố"
                 message="Kết quả trao giải sẽ ẩn khỏi trang công khai."
@@ -493,7 +505,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                   Thu hồi công bố
                 </Button>
               </ConfirmAction>
-            ) : (
+            ) : !configOnly ? (
               <ConfirmAction
                 title="Công bố giải thưởng"
                 message="Mọi người sẽ thấy danh sách giải trên trang kết quả công khai."
@@ -508,19 +520,21 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                   Công bố giải
                 </Button>
               </ConfirmAction>
-            )}
+            ) : null}
           </div>
 
           {awardsLocked ? (
             <div className="rounded-lg border border-primary/30 bg-primary-container/40 p-md">
               <p className="font-label-md text-on-primary-container">Giải thưởng đã công bố</p>
               <p className="mt-xs font-body-sm text-on-primary-container/80">
-                Thu hồi công bố trước khi khởi tạo, gợi ý, thêm, sửa, gán hoặc xóa giải.
+                {configOnly
+                  ? "Giải thưởng đã công bố nên tạm khóa chỉnh sửa cơ cấu giải."
+                  : "Thu hồi công bố trước khi khởi tạo, gợi ý, thêm, sửa, gán hoặc xóa giải."}
               </p>
             </div>
           ) : null}
 
-          {hasIneligibleWinners ? (
+          {!configOnly && hasIneligibleWinners ? (
             <div className="rounded-lg border border-warning/40 bg-warning-container/30 p-md space-y-sm">
               <p className="font-label-md text-on-warning-container">Có đội nhận giải không còn đủ điều kiện</p>
               <p className="font-body-sm text-on-warning-container/90">
@@ -541,7 +555,8 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
             </div>
           ) : null}
 
-          <div className="grid gap-lg lg:grid-cols-2">
+          <div className={configOnly ? "grid gap-lg" : "grid gap-lg lg:grid-cols-2"}>
+            {!configOnly ? (
             <section className="rounded-xl border border-outline-variant p-lg space-y-md">
               <div className="flex flex-wrap items-end justify-between gap-md">
                 <h2 className="font-headline-sm">BXH tham khảo</h2>
@@ -709,6 +724,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                 </Button>
               </div>
             </section>
+            ) : null}
 
             <section className="rounded-xl border border-outline-variant p-lg space-y-md">
               <h2 className="font-headline-sm">Hạng mục giải thưởng</h2>
@@ -738,11 +754,13 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                                   <p className="font-body-sm text-on-surface-variant mt-xs">{category.description}</p>
                                 ) : null}
                                 <p className="font-body-sm text-on-surface-variant mt-xs">
-                                  Tối đa {category.maxWinners} đội · đã gán {category.winnerCount}
+                                  Tối đa {category.maxWinners} đội
+                                  {!configOnly ? ` · đã gán ${category.winnerCount}` : ""}
                                   {category.rankOrder ? ` · hạng BXH ${category.rankOrder}` : ""}
                                   {category.roundId != null
                                     ? ` · ${resolveRoundDisplayName(category.roundId, roundNameById)}`
                                     : ""}
+                                  {category.prizeValue ? ` · ${category.prizeValue}` : ""}
                                 </p>
                               </div>
                               <div className="flex flex-wrap gap-sm">
@@ -756,7 +774,11 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                                 </Button>
                                 <ConfirmAction
                                   title="Xóa loại giải"
-                                  message={`Xóa "${category.name}" và mọi đội đã gán?`}
+                                  message={
+                                    configOnly
+                                      ? `Xóa "${category.name}"?`
+                                      : `Xóa "${category.name}" và mọi đội đã gán?`
+                                  }
                                   confirmLabel="Xóa"
                                   onConfirm={() => void handleDeleteCategory(category)}
                                 >
@@ -766,7 +788,7 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                                 </ConfirmAction>
                               </div>
                             </div>
-                            {category.winners.length > 0 ? (
+                            {!configOnly && category.winners.length > 0 ? (
                               <ul className="space-y-xs font-body-sm">
                                 {category.winners.map((winner) => {
                                   const ineligible =
@@ -799,9 +821,9 @@ export function AwardManagementPage({ embedded = false }: { embedded?: boolean }
                                   );
                                 })}
                               </ul>
-                            ) : (
+                            ) : !configOnly ? (
                               <p className="font-body-sm text-on-surface-variant">Chưa gán đội.</p>
-                            )}
+                            ) : null}
                           </li>
                         ))}
                       </ul>

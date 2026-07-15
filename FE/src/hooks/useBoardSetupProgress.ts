@@ -15,6 +15,8 @@ interface BoardSetupProgressInput {
   hasProblem: boolean;
   hasRubric: boolean;
   showRubricStep: boolean;
+  hasAwards: boolean;
+  showAwardsStep: boolean;
 }
 
 export function useBoardSetupProgress({
@@ -24,7 +26,9 @@ export function useBoardSetupProgress({
   judgeCount,
   hasProblem,
   hasRubric,
-  showRubricStep
+  showRubricStep,
+  hasAwards,
+  showAwardsStep
 }: BoardSetupProgressInput) {
   return useMemo(() => {
     const boardsCount = boards.length;
@@ -41,7 +45,9 @@ export function useBoardSetupProgress({
     const hasMentor = mentorCount > 0;
     const hasJudge = judgeCount > 0;
     const staffReady = hasMentor && hasJudge;
-    const prepReady = structureReady && staffReady && hasProblem && (!showRubricStep || hasRubric);
+    const rubricReady = !showRubricStep || hasRubric;
+    const awardsReady = !showAwardsStep || hasAwards;
+    const prepReady = structureReady && staffReady && hasProblem && rubricReady && awardsReady;
 
     const microSteps: Array<{
       label: string;
@@ -61,7 +67,7 @@ export function useBoardSetupProgress({
         detail: hasBoards
           ? hasSlots
             ? `${boardsCount} bảng · ${slotsCount} vị trí`
-            : `${boardsCount} bảng — thêm vị trí`
+            : `${boardsCount} bảng - thêm vị trí`
           : "Thêm bảng và vị trí trên cùng màn",
         state: !hasRounds ? "blocked" : structureReady ? "done" : hasBoards ? "active" : "next",
         anchor: "#board-step-layout"
@@ -93,6 +99,15 @@ export function useBoardSetupProgress({
       });
     }
 
+    if (showAwardsStep) {
+      microSteps.push({
+        label: "Giải thưởng",
+        detail: hasAwards ? "Đã có cơ cấu giải" : "Cấu hình hạng mục và giá trị giải",
+        state: !hasProblem || (showRubricStep && !hasRubric) ? "blocked" : hasAwards ? "done" : "active",
+        anchor: "#board-step-awards"
+      });
+    }
+
     microSteps.push({
       label: "Tiếp theo",
       detail: "Đội & lời mời",
@@ -106,7 +121,7 @@ export function useBoardSetupProgress({
     if (!hasRounds) {
       nextAction = {
         title: "Bước tiếp: Tạo vòng thi",
-        description: "Nhập tên vòng, thời gian và bấm «Tạo vòng thi».",
+        description: "Nhập tên vòng, thời gian và bấm tạo vòng thi.",
         href: "#board-step-round",
         cta: "Đi tới form vòng"
       };
@@ -114,7 +129,7 @@ export function useBoardSetupProgress({
     } else if (!structureReady) {
       nextAction = {
         title: "Bước tiếp: Bảng & vị trí",
-        description: "Thêm bảng và vị trí — gán đội sẽ làm sau khi mở đăng ký và có đội xác nhận.",
+        description: "Thêm bảng và vị trí; gán đội sẽ làm sau khi mở đăng ký và có đội xác nhận.",
         href: "#board-step-layout",
         cta: "Đi tới bảng & vị trí"
       };
@@ -122,7 +137,7 @@ export function useBoardSetupProgress({
     } else if (!staffReady) {
       nextAction = {
         title: "Bước tiếp: Mentor & giám khảo",
-        description: "Gán mentor và giám khảo cho bảng — chuẩn bị trước khi mở đăng ký.",
+        description: "Gán mentor và giám khảo cho bảng trước khi mở đăng ký.",
         href: "#board-step-staff",
         cta: "Đi tới phân công"
       };
@@ -143,10 +158,18 @@ export function useBoardSetupProgress({
         cta: "Đi tới rubric"
       };
       completedMacroIndex = 2;
+    } else if (showAwardsStep && !hasAwards) {
+      nextAction = {
+        title: "Bước tiếp: Cấu hình giải thưởng",
+        description: "Thiết lập hạng mục, số đội nhận giải và giá trị giải để hiển thị cho thí sinh.",
+        href: "#board-step-awards",
+        cta: "Đi tới giải thưởng"
+      };
+      completedMacroIndex = 2;
     } else {
       nextAction = {
-        title: "Hoàn tất chuẩn bị bảng — sang Đội & lời mời",
-        description: "Khung bảng, staff, đề và rubric đã sẵn sàng — có thể mở đăng ký.",
+        title: "Hoàn tất chuẩn bị bảng - sang Đội & lời mời",
+        description: "Khung bảng, staff, đề, rubric và giải thưởng đã sẵn sàng - có thể mở đăng ký.",
         to: "/organizer/teams-hub",
         cta: "Đi tới Đội & lời mời"
       };
@@ -162,11 +185,13 @@ export function useBoardSetupProgress({
     };
   }, [
     boards,
+    hasAwards,
     hasProblem,
     hasRubric,
     judgeCount,
     mentorCount,
     roundsCount,
+    showAwardsStep,
     showRubricStep
   ]);
 }

@@ -11,9 +11,10 @@ export type BoardSetupStep =
   | "#board-step-layout"
   | "#board-step-staff"
   | "#board-step-problem"
-  | "#board-step-rubric";
+  | "#board-step-rubric"
+  | "#board-step-awards";
 
-import { toIsoFromLocal, toLocalDateTimeInput } from "../../utils/dateTimeInput";
+import { toLocalDateTimeInput } from "../../utils/dateTimeInput";
 
 export { toIsoFromLocal, toLocalDateTimeInput as toLocalInput } from "../../utils/dateTimeInput";
 
@@ -36,6 +37,9 @@ export function normalizeBoardStep(anchor: string): BoardSetupStep {
   }
   if (anchor === "#artifacts-step-rubric") {
     return "#board-step-rubric";
+  }
+  if (anchor === "#results-step-awards" || anchor === "#awards-step-config") {
+    return "#board-step-awards";
   }
   return anchor as BoardSetupStep;
 }

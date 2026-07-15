@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { BoardPrepSections } from "../../components/organizer/board-management/BoardPrepSections";
-import { enableScoring } from "../../config/features";
+import { enableAwards, enableScoring } from "../../config/features";
 import { useBoardManagement } from "../../hooks/useBoardManagement";
 import { BoardListSection } from "../../components/organizer/board-management/BoardListSection";
 import { BoardRoundSection } from "../../components/organizer/board-management/BoardRoundSection";
@@ -46,6 +46,7 @@ import {
 } from "../../services/contestApi";
 import { fetchTeam, type TeamDetailResponse } from "../../services/registrationService";
 import { fetchRubric } from "../../services/scoringApi";
+import { fetchEventAwards } from "../../services/awardApi";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { zodFirstError } from "../../utils/formValidation";
 import { zodFieldErrors } from "../../utils/zodFieldErrors";
@@ -63,6 +64,7 @@ import {
   type BoardSetupStep
 } from "./boardManagementUtils";
 import { RubricSetupPage } from "./RubricSetupPage";
+import { AwardManagementPage } from "./AwardManagementPage";
 
 export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbedProps = {}) {
   const { notify } = useToast();
@@ -102,6 +104,13 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
     enabled: Boolean(selectedRoundId) && enableScoring
   });
   const hasRubric = (rubricQuery.data?.criteria?.length ?? 0) > 0;
+
+  const awardsQuery = useQuery({
+    queryKey: queryKeys.awards.event(eventId),
+    queryFn: () => fetchEventAwards(eventId!),
+    enabled: Boolean(eventId) && enableAwards
+  });
+  const hasAwards = (awardsQuery.data?.categories?.length ?? 0) > 0;
 
   const [busy, setBusy] = useState(false);
   const [roundFieldErrors, setRoundFieldErrors] = useState<Record<string, string>>({});
@@ -168,7 +177,9 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
     judgeCount: boardJudges.length,
     hasProblem,
     hasRubric,
-    showRubricStep: enableScoring
+    showRubricStep: enableScoring,
+    hasAwards,
+    showAwardsStep: enableAwards
   });
   const [activeStep, setActiveStep] = useState<BoardSetupStep | null>(null);
   const currentStep = activeStep ?? resolveBoardSetupStep(microSteps);
@@ -838,6 +849,18 @@ export function BoardManagementPage({ embedded = false, onWizardStep }: HubEmbed
           </div>
         ) : (
           <RubricSetupPage embedded />
+        )
+      ) : null}
+
+      {enableAwards && currentStep === "#board-step-awards" ? (
+        !hasProblem || (enableScoring && !hasRubric) ? (
+          <div className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+            <p className="font-body-md text-on-surface-variant">
+              Hoàn thành đề thi và rubric trước khi cấu hình giải thưởng.
+            </p>
+          </div>
+        ) : (
+          <AwardManagementPage embedded mode="config" />
         )
       ) : null}
 
