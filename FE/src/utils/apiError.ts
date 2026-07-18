@@ -29,6 +29,10 @@ export function getApiFieldErrors(error: unknown): Record<string, string> | unde
   return undefined;
 }
 
+export function isUnauthorizedApiError(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 401;
+}
+
 /** Map @AssertTrue global keys (e.g. createEventRequest.registrationEndWithinEvent) → form field. */
 const ASSERT_TRUE_FIELD_MAP: Record<string, string> = {
   eventDateRangeValid: "endDate",

@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { getAuthSession, isAuthenticated, setAuthSession } from "../../auth/authSession";
 import { fetchCurrentUser } from "../../services/userService";
+import { isUnauthorizedApiError } from "../../utils/apiError";
 import { RetryPanel } from "../feedback/RetryPanel";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
 import { isStaffInvitationActionPath } from "../../utils/staffInvitationPaths";
@@ -49,8 +50,8 @@ export function AccountApprovalGate({ children }: AccountApprovalGateProps) {
         }
         setPending(user.status === "PENDING_APPROVAL");
       })
-      .catch(() => {
-        if (active) {
+      .catch((error) => {
+        if (active && !isUnauthorizedApiError(error)) {
           setFetchError("Không kiểm tra được trạng thái tài khoản. Vui lòng thử lại.");
         }
       })

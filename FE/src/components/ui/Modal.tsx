@@ -30,6 +30,11 @@ const FOCUSABLE =
 export function Modal({ open, title, onClose, children, size = "lg" }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -37,7 +42,7 @@ export function Modal({ open, title, onClose, children, size = "lg" }: ModalProp
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !dialogRef.current) return;
@@ -73,7 +78,7 @@ export function Modal({ open, title, onClose, children, size = "lg" }: ModalProp
         triggerRef.current.focus();
       }
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

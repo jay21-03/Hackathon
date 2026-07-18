@@ -6,6 +6,7 @@ import {
   setAuthSession
 } from "../../auth/authSession";
 import { fetchCurrentUser } from "../../services/userService";
+import { isUnauthorizedApiError } from "../../utils/apiError";
 import { RetryPanel } from "../feedback/RetryPanel";
 import { ModuleSkeleton } from "../ui/ModuleSkeleton";
 
@@ -51,8 +52,8 @@ export function ProfileCompletionGate({ children }: ProfileCompletionGateProps) 
         });
         setIncomplete(!profileCompleted);
       })
-      .catch(() => {
-        if (active) {
+      .catch((error) => {
+        if (active && !isUnauthorizedApiError(error)) {
           setFetchError("Không kiểm tra được hồ sơ. Vui lòng thử lại.");
         }
       })

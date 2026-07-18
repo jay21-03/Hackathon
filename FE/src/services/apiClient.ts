@@ -39,9 +39,9 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 && typeof window !== "undefined") {
       const path = window.location.pathname;
+      setAuthenticated(false);
+      window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
       if (shouldRedirectOn401(path)) {
-        setAuthenticated(false);
-        window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
         if (!path.startsWith("/login")) {
           window.location.assign(`/login?next=${encodeURIComponent(path)}`);
         }
