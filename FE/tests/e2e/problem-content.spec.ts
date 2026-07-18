@@ -25,4 +25,8 @@ test("participant problem page shows rich content and links", async ({ page }) =
   await expect(page.getByText("rich text")).toBeVisible();
   await expect(page.getByRole("link", { name: /Link tham khảo/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Tải tệp đính kèm/ })).toBeVisible();
+  await expect(page.getByText(/Rubric/i)).toBeVisible();
+  await expect(page.getByText("100%")).toBeVisible();
+  await expect(page.getByText("0-10")).toBeVisible();
+  await expect(page.getByText("E2E").first()).toBeVisible();
 });

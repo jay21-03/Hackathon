@@ -624,6 +624,14 @@ export async function mockCoreApis(page: Page) {
     await route.continue();
   });
 
+  await page.route("**/api/v1/my/problem-rubric**", async (route) => {
+    if (route.request().method() === "GET") {
+      await json(route, ok(sampleRubric));
+      return;
+    }
+    await route.continue();
+  });
+
   await page.route("**/api/v1/admin/rounds/*/boards**", async (route) => {
     if (route.request().method() === "GET") {
       await json(route, ok([sampleBoard]));
