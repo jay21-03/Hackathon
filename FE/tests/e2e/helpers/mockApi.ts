@@ -122,7 +122,20 @@ export async function mockCoreApis(page: Page) {
       );
       return;
     }
-    await route.continue();
+    await json(
+      route,
+      ok({
+        id: 1,
+        email: "participant@seal.edu.vn",
+        fullName: "Thí sinh E2E",
+        studentType: "FPT",
+        studentId: "SE123456",
+        university: "FPT University",
+        githubUsername: profileGithubUsername,
+        status: "ACTIVE",
+        roles: ["PARTICIPANT"]
+      })
+    );
   });
 
   await page.route("**/api/v1/me", async (route) => {
@@ -712,7 +725,11 @@ export async function mockCoreApis(page: Page) {
           academicTermId: 1,
           academicTermCode: "SPRING_2026",
           academicTermName: "Spring 2026",
-          academicTermStatus: "ACTIVE"
+          academicTermStatus: "ACTIVE",
+          readiness: "READY_TO_SCORE",
+          teamsCount: 1,
+          submittedSheetsCount: 0,
+          draftSheetsCount: 1
         },
         {
           id: 2,
@@ -833,6 +850,25 @@ export async function mockCoreApis(page: Page) {
     await json(route, ok({ boardsCalculated: 1, teamsRanked: 1, message: "PUBLISHED" }));
   });
 
+  await page.route("**/api/v1/admin/events/*/publish-readiness**", async (route) => {
+    await json(
+      route,
+      ok({
+        eventId: 1,
+        ready: false,
+        blockers: ["Chưa có bảng nào được tính xếp hạng."],
+        boards: [
+          {
+            boardId: sampleBoardRanking.boardId,
+            boardName: sampleBoardRanking.boardName,
+            ready: false,
+            blockers: ["Chưa công bố kết quả bảng."]
+          }
+        ]
+      })
+    );
+  });
+
   await page.route("**/api/v1/admin/events/*/rankings**", async (route) => {
     if (route.request().method() === "GET") {
       await json(route, ok(sampleEventRankings));
@@ -843,6 +879,19 @@ export async function mockCoreApis(page: Page) {
 
   await page.route("**/api/v1/events/*/results**", async (route) => {
     await json(route, ok(samplePublicResults));
+  });
+
+  await page.route("**/api/v1/events/*/awards**", async (route) => {
+    await json(
+      route,
+      ok({
+        eventId: 1,
+        eventName: "SEAL Hackathon 2026",
+        published: false,
+        publishedAt: null,
+        categories: []
+      })
+    );
   });
 
   await page.route("**/api/v1/my/submission**", async (route) => {

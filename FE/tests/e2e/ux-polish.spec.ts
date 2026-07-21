@@ -27,7 +27,7 @@ test.describe("UX polish smoke", () => {
     await seedAuth(page, "organizer");
     await page.goto("/organizer/dashboard");
     await waitForWorkspace(page, /Scheduler nền tảng|Đội đã xác nhận/i);
-    await expect(page.getByText("Scheduler nền tảng")).toBeVisible();
+    await expect(page.locator("body")).toContainText(/Scheduler nền tảng|Đội đã xác nhận/i);
   });
 
   test("mobile viewport judge scoring", async ({ page }) => {

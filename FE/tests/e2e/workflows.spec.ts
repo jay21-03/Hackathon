@@ -26,7 +26,7 @@ test("event wizard embeds basic info step", async ({ page }) => {
   await page.goto("/organizer/events/wizard#wizard-step-basic");
   await waitForWorkspace(page, /Quy trình vận hành/i);
   await expect(page.locator("body")).toContainText("Thông tin & lịch");
-  await page.getByRole("button", { name: "Đội & lời mời" }).click();
+  await page.getByText("Đội & lời mời").first().click();
   await expect(page.locator("body")).toContainText("Đăng ký đội");
 });
 
@@ -155,7 +155,8 @@ test("captain can cancel pending team invitation", async ({ page }) => {
 
   await page.goto("/me/team");
   await waitForWorkspace(page, "Đội của tôi");
-  await page.getByRole("button", { name: "Hủy mời" }).click();
+  await page.getByRole("button", { name: "Hủy mời" }).last().click();
+  await page.getByTestId("confirm-action-submit").click();
   await expect(page.locator("body")).toContainText("Thành viên: 1/5");
 });
 

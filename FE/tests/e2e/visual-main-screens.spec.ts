@@ -44,7 +44,7 @@ for (const screen of desktopScreens) {
 test("visual mobile: judge scoring modal", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openAs(page, "judge", "/judge/scoring");
-  await page.getByRole("button", { name: /Chấm điểm/i }).first().click();
+  await page.getByRole("button", { name: /Chấm điểm|Xem phiếu/i }).first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expectUsableViewport(page);
 });

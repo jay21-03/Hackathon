@@ -1,14 +1,16 @@
 import { test, expect } from "@playwright/test";
 import { mockCoreApis } from "./helpers/mockApi";
+import { mockRepoProvisioningApis } from "./helpers/mockRepoApis";
 import { seedAuth } from "./helpers/auth";
 
 test.beforeEach(async ({ page }) => {
   await mockCoreApis(page);
+  await mockRepoProvisioningApis(page);
 });
 
 test("organizer problem page shows content editor and attachment fields", async ({ page }) => {
   await seedAuth(page, "organizer");
-  await page.goto("/organizer/board-ops");
+  await page.goto("/organizer/boards#board-step-problem");
 
   await expect(page.getByText("Nội dung đề")).toBeVisible();
   await expect(page.getByText("Xem trước — giao diện thí sinh")).toBeVisible();

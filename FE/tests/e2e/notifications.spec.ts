@@ -30,7 +30,7 @@ test("participant sidebar notifications nav shows unread badge", async ({ page }
   await unreadPromise;
   await waitForWorkspace(page, "Tổng quan");
 
-  const nav = page.getByRole("link", { name: /Thông báo/i });
+  const nav = page.getByRole("link", { name: /^1?\s*Thông báo$/i });
   await expect(nav).toBeVisible();
   await expect(nav.locator("span.bg-error")).toBeVisible({ timeout: 10_000 });
 });

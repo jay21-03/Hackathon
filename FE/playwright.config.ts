@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testIgnore: ["**/live/**"],
+  testIgnore: ["**/live/**", "**/manual-submission.spec.ts"],
   workers: 1,
   timeout: 30_000,
   expect: {

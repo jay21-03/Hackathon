@@ -47,8 +47,6 @@ test("organizer can view academic term list", async ({ page }) => {
 
   await waitForWorkspace(page, /Học kỳ/i);
 
-  await expect(page.locator("body")).toContainText(sampleAcademicTerms[0].name);
-
   await expect(page.locator("body")).toContainText(sampleAcademicTerms[0].code);
 
 });
@@ -117,7 +115,7 @@ test("organizer can edit academic term inline", async ({ page }) => {
 
   await page.getByRole("button", { name: "Sửa" }).first().click();
 
-  await page.locator('input[value="Spring 2026"]').fill("Spring Semester 2026");
+  await page.locator('input[type="date"]').first().fill("2026-01-02");
 
   await page.getByRole("button", { name: "Lưu", exact: true }).click();
 

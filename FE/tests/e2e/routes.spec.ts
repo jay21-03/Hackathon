@@ -14,7 +14,7 @@ const protectedRoutes: Array<{ role: E2ERole; path: string; expectText: RegExp }
   { role: "organizer", path: "/organizer/events/new", expectText: /Tạo cuộc thi mới/i },
   { role: "organizer", path: "/organizer/events/wizard", expectText: /Quy trình vận hành|Thông tin/i },
   { role: "organizer", path: "/organizer/teams-hub", expectText: /Đội & lời mời|Đăng ký đội/i },
-  { role: "organizer", path: "/organizer/artifacts-hub", expectText: /Bài nộp & repository|Repository đội thi/i },
+  { role: "organizer", path: "/organizer/artifacts-hub", expectText: /Bài nộp & mã nguồn|Bài nộp & repository|Repository đội thi/i },
   { role: "organizer", path: "/organizer/artifacts-hub", expectText: /Bài nộp|Tiêu chí chấm|repository/i },
   { role: "organizer", path: "/organizer/results-hub", expectText: /Chấm điểm & kết quả|Tiến độ chấm/i },
   { role: "organizer", path: "/organizer/publish-results", expectText: /Công bố kết quả/i },
@@ -35,8 +35,8 @@ for (const path of publicRoutes) {
   });
 }
 
-for (const route of protectedRoutes) {
-  test(`${route.role} route renders ${route.path}`, async ({ page }) => {
+for (const [index, route] of protectedRoutes.entries()) {
+  test(`${route.role} route renders ${route.path} #${index + 1}`, async ({ page }) => {
     await seedAuth(page, route.role);
     await page.goto(route.path);
     await expect(page.locator("body")).toContainText(route.expectText);
