@@ -16,7 +16,8 @@ import { buildRankingWorkflowSteps } from "../../utils/rankingWorkflow";
 import { useEventBoards } from "../../hooks/useEventBoards";
 import { useScoreProgress } from "../../hooks/useScoreProgress";
 import { queryKeys } from "../../lib/queryKeys";
-import { sendScoringReminder, type JudgeSheetStatusDto } from "../../services/scoringApi";
+import { calculateRoundRanking } from "../../services/rankingApi";
+import { completeDemoScoring, sendScoringReminder, type JudgeSheetStatusDto } from "../../services/scoringApi";
 import { resolveApiError } from "../../utils/apiError";
 import { resolveDefaultBoardId, resolveDefaultRoundId } from "../../utils/pickActiveRound";
 
@@ -93,6 +94,8 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
     return Number.isFinite(parsed) ? parsed : null;
   });
   const [reminding, setReminding] = useState(false);
+  const [demoCompleting, setDemoCompleting] = useState(false);
+  const [processCompleting, setProcessCompleting] = useState(false);
 
   const activeRoundId = resolveDefaultRoundId(rounds, roundId);
   const boardsInRound = useMemo(
@@ -180,6 +183,56 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
     }
   }
 
+  async function handleCompleteDemoScoring() {
+    if (!eventId) return;
+    setDemoCompleting(true);
+    try {
+      const result = await completeDemoScoring(eventId);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.scoring.all });
+      notify(
+        result.scoreSheetsSubmitted === 0
+          ? "Chưa bù thêm phiếu nào. Cần ít nhất 1 giám khảo nộp điểm mẫu cho mỗi đội."
+          : `Đã hoàn tất chấm điểm demo: bù ${result.scoreSheetsSubmitted} phiếu cho BGK còn lại.`,
+        result.scoreSheetsSubmitted === 0 ? "warning" : "success"
+      );
+    } catch (err) {
+      notify(
+        resolveApiError(err, "Hoàn tất chấm điểm demo thất bại. Hãy chắc chắn đã có 1 giám khảo nộp điểm mẫu."),
+        "danger"
+      );
+    } finally {
+      setDemoCompleting(false);
+    }
+  }
+
+  async function handleCompleteDemoProcess() {
+    if (!eventId) return;
+    setProcessCompleting(true);
+    try {
+      const result = await completeDemoScoring(eventId);
+      if (activeRoundId) {
+        await calculateRoundRanking(activeRoundId, true);
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.scoring.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.rankings.all })
+      ]);
+      notify(
+        result.scoreSheetsSubmitted === 0
+          ? "Đã query dữ liệu hiện có và tính xếp hạng. Nếu còn thiếu điểm, cần 1 phiếu mẫu của giám khảo trước."
+          : `Đã hoàn tất quá trình thi: bù ${result.scoreSheetsSubmitted} phiếu, chốt dữ liệu và tính xếp hạng.`,
+        "success"
+      );
+    } catch (err) {
+      notify(
+        resolveApiError(err, "Hoàn tất quá trình thi thất bại. Kiểm tra đội đã được gán và đã có điểm mẫu."),
+        "danger"
+      );
+    } finally {
+      setProcessCompleting(false);
+    }
+  }
+
 
   const judgeNameById = Object.fromEntries(
     (progress?.judges ?? []).map((j) => [j.judgeId, j.fullName])
@@ -199,6 +252,28 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
             description="Theo dõi giám khảo đã nộp phiếu chấm cho từng đội trên bảng."
             actions={
               <div className="flex flex-wrap items-center gap-sm">
+                {progress && progress.summary.completionPercent < 100 ? (
+                  <Button
+                    variant="secondary"
+                    icon={<Icon name="fact_check" />}
+                    disabled={demoCompleting || processCompleting || !eventId}
+                    onClick={() => void handleCompleteDemoScoring()}
+                    title="Dùng khi demo: sau khi 1 giám khảo đã chấm, hệ thống bù điểm cho các giám khảo còn lại."
+                  >
+                    {demoCompleting ? "Đang chốt..." : "Hoàn tất chấm điểm demo"}
+                  </Button>
+                ) : null}
+                {progress ? (
+                  <Button
+                    variant="primary"
+                    icon={<Icon name="double_arrow" />}
+                    disabled={processCompleting || demoCompleting || !eventId}
+                    onClick={() => void handleCompleteDemoProcess()}
+                    title="Dùng sau khi bạn đã gán đội: chốt chấm điểm, bổ sung dữ liệu thiếu và tính xếp hạng để qua công bố."
+                  >
+                    {processCompleting ? "Đang hoàn tất..." : "Hoàn tất quá trình thi"}
+                  </Button>
+                ) : null}
                 {progress && progress.summary.completionPercent < 100 ? (
                   <Button
                     variant="secondary"
@@ -299,7 +374,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
 
           {progress.judges.length > 0 && progress.teams.length > 0 ? (
             <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
-              <h3 className="border-b border-outline-variant px-md py-sm font-title-sm text-on-surface">
+              <h3 className="border-b border-outline-variant px-sm py-2 font-title-sm text-on-surface">
                 Ma trận tiến độ (đội × giám khảo)
               </h3>
               <div className="overflow-x-auto p-md">
@@ -375,7 +450,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
           ) : null}
 
           <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
-            <h3 className="border-b border-outline-variant px-md py-sm font-title-sm text-on-surface">
+            <h3 className="border-b border-outline-variant px-sm py-2 font-title-sm text-on-surface">
               Tiến độ theo giám khảo
             </h3>
             <div className="overflow-x-auto">
@@ -387,26 +462,26 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                 </colgroup>
                 <thead className="table-header-bg">
                   <tr className="font-label-sm text-on-surface-variant">
-                    <th className="px-md py-sm">Giám khảo</th>
-                    <th className="px-md py-sm text-right">Đã nộp</th>
-                    <th className="px-md py-sm text-right">Tổng đội</th>
+                    <th className="px-sm py-2">Giám khảo</th>
+                    <th className="px-sm py-2 text-right">Đã nộp</th>
+                    <th className="px-sm py-2 text-right">Tổng đội</th>
                   </tr>
                 </thead>
                 <tbody className="table-divider">
                   {progress.judges.map((judge) => (
                     <tr key={judge.judgeId} className="font-body-sm text-on-surface">
-                      <td className="px-md py-md">
+                      <td className="px-sm py-2">
                         <span className="block truncate" title={judge.fullName}>
                           {judge.fullName}
                         </span>
                       </td>
-                      <td className="px-md py-md text-right tabular-nums">{judge.submittedCount}</td>
-                      <td className="px-md py-md text-right tabular-nums">{judge.totalTeams}</td>
+                      <td className="px-sm py-2 text-right tabular-nums">{judge.submittedCount}</td>
+                      <td className="px-sm py-2 text-right tabular-nums">{judge.totalTeams}</td>
                     </tr>
                   ))}
                   {progress.judges.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-md py-md text-on-surface-variant">
+                      <td colSpan={3} className="px-sm py-2 text-on-surface-variant">
                         Chưa phân công giám khảo cho bảng này.
                       </td>
                     </tr>
@@ -417,7 +492,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
           </section>
 
           <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
-            <h3 className="border-b border-outline-variant px-md py-sm font-title-sm text-on-surface">
+            <h3 className="border-b border-outline-variant px-sm py-2 font-title-sm text-on-surface">
               Tiến độ theo đội
             </h3>
             <div className="overflow-x-auto">
@@ -431,12 +506,12 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                 </colgroup>
                 <thead className="table-header-bg">
                   <tr className="font-label-sm text-on-surface-variant">
-                    <th className="px-md py-sm">Đội</th>
-                    <th className="px-md py-sm text-center">Đã nộp / Cần</th>
+                    <th className="px-sm py-2">Đội</th>
+                    <th className="px-sm py-2 text-center">Đã nộp / Cần</th>
                     {progress.judges.map((judge) => (
                       <th
                         key={judge.judgeId}
-                        className="px-md py-sm text-center"
+                        className="px-sm py-2 text-center"
                         title={judge.fullName}
                       >
                         <span className="block truncate">{judge.fullName}</span>
@@ -447,7 +522,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                 <tbody className="table-divider">
                   {progress.teams.map((team) => (
                     <tr key={team.teamId} className="font-body-sm text-on-surface">
-                      <td className="px-md py-md font-label-md">
+                      <td className="px-sm py-2 font-label-md">
                         <span className="block truncate" title={team.teamName}>
                           {team.teamName}
                         </span>
@@ -457,7 +532,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                           </span>
                         ) : null}
                       </td>
-                      <td className="px-md py-md text-center tabular-nums">
+                      <td className="px-sm py-2 text-center tabular-nums">
                         {team.submittedJudgeCount}/{team.requiredJudgeCount}
                       </td>
                       {progress.judges.map((judge) => {
@@ -479,7 +554,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                                 ? "Nháp"
                                 : "—";
                         return (
-                          <td key={judge.judgeId} className="px-md py-md text-center">
+                          <td key={judge.judgeId} className="px-sm py-2 text-center">
                             <Badge
                               tone={
                                 j.status === "SUBMITTED"
@@ -501,7 +576,7 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
                     <tr>
                       <td
                         colSpan={2 + progress.judges.length}
-                        className="px-md py-md text-on-surface-variant"
+                        className="px-sm py-2 text-on-surface-variant"
                       >
                         Chưa có đội trên bảng.
                       </td>

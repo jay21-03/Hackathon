@@ -192,6 +192,15 @@ export interface EventScoreProgressResponse {
   boardsIncomplete: number[];
 }
 
+export interface DemoScoringCompletionResponse {
+  eventId: number;
+  boardsProcessed: number;
+  scoreSheetsCreated: number;
+  scoreSheetsSubmitted: number;
+  scoreItemsCopied: number;
+  skippedTeamsWithoutSample: number;
+}
+
 export const DEFAULT_LEVEL_DESCRIPTORS: LevelDescriptor[] = [
   {
     level: "EXCELLENT",
@@ -445,6 +454,16 @@ export async function fetchEventScoreProgress(eventId: number) {
   );
   if (!data.data) {
     throw new Error(data.message || "Không tải được tiến độ chấm.");
+  }
+  return data.data;
+}
+
+export async function completeDemoScoring(eventId: number) {
+  const { data } = await apiClient.post<ApiResponse<DemoScoringCompletionResponse>>(
+    `/v1/admin/events/${eventId}/demo-scoring-complete`
+  );
+  if (!data.data) {
+    throw new Error(data.message || "Không hoàn tất được chấm điểm demo.");
   }
   return data.data;
 }

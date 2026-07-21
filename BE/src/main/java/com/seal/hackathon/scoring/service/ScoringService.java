@@ -28,6 +28,7 @@ import com.seal.hackathon.scoring.dto.BoardBriefDto;
 import com.seal.hackathon.scoring.dto.ComputedScoreDto;
 import com.seal.hackathon.scoring.dto.CriteriaRequestItem;
 import com.seal.hackathon.scoring.dto.CriteriaResponse;
+import com.seal.hackathon.scoring.dto.DemoScoringCompletionResponse;
 import com.seal.hackathon.scoring.dto.EventScoreProgressResponse;
 import com.seal.hackathon.scoring.dto.JudgeBriefDto;
 import com.seal.hackathon.scoring.dto.JudgeProgressDto;
@@ -369,6 +370,97 @@ public class ScoringService {
                                 && p.getSummary().getCompletionPercent().compareTo(BigDecimal.valueOf(100)) < 0)
                         .map(ScoreProgressResponse::getBoardId)
                         .toList())
+                .build();
+    }
+
+    @Transactional
+    public DemoScoringCompletionResponse completeDemoScoring(Long eventId) {
+        organizerAuthorizationService.requireEventOwnedByCurrentOrganizer(eventId);
+        eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+
+        int boardsProcessed = 0;
+        int sheetsCreated = 0;
+        int sheetsSubmitted = 0;
+        int itemsCopied = 0;
+        int skippedTeamsWithoutSample = 0;
+        OffsetDateTime now = OffsetDateTime.now();
+
+        for (Round round : ContestOrdering.sortRounds(roundRepository.findByEventId(eventId))) {
+            List<ScoreCriteria> criteria = scoreCriteriaRepository.findByRoundIdOrderBySortOrderAsc(round.getId());
+            if (criteria.isEmpty()) {
+                continue;
+            }
+            for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(round.getId()))) {
+                List<JudgeAssignment> assignments = judgeAssignmentRepository.findByBoardId(board.getId());
+                List<BoardSlot> slots = sortedScorableSlotsWithTeams(board.getId());
+                if (assignments.isEmpty() || slots.isEmpty()) {
+                    continue;
+                }
+                boardsProcessed++;
+                for (BoardSlot slot : slots) {
+                    ScoreSheet sample = scoreSheetRepository.findByBoardIdAndTeamId(board.getId(), slot.getTeamId())
+                            .stream()
+                            .filter(sheet -> sheet.getStatus() == ScoreSheetStatus.SUBMITTED)
+                            .findFirst()
+                            .orElse(null);
+                    if (sample == null) {
+                        skippedTeamsWithoutSample++;
+                        continue;
+                    }
+                    List<ScoreItem> sampleItems = scoreItemRepository.findByScoreSheetId(sample.getId());
+                    for (JudgeAssignment assignment : assignments) {
+                        ScoreSheet sheet = scoreSheetRepository
+                                .findByBoardIdAndTeamIdAndJudgeId(
+                                        board.getId(), slot.getTeamId(), assignment.getJudgeId())
+                                .orElse(null);
+                        if (sheet != null && sheet.getStatus() == ScoreSheetStatus.SUBMITTED) {
+                            continue;
+                        }
+                        if (sheet == null) {
+                            sheet = ScoreSheet.builder()
+                                    .boardId(board.getId())
+                                    .teamId(slot.getTeamId())
+                                    .judgeId(assignment.getJudgeId())
+                                    .judgeAssignmentId(assignment.getId())
+                                    .status(ScoreSheetStatus.DRAFT)
+                                    .createdAt(now)
+                                    .updatedAt(now)
+                                    .build();
+                            sheet = scoreSheetRepository.save(sheet);
+                            sheetsCreated++;
+                        } else {
+                            scoreItemRepository.deleteByScoreSheetId(sheet.getId());
+                        }
+                        for (ScoreItem item : sampleItems) {
+                            if (criteria.stream().noneMatch(c -> c.getId().equals(item.getCriteriaId()))) {
+                                continue;
+                            }
+                            scoreItemRepository.save(ScoreItem.builder()
+                                    .scoreSheetId(sheet.getId())
+                                    .criteriaId(item.getCriteriaId())
+                                    .scoreValue(item.getScoreValue())
+                                    .comment("Demo copy: " + (item.getComment() == null ? "" : item.getComment()))
+                                    .build());
+                            itemsCopied++;
+                        }
+                        sheet.setGeneralFeedback(sample.getGeneralFeedback() == null
+                                ? "Demo: điểm được bù từ phiếu giám khảo đã chấm."
+                                : "Demo copy: " + sample.getGeneralFeedback());
+                        submitSheetInternal(sheet, criteria);
+                        sheetsSubmitted++;
+                    }
+                }
+            }
+        }
+
+        return DemoScoringCompletionResponse.builder()
+                .eventId(eventId)
+                .boardsProcessed(boardsProcessed)
+                .scoreSheetsCreated(sheetsCreated)
+                .scoreSheetsSubmitted(sheetsSubmitted)
+                .scoreItemsCopied(itemsCopied)
+                .skippedTeamsWithoutSample(skippedTeamsWithoutSample)
                 .build();
     }
 
