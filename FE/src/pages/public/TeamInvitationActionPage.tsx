@@ -288,7 +288,7 @@ export function TeamInvitationActionPage({ action }: TeamInvitationActionPagePro
 
       {team?.members?.length ? (
 
-        <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+        <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
 
           <p className="mb-sm font-label-md text-on-surface">Thành viên trong đội</p>
 

@@ -66,8 +66,8 @@ export function BoardProblemSection({
 }: BoardProblemSectionProps) {
   return (
     <div className="space-y-lg">
-      <section className="grid gap-lg xl:grid-cols-[1fr_320px]">
-        <form className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
+      <section className="grid gap-md xl:grid-cols-[1fr_320px]">
+        <form className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
           {rounds.length > 0 ? (
             <label className="flex flex-col gap-xs">
               <span className="font-label-sm normal-case text-on-surface-variant">Vòng thi</span>
@@ -202,7 +202,7 @@ export function BoardProblemSection({
           </div>
         </form>
 
-        <aside className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+        <aside className="rounded-xl border border-outline-variant bg-surface-container p-md">
           <h2 className="font-headline-sm text-on-surface">Quy tắc cần giữ</h2>
           <div className="mt-md space-y-sm font-body-sm text-on-surface-variant">
             <p>Thí sinh chỉ xem đề từ lúc mở đến trước lúc đóng.</p>

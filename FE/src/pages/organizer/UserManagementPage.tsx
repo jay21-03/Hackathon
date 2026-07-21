@@ -104,7 +104,7 @@ export function UserManagementPage() {
         />
       ) : null}
 
-      <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+      <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
         <TableToolbar
           searchValue={search}
           onSearchChange={setSearch}

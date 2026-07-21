@@ -28,7 +28,7 @@ export function TermDashboardPanel({ termId: termIdOverride }: TermDashboardPane
   const stats = dashboardQuery.data;
 
   return (
-    <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
+    <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
       <div>
         <h2 className="font-headline-sm text-on-surface">Tổng quan học kỳ</h2>
         <p className="font-body-sm text-on-surface-variant">

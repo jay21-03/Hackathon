@@ -124,7 +124,7 @@ export function CompleteProfilePage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [redirectTarget]);
 
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace state={{ message: "Vui lòng đăng nhập để hoàn tất hồ sơ." }} />;

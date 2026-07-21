@@ -50,12 +50,12 @@ export function EventAwardsView({
   }
 
   return (
-    <section className="rounded-xl border border-outline-variant p-lg space-y-md">
+    <section className="rounded-xl border border-outline-variant p-md space-y-md">
       <div className="flex flex-wrap items-center justify-between gap-sm">
         <h2 className="font-headline-sm">Kết quả trao giải</h2>
         <Badge tone="active">Đã công bố</Badge>
       </div>
-      <div className="space-y-lg">
+      <div className="space-y-md">
         {categoryGroups.map((group) => (
           <div key={group.key} className="space-y-md">
             <h3 className="font-label-md text-on-surface-variant">{group.roundName}</h3>

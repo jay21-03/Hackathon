@@ -238,7 +238,7 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
 
       {activeBoard ? (
         <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
-          <div className="flex flex-wrap items-center justify-between gap-sm border-b border-outline-variant px-md py-sm">
+          <div className="flex flex-wrap items-center justify-between gap-sm border-b border-outline-variant px-sm py-2">
             <div>
               <h2 className="font-headline-sm text-on-surface">{formatBoardRankingLabel(activeBoard)}</h2>
               <p className="font-body-sm text-on-surface-variant">
@@ -260,11 +260,11 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
               </colgroup>
               <thead className="table-header-bg">
                 <tr className="font-label-sm text-on-surface-variant">
-                  <th className="px-md py-sm">Hạng</th>
-                  <th className="px-md py-sm">Đội</th>
-                  <th className="px-md py-sm text-right">Điểm TB</th>
-                  <th className="px-md py-sm text-right">GK đã nộp</th>
-                  {participantView ? <th className="px-md py-sm text-right">Chi tiết</th> : null}
+                  <th className="px-sm py-2">Hạng</th>
+                  <th className="px-sm py-2">Đội</th>
+                  <th className="px-sm py-2 text-right">Điểm TB</th>
+                  <th className="px-sm py-2 text-right">GK đã nộp</th>
+                  {participantView ? <th className="px-sm py-2 text-right">Chi tiết</th> : null}
                 </tr>
               </thead>
               <tbody className="table-divider">
@@ -275,21 +275,21 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
                       key={row.teamId}
                       className={`font-body-sm text-on-surface ${isOwnTeam ? "bg-primary-container/30" : ""}`}
                     >
-                      <td className="px-md py-md align-middle font-headline-sm tabular-nums">
+                      <td className="px-sm py-2 align-middle font-headline-sm tabular-nums">
                         {row.rank}
                       </td>
-                      <td className="px-md py-md align-middle">
+                      <td className="px-sm py-2 align-middle">
                         <div className="flex flex-wrap items-center gap-sm">
                           <span className="font-label-md">{row.teamName}</span>
                           {isOwnTeam ? <Badge tone="active">Đội bạn</Badge> : null}
                         </div>
                       </td>
-                      <td className="px-md py-md align-middle text-right tabular-nums">
+                      <td className="px-sm py-2 align-middle text-right tabular-nums">
                         {Number(row.averageScore).toFixed(2)}
                       </td>
-                      <td className="px-md py-md align-middle text-right tabular-nums">{row.submittedJudgeCount}</td>
+                      <td className="px-sm py-2 align-middle text-right tabular-nums">{row.submittedJudgeCount}</td>
                       {participantView ? (
-                        <td className="px-md py-md align-middle text-right">
+                        <td className="px-sm py-2 align-middle text-right">
                           {isOwnTeam ? (
                             <Button
                               type="button"
@@ -359,22 +359,22 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
                 </colgroup>
                 <thead className="table-header-bg">
                   <tr className="font-label-sm text-on-surface-variant">
-                    <th className="px-md py-sm">Giám khảo</th>
-                    <th className="px-md py-sm text-right">Điểm</th>
-                    <th className="px-md py-sm text-right">Thời gian nộp</th>
+                    <th className="px-sm py-2">Giám khảo</th>
+                    <th className="px-sm py-2 text-right">Điểm</th>
+                    <th className="px-sm py-2 text-right">Thời gian nộp</th>
                   </tr>
                 </thead>
                 <tbody className="table-divider font-body-sm">
                   {detailEntry.entry.judgeScores.map((judge) => (
                     <tr key={judge.judgeId}>
-                      <td className="px-md py-sm">
+                      <td className="px-sm py-2">
                         <span className="font-label-md text-on-surface">{judge.judgeName}</span>
                         {judge.feedback ? (
                           <span className="mt-xs block text-on-surface-variant">{judge.feedback}</span>
                         ) : null}
                       </td>
-                      <td className="px-md py-sm text-right tabular-nums">{formatScore(judge.totalScore)}</td>
-                      <td className="px-md py-sm text-right text-on-surface-variant">
+                      <td className="px-sm py-2 text-right tabular-nums">{formatScore(judge.totalScore)}</td>
+                      <td className="px-sm py-2 text-right text-on-surface-variant">
                         {formatSubmittedAt(judge.submittedAt) ?? "—"}
                       </td>
                     </tr>
@@ -401,16 +401,16 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
                 </colgroup>
                 <thead className="table-header-bg">
                   <tr className="font-label-sm text-on-surface-variant">
-                    <th className="px-md py-sm">Tiêu chí</th>
-                    <th className="px-md py-sm text-right">Trọng số</th>
-                    <th className="px-md py-sm text-right">Điểm TB</th>
-                    <th className="px-md py-sm text-right">Điểm quy đổi</th>
+                    <th className="px-sm py-2">Tiêu chí</th>
+                    <th className="px-sm py-2 text-right">Trọng số</th>
+                    <th className="px-sm py-2 text-right">Điểm TB</th>
+                    <th className="px-sm py-2 text-right">Điểm quy đổi</th>
                   </tr>
                 </thead>
                 <tbody className="table-divider font-body-sm">
                   {detailEntry.entry.criteriaScores.map((criterion) => (
                     <tr key={criterion.criteriaId}>
-                      <td className="px-md py-sm">
+                      <td className="px-sm py-2">
                         <span className="font-label-md text-on-surface">{criterion.criteriaName}</span>
                         {criterion.comments?.length ? (
                           <ul className="mt-xs list-disc space-y-1 pl-md text-on-surface-variant">
@@ -420,11 +420,11 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
                           </ul>
                         ) : null}
                       </td>
-                      <td className="px-md py-sm text-right tabular-nums">{criterion.weight}%</td>
-                      <td className="px-md py-sm text-right tabular-nums">
+                      <td className="px-sm py-2 text-right tabular-nums">{criterion.weight}%</td>
+                      <td className="px-sm py-2 text-right tabular-nums">
                         {formatScore(criterion.averageScore)}
                       </td>
-                      <td className="px-md py-sm text-right tabular-nums">
+                      <td className="px-sm py-2 text-right tabular-nums">
                         {formatScore(criterion.weightedScore)}
                       </td>
                     </tr>

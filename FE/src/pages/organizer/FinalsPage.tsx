@@ -58,6 +58,7 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [toRoundId, setToRoundId] = useState<number | "">(initialFilters.toRoundId);
   const [topN, setTopN] = useState(initialFilters.topN);
   const [selectedTeamIds, setSelectedTeamIds] = useState<Set<number>>(new Set());
+  const [manualTeamId, setManualTeamId] = useState<number | "">("");
   const [busy, setBusy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -130,6 +131,13 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
 
   function clearSelection() {
     setSelectedTeamIds(new Set());
+    setManualTeamId("");
+  }
+
+  function addManualTeam() {
+    if (manualTeamId === "") return;
+    setSelectedTeamIds((prev) => new Set(prev).add(manualTeamId));
+    setManualTeamId("");
   }
 
   async function handleExecute() {
@@ -249,7 +257,7 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
               description="Tính xếp hạng và công bố kết quả ở vòng nguồn trước khi chuyển đội."
             />
           ) : (
-            <section className="rounded-xl border border-outline-variant p-lg space-y-md">
+            <section className="rounded-xl border border-outline-variant p-md space-y-md">
               <div className="flex flex-wrap items-center justify-between gap-md">
                 <div>
                   <h2 className="font-headline-sm">Bảng xếp hạng vòng nguồn</h2>
@@ -259,6 +267,26 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-sm">
+                  <div className="flex min-w-[18rem] gap-xs">
+                    <select
+                      className="min-w-0 flex-1 rounded-lg border border-outline-variant bg-surface px-3 py-2 font-body-sm"
+                      value={manualTeamId}
+                      onChange={(e) => setManualTeamId(e.target.value ? Number(e.target.value) : "")}
+                      aria-label="Thêm đội manual"
+                    >
+                      <option value="">Thêm đội manual</option>
+                      {eligibleTeams
+                        .filter((team) => !selectedTeamIds.has(team.teamId))
+                        .map((team) => (
+                          <option key={`${team.teamId}-${team.fromBoardId}`} value={team.teamId}>
+                            {team.teamName}
+                          </option>
+                        ))}
+                    </select>
+                    <Button variant="secondary" size="sm" disabled={manualTeamId === ""} onClick={addManualTeam}>
+                      Thêm
+                    </Button>
+                  </div>
                   <Button variant="secondary" size="sm" onClick={applySuggestedSelection}>
                     Chọn top {topN} mỗi bảng
                   </Button>
@@ -279,15 +307,15 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                   </colgroup>
                   <thead className="table-header-bg">
                     <tr className="font-label-sm text-on-surface-variant">
-                      <th className="px-md py-sm text-center">Chọn</th>
-                      <th className="px-md py-sm">Hạng</th>
-                      <th className="px-md py-sm">Đội</th>
-                      <th className="px-md py-sm">Vòng · Bảng</th>
-                      <th className="px-md py-sm text-right">Điểm TB</th>
+                      <th className="px-sm py-2 text-center">Chọn</th>
+                      <th className="px-sm py-2">STT</th>
+                      <th className="px-sm py-2">Đội</th>
+                      <th className="px-sm py-2">Vòng · Bảng</th>
+                      <th className="px-sm py-2 text-right">Điểm TB</th>
                     </tr>
                   </thead>
                   <tbody className="table-divider font-body-sm">
-                    {eligibleTeams.map((team) => {
+                    {eligibleTeams.map((team, index) => {
                       const checked = selectedTeamIds.has(team.teamId);
                       const suggested = suggestedTeamIds.has(team.teamId);
                       const selectable = !team.teamStatus || team.teamStatus === "CONFIRMED";
@@ -296,7 +324,7 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                           key={`${team.teamId}-${team.fromBoardId}`}
                           className={checked ? "bg-primary-container/20" : undefined}
                         >
-                          <td className="px-md py-sm text-center">
+                          <td className="px-sm py-2 text-center">
                             <input
                               type="checkbox"
                               className="size-4 rounded border-outline-variant"
@@ -311,8 +339,8 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                               aria-label={`Chọn ${team.teamName}`}
                             />
                           </td>
-                          <td className="px-md py-sm tabular-nums">{team.rank}</td>
-                          <td className="px-md py-sm">
+                          <td className="px-sm py-2 tabular-nums">{index + 1}</td>
+                          <td className="px-sm py-2">
                             <span className="font-medium">{team.teamName}</span>
                             {team.teamStatus && team.teamStatus !== "CONFIRMED" ? (
                               <Badge tone={getStatusTone(team.teamStatus)} className="ml-sm align-middle">
@@ -325,10 +353,10 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                               </Badge>
                             ) : null}
                           </td>
-                          <td className="px-md py-sm">
+                          <td className="px-sm py-2">
                             {formatBoardWithRoundLabel(team.fromBoardName, fromRoundName)}
                           </td>
-                          <td className="px-md py-sm text-right tabular-nums">
+                          <td className="px-sm py-2 text-right tabular-nums">
                             {formatScore(team.averageScore)}
                           </td>
                         </tr>
@@ -357,12 +385,12 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
           )}
 
           {advancementsQuery.data && advancementsQuery.data.length > 0 ? (
-            <section className="rounded-xl border border-outline-variant p-lg">
+            <section className="rounded-xl border border-outline-variant p-md">
               <h2 className="font-headline-sm mb-md">Đã chuyển ({advancementsQuery.data.length})</h2>
               <ul className="space-y-xs font-body-sm">
                 {advancementsQuery.data.map((a) => (
                   <li key={a.id}>
-                    {a.teamName} — hạng nguồn {a.basisRank} ({formatScore(a.basisScore)})
+                    {a.teamName} — căn cứ điểm nguồn {formatScore(a.basisScore)}
                   </li>
                 ))}
               </ul>

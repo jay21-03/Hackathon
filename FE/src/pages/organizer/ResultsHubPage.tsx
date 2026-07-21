@@ -28,13 +28,13 @@ import {
   type ResultsHubStep
 } from "./resultsHubUtils";
 
-export function ResultsHubPage({ embedded = false, onWizardStep }: HubEmbedProps = {}) {
+export function ResultsHubPage({ embedded = false }: HubEmbedProps = {}) {
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { context: setupContext, loading: setupLoading } = useEventSetupProgress(
     eventId,
     embedded ? "/organizer/events/wizard" : "/organizer/results-hub"
   );
-  const { boards, loading: boardsLoading } = useEventBoards(eventId);
+  const { loading: boardsLoading } = useEventBoards(eventId);
   const { rounds, loading: roundsLoading } = useEventRounds(eventId);
   const eventScoreProgressQuery = useQuery({
     queryKey: queryKeys.scoring.eventProgress(eventId),

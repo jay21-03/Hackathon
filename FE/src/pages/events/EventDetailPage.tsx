@@ -64,7 +64,7 @@ export function EventDetailPage() {
 
   if (!event) {
     return (
-      <div className="rounded-xl border border-outline-variant bg-surface p-lg shadow-sm">
+      <div className="rounded-xl border border-outline-variant bg-surface p-md shadow-sm">
         <p className="text-error font-body-md">Không tìm thấy cuộc thi.</p>
         <Link to="/events" className="text-primary font-label-md mt-md inline-block">
           Quay lại danh sách
@@ -125,7 +125,7 @@ export function EventDetailPage() {
         </div>
       )}
 
-      <article className="space-y-lg rounded-xl border border-outline-variant bg-surface p-lg shadow-sm">
+      <article className="space-y-md rounded-xl border border-outline-variant bg-surface p-md shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-md">
           <div>
             <h1 className="font-headline-lg text-on-surface">{event.name}</h1>
@@ -298,7 +298,7 @@ export function EventDetailPage() {
       </article>
 
       {enableAnnouncements && publishedAnnouncements.length > 0 ? (
-        <section className="space-y-sm rounded-xl border border-outline-variant bg-surface p-lg shadow-sm">
+        <section className="space-y-sm rounded-xl border border-outline-variant bg-surface p-md shadow-sm">
           <h2 className="font-headline-sm text-on-surface">Thông báo từ ban tổ chức</h2>
           <ul className="space-y-sm">
             {publishedAnnouncements.map((item) => (

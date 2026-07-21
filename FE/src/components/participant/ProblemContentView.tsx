@@ -27,7 +27,7 @@ export function ProblemContentView({
   const showRubricSection = !previewMode || rubricLoading || rubricError || criteria.length > 0;
 
   return (
-    <article className="rounded-xl border border-outline-variant bg-surface-container p-lg space-y-md">
+    <article className="rounded-xl border border-outline-variant bg-surface-container p-md space-y-md">
       {hasHtml ? (
         <div
           className="problem-content font-body-md text-on-surface prose prose-invert max-w-none [&_a]:text-primary [&_table]:w-full [&_td]:border [&_td]:border-outline-variant [&_th]:border [&_th]:border-outline-variant [&_th]:bg-surface-container-high"

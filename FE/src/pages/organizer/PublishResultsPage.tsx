@@ -52,7 +52,7 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
     enabled: Boolean(eventId)
   });
 
-  const boards = rankingsQuery.data?.boards ?? [];
+  const boards = useMemo(() => rankingsQuery.data?.boards ?? [], [rankingsQuery.data?.boards]);
   const sortedBoards = useMemo(() => sortBoardRankings(boards), [boards]);
   const boardsByRound = useMemo(() => groupBoardRankingsByRound(sortedBoards), [sortedBoards]);
   const boardLabelById = useMemo(

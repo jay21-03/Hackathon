@@ -157,7 +157,7 @@ function PageTabs({
 
           type="button"
 
-          className={`inline-flex items-center gap-2 border-b-2 px-md py-sm font-label-md transition-colors ${
+          className={`inline-flex items-center gap-2 border-b-2 px-sm py-2 font-label-md transition-colors ${
 
             view === tab.id
 
@@ -213,7 +213,7 @@ export function AcademicTermManagementPage() {
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [, setEditErrors] = useState<Record<string, string>>({});
 
 
 
@@ -300,6 +300,7 @@ export function AcademicTermManagementPage() {
 
     }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasTerms, terms]);
 
 
@@ -704,7 +705,7 @@ export function AcademicTermManagementPage() {
 
 
 
-            <div className="rounded-lg bg-surface-container-high px-md py-sm">
+            <div className="rounded-lg bg-surface-container-high px-sm py-2">
 
               <p className="font-label-sm text-on-surface-variant">Mã kỳ</p>
 
@@ -858,17 +859,17 @@ export function AcademicTermManagementPage() {
 
                 <tr>
 
-                  <th className="px-md py-sm">Mã kỳ</th>
+                  <th className="px-sm py-2">Mã kỳ</th>
 
-                  <th className="px-md py-sm">Loại</th>
+                  <th className="px-sm py-2">Loại</th>
 
-                  <th className="px-md py-sm">Thời gian</th>
+                  <th className="px-sm py-2">Thời gian</th>
 
-                  <th className="px-md py-sm">Cuộc thi</th>
+                  <th className="px-sm py-2">Cuộc thi</th>
 
-                  <th className="px-md py-sm">Trạng thái</th>
+                  <th className="px-sm py-2">Trạng thái</th>
 
-                  <th className="px-md py-sm" />
+                  <th className="px-sm py-2" />
 
                 </tr>
 
@@ -894,11 +895,11 @@ export function AcademicTermManagementPage() {
 
                   <tr key={term.id} className="border-t border-outline-variant/60">
 
-                    <td className="px-md py-sm font-mono text-sm">{term.code}</td>
+                    <td className="px-sm py-2 font-mono text-sm">{term.code}</td>
 
-                    <td className="px-md py-sm">{term.termType}</td>
+                    <td className="px-sm py-2">{term.termType}</td>
 
-                    <td className="px-md py-sm text-on-surface-variant">
+                    <td className="px-sm py-2 text-on-surface-variant">
 
                       {editingId === term.id ? (
 
@@ -938,9 +939,9 @@ export function AcademicTermManagementPage() {
 
                     </td>
 
-                    <td className="px-md py-sm">{term.eventCount ?? 0}</td>
+                    <td className="px-sm py-2">{term.eventCount ?? 0}</td>
 
-                    <td className="px-md py-sm">
+                    <td className="px-sm py-2">
 
                       <Badge tone={term.status === "ACTIVE" ? "success" : "neutral"}>
 
@@ -950,7 +951,7 @@ export function AcademicTermManagementPage() {
 
                     </td>
 
-                    <td className="px-md py-sm">
+                    <td className="px-sm py-2">
 
                       <div className="flex flex-wrap gap-1">
 
@@ -1059,7 +1060,7 @@ export function AcademicTermManagementPage() {
 
         <section className="space-y-md">
 
-          <div className="flex flex-wrap items-center justify-between gap-sm rounded-xl border border-outline-variant bg-surface-container px-md py-sm">
+          <div className="flex flex-wrap items-center justify-between gap-sm rounded-xl border border-outline-variant bg-surface-container px-sm py-2">
 
             {terms.length > 1 ? (
 

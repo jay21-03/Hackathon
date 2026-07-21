@@ -69,7 +69,7 @@ export function useAssignmentManagement(
     enabled: boardIds.length > 0
   });
 
-  const byBoard = assignmentsQuery.data ?? {};
+  const byBoard = useMemo(() => assignmentsQuery.data ?? {}, [assignmentsQuery.data]);
   const allAssignedMentorIds = useMemo(
     () =>
       Object.values(byBoard).flatMap((entry) => entry.mentors.map((row) => row.assigneeId)),

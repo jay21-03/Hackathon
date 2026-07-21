@@ -61,7 +61,7 @@ export function TeamInvitationConfirmationPage() {
         actions={<Badge tone={getStatusTone(status)}>{getStatusLabel(status)}</Badge>}
       />
 
-      <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+      <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
         <div className="grid gap-md md:grid-cols-2">
           <div>
             <p className="font-label-sm normal-case text-on-surface-variant">Token lời mời</p>

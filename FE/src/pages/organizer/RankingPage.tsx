@@ -54,7 +54,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
   const queryClient = useQueryClient();
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, boards, loading: boardsLoading } = useEventBoards(eventId);
-  const initialFilters = useMemo(loadRankingFilters, []);
+  const [initialFilters] = useState(loadRankingFilters);
   const [boardId, setBoardId] = useState<number | null>(initialFilters.boardId);
   const [roundId, setRoundId] = useState<number | null>(initialFilters.roundId);
   const [calculating, setCalculating] = useState(false);
@@ -101,9 +101,9 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
     (progress?.summary.completionPercent ?? 0) >= 100 ||
     ((progress?.summary.expectedSheets ?? 0) === 0 && (progress?.summary.judgeCount ?? 0) > 0);
 
-  async function invalidateRankingQueries() {
+  const invalidateRankingQueries = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.rankings.all });
-  }
+  }, [queryClient]);
 
   const handleCalculateBoard = useCallback(
     async (force = false, options?: { silent?: boolean }) => {
@@ -135,7 +135,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
         setCalculating(false);
       }
     },
-    [activeBoardId, notify, queryClient]
+    [activeBoardId, invalidateRankingQueries, notify]
   );
 
   const hasRankingData = (rankingQuery.data?.entries.length ?? 0) > 0;
@@ -419,7 +419,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
       {hasRanking && ranking ? (
         <>
           <section className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
-            <div className="border-b border-outline-variant px-md py-sm font-label-sm text-on-surface-variant">
+            <div className="border-b border-outline-variant px-sm py-2 font-label-sm text-on-surface-variant">
               {formatBoardRankingLabel(ranking)}
               {ranking.calculatedAt ? (
                 <span className="ml-2">
@@ -438,12 +438,12 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
               <table className="min-w-full text-left">
                 <thead className="table-header-bg">
                   <tr className="font-label-sm text-on-surface-variant">
-                    <th className="px-md py-sm">Hạng</th>
-                    <th className="px-md py-sm">Đội</th>
-                    <th className="px-md py-sm">Vị trí</th>
-                    <th className="px-md py-sm">Điểm TB</th>
-                    <th className="px-md py-sm">Trạng thái</th>
-                    <th className="px-md py-sm">Giám khảo đã nộp</th>
+                    <th className="px-sm py-2">Hạng</th>
+                    <th className="px-sm py-2">Đội</th>
+                    <th className="px-sm py-2">Vị trí</th>
+                    <th className="px-sm py-2">Điểm TB</th>
+                    <th className="px-sm py-2">Trạng thái</th>
+                    <th className="px-sm py-2">Giám khảo đã nộp</th>
                   </tr>
                 </thead>
                 <tbody className="table-divider">
@@ -456,11 +456,11 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
                         key={row.teamId}
                         className={`font-body-sm text-on-surface ${incomplete ? "bg-warning-container/20" : ""}`}
                       >
-                        <td className="px-md py-md font-headline-sm">{row.rank}</td>
-                        <td className="px-md py-md font-label-md">{row.teamName}</td>
-                        <td className="px-md py-md">{row.slotNumber ?? "—"}</td>
-                        <td className="px-md py-md">{Number(row.averageScore).toFixed(2)}</td>
-                        <td className="px-md py-md">
+                        <td className="px-sm py-2 font-headline-sm">{row.rank}</td>
+                        <td className="px-sm py-2 font-label-md">{row.teamName}</td>
+                        <td className="px-sm py-2">{row.slotNumber ?? "—"}</td>
+                        <td className="px-sm py-2">{Number(row.averageScore).toFixed(2)}</td>
+                        <td className="px-sm py-2">
                           {row.rankingStatus === "REPO_NOT_READY" ? (
                             <Badge tone="warning">Thiếu repository</Badge>
                           ) : row.rankingStatus === "NOT_SCORED" ? (
@@ -474,7 +474,7 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
                             </p>
                           ) : null}
                         </td>
-                        <td className="px-md py-md">
+                        <td className="px-sm py-2">
                           {row.submittedJudgeCount}
                           {required != null ? ` / ${required}` : ""}
                           {incomplete ? (

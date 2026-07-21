@@ -376,7 +376,7 @@ export function StaffCarryoverSection({
           description="Không có giám khảo/mentor khớp bộ lọc. Thử đổi học kỳ nguồn hoặc bộ lọc tên/email."
         />
       ) : (
-        <section className="space-y-md rounded-xl border border-outline-variant p-lg">
+        <section className="space-y-md rounded-xl border border-outline-variant p-md">
           <div className="flex flex-wrap items-center justify-between gap-md">
             <div>
               <h2 className="font-headline-sm">Danh sách từ kỳ cũ</h2>
@@ -399,11 +399,11 @@ export function StaffCarryoverSection({
             <table className="min-w-full text-left">
               <thead className="table-header-bg">
                 <tr className="font-label-sm text-on-surface-variant">
-                  <th className="w-12 px-md py-sm text-center">Chọn</th>
-                  <th className="px-md py-sm">Họ tên</th>
-                  <th className="px-md py-sm">Email</th>
-                  <th className="px-md py-sm">Vai trò kỳ cũ</th>
-                  <th className="px-md py-sm">Kỳ mới</th>
+                  <th className="w-12 px-sm py-2 text-center">Chọn</th>
+                  <th className="px-sm py-2">Họ tên</th>
+                  <th className="px-sm py-2">Email</th>
+                  <th className="px-sm py-2">Vai trò kỳ cũ</th>
+                  <th className="px-sm py-2">Kỳ mới</th>
                 </tr>
               </thead>
               <tbody className="table-divider font-body-sm">
@@ -415,7 +415,7 @@ export function StaffCarryoverSection({
                       key={key}
                       className={checked ? "bg-primary-container/20" : undefined}
                     >
-                      <td className="px-md py-sm text-center">
+                      <td className="px-sm py-2 text-center">
                         <input
                           type="checkbox"
                           className="size-4 rounded border-outline-variant"
@@ -425,14 +425,14 @@ export function StaffCarryoverSection({
                           aria-label={`Chọn ${person.fullName}`}
                         />
                       </td>
-                      <td className="px-md py-sm font-medium">{person.fullName}</td>
-                      <td className="px-md py-sm">{person.email}</td>
-                      <td className="px-md py-sm">
+                      <td className="px-sm py-2 font-medium">{person.fullName}</td>
+                      <td className="px-sm py-2">{person.email}</td>
+                      <td className="px-sm py-2">
                         <Badge tone={person.role === "JUDGE" ? "active" : "neutral"}>
                           {roleLabel(person.role)}
                         </Badge>
                       </td>
-                      <td className="px-md py-sm">
+                      <td className="px-sm py-2">
                         {person.inCurrentTerm ? (
                           <Badge tone="success">Đã có ở kỳ mới</Badge>
                         ) : (

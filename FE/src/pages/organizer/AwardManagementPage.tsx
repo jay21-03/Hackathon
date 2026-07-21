@@ -557,7 +557,7 @@ export function AwardManagementPage({
 
           <div className={configOnly ? "grid gap-lg" : "grid gap-lg lg:grid-cols-2"}>
             {!configOnly ? (
-            <section className="rounded-xl border border-outline-variant p-lg space-y-md">
+            <section className="rounded-xl border border-outline-variant p-md space-y-md">
               <div className="flex flex-wrap items-end justify-between gap-md">
                 <h2 className="font-headline-sm">BXH tham khảo</h2>
                 <div className="flex flex-wrap gap-sm">
@@ -606,17 +606,17 @@ export function AwardManagementPage({
                     <table className="min-w-full text-left font-body-sm">
                       <thead className="table-header-bg font-label-sm text-on-surface-variant">
                         <tr>
-                          <th className="px-md py-sm">Hạng</th>
-                          <th className="px-md py-sm">Đội</th>
-                          <th className="px-md py-sm text-right">Điểm</th>
+                          <th className="px-sm py-2">Hạng</th>
+                          <th className="px-sm py-2">Đội</th>
+                          <th className="px-sm py-2 text-right">Điểm</th>
                         </tr>
                       </thead>
                       <tbody className="table-divider">
                         {rankingRows.map((team) => (
                           <tr key={`${team.boardId}-${team.teamId}`}>
-                            <td className="px-md py-sm tabular-nums">{team.rank}</td>
-                            <td className="px-md py-sm">{team.teamName}</td>
-                            <td className="px-md py-sm text-right tabular-nums">{formatScore(team.score)}</td>
+                            <td className="px-sm py-2 tabular-nums">{team.rank}</td>
+                            <td className="px-sm py-2">{team.teamName}</td>
+                            <td className="px-sm py-2 text-right tabular-nums">{formatScore(team.score)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -627,23 +627,23 @@ export function AwardManagementPage({
                     {rankingBoardsByRound.map((group) =>
                       group.boards.map((board) => (
                         <div key={board.boardId} className="overflow-x-auto rounded-lg border border-outline-variant">
-                          <div className="border-b border-outline-variant bg-surface-container-low px-md py-sm font-label-sm text-on-surface">
+                          <div className="border-b border-outline-variant bg-surface-container-low px-sm py-2 font-label-sm text-on-surface">
                             {formatBoardRankingLabel(board)} · {board.entries.length} đội
                           </div>
                           <table className="min-w-full text-left font-body-sm">
                             <thead className="table-header-bg font-label-sm text-on-surface-variant">
                               <tr>
-                                <th className="px-md py-sm">Hạng</th>
-                                <th className="px-md py-sm">Đội</th>
-                                <th className="px-md py-sm text-right">Điểm</th>
+                                <th className="px-sm py-2">Hạng</th>
+                                <th className="px-sm py-2">Đội</th>
+                                <th className="px-sm py-2 text-right">Điểm</th>
                               </tr>
                             </thead>
                             <tbody className="table-divider">
                               {board.entries.map((entry) => (
                                 <tr key={entry.teamId}>
-                                  <td className="px-md py-sm tabular-nums">{entry.rank}</td>
-                                  <td className="px-md py-sm">{entry.teamName}</td>
-                                  <td className="px-md py-sm text-right tabular-nums">
+                                  <td className="px-sm py-2 tabular-nums">{entry.rank}</td>
+                                  <td className="px-sm py-2">{entry.teamName}</td>
+                                  <td className="px-sm py-2 text-right tabular-nums">
                                     {formatScore(entry.averageScore)}
                                   </td>
                                 </tr>
@@ -665,7 +665,7 @@ export function AwardManagementPage({
                   {eligibleTeams.length > 0 ? (
                     <ul className="space-y-xs font-body-sm max-h-80 overflow-y-auto">
                       {eligibleTeams.map((team) => (
-                        <li key={team.id} className="rounded-lg border border-outline-variant px-md py-sm">
+                        <li key={team.id} className="rounded-lg border border-outline-variant px-sm py-2">
                           {team.name}
                         </li>
                       ))}
@@ -726,7 +726,7 @@ export function AwardManagementPage({
             </section>
             ) : null}
 
-            <section className="rounded-xl border border-outline-variant p-lg space-y-md">
+            <section className="rounded-xl border border-outline-variant p-md space-y-md">
               <h2 className="font-headline-sm">Hạng mục giải thưởng</h2>
               {categories.length === 0 ? (
                 <EmptyState

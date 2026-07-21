@@ -145,7 +145,7 @@ export function AssignedBoardPage() {
       </section>
 
       <section className="rounded-xl border border-outline-variant bg-surface-container">
-        <div className="border-b border-outline-variant px-md py-md">
+        <div className="border-b border-outline-variant px-sm py-2">
           <h2 className="font-headline-sm text-on-surface">Đội cùng bảng</h2>
           <p className="font-body-sm text-on-surface-variant">
             {peers.length} đội đã được gán vào{" "}
@@ -155,7 +155,7 @@ export function AssignedBoardPage() {
         <DataTable headers={["Đội", "Vị trí"]}>
           {peers.map((peer) => (
             <tr key={peer.teamId} className="font-body-sm text-on-surface">
-              <td className="px-md py-md">
+              <td className="px-sm py-2">
                 <span className="font-label-md">
                   {peer.teamName}
                   {peer.teamId === board.teamId ? (
@@ -163,7 +163,7 @@ export function AssignedBoardPage() {
                   ) : null}
                 </span>
               </td>
-              <td className="px-md py-md">#{peer.slotNumber}</td>
+              <td className="px-sm py-2">#{peer.slotNumber}</td>
             </tr>
           ))}
         </DataTable>

@@ -137,7 +137,7 @@ export function TermScopedResourcesPanel({
   };
 
   return (
-    <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
+    <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
       <div className="flex flex-col gap-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-headline-sm text-on-surface">{stepTitles[hubStep]}</h2>

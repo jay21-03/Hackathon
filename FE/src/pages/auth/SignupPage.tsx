@@ -88,7 +88,6 @@ export function SignupPage() {
       if (staffSignupFlow) {
         const staffPayload = parsed.data as z.infer<typeof mentorJudgeSignupSchema>;
         const {
-          confirmPassword: _ignored,
           email: staffEmail,
           password: staffPassword,
           fullName: staffFullName,
@@ -105,10 +104,14 @@ export function SignupPage() {
       }
 
       const participantPayload = parsed.data as z.infer<typeof signupSchema>;
-      const { confirmPassword: _ignored, ...payload } = participantPayload;
       const result = await registerAccount({
-        ...payload,
-        university: payload.university || undefined
+        studentType: participantPayload.studentType,
+        fullName: participantPayload.fullName,
+        studentId: participantPayload.studentId,
+        githubUsername: participantPayload.githubUsername,
+        email: participantPayload.email,
+        password: participantPayload.password,
+        university: participantPayload.university || undefined
       });
       await finishAuthSession(result, authReturnTo ? { from: authReturnTo } : undefined);
     } catch (error) {

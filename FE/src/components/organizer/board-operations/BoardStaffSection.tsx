@@ -69,7 +69,7 @@ export function BoardStaffSection({
   const hasStaffOptions = selectableStaffCount > 0;
 
   return (
-    <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
+    <section className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
       <div className="grid gap-md md:grid-cols-2">
         {rounds.length > 0 ? (
           <label className="flex flex-col gap-xs font-label-sm text-on-surface-variant">

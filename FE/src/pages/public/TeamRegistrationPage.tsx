@@ -231,7 +231,7 @@ export function TeamRegistrationPage() {
         <Link to={`/events/${eventId}`} className="inline-flex items-center gap-1 font-label-md text-primary">
           ← Chi tiết cuộc thi
         </Link>
-        <p className="rounded-xl border border-outline-variant bg-surface-container p-lg font-body-md text-on-surface-variant">
+        <p className="rounded-xl border border-outline-variant bg-surface-container p-md font-body-md text-on-surface-variant">
           Cuộc thi chưa mở đăng ký. Bạn vẫn có thể chọn cuộc thi khác từ danh sách.
         </p>
       </div>
@@ -264,9 +264,9 @@ export function TeamRegistrationPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-lg lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-md lg:grid-cols-[1fr_320px]">
         <form
-          className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg"
+          className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md"
           onSubmit={(event) => {
             event.preventDefault();
             void submitRegistration();
@@ -395,7 +395,7 @@ export function TeamRegistrationPage() {
           </div>
         </form>
 
-        <aside className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
+        <aside className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
           <h2 className="font-headline-sm text-on-surface">Quy tắc đăng ký</h2>
           <div className="space-y-sm font-body-sm text-on-surface-variant">
             <p>

@@ -278,7 +278,15 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
         <RetryPanel message={error} onRetry={() => void refetch()} />
       ) : null}
 
-      <section className="grid gap-md md:grid-cols-3">
+      <details className="rounded-lg border border-outline-variant bg-surface-container px-md py-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-sm font-label-md text-on-surface">
+          <span className="flex items-center gap-2">
+            <Icon name="dataset" className="text-[18px] text-primary" />
+            Mô tả dữ liệu duyệt đội
+          </span>
+          <Icon name="expand_more" className="text-[20px] text-on-surface-variant" />
+        </summary>
+      <section className="mt-sm grid gap-sm md:grid-cols-3">
         <StatCard label="Đã duyệt" value={confirmed} helper="Được tính vào quota" icon="check_circle" tone="success" />
         <StatCard
           label="Chờ BTC duyệt"
@@ -289,6 +297,7 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
         />
         <StatCard label="Danh sách chờ" value={waitlist} helper="Chờ khi quota mở lại" icon="hourglass_top" tone="primary" />
       </section>
+      </details>
 
       <section className="rounded-xl border border-outline-variant bg-surface-container">
         <TableToolbar
@@ -337,18 +346,18 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
               <td className={tableFirstCellStickyClass}>
                 <p className="font-label-md">{registration.name}</p>
               </td>
-              <td className="px-md py-md">{memberCount(registration)}/{maxTeamSize}</td>
-              <td className="px-md py-md">
+              <td className="px-sm py-2">{memberCount(registration)}/{maxTeamSize}</td>
+              <td className="px-sm py-2">
                 {registration.confirmedAt ? formatDate(registration.confirmedAt) : "—"}
               </td>
-              <td className="px-md py-md">
+              <td className="px-sm py-2">
                 <Badge tone={getTeamRegistrationStatusTone(registration)}>
                   {getTeamRegistrationStatusLabel(registration)}
                 </Badge>
               </td>
               <td className={tableActionCellClass}>
-                <div className="flex flex-wrap justify-end gap-2 max-sm:min-w-[12rem]">
-                  <Button type="button" variant="ghost" onClick={() => openTeamDetail(registration.id)}>
+                <div className="flex flex-wrap justify-end gap-1.5 max-sm:min-w-[12rem]">
+                  <Button type="button" variant="ghost" size="sm" icon={<Icon name="open_in_new" />} onClick={() => openTeamDetail(registration.id)}>
                     Chi tiết
                   </Button>
                   <span
@@ -358,6 +367,8 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
                     <Button
                       type="button"
                       variant="ghost"
+                      size="sm"
+                      icon={<Icon name="arrow_forward" />}
                       loading={updatingId === registration.id}
                       disabled={
                         updatingId != null ||
@@ -374,6 +385,7 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
                     <Button
                       type="button"
                       variant="secondary"
+                      size="sm"
                       loading={updatingId === registration.id}
                       disabled={updatingId != null || Boolean(waitlistDisabled)}
                       onClick={() => updateStatus(registration.id, "WAITLIST")}
@@ -392,6 +404,7 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
                       <Button
                         type="button"
                         variant="danger"
+                        size="sm"
                         loading={updatingId === registration.id}
                         disabled={updatingId != null || Boolean(rejectDisabled)}
                       >
@@ -411,6 +424,7 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
                       <Button
                         type="button"
                         variant="danger"
+                        size="sm"
                         loading={updatingId === registration.id}
                         disabled={updatingId != null || Boolean(disqualifyDisabled)}
                       >

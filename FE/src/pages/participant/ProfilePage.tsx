@@ -177,7 +177,7 @@ export function ProfilePage() {
       ) : null}
 
       <section className="grid gap-md lg:grid-cols-[1fr_320px]">
-        <form className="rounded-xl border border-outline-variant bg-surface-container p-lg" onSubmit={(event) => event.preventDefault()}>
+        <form className="rounded-xl border border-outline-variant bg-surface-container p-md" onSubmit={(event) => event.preventDefault()}>
           {staffProfile ? (
             <div className="grid gap-md md:grid-cols-2">
               <label className="grid gap-xs font-label-md text-on-surface">
@@ -351,7 +351,7 @@ export function ProfilePage() {
           </Button>
         </form>
 
-        <aside className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+        <aside className="rounded-xl border border-outline-variant bg-surface-container p-md">
           <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary-container text-on-primary-container">
             <Icon name="person" filled className="text-[32px]" />
           </div>
@@ -365,7 +365,7 @@ export function ProfilePage() {
         </aside>
       </section>
 
-      <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+      <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
         <h2 className="font-title-md text-on-surface">
           {hasPassword === true ? "Đổi mật khẩu" : "Đặt mật khẩu"}
         </h2>

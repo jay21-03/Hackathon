@@ -222,9 +222,9 @@ export function TeamOverviewPage() {
 
       <ParticipantWorkflowBar active="team" />
 
-      <section className="grid gap-lg lg:grid-cols-[1fr_320px]">
+      <section className="grid gap-md lg:grid-cols-[1fr_320px]">
         <article className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container">
-          <div className="border-b border-outline-variant p-lg">
+          <div className="border-b border-outline-variant p-md">
             <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="font-headline-sm text-on-surface">Thành viên</h2>
@@ -246,7 +246,7 @@ export function TeamOverviewPage() {
           {canAddMember ? (
             <form
               onSubmit={(event) => void submitInvite(event)}
-              className="border-b border-outline-variant bg-surface-container-low p-lg"
+              className="border-b border-outline-variant bg-surface-container-low p-md"
             >
               <h3 className="font-label-md text-on-surface">Mời thêm thành viên</h3>
               <p className="mt-xs font-body-sm text-on-surface-variant">
@@ -271,21 +271,21 @@ export function TeamOverviewPage() {
               </div>
             </form>
           ) : isCaptain && rosterLocked ? (
-            <p className="border-b border-outline-variant bg-warning-container/30 p-lg font-body-sm text-on-warning-container">
+            <p className="border-b border-outline-variant bg-warning-container/30 p-md font-body-sm text-on-warning-container">
               {rosterLockMessage}
             </p>
           ) : isCaptain && !registrationOpen && !teamLocked ? (
-            <p className="border-b border-outline-variant bg-surface-container-low p-lg font-body-sm text-on-surface-variant">
+            <p className="border-b border-outline-variant bg-surface-container-low p-md font-body-sm text-on-surface-variant">
               Cuộc thi đã đóng đăng ký — không thể mời thêm thành viên.
             </p>
           ) : isCaptain && members.length >= maxTeamSize ? (
-            <p className="border-b border-outline-variant bg-surface-container-low p-lg font-body-sm text-on-surface-variant">
+            <p className="border-b border-outline-variant bg-surface-container-low p-md font-body-sm text-on-surface-variant">
               Đội đã đủ {maxTeamSize} thành viên.
             </p>
           ) : null}
 
           {members.length === 0 ? (
-            <div className="p-lg">
+            <div className="p-md">
               <EmptyState
                 icon="groups"
                 title="Chưa có thành viên"
@@ -345,7 +345,7 @@ export function TeamOverviewPage() {
           )}
         </article>
 
-        <aside className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
+        <aside className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
           <h2 className="font-headline-sm text-on-surface">Thông tin đội</h2>
           <div className="space-y-sm font-body-sm text-on-surface-variant">
             <p>Trạng thái: {getStatusLabel(team.status)}</p>
@@ -360,7 +360,7 @@ export function TeamOverviewPage() {
         </aside>
       </section>
 
-      <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+      <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
         <h2 className="font-headline-sm text-on-surface">Tiến độ đội</h2>
         <p className="mt-xs font-body-sm text-on-surface-variant">
           Các mốc cần hoàn tất trước khi vào bảng thi và đề.
@@ -371,7 +371,7 @@ export function TeamOverviewPage() {
             label="Tiến độ tổng"
           />
         </div>
-        <div className="mt-lg grid gap-sm">
+        <div className="mt-md grid gap-sm">
           {progressSteps.map((step) => (
             <Link
               key={step.label}

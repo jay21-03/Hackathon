@@ -37,8 +37,8 @@ export function useBoardOperations(
     enabled: Boolean(boardId)
   });
 
-  const boardMentors = boardAssignmentsQuery.data?.mentors ?? [];
-  const boardJudges = boardAssignmentsQuery.data?.judges ?? [];
+  const boardMentors = useMemo(() => boardAssignmentsQuery.data?.mentors ?? [], [boardAssignmentsQuery.data?.mentors]);
+  const boardJudges = useMemo(() => boardAssignmentsQuery.data?.judges ?? [], [boardAssignmentsQuery.data?.judges]);
 
   const staffPool = useTermStaffPool({
     academicTermId: options?.academicTermId,

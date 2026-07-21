@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { BoardProblemSection } from "../board-operations/BoardProblemSection";
 import { BoardStaffSection } from "../board-operations/BoardStaffSection";
+import { ProblemRepoTemplateSection } from "../ProblemRepoTemplateSection";
 import { useToast } from "../../feedback/ToastProvider";
+import { enableGithubProvisioning } from "../../../config/features";
 import { problemFormSchemaForRound } from "../../../domain/schemas";
 import { useActiveTerm } from "../../../hooks/useActiveTerm";
 import { useBoardOperations } from "../../../hooks/useBoardOperations";
@@ -329,40 +331,46 @@ export function BoardPrepSections({
   }
 
   return (
-    <BoardProblemSection
-      eventId={eventId}
-      rounds={rounds}
-      boards={boards}
-      selectedRoundId={selectedRoundId}
-      boardId={boardId}
-      problem={problem}
-      title={title}
-      description={description}
-      externalLink={externalLink}
-      attachmentUrl={attachmentUrl}
-      attachmentFileName={attachmentFileName}
-      releaseAt={releaseAt}
-      closeAt={closeAt}
-      saving={saving}
-      deleting={deleting}
-      fieldErrors={problemFieldErrors}
-      onRoundChange={setSelectedRoundId}
-      onBoardChange={setBoardId}
-      onTitleChange={setTitle}
-      onDescriptionChange={setDescription}
-      onExternalLinkChange={setExternalLink}
-      onReleaseAtChange={setReleaseAt}
-      onCloseAtChange={setCloseAt}
-      onAttachmentUploaded={(url, fileName) => {
-        setAttachmentUrl(url);
-        setAttachmentFileName(fileName);
-      }}
-      onAttachmentClear={() => {
-        setAttachmentUrl(null);
-        setAttachmentFileName(null);
-      }}
-      onSave={() => void handleSaveProblem()}
-      onDelete={() => void handleDeleteProblem()}
-    />
+    <div className="space-y-md">
+      <BoardProblemSection
+        eventId={eventId}
+        rounds={rounds}
+        boards={boards}
+        selectedRoundId={selectedRoundId}
+        boardId={boardId}
+        problem={problem}
+        title={title}
+        description={description}
+        externalLink={externalLink}
+        attachmentUrl={attachmentUrl}
+        attachmentFileName={attachmentFileName}
+        releaseAt={releaseAt}
+        closeAt={closeAt}
+        saving={saving}
+        deleting={deleting}
+        fieldErrors={problemFieldErrors}
+        onRoundChange={setSelectedRoundId}
+        onBoardChange={setBoardId}
+        onTitleChange={setTitle}
+        onDescriptionChange={setDescription}
+        onExternalLinkChange={setExternalLink}
+        onReleaseAtChange={setReleaseAt}
+        onCloseAtChange={setCloseAt}
+        onAttachmentUploaded={(url, fileName) => {
+          setAttachmentUrl(url);
+          setAttachmentFileName(fileName);
+        }}
+        onAttachmentClear={() => {
+          setAttachmentUrl(null);
+          setAttachmentFileName(null);
+        }}
+        onSave={() => void handleSaveProblem()}
+        onDelete={() => void handleDeleteProblem()}
+      />
+
+      {enableGithubProvisioning && problem ? (
+        <ProblemRepoTemplateSection problemId={problem.id} problemTitle={problem.title} />
+      ) : null}
+    </div>
   );
 }

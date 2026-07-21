@@ -5,7 +5,6 @@ import {
   fetchBoardProblems,
   fetchEventRounds,
   fetchRoundBoards,
-  type BoardResponse,
   type ProblemResponse,
   type RoundResponse
 } from "../services/contestApi";

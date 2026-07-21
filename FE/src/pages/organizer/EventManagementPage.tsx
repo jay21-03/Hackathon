@@ -111,27 +111,27 @@ export function EventManagementPage() {
           <table className="min-w-full text-left">
             <thead className="table-header-bg">
               <tr className="font-label-sm text-on-surface-variant">
-                <th className="px-md py-sm">Cuộc thi</th>
-                <th className="px-md py-sm">Đăng ký</th>
-                <th className="px-md py-sm">Diễn ra</th>
-                <th className="px-md py-sm">Trạng thái</th>
-                <th className="px-md py-sm">Thao tác</th>
+                <th className="px-sm py-2">Cuộc thi</th>
+                <th className="px-sm py-2">Đăng ký</th>
+                <th className="px-sm py-2">Diễn ra</th>
+                <th className="px-sm py-2">Trạng thái</th>
+                <th className="px-sm py-2">Thao tác</th>
               </tr>
             </thead>
             <tbody className="table-divider">
               {events.map((event) => (
                 <tr key={event.id} className="font-body-sm text-on-surface">
-                  <td className="px-md py-md font-label-md">{event.name}</td>
-                  <td className="px-md py-md">
+                  <td className="px-sm py-2 font-label-md">{event.name}</td>
+                  <td className="px-sm py-2">
                     {formatDate(event.registrationStartAt)} – {formatDate(event.registrationEndAt)}
                   </td>
-                  <td className="px-md py-md">
+                  <td className="px-sm py-2">
                     {formatDate(event.startDate)} – {formatDate(event.endDate)}
                   </td>
-                  <td className="px-md py-md">
+                  <td className="px-sm py-2">
                     <Badge tone={getStatusTone(event.status)}>{getStatusLabel(event.status)}</Badge>
                   </td>
-                  <td className="px-md py-md">
+                  <td className="px-sm py-2">
                     <button
                       type="button"
                       onClick={() => openEvent(event)}
