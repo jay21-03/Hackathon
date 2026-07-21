@@ -45,9 +45,9 @@ export function JudgeAiReviewPage() {
 
   });
 
-  const assignments = assignmentsQuery.data ?? [];
+  const assignments = useMemo(() => assignmentsQuery.data ?? [], [assignmentsQuery.data]);
 
-  const storedFilters = useMemo<{ boardId: number | ""; teamId: number | "" }>(() => {
+  const [storedFilters] = useState<{ boardId: number | ""; teamId: number | "" }>(() => {
     try {
       const raw = window.localStorage.getItem("seal.judgeAiReview.filters");
       if (!raw) return { boardId: "", teamId: "" } as { boardId: number | ""; teamId: number | "" };
@@ -59,7 +59,7 @@ export function JudgeAiReviewPage() {
     } catch {
       return { boardId: "", teamId: "" } as { boardId: number | ""; teamId: number | "" };
     }
-  }, []);
+  });
 
   const [boardId, setBoardId] = useState<number | "">(storedFilters.boardId);
 

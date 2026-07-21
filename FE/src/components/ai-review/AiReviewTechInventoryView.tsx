@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import type { InventoryExhaustive, TechStackGroup } from "../../services/aiReviewApi";
 
 export const TECH_STACK_LABELS: Record<keyof TechStackGroup, string> = {

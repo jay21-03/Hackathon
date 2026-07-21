@@ -34,7 +34,10 @@ export function useCommitUpdates(options?: {
   const enabled = options?.enabled ?? true;
   const [connectionStatus, setConnectionStatus] = useState<CommitConnectionStatus>("disconnected");
   const queryClientRef = useRef(queryClient);
-  queryClientRef.current = queryClient;
+
+  useEffect(() => {
+    queryClientRef.current = queryClient;
+  }, [queryClient]);
 
   useEffect(() => {
     if (!enabled) {

@@ -66,7 +66,7 @@ export function AiReviewManagementPage() {
   }, [searchParams]);
   const { eventId: activeEventId, setEventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const eventId = requestedEventId ?? activeEventId;
-  const storedFilters = useMemo(readStoredAiReviewFilters, []);
+  const [storedFilters] = useState(readStoredAiReviewFilters);
   const [runningTeamId, setRunningTeamId] = useState<number | null>(null);
   const [runningAll, setRunningAll] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>(storedFilters.statusFilter);
@@ -390,13 +390,13 @@ export function AiReviewManagementPage() {
             <table className="min-w-full text-left">
               <thead className="table-header-bg">
                 <tr className="font-label-sm text-on-surface-variant">
-                  <th className="px-md py-sm">Đội</th>
-                  <th className="px-md py-sm">Loại</th>
-                  <th className="px-md py-sm">Trạng thái</th>
-                  <th className="px-md py-sm">RAG</th>
-                  <th className="px-md py-sm">Tóm tắt</th>
-                  <th className="px-md py-sm">Cập nhật</th>
-                  <th className="px-md py-sm">Thao tác</th>
+                  <th className="px-sm py-2">Đội</th>
+                  <th className="px-sm py-2">Loại</th>
+                  <th className="px-sm py-2">Trạng thái</th>
+                  <th className="px-sm py-2">RAG</th>
+                  <th className="px-sm py-2">Tóm tắt</th>
+                  <th className="px-sm py-2">Cập nhật</th>
+                  <th className="px-sm py-2">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="table-divider">
@@ -407,7 +407,7 @@ export function AiReviewManagementPage() {
                       key={review.id ?? `team-${review.teamId}`}
                       className={`font-body-sm text-on-surface ${isSelected ? "bg-surface-container-high" : ""}`}
                     >
-                      <td className="px-md py-md">
+                      <td className="px-sm py-2">
                         <button
                           type="button"
                           className="text-left font-label-sm text-primary underline-offset-2 hover:underline"
@@ -416,26 +416,26 @@ export function AiReviewManagementPage() {
                           {review.teamName ?? `Đội #${review.teamId}`}
                         </button>
                       </td>
-                      <td className="px-md py-md">
+                      <td className="px-sm py-2">
                         {review.reviewKind === "TEAM_AGGREGATE" ? "Tổng hợp" : "Theo lần cập nhật"}
                       </td>
-                      <td className="px-md py-md">
+                      <td className="px-sm py-2">
                         {review.status ? (
                           <Badge tone={statusTone(review.status)}>{review.status}</Badge>
                         ) : (
                           <Badge tone="neutral">Chưa chạy</Badge>
                         )}
                       </td>
-                      <td className="px-md py-md">{review.ragLevel ?? "—"}</td>
-                      <td className="max-w-md px-md py-md text-on-surface-variant">
+                      <td className="px-sm py-2">{review.ragLevel ?? "—"}</td>
+                      <td className="max-w-md px-sm py-2 text-on-surface-variant">
                         {review.status === "FAILED"
                           ? formatAiReviewFailure(review.summary)
                           : review.summary ?? "—"}
                       </td>
-                      <td className="px-md py-md">
+                      <td className="px-sm py-2">
                         {review.reviewedAt ? new Date(review.reviewedAt).toLocaleString("vi-VN") : "—"}
                       </td>
-                      <td className="px-md py-md">
+                      <td className="px-sm py-2">
                         <div className="flex flex-wrap gap-xs">
                           <Button type="button" size="sm" variant="ghost" onClick={() => selectTeam(review.teamId)}>
                             Rubric

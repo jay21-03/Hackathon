@@ -54,7 +54,7 @@ export function MentorAiReviewPage() {
 
   });
 
-  const assignments = assignmentsQuery.data ?? [];
+  const assignments = useMemo(() => assignmentsQuery.data ?? [], [assignmentsQuery.data]);
 
   const [boardId, setBoardId] = useState<number | "">("");
 
