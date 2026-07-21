@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -12,15 +13,15 @@ export function AuthFormShell({ title, subtitle, children, footer }: AuthFormShe
   return (
     <main className="relative z-10 w-full max-w-[440px] px-page">
       <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
-        <div className="border-b border-outline-variant bg-surface-container-low px-xl py-lg">
+        <div className="border-b border-outline-variant bg-surface-container-low px-lg py-md">
           <h1 className="font-headline-md text-on-surface">{title}</h1>
           {subtitle ? (
             <p className="mt-xs font-body-sm text-on-surface-variant">{subtitle}</p>
           ) : null}
         </div>
-        <div className="flex flex-col gap-md p-xl">{children}</div>
+        <div className="flex flex-col gap-md p-lg">{children}</div>
         {footer ? (
-          <div className="border-t border-outline-variant bg-surface-container-high px-xl py-md text-center font-body-sm text-on-surface-variant">
+          <div className="border-t border-outline-variant bg-surface-container-high px-lg py-sm text-center font-body-sm text-on-surface-variant">
             {footer}
           </div>
         ) : null}

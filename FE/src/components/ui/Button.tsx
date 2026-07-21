@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { Link, type LinkProps } from "react-router-dom";
 

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 export type TableDensity = "comfortable" | "compact";
 
 interface TableDensityToggleProps {
@@ -6,7 +7,7 @@ interface TableDensityToggleProps {
 }
 
 export function getDensityCellClass(value: TableDensity) {
-  return value === "compact" ? "px-md py-sm" : "px-md py-md";
+  return value === "compact" ? "px-2 py-1.5" : "px-sm py-2";
 }
 
 export function TableDensityToggle({ value, onChange }: TableDensityToggleProps) {

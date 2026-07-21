@@ -17,7 +17,6 @@ import {
   enableAiReview,
   enableAiReviewJudgeAccess,
   enableNotifications,
-  enablePhase7,
   enableRanking,
   enableScoring,
   enableStaffInvitations,
@@ -101,26 +100,10 @@ const EventBasicInfoPage = lazyPage(() => import("../pages/organizer/EventBasicI
 const EventManagementPage = lazyPage(() => import("../pages/organizer/EventManagementPage"), "EventManagementPage");
 const CreateEventPage = lazyPage(() => import("../pages/organizer/CreateEventPage"), "CreateEventPage");
 const EventWizardPage = lazyPage(() => import("../pages/organizer/EventWizardPage"), "EventWizardPage");
-const ExportSuccessPage = lazyPage(() => import("../pages/organizer/ExportSuccessPage"), "ExportSuccessPage");
-const FinalsPage = lazyPage(() => import("../pages/organizer/FinalsPage"), "FinalsPage");
-const InvitationManagementPage = lazyPage(() => import("../pages/organizer/InvitationManagementPage"), "InvitationManagementPage");
 const NotificationCenterPage = lazyPage(() => import("../pages/organizer/NotificationCenterPage"), "NotificationCenterPage");
 const OrganizerOverviewPage = lazyPage(() => import("../pages/organizer/OrganizerOverviewPage"), "OrganizerOverviewPage");
 const ProblemManagementPage = lazyPage(() => import("../pages/organizer/ProblemManagementPage"), "ProblemManagementPage");
-const PublishResultsPage = lazyPage(() => import("../pages/organizer/PublishResultsPage"), "PublishResultsPage");
-const RankingPage = lazyPage(() => import("../pages/organizer/RankingPage"), "RankingPage");
-const RegistrationManagementPage = lazyPage(() => import("../pages/organizer/RegistrationManagementPage"), "RegistrationManagementPage");
-const RubricSetupPage = lazyPage(() => import("../pages/organizer/RubricSetupPage"), "RubricSetupPage");
-const ScoringProgressPage = lazyPage(() => import("../pages/organizer/ScoringProgressPage"), "ScoringProgressPage");
-const SubmissionManagementPage = lazyPage(
-  () => import("../pages/organizer/SubmissionManagementPage"),
-  "SubmissionManagementPage"
-);
 const UserManagementPage = lazyPage(() => import("../pages/organizer/UserManagementPage"), "UserManagementPage");
-const RepositoryManagementPage = lazyPage(
-  () => import("../pages/organizer/RepositoryManagementPage"),
-  "RepositoryManagementPage"
-);
 const AiReviewManagementPage = lazyPage(
   () => import("../pages/organizer/AiReviewManagementPage"),
   "AiReviewManagementPage"
@@ -152,19 +135,6 @@ function routeElement(component: ReactNode) {
   return <Suspense fallback={<ModuleSkeleton rows={4} />}>{component}</Suspense>;
 }
 
-/** Phase 7+ tắt → redirect, không hiện FeatureUnavailable */
-function gatedRoute(redirectTo: string, component: ReactNode) {
-  return routeElement(
-    <FeatureRouteGate
-      enabled={enablePhase7}
-      redirectTo={redirectTo}
-      message="Tính năng vận hành cuộc thi chưa được bật trên môi trường này."
-    >
-      {component}
-    </FeatureRouteGate>
-  );
-}
-
 /** Scoring (rubric, ma trận, tiến độ) — tách khỏi phase 7 khác */
 function gatedScoringRoute(redirectTo: string, component: ReactNode) {
   return routeElement(
@@ -184,18 +154,6 @@ function gatedSubmissionRoute(redirectTo: string, component: ReactNode) {
       enabled={enableSubmissions}
       redirectTo={redirectTo}
       message="Tính năng nộp bài chưa được bật trên môi trường này."
-    >
-      {component}
-    </FeatureRouteGate>
-  );
-}
-
-function gatedGithubRoute(redirectTo: string, component: ReactNode) {
-  return routeElement(
-    <FeatureRouteGate
-      enabled={enableGithubProvisioning}
-      redirectTo={redirectTo}
-      message="Tính năng GitHub repository chưa được bật trên môi trường này."
     >
       {component}
     </FeatureRouteGate>

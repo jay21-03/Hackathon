@@ -77,7 +77,7 @@ export function useActiveEvent(options?: UseActiveEventOptions) {
 
 
 
-  const events = eventsQuery.data ?? [];
+  const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
 
 
 

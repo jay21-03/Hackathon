@@ -12,10 +12,10 @@ interface DataTableProps {
 export const tableRowClass =
   "font-body-sm text-on-surface transition-colors even:bg-surface-container-low/50 hover:bg-surface-container-high/80";
 
-export const tableActionCellClass = "w-[1%] whitespace-nowrap px-md py-md";
+export const tableActionCellClass = "w-[1%] whitespace-nowrap px-sm py-2";
 
 export const tableFirstCellStickyClass =
-  "sticky left-0 z-10 bg-surface-container px-md py-md shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]";
+  "sticky left-0 z-10 bg-surface-container px-sm py-2 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]";
 
 export function DataTable({
   headers,
@@ -32,7 +32,7 @@ export function DataTable({
             {headers.map((header, index) => (
               <th
                 key={index}
-                className={`whitespace-nowrap px-md py-3 ${
+                className={`whitespace-nowrap px-sm py-2 ${
                   stickyFirstColumn && index === 0
                     ? "sticky left-0 z-10 bg-surface-container"
                     : ""

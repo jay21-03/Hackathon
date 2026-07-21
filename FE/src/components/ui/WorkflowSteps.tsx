@@ -43,33 +43,48 @@ interface WorkflowStepsProps {
 
 export function WorkflowSteps({ title, description, steps, activeHref, onStepSelect }: WorkflowStepsProps) {
   return (
-    <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
-      <div className="flex flex-col gap-xs">
-        <h2 className="font-headline-sm text-on-surface">{title}</h2>
-        <p className="font-body-sm text-on-surface-variant">{description}</p>
+    <section className="rounded-lg border border-outline-variant bg-surface-container p-md">
+      <div className="flex flex-wrap items-center justify-between gap-sm">
+        <div className="min-w-0">
+          <h2 className="font-title-md text-on-surface">{title}</h2>
+          <p className="font-body-sm text-on-surface-variant">{description}</p>
+        </div>
+        <Badge tone="neutral">{steps.length} bước</Badge>
       </div>
 
-      <div className="mt-md grid gap-sm sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-sm flex gap-sm overflow-x-auto pb-1">
         {steps.map((step, index) => {
           const state = step.state ?? "next";
           const content = (
             <>
-              <div className="flex items-start justify-between gap-sm">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-container-high text-primary">
-                    <Icon name={stateIcon[state]} className="text-[19px]" filled={state !== "next"} />
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-container font-label-sm text-on-primary-container">
+                  {index + 1}
+                </span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-container-high text-primary">
+                  <Icon name={stateIcon[state]} className="text-[18px]" filled={state !== "next"} />
+                </span>
+                <span className="min-w-0 flex-1 truncate font-label-md text-on-surface" title={step.label}>
+                  {step.label}
+                </span>
+                {step.state !== "blocked" ? (
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface text-primary">
+                    <Icon name="arrow_forward" className="text-[18px]" />
                   </span>
-                  <span className="font-label-md text-on-surface">{step.label}</span>
-                </div>
+                ) : null}
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-sm">
+                <p className="min-w-0 truncate font-body-sm text-on-surface-variant" title={step.detail}>
+                  {step.detail}
+                </p>
                 <Badge tone={stateTone[state]}>{stateLabel[state]}</Badge>
               </div>
-              <p className="mt-sm font-body-sm text-on-surface-variant">{step.detail}</p>
             </>
           );
 
           const isSelected = Boolean(activeHref && step.href && activeHref === step.href);
           const className = [
-            "min-h-[124px] rounded-lg border bg-surface-container-low p-md text-left transition-colors hover:bg-surface-variant",
+            "min-h-[82px] w-[18rem] shrink-0 rounded-lg border bg-surface-container-low p-sm text-left transition-colors hover:bg-surface-variant",
             isSelected ? "border-primary ring-2 ring-primary/30" : "border-outline-variant",
             step.state === "blocked" ? "cursor-not-allowed opacity-60" : ""
           ]
