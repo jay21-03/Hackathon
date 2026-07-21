@@ -325,7 +325,7 @@ export function SubmissionPage() {
     }
   });
 
-  const provisionedRepos = provisionedReposQuery.data ?? [];
+  const provisionedRepos = useMemo(() => provisionedReposQuery.data ?? [], [provisionedReposQuery.data]);
   const provisionedMode = enableGithubProvisioning;
   const currentRepos = provisionedRepos.filter((repo) => repo.currentRound);
   const historyRepos = provisionedRepos.filter((repo) => !repo.currentRound);

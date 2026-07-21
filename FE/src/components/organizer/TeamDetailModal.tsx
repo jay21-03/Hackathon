@@ -66,7 +66,7 @@ export function TeamDetailModal({
 
           {team.rejectedReason &&
           (team.status === "REJECTED" || team.status === "DISQUALIFIED") ? (
-            <div className="rounded-lg border border-danger/30 bg-danger-container/30 px-md py-sm">
+            <div className="rounded-lg border border-danger/30 bg-danger-container/30 px-sm py-2">
               <p className="font-label-sm text-on-danger-container">Lý do</p>
               <p className="mt-xs font-body-sm text-on-danger-container">{team.rejectedReason}</p>
             </div>
@@ -90,29 +90,29 @@ export function TeamDetailModal({
               <table className="w-full min-w-[640px] text-left font-body-sm">
                 <thead className="bg-surface-container-low font-label-sm text-on-surface-variant">
                   <tr>
-                    <th className="px-md py-sm">Họ tên</th>
-                    <th className="px-md py-sm">Email</th>
-                    <th className="px-md py-sm">MSSV</th>
-                    <th className="px-md py-sm">Trường</th>
-                    <th className="px-md py-sm">Vai trò</th>
-                    <th className="px-md py-sm">Trạng thái</th>
+                    <th className="px-sm py-2">Họ tên</th>
+                    <th className="px-sm py-2">Email</th>
+                    <th className="px-sm py-2">MSSV</th>
+                    <th className="px-sm py-2">Trường</th>
+                    <th className="px-sm py-2">Vai trò</th>
+                    <th className="px-sm py-2">Trạng thái</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/60">
                   {(team.members ?? []).map((member) => (
                     <tr key={member.id} className="text-on-surface">
-                      <td className="px-md py-sm font-label-sm">{member.fullName}</td>
-                      <td className="px-md py-sm text-on-surface-variant">{member.email}</td>
-                      <td className="px-md py-sm">{member.studentId?.trim() || "—"}</td>
-                      <td className="px-md py-sm">{member.university?.trim() || "—"}</td>
-                      <td className="px-md py-sm">
+                      <td className="px-sm py-2 font-label-sm">{member.fullName}</td>
+                      <td className="px-sm py-2 text-on-surface-variant">{member.email}</td>
+                      <td className="px-sm py-2">{member.studentId?.trim() || "—"}</td>
+                      <td className="px-sm py-2">{member.university?.trim() || "—"}</td>
+                      <td className="px-sm py-2">
                         {member.contactPerson ? (
                           <Badge tone="active">Đội trưởng</Badge>
                         ) : (
                           <span className="text-on-surface-variant">Thành viên</span>
                         )}
                       </td>
-                      <td className="px-md py-sm">
+                      <td className="px-sm py-2">
                         <Badge tone={getStatusTone(member.status)}>{getStatusLabel(member.status)}</Badge>
                       </td>
                     </tr>

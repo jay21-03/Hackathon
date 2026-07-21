@@ -74,7 +74,7 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
   const { rounds, boards, loading: boardsLoading, error: boardsError, refetch: refetchBoards } =
     useEventBoards(eventId);
-  const initialFilters = useMemo(loadSubmissionFilters, []);
+  const [initialFilters] = useState(loadSubmissionFilters);
   const [roundId, setRoundId] = useState<number | null>(initialFilters.roundId);
   const [boardId, setBoardId] = useState<number | null>(initialFilters.boardId);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilters.statusFilter);
@@ -85,6 +85,7 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
   const [detailTeamId, setDetailTeamId] = useState<number | null>(null);
   const [detail, setDetail] = useState<AdminTeamSubmissionResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [nowForRoundSelection] = useState(() => Date.now());
   const activeRoundId = resolveDefaultRoundId(rounds, roundId);
   const roundNameById = useMemo(() => buildRoundNameById(rounds), [rounds]);
   const activeRound = useMemo(
@@ -92,13 +93,12 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
     [activeRoundId, rounds]
   );
   const runningRound = useMemo(() => {
-    const now = Date.now();
     return rounds.find((round) => {
       const start = new Date(round.startAt).getTime();
       const end = new Date(round.endAt).getTime();
-      return Number.isFinite(start) && Number.isFinite(end) && start <= now && now < end;
+      return Number.isFinite(start) && Number.isFinite(end) && start <= nowForRoundSelection && nowForRoundSelection < end;
     });
-  }, [rounds]);
+  }, [nowForRoundSelection, rounds]);
 
   const boardsInRound = useMemo(
     () => (activeRoundId != null ? boards.filter((b) => b.roundId === activeRoundId) : []),
@@ -343,31 +343,31 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
             <table className="min-w-full text-left">
               <thead className="table-header-bg">
                 <tr className="font-label-sm text-on-surface-variant">
-                  <th className="px-md py-sm">Đội</th>
-                  <th className="px-md py-sm">Vòng · Bảng</th>
-                  <th className="px-md py-sm">Trạng thái</th>
-                  <th className="px-md py-sm">Repository</th>
-                  <th className="px-md py-sm">Nộp lúc</th>
-                  <th className="px-md py-sm">Lần push cuối</th>
-                  <th className="px-md py-sm">Commit cuối</th>
-                  <th className="px-md py-sm">Số commit</th>
-                  <th className="px-md py-sm">Chi tiết</th>
+                  <th className="px-sm py-2">Đội</th>
+                  <th className="px-sm py-2">Vòng · Bảng</th>
+                  <th className="px-sm py-2">Trạng thái</th>
+                  <th className="px-sm py-2">Repository</th>
+                  <th className="px-sm py-2">Nộp lúc</th>
+                  <th className="px-sm py-2">Lần push cuối</th>
+                  <th className="px-sm py-2">Commit cuối</th>
+                  <th className="px-sm py-2">Số commit</th>
+                  <th className="px-sm py-2">Chi tiết</th>
                 </tr>
               </thead>
               <tbody className="table-divider">
                 {sortedSubmissions.map((row) => (
                   <tr key={row.teamId} className="font-body-sm text-on-surface">
-                    <td className="px-md py-md font-label-md">{row.teamName}</td>
-                    <td className="px-md py-md">
+                    <td className="px-sm py-2 font-label-md">{row.teamName}</td>
+                    <td className="px-sm py-2">
                       {formatBoardLabelById(row.boardId, row.boardName, boards, roundNameById)}
                       {row.slotNumber != null ? (
                         <span className="ml-1 text-on-surface-variant">· Vị trí #{row.slotNumber}</span>
                       ) : null}
                     </td>
-                    <td className="px-md py-md">
+                    <td className="px-sm py-2">
                       <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge>
                     </td>
-                    <td className="px-md py-md max-w-xs truncate">
+                    <td className="px-sm py-2 max-w-xs truncate">
                       {row.repositoryUrl ? (
                         <a
                           href={row.repositoryUrl}
@@ -381,13 +381,13 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
                         <span className="text-on-surface-variant">—</span>
                       )}
                     </td>
-                    <td className="px-md py-md text-on-surface-variant">
+                    <td className="px-sm py-2 text-on-surface-variant">
                       {row.submittedAt ? new Date(row.submittedAt).toLocaleString("vi-VN") : "—"}
                     </td>
-                    <td className="px-md py-md text-on-surface-variant">
+                    <td className="px-sm py-2 text-on-surface-variant">
                       {formatRepositoryTimestamp(row.lastPushAt) ?? "—"}
                     </td>
-                    <td className="px-md py-md text-on-surface-variant">
+                    <td className="px-sm py-2 text-on-surface-variant">
                       {row.latestCommitSha ? (
                         <span title={row.latestCommitMessage ?? undefined}>
                           {shortCommitSha(row.latestCommitSha)}
@@ -399,10 +399,10 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
                         "—"
                       )}
                     </td>
-                    <td className="px-md py-md text-on-surface-variant">
+                    <td className="px-sm py-2 text-on-surface-variant">
                       {row.commitCount ?? "—"}
                     </td>
-                    <td className="px-md py-md">
+                    <td className="px-sm py-2">
                       <Button type="button" variant="ghost" onClick={() => void openDetail(row)}>
                         Xem
                       </Button>
@@ -416,7 +416,7 @@ export function SubmissionManagementPage({ embedded = false }: { embedded?: bool
       )}
 
       {totalPages > 1 ? (
-        <div className="flex items-center justify-between gap-md rounded-xl border border-outline-variant bg-surface-container px-md py-sm">
+        <div className="flex items-center justify-between gap-md rounded-xl border border-outline-variant bg-surface-container px-sm py-2">
           <p className="font-body-sm text-on-surface-variant">
             Trang {listPage + 1}/{totalPages} · {total} đội
           </p>

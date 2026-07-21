@@ -16,7 +16,6 @@ import {
   fetchBoardProblems,
   fetchEventRounds,
   fetchRoundBoards,
-  type BoardResponse,
   type ProblemResponse,
   type RoundResponse
 } from "../../services/contestApi";
@@ -31,8 +30,7 @@ import {
   provisionStatusTone,
   formatRepositoryTimestamp,
   retryTeamRepository,
-  saveProblemRepoTemplate,
-  type TeamRepositoryResponse
+  saveProblemRepoTemplate
 } from "../../services/repositoryProvisioningService";
 import { grantRoundJudgeAccess } from "../../services/judgeRepositoryService";
 import { GITHUB_REPO_TEMPLATE_DEFAULTS } from "../../config/githubRepoDefaults";
@@ -84,7 +82,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { eventId, loading: eventLoading } = useActiveEvent({ autoSelectFirst: true });
-  const initialFilters = useMemo(loadRepositoryFilters, []);
+  const [initialFilters] = useState(loadRepositoryFilters);
   const [selectedRoundId, setSelectedRoundId] = useState<number | null>(initialFilters.selectedRoundId);
   const [boardId, setBoardId] = useState<number | null>(initialFilters.boardId);
   const [problemId, setProblemId] = useState<number | null>(null);
@@ -92,7 +90,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
   const [templateRepo, setTemplateRepo] = useState(GITHUB_REPO_TEMPLATE_DEFAULTS.templateRepo);
   const [defaultBranch, setDefaultBranch] = useState(GITHUB_REPO_TEMPLATE_DEFAULTS.defaultBranch);
   const [templateEnabled, setTemplateEnabled] = useState<boolean>(GITHUB_REPO_TEMPLATE_DEFAULTS.enabled);
-  const [templateErrors, setTemplateErrors] = useState<Record<string, string>>({});
+  const [, setTemplateErrors] = useState<Record<string, string>>({});
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
   const [locking, setLocking] = useState(false);
@@ -407,8 +405,8 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
           description="Tạo vòng và bảng trước khi cấu hình repository."
         />
       ) : (
-        <section className="grid gap-lg lg:grid-cols-[1fr_320px]">
-          <div className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-lg">
+        <section className="grid gap-md lg:grid-cols-[1fr_320px]">
+          <div className="space-y-md rounded-xl border border-outline-variant bg-surface-container p-md">
             {rounds.length > 0 ? (
               <label className="flex flex-col gap-xs">
                 <span className="font-label-sm normal-case text-on-surface-variant">Vòng thi</span>
@@ -575,7 +573,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
             )}
           </div>
 
-          <aside className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+          <aside className="rounded-xl border border-outline-variant bg-surface-container p-md">
             <h2 className="font-headline-sm text-on-surface">Thống kê (bảng đang chọn)</h2>
             <dl className="mt-md space-y-sm font-body-sm text-on-surface-variant">
               <div className="flex justify-between">
@@ -632,7 +630,7 @@ export function RepositoryManagementPage({ embedded = false }: { embedded?: bool
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-outline-variant bg-surface-container p-lg">
+      <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
         <div className="flex flex-wrap items-center justify-between gap-md">
           <div>
             <h2 className="font-title-md text-on-surface">Danh sách repository</h2>
