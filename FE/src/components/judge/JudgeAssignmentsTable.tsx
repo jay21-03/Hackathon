@@ -21,27 +21,27 @@ export function JudgeAssignmentsTable({ assignments, scorePath }: JudgeAssignmen
       <table className="min-w-full border-collapse font-body-sm">
         <thead>
           <tr className="border-b border-outline-variant bg-surface-container-high text-left">
-            <th className="px-md py-sm font-label-sm text-on-surface-variant">Cuộc thi</th>
-            <th className="px-md py-sm font-label-sm text-on-surface-variant">Vòng</th>
-            <th className="px-md py-sm font-label-sm text-on-surface-variant">Bảng</th>
-            <th className="px-md py-sm font-label-sm text-on-surface-variant">Tiến độ</th>
-            <th className="px-md py-sm font-label-sm text-on-surface-variant">Trạng thái</th>
-            <th className="px-md py-sm font-label-sm text-on-surface-variant">Thao tác</th>
+            <th className="px-sm py-2 font-label-sm text-on-surface-variant">Cuộc thi</th>
+            <th className="px-sm py-2 font-label-sm text-on-surface-variant">Vòng</th>
+            <th className="px-sm py-2 font-label-sm text-on-surface-variant">Bảng</th>
+            <th className="px-sm py-2 font-label-sm text-on-surface-variant">Tiến độ</th>
+            <th className="px-sm py-2 font-label-sm text-on-surface-variant">Trạng thái</th>
+            <th className="px-sm py-2 font-label-sm text-on-surface-variant">Thao tác</th>
           </tr>
         </thead>
         <tbody>
           {assignments.map((item) => (
             <tr key={item.id} className="border-b border-outline-variant/60 last:border-b-0">
-              <td className="px-md py-sm text-on-surface">{item.eventName ?? "—"}</td>
-              <td className="px-md py-sm text-on-surface">{item.roundName ?? "—"}</td>
-              <td className="px-md py-sm text-on-surface" title={formatBoardAssignmentLabel(item)}>
+              <td className="px-sm py-2 text-on-surface">{item.eventName ?? "—"}</td>
+              <td className="px-sm py-2 text-on-surface">{item.roundName ?? "—"}</td>
+              <td className="px-sm py-2 text-on-surface" title={formatBoardAssignmentLabel(item)}>
                 {item.boardName ?? `Bảng #${item.boardId}`}
               </td>
-              <td className="px-md py-sm text-on-surface-variant">{formatScoringProgress(item)}</td>
-              <td className="px-md py-sm">
+              <td className="px-sm py-2 text-on-surface-variant">{formatScoringProgress(item)}</td>
+              <td className="px-sm py-2">
                 <Badge tone={readinessTone(item.readiness)}>{readinessLabel(item.readiness)}</Badge>
               </td>
-              <td className="px-md py-sm">
+              <td className="px-sm py-2">
                 {canOpenScoringMatrix(item) ? (
                   <ButtonLink to={scorePath(item.boardId)} variant="primary" size="sm">
                     {scoringCtaLabel(item)}

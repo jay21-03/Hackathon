@@ -15,11 +15,11 @@ export function JudgeTeamListTable({ teams, criteriaCount, onScoreTeam }: JudgeT
       <table className="min-w-full border-collapse font-body-sm">
         <thead>
           <tr className="border-b border-outline-variant bg-surface-container-high text-left">
-            <th className="px-md py-sm font-label-sm text-on-surface-variant">Đội</th>
-            <th className="px-md py-sm font-label-sm text-on-surface-variant">Vị trí</th>
-            <th className="min-w-[16rem] px-md py-sm font-label-sm text-on-surface-variant">Trạng thái phiếu</th>
-            <th className="px-md py-sm font-label-sm text-on-surface-variant">Tổng điểm</th>
-            <th className="px-md py-sm font-label-sm text-on-surface-variant" />
+            <th className="px-sm py-2 font-label-sm text-on-surface-variant">Đội</th>
+            <th className="px-sm py-2 font-label-sm text-on-surface-variant">Vị trí</th>
+            <th className="min-w-[16rem] px-sm py-2 font-label-sm text-on-surface-variant">Trạng thái phiếu</th>
+            <th className="px-sm py-2 font-label-sm text-on-surface-variant">Tổng điểm</th>
+            <th className="px-sm py-2 font-label-sm text-on-surface-variant" />
           </tr>
         </thead>
         <tbody>
@@ -27,17 +27,17 @@ export function JudgeTeamListTable({ teams, criteriaCount, onScoreTeam }: JudgeT
             const scoreStatus = getTeamScoreStatus(team, criteriaCount);
             return (
               <tr key={team.teamId} className="border-b border-outline-variant/60 last:border-b-0">
-                <td className="px-md py-sm font-label-md text-on-surface">{team.teamName}</td>
-                <td className="px-md py-sm text-on-surface-variant">#{team.slotNumber}</td>
-                <td className="px-md py-sm">
+                <td className="px-sm py-2 font-label-md text-on-surface">{team.teamName}</td>
+                <td className="px-sm py-2 text-on-surface-variant">#{team.slotNumber}</td>
+                <td className="px-sm py-2">
                   <JudgeTeamScoreStatusBanner status={scoreStatus} compact />
                 </td>
-                <td className="px-md py-sm text-on-surface">
+                <td className="px-sm py-2 text-on-surface">
                   {team.computed?.judgeTeamScore != null
                     ? Number(team.computed.judgeTeamScore).toFixed(2)
                     : "—"}
                 </td>
-                <td className="px-md py-sm text-right">
+                <td className="px-sm py-2 text-right">
                   <Button type="button" size="sm" variant="primary" onClick={() => onScoreTeam(team.teamId)}>
                     {team.status === "SUBMITTED" ? "Xem phiếu" : "Chấm điểm"}
                   </Button>

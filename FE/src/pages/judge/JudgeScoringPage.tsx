@@ -96,7 +96,7 @@ export function JudgeScoringPage() {
     () => excludeArchivedTermJudgeAssignments(allAssignments),
     [allAssignments]
   );
-  const storedFilters = useMemo(readStoredFilters, []);
+  const [storedFilters] = useState(readStoredFilters);
   const [selectedTermId, setSelectedTermId] = useState<number | "">(storedFilters.termId);
   const [selectedEventId, setSelectedEventId] = useState<number | "">(storedFilters.eventId);
   const [boardId, setBoardId] = useState<number | null>(boardIdParam ? Number(boardIdParam) : null);
