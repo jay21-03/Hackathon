@@ -63,6 +63,7 @@ public class BoardAssignmentService {
     public AssignmentResponse assignMentor(Long boardId, CreateAssignmentRequest request) {
         CurrentUserPrincipal principal = organizerAuthorizationService.requireOrganizer();
         organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
+        Board board = requireBoard(boardId);
 
         Long mentorId = request.getUserId();
         if (mentorId == null) {
@@ -77,6 +78,7 @@ public class BoardAssignmentService {
             MentorAssignment existing = mentorAssignmentRepository.findByBoardIdAndMentorId(boardId, mentorId).get();
             return toResponse(existing);
         }
+        assertMentorEligibleForBoard(board, mentorId);
         assertStaffAssignmentsMutable(boardId);
 
         OffsetDateTime now = OffsetDateTime.now();
@@ -94,6 +96,7 @@ public class BoardAssignmentService {
     public AssignmentResponse assignJudge(Long boardId, CreateAssignmentRequest request) {
         CurrentUserPrincipal principal = organizerAuthorizationService.requireOrganizer();
         organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
+        Board board = requireBoard(boardId);
 
         Long judgeId = request.getUserId();
         if (judgeId == null) {
@@ -110,6 +113,7 @@ public class BoardAssignmentService {
             JudgeAssignment existing = judgeAssignmentRepository.findByBoardIdAndJudgeId(boardId, judgeId).get();
             return toJudgeResponse(existing);
         }
+        assertJudgeEligibleForBoard(board, judgeId);
         assertStaffAssignmentsMutable(boardId);
 
         OffsetDateTime now = OffsetDateTime.now();
@@ -199,10 +203,11 @@ public class BoardAssignmentService {
 
     @Transactional
     public void completeStaffAssignment(Long boardId, Long userId, SystemRole role, Long createdBy) {
-        boardRepository.findById(boardId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+        Board board = requireBoard(boardId);
         OffsetDateTime now = OffsetDateTime.now();
         if (role == SystemRole.MENTOR) {
             if (!mentorAssignmentRepository.existsByBoardIdAndMentorId(boardId, userId)) {
+                assertMentorEligibleForBoard(board, userId);
                 assertStaffAssignmentsMutable(boardId);
                 mentorAssignmentRepository.save(MentorAssignment.builder()
                         .boardId(boardId)
@@ -218,6 +223,7 @@ public class BoardAssignmentService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MENTOR_CANNOT_JUDGE_OWN_BOARD");
             }
             if (!judgeAssignmentRepository.existsByBoardIdAndJudgeId(boardId, userId)) {
+                assertJudgeEligibleForBoard(board, userId);
                 assertStaffAssignmentsMutable(boardId);
                 judgeAssignmentRepository.save(JudgeAssignment.builder()
                         .boardId(boardId)
@@ -250,6 +256,35 @@ public class BoardAssignmentService {
         }
         if (!scoreSheetRepository.findByBoardId(boardId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "BOARD_SCORING_LOCKED");
+        }
+    }
+
+    private Board requireBoard(Long boardId) {
+        return boardRepository.findById(boardId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+    }
+
+    private void assertMentorEligibleForBoard(Board board, Long mentorId) {
+        Long roundId = board.getRoundId();
+        if (roundId == null) {
+            return;
+        }
+        if (mentorAssignmentRepository.existsByMentorIdInRoundExcludingBoard(
+                mentorId, roundId, board.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "MENTOR_ALREADY_ASSIGNED_IN_ROUND");
+        }
+        if (judgeAssignmentRepository.existsByJudgeIdInRound(mentorId, roundId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "STAFF_ROLE_CONFLICT_IN_ROUND");
+        }
+    }
+
+    private void assertJudgeEligibleForBoard(Board board, Long judgeId) {
+        Long roundId = board.getRoundId();
+        if (roundId == null) {
+            return;
+        }
+        if (mentorAssignmentRepository.existsByMentorIdInRound(judgeId, roundId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "STAFF_ROLE_CONFLICT_IN_ROUND");
         }
     }
 

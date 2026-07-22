@@ -97,6 +97,7 @@ public class AssignmentIntegrationTest {
     User organizer;
     User mentor;
     User judge;
+    User mentorJudge;
     Event event;
     Round round;
     Board board;
@@ -135,10 +136,20 @@ public class AssignmentIntegrationTest {
                 .updatedAt(OffsetDateTime.now())
                 .build());
 
+        mentorJudge = userRepository.save(User.builder()
+                .email("mentor-judge@example.com")
+                .fullName("Mentor Judge")
+                .status(UserStatus.ACTIVE)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
         // roles
         userRoleRepository.save(UserRole.builder().userId(organizer.getId()).role(SystemRole.ORGANIZER).createdAt(OffsetDateTime.now()).build());
         userRoleRepository.save(UserRole.builder().userId(mentor.getId()).role(SystemRole.MENTOR).createdAt(OffsetDateTime.now()).build());
         userRoleRepository.save(UserRole.builder().userId(judge.getId()).role(SystemRole.JUDGE).createdAt(OffsetDateTime.now()).build());
+        userRoleRepository.save(UserRole.builder().userId(mentorJudge.getId()).role(SystemRole.MENTOR).createdAt(OffsetDateTime.now()).build());
+        userRoleRepository.save(UserRole.builder().userId(mentorJudge.getId()).role(SystemRole.JUDGE).createdAt(OffsetDateTime.now()).build());
 
         event = eventRepository.save(Event.builder()
                 .name("AssignTestEvent")
@@ -252,5 +263,99 @@ public class AssignmentIntegrationTest {
                         .header("Authorization", "Bearer " + judgeJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.length()").value(0));
+    }
+
+    @Test
+    void mentorCannotBeAssignedToTwoBoardsInSameRound() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        Board secondBoard = boardRepository.save(Board.builder()
+                .roundId(round.getId())
+                .name("Board B")
+                .boardOrder(2)
+                .description("")
+                .status(BoardStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        String payload = objectMapper.writeValueAsString(java.util.Map.of("userId", mentor.getId()));
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/boards/" + board.getId() + "/mentors")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(payload))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/boards/" + secondBoard.getId() + "/mentors")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(payload))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("MENTOR_ALREADY_ASSIGNED_IN_ROUND"));
+    }
+
+    @Test
+    void staffCanMentorAndJudgeInDifferentRounds() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        Round finalRound = roundRepository.save(Round.builder()
+                .eventId(event.getId())
+                .name("R2")
+                .roundType(RoundType.FINAL)
+                .roundOrder(2)
+                .startAt(OffsetDateTime.now().plusHours(3))
+                .endAt(OffsetDateTime.now().plusHours(4))
+                .status(RoundStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        Board finalBoard = boardRepository.save(Board.builder()
+                .roundId(finalRound.getId())
+                .name("Final Board")
+                .boardOrder(1)
+                .description("")
+                .status(BoardStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        String payload = objectMapper.writeValueAsString(java.util.Map.of("userId", mentorJudge.getId()));
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/boards/" + board.getId() + "/mentors")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(payload))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/boards/" + finalBoard.getId() + "/judges")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(payload))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+    }
+
+    @Test
+    void staffCannotMentorAndJudgeInSameRound() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        Board secondBoard = boardRepository.save(Board.builder()
+                .roundId(round.getId())
+                .name("Board B")
+                .boardOrder(2)
+                .description("")
+                .status(BoardStatus.DRAFT)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        String payload = objectMapper.writeValueAsString(java.util.Map.of("userId", mentorJudge.getId()));
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/boards/" + board.getId() + "/mentors")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(payload))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/boards/" + secondBoard.getId() + "/judges")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(payload))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("STAFF_ROLE_CONFLICT_IN_ROUND"));
     }
 }
