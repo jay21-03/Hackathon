@@ -300,6 +300,58 @@ export function ScoringProgressPage({ embedded = false }: { embedded?: boolean }
         </>
       ) : null}
 
+      {embedded ? (
+        <section className="rounded-xl border border-outline-variant bg-surface-container p-md">
+          <div className="flex flex-wrap items-center justify-between gap-md">
+            <div>
+              <h2 className="font-title-md text-on-surface">Tiến độ chấm</h2>
+              <p className="font-body-sm text-on-surface-variant">
+                Theo dõi và hỗ trợ hoàn tất dữ liệu chấm trước khi tính xếp hạng.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-sm">
+              {progress && progress.summary.completionPercent < 100 ? (
+                <Button
+                  variant="secondary"
+                  icon={<Icon name="fact_check" />}
+                  disabled={demoCompleting || processCompleting || !eventId}
+                  onClick={() => void handleCompleteDemoScoring()}
+                  title="Dùng khi demo: sau khi 1 giám khảo đã chấm, hệ thống bù điểm cho các giám khảo còn lại."
+                >
+                  {demoCompleting ? "Đang chốt..." : "Hoàn tất chấm điểm demo"}
+                </Button>
+              ) : null}
+              {progress ? (
+                <Button
+                  variant="primary"
+                  icon={<Icon name="double_arrow" />}
+                  disabled={processCompleting || demoCompleting || !eventId}
+                  onClick={() => void handleCompleteDemoProcess()}
+                  title="Dùng sau khi bạn đã gán đội: chốt chấm điểm, bổ sung dữ liệu thiếu và tính xếp hạng để qua công bố."
+                >
+                  {processCompleting ? "Đang hoàn tất..." : "Hoàn tất quá trình thi"}
+                </Button>
+              ) : null}
+              {progress && progress.summary.completionPercent < 100 ? (
+                <Button
+                  variant="secondary"
+                  icon={<Icon name="notifications_active" />}
+                  disabled={reminding || !activeBoardId}
+                  onClick={() => void handleRemindScoring()}
+                >
+                  {reminding ? "Đang gửi..." : "Nhắc chấm"}
+                </Button>
+              ) : null}
+              {progress ? (
+                <Badge tone={progress.summary.completionPercent >= 100 ? "success" : "warning"}>
+                  {Number(progress.summary.completionPercent).toFixed(0)}% hoàn thành
+                </Badge>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section
         className={`grid gap-md rounded-xl border border-outline-variant bg-surface-container p-md ${
           embedded ? "sm:grid-cols-2" : "sm:grid-cols-[auto_minmax(12rem,1fr)_minmax(12rem,1fr)]"
