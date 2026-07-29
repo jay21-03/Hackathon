@@ -261,6 +261,35 @@ class ScoringIntegrationTest {
     }
 
     @Test
+    void saveRubricRejectsOverlappingLevelScoreRanges() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+
+        List<Map<String, Object>> overlappingLevels = List.of(
+                Map.of("level", "EXCELLENT", "label", "Xuất sắc", "minScore", 9, "maxScore", 10, "description", "A"),
+                Map.of("level", "GOOD", "label", "Tốt", "minScore", 7, "maxScore", 9.1, "description", "B"),
+                Map.of("level", "SATISFACTORY", "label", "Đạt", "minScore", 5, "maxScore", 6.9, "description", "C"),
+                Map.of("level", "UNSATISFACTORY", "label", "Chưa đạt", "minScore", 0, "maxScore", 4.9, "description", "D"));
+
+        Map<String, Object> rubricBody = Map.of(
+                "replaceExisting", true,
+                "criteria", List.of(Map.of(
+                        "code", "R1_01",
+                        "name", "Functionality",
+                        "weight", 100,
+                        "minScore", 0,
+                        "maxScore", 10,
+                        "sortOrder", 1,
+                        "levelDescriptors", overlappingLevels)));
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/rounds/" + round.getId() + "/criteria")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(rubricBody)))
+                .andExpect(MockMvcResultMatchers.status().isBadRequest())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("OVERLAPPING_LEVEL_SCORE_RANGE"));
+    }
+
+    @Test
     void rubricMatrixSubmitAndProgressFlow() throws Exception {
         String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
         String judgeJwt = jwtService.generateToken(judge, Set.of("JUDGE"));

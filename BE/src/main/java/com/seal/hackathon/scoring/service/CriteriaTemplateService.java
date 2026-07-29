@@ -1,5 +1,6 @@
 package com.seal.hackathon.scoring.service;
 
+import com.seal.hackathon.common.util.RubricValidation;
 import com.seal.hackathon.scoring.dto.CriteriaRequestItem;
 import com.seal.hackathon.scoring.dto.CriteriaTemplateResponse;
 import com.seal.hackathon.scoring.dto.CriteriaTemplateSummaryResponse;
@@ -177,6 +178,7 @@ public class CriteriaTemplateService {
         Set<String> names = new HashSet<>();
         BigDecimal totalWeight = BigDecimal.ZERO;
         for (CriteriaRequestItem item : items) {
+            item.setLevelDescriptors(LevelDescriptorNormalizer.normalize(item.getLevelDescriptors()));
             if (!StringUtils.hasText(item.getCode()) || !codes.add(item.getCode().trim())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "DUPLICATE_CRITERIA");
             }
@@ -185,6 +187,9 @@ public class CriteriaTemplateService {
             }
             if (item.getLevelDescriptors() == null || item.getLevelDescriptors().size() != 4) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_LEVEL_DESCRIPTORS");
+            }
+            if (!RubricValidation.hasValidLevelScoreRanges(item)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OVERLAPPING_LEVEL_SCORE_RANGE");
             }
             totalWeight = totalWeight.add(item.getWeight());
         }

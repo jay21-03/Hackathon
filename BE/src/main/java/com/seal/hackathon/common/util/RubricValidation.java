@@ -1,7 +1,9 @@
 package com.seal.hackathon.common.util;
 
 import com.seal.hackathon.scoring.dto.CriteriaRequestItem;
+import com.seal.hackathon.scoring.dto.LevelDescriptorDto;
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -43,6 +45,40 @@ public final class RubricValidation {
             }
             if (StringUtils.hasText(item.getName()) && !names.add(item.getName().trim())) {
                 return false;
+            }
+        }
+        return true;
+    }
+
+    public static boolean hasValidLevelScoreRanges(CriteriaRequestItem item) {
+        if (item == null || item.getLevelDescriptors() == null || item.getLevelDescriptors().isEmpty()) {
+            return true;
+        }
+        if (item.getMinScore() == null || item.getMaxScore() == null) {
+            return true;
+        }
+        List<LevelDescriptorDto> sorted = item.getLevelDescriptors().stream()
+                .filter(level -> level != null && level.getMinScore() != null && level.getMaxScore() != null)
+                .sorted(Comparator.comparing(LevelDescriptorDto::getMinScore)
+                        .thenComparing(LevelDescriptorDto::getMaxScore))
+                .toList();
+        if (sorted.size() != item.getLevelDescriptors().size()) {
+            return true;
+        }
+        for (int index = 0; index < sorted.size(); index++) {
+            LevelDescriptorDto current = sorted.get(index);
+            if (current.getMaxScore().compareTo(current.getMinScore()) <= 0) {
+                return false;
+            }
+            if (current.getMinScore().compareTo(item.getMinScore()) < 0
+                    || current.getMaxScore().compareTo(item.getMaxScore()) > 0) {
+                return false;
+            }
+            if (index > 0) {
+                LevelDescriptorDto previous = sorted.get(index - 1);
+                if (previous.getMaxScore().compareTo(current.getMinScore()) > 0) {
+                    return false;
+                }
             }
         }
         return true;

@@ -384,6 +384,41 @@ export interface RubricCriteriaInput {
 
 const VALID_RUBRIC_LEVELS = new Set(["EXCELLENT", "GOOD", "SATISFACTORY", "UNSATISFACTORY"]);
 
+function validateLevelScoreRanges(
+  label: string,
+  minScore: number,
+  maxScore: number,
+  levels: RubricCriteriaInput["levelDescriptors"]
+): string | null {
+  const sorted = [...levels].sort((a, b) => {
+    const byMin = Number(a.minScore) - Number(b.minScore);
+    return byMin !== 0 ? byMin : Number(a.maxScore) - Number(b.maxScore);
+  });
+  for (let index = 0; index < sorted.length; index++) {
+    const level = sorted[index];
+    const levelLabel = level.label?.trim() || level.level || `mức ${index + 1}`;
+    const levelMin = Number(level.minScore);
+    const levelMax = Number(level.maxScore);
+    if (Number.isNaN(levelMin) || Number.isNaN(levelMax)) {
+      return `${label}: điểm min/max của mức "${levelLabel}" không hợp lệ.`;
+    }
+    if (levelMin >= levelMax) {
+      return `${label}: điểm tối thiểu của mức "${levelLabel}" phải nhỏ hơn điểm tối đa.`;
+    }
+    if (levelMin < minScore || levelMax > maxScore) {
+      return `${label}: mức "${levelLabel}" phải nằm trong phạm vi ${minScore}–${maxScore}.`;
+    }
+    if (index > 0) {
+      const previous = sorted[index - 1];
+      if (Number(previous.maxScore) > levelMin) {
+        const previousLabel = previous.label?.trim() || previous.level || `mức ${index}`;
+        return `${label}: khoảng điểm "${previousLabel}" và "${levelLabel}" đang bị chồng lấn.`;
+      }
+    }
+  }
+  return null;
+}
+
 /** Validate rubric trước khi lưu — mirror ScoringService.validateRubricRequest. */
 export function validateRubricCriteria(criteria: RubricCriteriaInput[]): string | null {
   if (!criteria.length) {
@@ -424,6 +459,10 @@ export function validateRubricCriteria(criteria: RubricCriteriaInput[]): string 
     const maxScore = Number(item.maxScore);
     if (!Number.isNaN(minScore) && !Number.isNaN(maxScore) && minScore >= maxScore) {
       return `${label}: điểm tối thiểu phải nhỏ hơn điểm tối đa.`;
+    }
+    const levelRangeError = validateLevelScoreRanges(label, minScore, maxScore, item.levelDescriptors);
+    if (levelRangeError) {
+      return levelRangeError;
     }
   }
   if (weightSum !== 100) {

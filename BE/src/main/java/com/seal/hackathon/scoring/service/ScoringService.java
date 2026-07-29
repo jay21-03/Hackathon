@@ -11,6 +11,7 @@ import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.enums.ScoreSheetStatus;
 import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.util.ContestOrdering;
+import com.seal.hackathon.common.util.RubricValidation;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.BoardSlot;
 import com.seal.hackathon.contest.entity.Event;
@@ -883,6 +884,9 @@ public class ScoringService {
             }
             if (item.getMaxScore().compareTo(item.getMinScore()) <= 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_SCORE_RANGE");
+            }
+            if (!RubricValidation.hasValidLevelScoreRanges(item)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OVERLAPPING_LEVEL_SCORE_RANGE");
             }
             if (item.getWeight().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_WEIGHT");

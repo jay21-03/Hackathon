@@ -107,6 +107,7 @@ const organizerErrorMap: Record<string, string> = {
   INVALID_WEIGHT: "Trọng số phải lớn hơn 0.",
   DUPLICATE_CRITERIA: "Mã hoặc tên tiêu chí bị trùng trong vòng.",
   INVALID_LEVEL_DESCRIPTORS: "Mỗi tiêu chí cần đúng 4 mức mô tả.",
+  OVERLAPPING_LEVEL_SCORE_RANGE: "Khoảng điểm giữa các mức đang bị chồng lấn hoặc vượt phạm vi tiêu chí.",
   SCORE_OUT_OF_RANGE: "Điểm nằm ngoài thang cho phép.",
   INCOMPLETE_SCORE_SHEET: "Chưa nhập đủ điểm cho mọi tiêu chí.",
   JUDGE_NOT_ASSIGNED: "Giám khảo chưa được phân công cho bảng này.",
