@@ -27,6 +27,7 @@ export interface RankingTeamEntry {
   submittedJudgeCount: number;
   rankingStatus?: "SCORED" | "REPO_NOT_READY" | "NOT_SCORED" | string | null;
   ineligibleReason?: string | null;
+  tieBreakReason?: string | null;
   judgeScores?: RankingJudgeScore[];
   criteriaScores?: RankingCriterionScore[];
 }

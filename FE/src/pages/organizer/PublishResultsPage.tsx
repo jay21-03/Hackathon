@@ -341,7 +341,12 @@ export function PublishResultsPage({ embedded = false }: { embedded?: boolean } 
                         {board.entries.map((row) => (
                           <tr key={row.teamId} className="font-body-sm text-on-surface">
                             <td className="px-sm py-xs">{row.rank}</td>
-                            <td className="px-sm py-xs">{row.teamName}</td>
+                            <td className="px-sm py-xs">
+                              <p className="font-label-md">{row.teamName}</p>
+                              {row.tieBreakReason ? (
+                                <p className="mt-xs font-body-xs text-primary">{row.tieBreakReason}</p>
+                              ) : null}
+                            </td>
                             <td className="px-sm py-xs">{Number(row.averageScore).toFixed(2)}</td>
                             <td className="px-sm py-xs">{row.submittedJudgeCount}</td>
                           </tr>

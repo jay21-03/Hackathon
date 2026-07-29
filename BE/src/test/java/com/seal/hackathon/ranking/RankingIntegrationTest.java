@@ -259,6 +259,52 @@ class RankingIntegrationTest {
                 .build());
     }
 
+    private Team addConfirmedTeamToBoard(String name, int slotNumber) {
+        Team newTeam = teamRepository.save(Team.builder()
+                .eventId(event.getId())
+                .name(name)
+                .contactEmail(name.toLowerCase().replace(" ", "-") + "@example.com")
+                .status(TeamStatus.CONFIRMED)
+                .confirmedAt(OffsetDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        boardSlotRepository.save(BoardSlot.builder()
+                .roundId(round.getId())
+                .boardId(board.getId())
+                .teamNumber(slotNumber)
+                .teamId(newTeam.getId())
+                .assignedAt(OffsetDateTime.now())
+                .assignedBy(organizer.getId())
+                .createdAt(OffsetDateTime.now())
+                .build());
+        seedManualRepository(newTeam, board);
+        return newTeam;
+    }
+
+    private void assignJudgeToBoard() {
+        judgeAssignmentRepository.save(JudgeAssignment.builder()
+                .boardId(board.getId())
+                .judgeId(judge.getId())
+                .createdAt(OffsetDateTime.now())
+                .createdBy(organizer.getId())
+                .build());
+    }
+
+    private ScoreCriteria seedCriteria(String code, String name, int weight, int sortOrder) {
+        return scoreCriteriaRepository.save(ScoreCriteria.builder()
+                .roundId(round.getId())
+                .code(code)
+                .name(name)
+                .weight(BigDecimal.valueOf(weight))
+                .minScore(BigDecimal.ZERO)
+                .maxScore(BigDecimal.TEN)
+                .sortOrder(sortOrder)
+                .levelDescriptors(List.of())
+                .createdAt(OffsetDateTime.now())
+                .build());
+    }
+
     @Test
     void calculatePublishAndPublicResultsFlow() throws Exception {
         String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
@@ -429,6 +475,263 @@ class RankingIntegrationTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].averageScore").value(0.0))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].submittedJudgeCount").value(0))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].rankingStatus").value("REPO_NOT_READY"));
+    }
+
+    @Test
+    void calculateRankingBreaksAverageScoreTieByHighestWeightedCriterion() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        String judgeJwt = jwtService.generateToken(judge, Set.of("JUDGE"));
+
+        Team beta = teamRepository.save(Team.builder()
+                .eventId(event.getId())
+                .name("Team Beta")
+                .contactEmail("team-beta-ranking@example.com")
+                .status(TeamStatus.CONFIRMED)
+                .confirmedAt(OffsetDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        boardSlotRepository.save(BoardSlot.builder()
+                .roundId(round.getId())
+                .boardId(board.getId())
+                .teamNumber(2)
+                .teamId(beta.getId())
+                .assignedAt(OffsetDateTime.now())
+                .assignedBy(organizer.getId())
+                .createdAt(OffsetDateTime.now())
+                .build());
+        seedManualRepository(beta, board);
+        judgeAssignmentRepository.save(JudgeAssignment.builder()
+                .boardId(board.getId())
+                .judgeId(judge.getId())
+                .createdAt(OffsetDateTime.now())
+                .createdBy(organizer.getId())
+                .build());
+        scoreCriteriaRepository.save(ScoreCriteria.builder()
+                .roundId(round.getId())
+                .code("IDEA")
+                .name("Idea")
+                .weight(BigDecimal.valueOf(60))
+                .minScore(BigDecimal.ZERO)
+                .maxScore(BigDecimal.TEN)
+                .sortOrder(1)
+                .levelDescriptors(List.of())
+                .createdAt(OffsetDateTime.now())
+                .build());
+        scoreCriteriaRepository.save(ScoreCriteria.builder()
+                .roundId(round.getId())
+                .code("TECH")
+                .name("Technical")
+                .weight(BigDecimal.valueOf(40))
+                .minScore(BigDecimal.ZERO)
+                .maxScore(BigDecimal.TEN)
+                .sortOrder(2)
+                .levelDescriptors(List.of())
+                .createdAt(OffsetDateTime.now())
+                .build());
+
+        MvcResult matrixResult = mockMvc.perform(MockMvcRequestBuilders.get(
+                                "/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .header("Authorization", "Bearer " + judgeJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andReturn();
+
+        JsonNode criteria = objectMapper.readTree(matrixResult.getResponse().getContentAsString())
+                .path("data")
+                .path("criteria");
+        long ideaId = criteria.get(0).path("id").asLong();
+        long technicalId = criteria.get(1).path("id").asLong();
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "rows", List.of(
+                                        Map.of(
+                                                "teamId", team.getId(),
+                                                "scores", List.of(
+                                                        Map.of("criteriaId", ideaId, "scoreValue", 8.0),
+                                                        Map.of("criteriaId", technicalId, "scoreValue", 7.0))),
+                                        Map.of(
+                                                "teamId", beta.getId(),
+                                                "scores", List.of(
+                                                        Map.of("criteriaId", ideaId, "scoreValue", 7.0),
+                                                        Map.of("criteriaId", technicalId, "scoreValue", 8.5))))))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/judge/boards/" + board.getId() + "/score-matrix/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(Map.of("submitAll", true))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/boards/" + board.getId() + "/rankings/calculate")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].rank").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].averageScore").value(76.0))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].tieBreakReason").value("Ph\u00e1 tie b\u1eb1ng ti\u00eau ch\u00ed \"Idea\"."))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].teamId").value(beta.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].rank").value(2))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].averageScore").value(76.0))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].tieBreakReason").value("Ph\u00e1 tie b\u1eb1ng ti\u00eau ch\u00ed \"Idea\"."));
+    }
+
+    @Test
+    void calculateRankingUsesSortOrderWhenTieBreakCriteriaHaveSameWeight() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        String judgeJwt = jwtService.generateToken(judge, Set.of("JUDGE"));
+        Team beta = addConfirmedTeamToBoard("Team Beta", 2);
+        assignJudgeToBoard();
+        ScoreCriteria firstCriterion = seedCriteria("FIRST", "First Criterion", 50, 1);
+        ScoreCriteria secondCriterion = seedCriteria("SECOND", "Second Criterion", 50, 2);
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .header("Authorization", "Bearer " + judgeJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "rows", List.of(
+                                        Map.of(
+                                                "teamId", team.getId(),
+                                                "scores", List.of(
+                                                        Map.of("criteriaId", firstCriterion.getId(), "scoreValue", 9.0),
+                                                        Map.of("criteriaId", secondCriterion.getId(), "scoreValue", 5.0))),
+                                        Map.of(
+                                                "teamId", beta.getId(),
+                                                "scores", List.of(
+                                                        Map.of("criteriaId", firstCriterion.getId(), "scoreValue", 5.0),
+                                                        Map.of("criteriaId", secondCriterion.getId(), "scoreValue", 9.0))))))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/judge/boards/" + board.getId() + "/score-matrix/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(Map.of("submitAll", true))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/boards/" + board.getId() + "/rankings/calculate")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].rank").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].averageScore").value(70.0))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].tieBreakReason").value("Ph\u00e1 tie b\u1eb1ng ti\u00eau ch\u00ed \"First Criterion\"."))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].teamId").value(beta.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].rank").value(2))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].averageScore").value(70.0));
+    }
+
+    @Test
+    void calculateRankingKeepsSharedRankWhenAverageAndTieBreakCriteriaAreEqual() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        String judgeJwt = jwtService.generateToken(judge, Set.of("JUDGE"));
+        Team beta = addConfirmedTeamToBoard("Team Beta", 2);
+        assignJudgeToBoard();
+        ScoreCriteria idea = seedCriteria("IDEA", "Idea", 60, 1);
+        ScoreCriteria technical = seedCriteria("TECH", "Technical", 40, 2);
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .header("Authorization", "Bearer " + judgeJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "rows", List.of(
+                                        Map.of(
+                                                "teamId", team.getId(),
+                                                "scores", List.of(
+                                                        Map.of("criteriaId", idea.getId(), "scoreValue", 8.0),
+                                                        Map.of("criteriaId", technical.getId(), "scoreValue", 7.0))),
+                                        Map.of(
+                                                "teamId", beta.getId(),
+                                                "scores", List.of(
+                                                        Map.of("criteriaId", idea.getId(), "scoreValue", 8.0),
+                                                        Map.of("criteriaId", technical.getId(), "scoreValue", 7.0))))))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/judge/boards/" + board.getId() + "/score-matrix/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(Map.of("submitAll", true))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        MvcResult result = mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/boards/" + board.getId() + "/rankings/calculate")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].rank").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].averageScore").value(76.0))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].rank").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].averageScore").value(76.0))
+                .andReturn();
+
+        JsonNode entries = objectMapper.readTree(result.getResponse().getContentAsString())
+                .path("data")
+                .path("entries");
+        assertThat(entries.get(0).path("tieBreakReason").isMissingNode()
+                        || entries.get(0).path("tieBreakReason").isNull())
+                .isTrue();
+        assertThat(entries.get(1).path("tieBreakReason").isMissingNode()
+                        || entries.get(1).path("tieBreakReason").isNull())
+                .isTrue();
+    }
+
+    @Test
+    void calculateRankingOrdersDifferentAverageScoresDescending() throws Exception {
+        String orgJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
+        String judgeJwt = jwtService.generateToken(judge, Set.of("JUDGE"));
+        Team beta = addConfirmedTeamToBoard("Team Beta", 2);
+        assignJudgeToBoard();
+        ScoreCriteria idea = seedCriteria("IDEA", "Idea", 100, 1);
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .header("Authorization", "Bearer " + judgeJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/judge/boards/" + board.getId() + "/score-matrix")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "rows", List.of(
+                                        Map.of(
+                                                "teamId", team.getId(),
+                                                "scores", List.of(Map.of(
+                                                        "criteriaId", idea.getId(), "scoreValue", 6.0))),
+                                        Map.of(
+                                                "teamId", beta.getId(),
+                                                "scores", List.of(Map.of(
+                                                        "criteriaId", idea.getId(), "scoreValue", 8.0))))))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/judge/boards/" + board.getId() + "/score-matrix/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + judgeJwt)
+                        .content(objectMapper.writeValueAsString(Map.of("submitAll", true))))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/boards/" + board.getId() + "/rankings/calculate")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].teamId").value(beta.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].rank").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[0].averageScore").value(80.0))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].rank").value(2))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.entries[1].averageScore").value(60.0));
     }
 
     @Test

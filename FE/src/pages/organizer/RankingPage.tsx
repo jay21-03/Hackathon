@@ -457,7 +457,12 @@ export function RankingPage({ embedded = false }: { embedded?: boolean } = {}) {
                         className={`font-body-sm text-on-surface ${incomplete ? "bg-warning-container/20" : ""}`}
                       >
                         <td className="px-sm py-2 font-headline-sm">{row.rank}</td>
-                        <td className="px-sm py-2 font-label-md">{row.teamName}</td>
+                        <td className="px-sm py-2">
+                          <p className="font-label-md">{row.teamName}</p>
+                          {row.tieBreakReason ? (
+                            <p className="mt-xs max-w-sm font-body-xs text-primary">{row.tieBreakReason}</p>
+                          ) : null}
+                        </td>
                         <td className="px-sm py-2">{row.slotNumber ?? "—"}</td>
                         <td className="px-sm py-2">{Number(row.averageScore).toFixed(2)}</td>
                         <td className="px-sm py-2">

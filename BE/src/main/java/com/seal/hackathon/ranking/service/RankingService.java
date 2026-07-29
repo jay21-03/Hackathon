@@ -318,6 +318,7 @@ public class RankingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "RUBRIC_NOT_CONFIGURED");
         }
         requireBoardScoringComplete(board);
+        List<ScoreCriteria> tieBreakCriteria = tieBreakCriteria(criteria);
 
         List<BoardSlot> occupiedSlots = boardSlotRepository.findByBoardId(board.getId()).stream()
                 .filter(slot -> slot.getTeamId() != null)
@@ -340,7 +341,8 @@ public class RankingService {
                         slot.getTeamNumber(),
                         ZERO_SCORE,
                         0,
-                        false));
+                        false,
+                        zeroTieBreakScores(tieBreakCriteria)));
                 continue;
             }
             List<ScoreSheet> sheets = scoreSheetRepository.findByBoardIdAndTeamId(board.getId(), slot.getTeamId())
@@ -367,28 +369,24 @@ public class RankingService {
                     slot.getTeamNumber(),
                     average,
                     judgeScores.size(),
-                    true));
+                    true,
+                    computeCriterionTieBreakScores(sheets, tieBreakCriteria)));
         }
 
         scoredTeams.sort(Comparator
                 .comparing(ScoredTeam::scorable, Comparator.reverseOrder())
                 .thenComparing(ScoredTeam::averageScore, Comparator.reverseOrder())
+                .thenComparing((left, right) -> compareTieBreakScores(left.tieBreakScores(), right.tieBreakScores()))
                 .thenComparing(ScoredTeam::teamName, String.CASE_INSENSITIVE_ORDER));
 
         rankingResultRepository.deleteByBoardId(board.getId());
         rankingResultRepository.flush();
         OffsetDateTime now = OffsetDateTime.now();
         int rank = 0;
-        BigDecimal previousScore = null;
-        Boolean previousScorable = null;
         for (int i = 0; i < scoredTeams.size(); i++) {
             ScoredTeam scored = scoredTeams.get(i);
-            if (previousScore == null
-                    || scored.averageScore().compareTo(previousScore) != 0
-                    || !java.util.Objects.equals(scored.scorable(), previousScorable)) {
+            if (i == 0 || !sameRankingPosition(scoredTeams.get(i - 1), scored)) {
                 rank = i + 1;
-                previousScore = scored.averageScore();
-                previousScorable = scored.scorable();
             }
             rankingResultRepository.save(RankingResult.builder()
                     .roundId(round.getId())
@@ -463,11 +461,19 @@ public class RankingService {
                 .filter(row -> isRankingEligible(teamsById.get(row.getTeamId())))
                 .toList();
         int hiddenTeamCount = rows.size() - visibleRows.size();
+        Map<Long, List<RankingCriterionScoreDto>> criteriaScoresByTeam = visibleRows.stream()
+                .collect(Collectors.toMap(
+                        RankingResult::getTeamId,
+                        row -> buildCriteriaScoreDetails(board.getId(), row.getTeamId(), criteria)));
+        Map<Long, String> tieBreakReasonByTeam = resolveTieBreakReasons(
+                visibleRows, criteriaScoresByTeam, criteria);
 
         List<RankingTeamEntryDto> entries = visibleRows.stream()
                 .map(row -> {
                     Team team = teamsById.get(row.getTeamId());
                     int judgeCount = countSubmittedJudges(board.getId(), row.getTeamId());
+                    List<RankingCriterionScoreDto> criteriaScores =
+                            criteriaScoresByTeam.getOrDefault(row.getTeamId(), List.of());
                     return RankingTeamEntryDto.builder()
                             .rank(row.getRank())
                             .teamId(row.getTeamId())
@@ -477,8 +483,9 @@ public class RankingService {
                             .submittedJudgeCount(judgeCount)
                             .rankingStatus(resolveRankingStatus(board.getId(), row.getTeamId(), judgeCount))
                             .ineligibleReason(resolveIneligibleReason(board.getId(), row.getTeamId(), judgeCount))
+                            .tieBreakReason(tieBreakReasonByTeam.get(row.getTeamId()))
                             .judgeScores(buildJudgeScoreDetails(board.getId(), row.getTeamId(), criteria))
-                            .criteriaScores(buildCriteriaScoreDetails(board.getId(), row.getTeamId(), criteria))
+                            .criteriaScores(criteriaScores)
                             .build();
                 })
                 .toList();
@@ -608,6 +615,48 @@ public class RankingService {
                 .toList();
     }
 
+    private Map<Long, String> resolveTieBreakReasons(
+            List<RankingResult> rows,
+            Map<Long, List<RankingCriterionScoreDto>> criteriaScoresByTeam,
+            List<ScoreCriteria> criteria) {
+        Map<Long, String> reasons = new HashMap<>();
+        List<ScoreCriteria> tieCriteria = tieBreakCriteria(criteria);
+        Map<String, List<RankingResult>> rowsByAverage = rows.stream()
+                .collect(Collectors.groupingBy(row -> row.getAverageScore().stripTrailingZeros().toPlainString()));
+        for (List<RankingResult> tiedScoreRows : rowsByAverage.values()) {
+            if (tiedScoreRows.size() < 2) {
+                continue;
+            }
+            long distinctRanks = tiedScoreRows.stream().map(RankingResult::getRank).distinct().count();
+            if (distinctRanks < 2) {
+                continue;
+            }
+            for (ScoreCriteria criterion : tieCriteria) {
+                long distinctCriterionScores = tiedScoreRows.stream()
+                        .map(row -> criterionAverageForTeam(
+                                criteriaScoresByTeam.getOrDefault(row.getTeamId(), List.of()), criterion.getId()))
+                        .map(score -> score.stripTrailingZeros().toPlainString())
+                        .distinct()
+                        .count();
+                if (distinctCriterionScores > 1) {
+                    String reason = "Ph\u00e1 tie b\u1eb1ng ti\u00eau ch\u00ed \"" + criterion.getName() + "\".";
+                    tiedScoreRows.forEach(row -> reasons.put(row.getTeamId(), reason));
+                    break;
+                }
+            }
+        }
+        return reasons;
+    }
+
+    private BigDecimal criterionAverageForTeam(List<RankingCriterionScoreDto> scores, Long criterionId) {
+        return scores.stream()
+                .filter(score -> Objects.equals(score.getCriteriaId(), criterionId))
+                .map(RankingCriterionScoreDto::getAverageScore)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(ZERO_SCORE);
+    }
+
     private List<ScoreSheet> submittedSheetsForTeam(Long boardId, Long teamId) {
         return scoreSheetRepository.findByBoardIdAndTeamId(boardId, teamId).stream()
                 .filter(sheet -> sheet.getStatus() == ScoreSheetStatus.SUBMITTED)
@@ -623,6 +672,58 @@ public class RankingService {
             return null;
         }
         return average(values);
+    }
+
+    private List<ScoreCriteria> tieBreakCriteria(List<ScoreCriteria> criteria) {
+        return criteria.stream()
+                .sorted(Comparator
+                        .comparing(ScoreCriteria::getWeight, Comparator.nullsLast(BigDecimal::compareTo)).reversed()
+                        .thenComparing(ScoreCriteria::getSortOrder, Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(ScoreCriteria::getId, Comparator.nullsLast(Long::compareTo)))
+                .toList();
+    }
+
+    private List<BigDecimal> zeroTieBreakScores(List<ScoreCriteria> criteria) {
+        return criteria.stream().map(ignored -> ZERO_SCORE).toList();
+    }
+
+    private List<BigDecimal> computeCriterionTieBreakScores(
+            List<ScoreSheet> submittedSheets, List<ScoreCriteria> tieBreakCriteria) {
+        Map<Long, List<ScoreItem>> itemsByCriteria = new HashMap<>();
+        for (ScoreSheet sheet : submittedSheets) {
+            for (ScoreItem item : scoreItemRepository.findByScoreSheetId(sheet.getId())) {
+                if (item.getCriteriaId() == null || item.getScoreValue() == null) {
+                    continue;
+                }
+                itemsByCriteria.computeIfAbsent(item.getCriteriaId(), ignored -> new ArrayList<>()).add(item);
+            }
+        }
+        return tieBreakCriteria.stream()
+                .map(criterion -> {
+                    BigDecimal averageScore = averageScoreItems(
+                            itemsByCriteria.getOrDefault(criterion.getId(), List.of()));
+                    return averageScore != null ? averageScore : ZERO_SCORE;
+                })
+                .toList();
+    }
+
+    private int compareTieBreakScores(List<BigDecimal> left, List<BigDecimal> right) {
+        int max = Math.max(left.size(), right.size());
+        for (int i = 0; i < max; i++) {
+            BigDecimal leftScore = i < left.size() ? left.get(i) : ZERO_SCORE;
+            BigDecimal rightScore = i < right.size() ? right.get(i) : ZERO_SCORE;
+            int compared = rightScore.compareTo(leftScore);
+            if (compared != 0) {
+                return compared;
+            }
+        }
+        return 0;
+    }
+
+    private boolean sameRankingPosition(ScoredTeam previous, ScoredTeam current) {
+        return previous.scorable() == current.scorable()
+                && previous.averageScore().compareTo(current.averageScore()) == 0
+                && compareTieBreakScores(previous.tieBreakScores(), current.tieBreakScores()) == 0;
     }
 
     private String resolveRankingStatus(Long boardId, Long teamId, int submittedJudgeCount) {
@@ -679,5 +780,11 @@ public class RankingService {
     }
 
     private record ScoredTeam(
-            Long teamId, String teamName, Integer slotNumber, BigDecimal averageScore, int judgeCount, boolean scorable) {}
+            Long teamId,
+            String teamName,
+            Integer slotNumber,
+            BigDecimal averageScore,
+            int judgeCount,
+            boolean scorable,
+            List<BigDecimal> tieBreakScores) {}
 }

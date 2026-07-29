@@ -283,6 +283,9 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
                           <span className="font-label-md">{row.teamName}</span>
                           {isOwnTeam ? <Badge tone="active">Đội bạn</Badge> : null}
                         </div>
+                        {row.tieBreakReason ? (
+                          <p className="mt-xs font-body-xs text-primary">{row.tieBreakReason}</p>
+                        ) : null}
                       </td>
                       <td className="px-sm py-2 align-middle text-right tabular-nums">
                         {Number(row.averageScore).toFixed(2)}
@@ -348,6 +351,12 @@ export function EventResultsView({ results, participantView, highlightTeamId }: 
               <dd className="font-headline-sm tabular-nums">{detailEntry.entry.submittedJudgeCount}</dd>
             </div>
           </dl>
+
+          {detailEntry.entry.tieBreakReason ? (
+            <p className="mt-md rounded-lg border border-primary/30 bg-primary-container/30 px-md py-sm font-body-sm text-primary">
+              {detailEntry.entry.tieBreakReason}
+            </p>
+          ) : null}
 
           {detailEntry.entry.judgeScores?.length ? (
             <div className="mt-md overflow-x-auto rounded-lg border border-outline-variant bg-surface">

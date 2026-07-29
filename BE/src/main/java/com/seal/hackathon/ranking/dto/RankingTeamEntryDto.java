@@ -17,6 +17,7 @@ public class RankingTeamEntryDto {
     private Integer submittedJudgeCount;
     private String rankingStatus;
     private String ineligibleReason;
+    private String tieBreakReason;
     private List<RankingJudgeScoreDto> judgeScores;
     private List<RankingCriterionScoreDto> criteriaScores;
 }
