@@ -13,6 +13,6 @@ public class AdvancementPreviewResponse {
     private int topNPerBoard;
     /** Top-N per board — quick auto-select suggestion. */
     private List<AdvancementCandidateDto> candidates;
-    /** All published rankings in the source round for manual selection. */
+    /** All teams assigned in the source round, including teams that are not currently eligible. */
     private List<AdvancementCandidateDto> eligibleTeams;
 }

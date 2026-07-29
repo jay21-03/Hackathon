@@ -468,8 +468,12 @@ class AdvancementIntegrationTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.candidates.length()").value(1))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.candidates[0].teamId").value(secondTeam.getId()))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.candidates[0].teamName").value("Team RunnerUp"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams.length()").value(1))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].teamId").value(secondTeam.getId()));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams.length()").value(2))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].eligible").value(false))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].ineligibleReason").exists())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[1].teamId").value(secondTeam.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[1].eligible").value(true));
     }
 
     @Test
@@ -489,10 +493,13 @@ class AdvancementIntegrationTest {
                         .param("fromRoundId", String.valueOf(groupRound.getId()))
                         .param("toRoundId", String.valueOf(finalsRound.getId()))
                         .param("topNPerBoard", "1")
-                        .header("Authorization", "Bearer " + orgJwt))
+                .header("Authorization", "Bearer " + orgJwt))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.data.candidates.length()").value(0))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams.length()").value(0));
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams.length()").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].eligible").value(false))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].ineligibleReason").exists());
 
         mockMvc.perform(MockMvcRequestBuilders.post(
                                 "/api/v1/admin/events/" + event.getId() + "/advancements/execute")
@@ -505,5 +512,132 @@ class AdvancementIntegrationTest {
                                 "targetBoardId", finalsBoard.getId()))))
                 .andExpect(MockMvcResultMatchers.status().isConflict())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("NO_PUBLISHED_RANKINGS_TO_ADVANCE"));
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/events/" + event.getId() + "/advancements/execute")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "fromRoundId", groupRound.getId(),
+                                "toRoundId", finalsRound.getId(),
+                                "topNPerBoard", 1,
+                                "targetBoardId", finalsBoard.getId(),
+                                "teamIds", List.of(team.getId())))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.teamsAdvanced").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.slotsAssigned").value(1));
+
+        assertThat(boardSlotRepository.findById(finalsSlot.getId()).orElseThrow().getTeamId())
+                .isEqualTo(team.getId());
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/events/" + event.getId() + "/advancements/preview")
+                        .param("fromRoundId", String.valueOf(groupRound.getId()))
+                        .param("toRoundId", String.valueOf(finalsRound.getId()))
+                        .param("topNPerBoard", "1")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].eligible").value(false))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].ineligibleReason")
+                        .value("\u0110\u1ed9i \u0111\u00e3 c\u00f3 m\u1eb7t trong v\u00f2ng \u0111\u00edch."));
+    }
+
+    @Test
+    void manualAdvancementAllowsTeamWithoutRepositoryAndPublishedScore() throws Exception {
+        teamRepositoryEntityRepository.deleteAll();
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/events/" + event.getId() + "/advancements/preview")
+                        .param("fromRoundId", String.valueOf(groupRound.getId()))
+                        .param("toRoundId", String.valueOf(finalsRound.getId()))
+                        .param("topNPerBoard", "1")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.candidates.length()").value(0))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams.length()").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].eligible").value(false))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].rank").doesNotExist())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].averageScore").doesNotExist())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].ineligibleReason").exists());
+
+        mockMvc.perform(MockMvcRequestBuilders.post(
+                                "/api/v1/admin/events/" + event.getId() + "/advancements/execute")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + orgJwt)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "fromRoundId", groupRound.getId(),
+                                "toRoundId", finalsRound.getId(),
+                                "topNPerBoard", 1,
+                                "targetBoardId", finalsBoard.getId(),
+                                "teamIds", List.of(team.getId())))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.teamsAdvanced").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.slotsAssigned").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.advancements[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.advancements[0].basisRank").doesNotExist())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.advancements[0].basisScore").doesNotExist());
+
+        assertThat(boardSlotRepository.findById(finalsSlot.getId()).orElseThrow().getTeamId())
+                .isEqualTo(team.getId());
+    }
+
+    @Test
+    void previewShowsAlreadyAdvancedTeamButDoesNotSuggestItAgain() throws Exception {
+        Team secondTeam = teamRepository.save(Team.builder()
+                .eventId(event.getId())
+                .name("Team Next")
+                .contactEmail("next@example.com")
+                .status(TeamStatus.CONFIRMED)
+                .confirmedAt(OffsetDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        boardSlotRepository.save(BoardSlot.builder()
+                .roundId(groupRound.getId())
+                .boardId(groupBoard.getId())
+                .teamNumber(2)
+                .teamId(secondTeam.getId())
+                .assignedAt(OffsetDateTime.now())
+                .assignedBy(organizer.getId())
+                .createdAt(OffsetDateTime.now())
+                .build());
+        seedManualRepository(secondTeam);
+        finalsSlot.setTeamId(team.getId());
+        boardSlotRepository.save(finalsSlot);
+
+        rankingResultRepository.save(RankingResult.builder()
+                .roundId(groupRound.getId())
+                .boardId(groupBoard.getId())
+                .teamId(team.getId())
+                .rank(1)
+                .averageScore(BigDecimal.valueOf(95.0))
+                .calculatedAt(OffsetDateTime.now())
+                .publishedAt(OffsetDateTime.now())
+                .build());
+        rankingResultRepository.save(RankingResult.builder()
+                .roundId(groupRound.getId())
+                .boardId(groupBoard.getId())
+                .teamId(secondTeam.getId())
+                .rank(2)
+                .averageScore(BigDecimal.valueOf(90.0))
+                .calculatedAt(OffsetDateTime.now())
+                .publishedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/events/" + event.getId() + "/advancements/preview")
+                        .param("fromRoundId", String.valueOf(groupRound.getId()))
+                        .param("toRoundId", String.valueOf(finalsRound.getId()))
+                        .param("topNPerBoard", "1")
+                        .header("Authorization", "Bearer " + orgJwt))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.candidates.length()").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.candidates[0].teamId").value(secondTeam.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams.length()").value(2))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].teamId").value(team.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].eligible").value(false))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[0].ineligibleReason")
+                        .value("Đội đã có mặt trong vòng đích."))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[1].teamId").value(secondTeam.getId()))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.eligibleTeams[1].eligible").value(true));
     }
 }

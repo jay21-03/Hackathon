@@ -14,4 +14,6 @@ public class AdvancementCandidateDto {
     private String fromBoardName;
     private Integer rank;
     private BigDecimal averageScore;
+    private boolean eligible;
+    private String ineligibleReason;
 }

@@ -5,10 +5,12 @@ export interface AdvancementCandidate {
   teamId: number;
   teamName: string;
   teamStatus?: string | null;
-  fromBoardId: number;
-  fromBoardName: string;
-  rank: number;
-  averageScore: number;
+  fromBoardId?: number | null;
+  fromBoardName?: string | null;
+  rank?: number | null;
+  averageScore?: number | null;
+  eligible?: boolean;
+  ineligibleReason?: string | null;
 }
 
 export interface AdvancementPreview {

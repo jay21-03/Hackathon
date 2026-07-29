@@ -22,9 +22,22 @@ import { getStatusLabel, getStatusTone } from "../../domain/status";
 import { applyApiFormErrors, resolveApiError } from "../../utils/apiError";
 import { formatBoardWithRoundLabel } from "../../utils/boardLabels";
 
-function formatScore(score: number) {
+function formatScore(score: number | null | undefined) {
+  if (score == null) return "—";
   return Number.isInteger(score) ? String(score) : score.toFixed(2);
 }
+
+function ineligibleBadgeLabel(reason?: string | null) {
+  if (reason?.includes("Đội đã có mặt trong vòng đích")) return "Đã ở vòng đích";
+  return "Chưa đủ điều kiện";
+}
+
+function ineligibleBadgeTone(reason?: string | null) {
+  if (reason?.includes("Đội đã có mặt trong vòng đích")) return "success";
+  return "warning";
+}
+
+const ALREADY_IN_TARGET_REASON = "Đội đã có mặt trong vòng đích.";
 
 type FinalsFilterState = {
   fromRoundId: number | "";
@@ -109,6 +122,36 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
     () => new Set(previewQuery.data?.candidates.map((c) => c.teamId) ?? []),
     [previewQuery.data?.candidates]
   );
+  const targetRoundTeamIds = useMemo(
+    () => new Set((advancementsQuery.data ?? []).map((advancement) => advancement.teamId)),
+    [advancementsQuery.data]
+  );
+  const teamById = useMemo(
+    () => new Map(eligibleTeams.map((team) => [team.teamId, team])),
+    [eligibleTeams]
+  );
+  const effectiveIneligibleReasonByTeamId = useMemo(
+    () =>
+      new Map(
+        eligibleTeams.map((team) => [
+          team.teamId,
+          targetRoundTeamIds.has(team.teamId)
+            ? ALREADY_IN_TARGET_REASON
+            : team.ineligibleReason
+        ])
+      ),
+    [eligibleTeams, targetRoundTeamIds]
+  );
+  const invalidSelectedTeams = useMemo(
+    () =>
+      Array.from(selectedTeamIds)
+        .map((teamId) => teamById.get(teamId))
+        .filter(
+          (team): team is AdvancementCandidate =>
+            Boolean(team && (team.eligible === false || targetRoundTeamIds.has(team.teamId)))
+        ),
+    [selectedTeamIds, teamById, targetRoundTeamIds]
+  );
 
   useEffect(() => {
     if (!previewQuery.data) return;
@@ -116,6 +159,11 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
   }, [previewQuery.data, fromId, toId, topN]);
 
   function toggleTeam(teamId: number, checked: boolean) {
+    const team = teamById.get(teamId);
+    const effectiveReason = effectiveIneligibleReasonByTeamId.get(teamId);
+    if (checked && (team?.eligible === false || targetRoundTeamIds.has(teamId))) {
+      notify(effectiveReason ?? "Đội này chưa đủ điều kiện chuyển vòng.", "warning");
+    }
     setSelectedTeamIds((prev) => {
       const next = new Set(prev);
       if (checked) next.add(teamId);
@@ -174,6 +222,7 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   const selectedCount = selectedTeamIds.size;
+  const hasInvalidSelection = invalidSelectedTeams.length > 0;
   const executeModeLabel =
     selectedCount > 0 ? `${selectedCount} đội đã chọn` : `top ${topN} / bảng`;
 
@@ -318,7 +367,10 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                     {eligibleTeams.map((team, index) => {
                       const checked = selectedTeamIds.has(team.teamId);
                       const suggested = suggestedTeamIds.has(team.teamId);
-                      const selectable = !team.teamStatus || team.teamStatus === "CONFIRMED";
+                      const effectiveIneligibleReason =
+                        effectiveIneligibleReasonByTeamId.get(team.teamId) ?? null;
+                      const effectivelyIneligible =
+                        team.eligible === false || targetRoundTeamIds.has(team.teamId);
                       return (
                         <tr
                           key={`${team.teamId}-${team.fromBoardId}`}
@@ -329,12 +381,7 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                               type="checkbox"
                               className="size-4 rounded border-outline-variant"
                               checked={checked}
-                              disabled={!selectable}
-                              title={
-                                selectable
-                                  ? undefined
-                                  : "Chỉ đội đã xác nhận mới được chuyển vòng."
-                              }
+                              title={effectivelyIneligible ? effectiveIneligibleReason ?? undefined : undefined}
                               onChange={(e) => toggleTeam(team.teamId, e.target.checked)}
                               aria-label={`Chọn ${team.teamName}`}
                             />
@@ -352,9 +399,17 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
                                 Top {topN}
                               </Badge>
                             ) : null}
+                            {effectivelyIneligible ? (
+                              <Badge tone={ineligibleBadgeTone(effectiveIneligibleReason)} className="ml-sm align-middle">
+                                {ineligibleBadgeLabel(effectiveIneligibleReason)}
+                              </Badge>
+                            ) : null}
+                            {effectiveIneligibleReason ? (
+                              <p className="mt-xs font-body-xs text-warning">{effectiveIneligibleReason}</p>
+                            ) : null}
                           </td>
                           <td className="px-sm py-2">
-                            {formatBoardWithRoundLabel(team.fromBoardName, fromRoundName)}
+                            {formatBoardWithRoundLabel(team.fromBoardName ?? "Bảng", fromRoundName)}
                           </td>
                           <td className="px-sm py-2 text-right tabular-nums">
                             {formatScore(team.averageScore)}
@@ -372,11 +427,16 @@ export function FinalsPage({ embedded = false }: { embedded?: boolean } = {}) {
               <ConfirmAction
                 title="Xác nhận chuyển đội"
                 message={
-                  selectedCount > 0
+                  hasInvalidSelection
+                    ? `Có ${invalidSelectedTeams.length} đội chưa đủ điều kiện (${invalidSelectedTeams
+                        .slice(0, 3)
+                        .map((team) => team.teamName)
+                        .join(", ")}). Bạn vẫn muốn chuyển các đội này sang vòng đích?`
+                    : selectedCount > 0
                     ? `Chuyển ${selectedCount} đội đã chọn sang vòng đích và gán vào slot trống.`
                     : `Không chọn đội cụ thể — hệ thống lấy top ${topN} đội / bảng từ BXH đã công bố.`
                 }
-                confirmLabel="Chuyển đội"
+                confirmLabel={hasInvalidSelection ? "Vẫn chuyển đội" : "Chuyển đội"}
                 onConfirm={handleExecute}
               >
                 <Button disabled={busy}>Thực hiện chuyển đội ({executeModeLabel})</Button>

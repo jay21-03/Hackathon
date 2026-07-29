@@ -59,8 +59,8 @@ public class AdvancementService {
         Round fromRound = loadRoundForEvent(fromRoundId, eventId);
         Round toRound = loadRoundForEvent(toRoundId, eventId);
         assertForwardAdvancement(fromRound, toRound);
-        List<AdvancementCandidateDto> eligibleTeams = collectAllEligibleTeams(fromRound.getId());
-        List<AdvancementCandidateDto> candidates = collectSuggestedCandidates(fromRound.getId(), topN);
+        List<AdvancementCandidateDto> eligibleTeams = collectAllSourceRoundTeams(fromRound.getId(), toRound.getId());
+        List<AdvancementCandidateDto> candidates = collectSuggestedCandidates(fromRound.getId(), toRound.getId(), topN);
         return AdvancementPreviewResponse.builder()
                 .eventId(eventId)
                 .fromRoundId(fromRoundId)
@@ -82,7 +82,7 @@ public class AdvancementService {
         int topN = Math.max(request.getTopNPerBoard(), 1);
 
         List<AdvancementCandidateDto> candidates = resolveCandidatesForExecute(
-                fromRound.getId(), topN, request.getTeamIds());
+                fromRound.getId(), toRound.getId(), topN, request.getTeamIds());
         if (candidates.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "NO_PUBLISHED_RANKINGS_TO_ADVANCE");
         }
@@ -165,9 +165,9 @@ public class AdvancementService {
     }
 
     private List<AdvancementCandidateDto> resolveCandidatesForExecute(
-            Long fromRoundId, int topN, List<Long> teamIds) {
+            Long fromRoundId, Long toRoundId, int topN, List<Long> teamIds) {
         if (teamIds != null && !teamIds.isEmpty()) {
-            Map<Long, AdvancementCandidateDto> eligibleByTeamId = collectAllEligibleTeams(fromRoundId).stream()
+            Map<Long, AdvancementCandidateDto> sourceByTeamId = collectAllSourceRoundTeams(fromRoundId, toRoundId).stream()
                     .collect(Collectors.toMap(
                             AdvancementCandidateDto::getTeamId,
                             Function.identity(),
@@ -175,27 +175,81 @@ public class AdvancementService {
                             LinkedHashMap::new));
             List<AdvancementCandidateDto> selected = new ArrayList<>();
             for (Long teamId : teamIds) {
-                AdvancementCandidateDto candidate = eligibleByTeamId.get(teamId);
+                AdvancementCandidateDto candidate = sourceByTeamId.get(teamId);
                 if (candidate == null) {
                     throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST, "TEAM_NOT_ELIGIBLE:" + teamId);
+                            HttpStatus.BAD_REQUEST,
+                            "TEAM_NOT_IN_SOURCE_ROUND:" + teamId);
                 }
                 selected.add(candidate);
             }
             return selected;
         }
-        return collectSuggestedCandidates(fromRoundId, topN);
+        return collectSuggestedCandidates(fromRoundId, toRoundId, topN);
     }
 
-    private List<AdvancementCandidateDto> collectSuggestedCandidates(Long fromRoundId, int topN) {
-        return collectEligibleCandidates(fromRoundId, topN, true);
+    private List<AdvancementCandidateDto> collectSuggestedCandidates(Long fromRoundId, Long toRoundId, int topN) {
+        Set<Long> targetRoundTeamIds = boardSlotRepository.findByRoundId(toRoundId).stream()
+                .map(BoardSlot::getTeamId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        return collectEligibleCandidates(fromRoundId, topN, true, targetRoundTeamIds);
     }
 
-    private List<AdvancementCandidateDto> collectAllEligibleTeams(Long fromRoundId) {
-        return collectEligibleCandidates(fromRoundId, Integer.MAX_VALUE, false);
+    private List<AdvancementCandidateDto> collectAllSourceRoundTeams(Long fromRoundId, Long toRoundId) {
+        List<Board> boards = ContestOrdering.sortBoards(boardRepository.findByRoundId(fromRoundId));
+        Map<Long, Board> boardById = boards.stream()
+                .collect(Collectors.toMap(Board::getId, Function.identity()));
+        Map<Long, RankingResult> publishedRankingByTeam = new LinkedHashMap<>();
+        for (Board board : boards) {
+            rankingResultRepository.findByBoardIdOrderByRankAsc(board.getId()).stream()
+                    .filter(r -> r.getPublishedAt() != null)
+                    .forEach(r -> publishedRankingByTeam.putIfAbsent(r.getTeamId(), r));
+        }
+        Set<Long> targetRoundTeamIds = boardSlotRepository.findByRoundId(toRoundId).stream()
+                .map(BoardSlot::getTeamId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        List<BoardSlot> sourceSlots = boardSlotRepository.findByRoundId(fromRoundId).stream()
+                .filter(slot -> slot.getTeamId() != null)
+                .sorted(Comparator
+                        .comparing(
+                                (BoardSlot slot) -> {
+                                    Board board = boardById.get(slot.getBoardId());
+                                    return board != null ? board.getBoardOrder() : Integer.MAX_VALUE;
+                                },
+                                Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(BoardSlot::getTeamNumber, Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(BoardSlot::getId, Comparator.nullsLast(Long::compareTo)))
+                .toList();
+        Map<Long, Team> teamsById = loadTeamsById(sourceSlots.stream().map(BoardSlot::getTeamId).toList());
+        Set<Long> seenTeams = new LinkedHashSet<>();
+        List<AdvancementCandidateDto> candidates = new ArrayList<>();
+        for (BoardSlot slot : sourceSlots) {
+            if (!seenTeams.add(slot.getTeamId())) {
+                continue;
+            }
+            Board board = boardById.get(slot.getBoardId());
+            RankingResult ranking = publishedRankingByTeam.get(slot.getTeamId());
+            Team team = teamsById.get(slot.getTeamId());
+            candidates.add(toCandidateDto(
+                    board,
+                    ranking,
+                    team,
+                    slot.getTeamId(),
+                    resolveEligibilityReason(board, ranking, team, targetRoundTeamIds)));
+        }
+        candidates.sort(Comparator
+                .comparing(AdvancementCandidateDto::getFromBoardName, Comparator.nullsLast(String::compareToIgnoreCase))
+                .thenComparing(
+                        AdvancementCandidateDto::getRank,
+                        Comparator.nullsLast(Integer::compareTo))
+                .thenComparing(AdvancementCandidateDto::getTeamName, Comparator.nullsLast(String::compareToIgnoreCase)));
+        return candidates;
     }
 
-    private List<AdvancementCandidateDto> collectEligibleCandidates(Long fromRoundId, int topNPerBoard, boolean sortByName) {
+    private List<AdvancementCandidateDto> collectEligibleCandidates(
+            Long fromRoundId, int topNPerBoard, boolean sortByName, Set<Long> excludedTeamIds) {
         List<Board> boards = ContestOrdering.sortBoards(boardRepository.findByRoundId(fromRoundId));
         Map<Long, List<RankingResult>> rankingsByBoard = new LinkedHashMap<>();
         Set<Long> teamIds = new LinkedHashSet<>();
@@ -214,13 +268,14 @@ public class AdvancementService {
             List<RankingResult> rankings = rankingsByBoard.getOrDefault(board.getId(), List.of()).stream()
                     .filter(r -> isConfirmedTeam(teamsById.get(r.getTeamId())))
                     .filter(r -> scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), r.getTeamId()))
+                    .filter(r -> !excludedTeamIds.contains(r.getTeamId()))
                     .limit(topNPerBoard)
                     .toList();
             for (RankingResult result : rankings) {
                 if (!seenTeams.add(result.getTeamId())) {
                     continue;
                 }
-                candidates.add(toCandidateDto(board, result, teamsById.get(result.getTeamId())));
+                candidates.add(toCandidateDto(board, result, teamsById.get(result.getTeamId()), result.getTeamId(), null));
             }
         }
         Comparator<AdvancementCandidateDto> comparator = Comparator
@@ -234,15 +289,39 @@ public class AdvancementService {
         return candidates;
     }
 
-    private AdvancementCandidateDto toCandidateDto(Board board, RankingResult result, Team team) {
+    private String resolveEligibilityReason(
+            Board board, RankingResult ranking, Team team, Set<Long> targetRoundTeamIds) {
+        if (team != null && targetRoundTeamIds.contains(team.getId())) {
+            return "\u0110\u1ed9i \u0111\u00e3 c\u00f3 m\u1eb7t trong v\u00f2ng \u0111\u00edch.";
+        }
+        if (!isConfirmedTeam(team)) {
+            return "Đội chưa ở trạng thái đã xác nhận.";
+        }
+        if (ranking == null) {
+            return "Đội chưa có xếp hạng đã công bố ở vòng nguồn.";
+        }
+        if (board == null || !scoringRepositoryGuardService.hasScorableRepositoryForBoard(board.getId(), team.getId())) {
+            return "Repository của đội chưa sẵn sàng để tính điểm vòng nguồn.";
+        }
+        if (targetRoundTeamIds.contains(team.getId())) {
+            return "Đội đã có mặt trong vòng đích.";
+        }
+        return null;
+    }
+
+    private AdvancementCandidateDto toCandidateDto(
+            Board board, RankingResult result, Team team, Long fallbackTeamId, String ineligibleReason) {
+        Long teamId = result != null ? result.getTeamId() : fallbackTeamId;
         return AdvancementCandidateDto.builder()
-                .teamId(result.getTeamId())
-                .teamName(team != null ? team.getName() : "Team #" + result.getTeamId())
+                .teamId(teamId)
+                .teamName(team != null ? team.getName() : "Team #" + teamId)
                 .teamStatus(team != null && team.getStatus() != null ? team.getStatus().name() : null)
-                .fromBoardId(board.getId())
-                .fromBoardName(board.getName())
-                .rank(result.getRank())
-                .averageScore(result.getAverageScore())
+                .fromBoardId(board != null ? board.getId() : null)
+                .fromBoardName(board != null ? board.getName() : null)
+                .rank(result != null ? result.getRank() : null)
+                .averageScore(result != null ? result.getAverageScore() : null)
+                .eligible(ineligibleReason == null)
+                .ineligibleReason(ineligibleReason)
                 .build();
     }
 
