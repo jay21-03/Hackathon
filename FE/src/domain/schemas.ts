@@ -656,8 +656,17 @@ export function roundFormSchemaForEvent(
 const optionalUrlField = z
   .string()
   .trim()
+  .max(2048, "URL toi da 2.048 ky tu.")
   .optional()
-  .refine((value) => !value || /^https?:\/\/.+/i.test(value), {
+  .refine((value) => {
+    if (!value) return true;
+    try {
+      const url = new URL(value);
+      return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname);
+    } catch {
+      return false;
+    }
+  }, {
     message: "URL phải bắt đầu bằng http:// hoặc https://."
   });
 
@@ -831,9 +840,16 @@ export const awardCategorySchema = z.object({
   rankOrder: z.number().int().positive().optional(),
   maxWinners: z.number().int().min(1, "Số giải tối đa phải ≥ 1.").default(1),
   prizeValue: z.string().trim().max(255, "Giá trị giải tối đa 255 ký tự.").optional(),
-  sortOrder: z.number().int().optional(),
+  sortOrder: z.number().int().min(0, "Thu tu sap xep phai >= 0.").optional(),
   roundId: z.number().int().positive().nullable().optional(),
   isActive: z.boolean().optional()
+}).superRefine((data, ctx) => {
+  if (data.awardType === "RANK" && data.rankOrder == null) {
+    ctx.addIssue({ code: "custom", path: ["rankOrder"], message: "RANK_AWARD_REQUIRES_RANK_ORDER" });
+  }
+  if (data.awardType === "CUSTOM" && data.rankOrder != null) {
+    ctx.addIssue({ code: "custom", path: ["rankOrder"], message: "CUSTOM_AWARD_MUST_NOT_HAVE_RANK_ORDER" });
+  }
 });
 
 export const assignTeamAwardSchema = z.object({
