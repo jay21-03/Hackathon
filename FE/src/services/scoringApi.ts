@@ -194,10 +194,13 @@ export interface EventScoreProgressResponse {
 
 export interface DemoScoringCompletionResponse {
   eventId: number;
+  roundsProcessed?: number;
   boardsProcessed: number;
+  submittedSheetsPreserved?: number;
   scoreSheetsCreated: number;
   scoreSheetsSubmitted: number;
   scoreItemsCopied: number;
+  scoreItemsCreated?: number;
   skippedTeamsWithoutSample: number;
 }
 

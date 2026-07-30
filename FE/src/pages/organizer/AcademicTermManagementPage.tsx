@@ -31,6 +31,8 @@ import { useTermHubProgress } from "../../hooks/useTermHubProgress";
 import { queryKeys } from "../../lib/queryKeys";
 
 import { fetchTermDashboard } from "../../services/academicTermService";
+import { seedHistoricalDemoData } from "../../services/demoSeedApi";
+import { enableDemoSeed } from "../../config/features";
 
 import {
 
@@ -204,6 +206,7 @@ export function AcademicTermManagementPage() {
   const [listStatusFilter, setListStatusFilter] = useState<ListStatusFilter>("ALL");
 
   const [saving, setSaving] = useState(false);
+  const [demoSeeding, setDemoSeeding] = useState(false);
 
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -513,6 +516,28 @@ export function AcademicTermManagementPage() {
 
   }
 
+  async function createHistoricalDemoData() {
+    setDemoSeeding(true);
+    try {
+      const result = await seedHistoricalDemoData();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.academicTerms.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.events.all })
+      ]);
+      if (insightsTermId != null) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.academicTerms.dashboard(insightsTermId) });
+      }
+      notify(
+        `Demo lịch sử: tạo ${result.termsCreated} kỳ, ${result.eventsCreated} cuộc thi, ${result.teamsCreated} đội, ${result.scoreSheetsCreated} phiếu chấm, ${result.rankingResultsCreated} dòng BXH, ${result.awardsCreated} hạng mục giải.`,
+        result.warnings?.length ? "warning" : "success"
+      );
+    } catch (error) {
+      notify(resolveApiError(error, "Không tạo được dữ liệu lịch sử demo."), "danger");
+    } finally {
+      setDemoSeeding(false);
+    }
+  }
+
 
 
   if (termsQuery.isLoading) {
@@ -565,7 +590,29 @@ export function AcademicTermManagementPage() {
 
         }
 
-        actions={headerAction}
+        actions={
+          <div className="flex flex-wrap gap-sm">
+            {enableDemoSeed ? (
+              <ConfirmAction
+                title="Tạo dữ liệu lịch sử demo?"
+                message="Hệ thống sẽ tạo FALL_2025, SPRING_2026, SUMMER_2026 và bốn cuộc thi lịch sử hoàn tất. Dữ liệu hiện có không bị xóa."
+                confirmLabel="Tạo dữ liệu lịch sử demo"
+                onConfirm={() => void createHistoricalDemoData()}
+              >
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={<Icon name="auto_fix_high" />}
+                  loading={demoSeeding}
+                  disabled={demoSeeding}
+                >
+                  Tạo dữ liệu lịch sử demo
+                </Button>
+              </ConfirmAction>
+            ) : null}
+            {headerAction}
+          </div>
+        }
 
       />
 

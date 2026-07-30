@@ -39,6 +39,9 @@ export const enableAcademicTerms = import.meta.env.VITE_ENABLE_ACADEMIC_TERMS !=
 /** Trao giải (hạng mục giải BTC) — tắt bằng VITE_ENABLE_AWARDS=false */
 export const enableAwards = import.meta.env.VITE_ENABLE_AWARDS !== "false";
 
+/** Demo seed data controls — disabled unless VITE_DEMO_SEED_ENABLED=true */
+export const enableDemoSeed = import.meta.env.VITE_DEMO_SEED_ENABLED === "true";
+
 /** Route BTC phase 7+ (không có trong sidebar khi enablePhase7 = false) */
 export const organizerRankingPaths = ["ranking", "publish-results", "export-success"] as const;
 
