@@ -586,6 +586,9 @@ public class AiReviewService {
         if (until.isBefore(since)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BACKFILL_INVALID_RANGE");
         }
+        if (java.time.Duration.between(since, until).compareTo(java.time.Duration.ofDays(90)) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "BACKFILL_RANGE_TOO_LARGE");
+        }
 
         TeamRepository repository = resolveReviewableRepository(teamId, eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "NO_REVIEWABLE_REPOSITORY"));
