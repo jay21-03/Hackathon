@@ -358,16 +358,20 @@ public class AuthProfileService {
             }
             user.setStatus(UserStatus.ACTIVE);
         } else {
+            String reason = normalizeTextRequired(request.getReason(), "reason is required when rejecting a user");
             if (user.getStatus() == UserStatus.DISABLED) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "USER_ALREADY_DISABLED");
             }
             user.setStatus(UserStatus.DISABLED);
+            request.setReason(reason);
         }
 
         user.setUpdatedAt(OffsetDateTime.now());
         userRepository.save(user);
         if (request.getAction() == UpdateUserApprovalRequest.ApprovalAction.APPROVE) {
             notificationService.notifyUserAccountApproved(user);
+        } else {
+            notificationService.notifyUserAccountRejected(user, request.getReason());
         }
         return toUserSummaryResponse(user);
     }

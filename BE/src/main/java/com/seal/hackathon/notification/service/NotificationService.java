@@ -627,6 +627,23 @@ public class NotificationService {
                 "user-approved:u" + user.getId());
     }
 
+    @Transactional
+    public void notifyUserAccountRejected(User user, String reason) {
+        if (user == null) {
+            return;
+        }
+        String normalizedReason = StringUtils.hasText(reason) ? reason.trim() : "No reason provided.";
+        create(
+                user.getId(),
+                user.getEmail(),
+                null,
+                NotificationType.GENERAL,
+                "Tai khoan chua duoc duyet",
+                "Ly do: " + normalizedReason,
+                "/profile",
+                "user-rejected:u" + user.getId());
+    }
+
     private String formatEventStatus(EventStatus status) {
         return switch (status) {
             case DRAFT -> "Bản nháp";

@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import lombok.Data;
@@ -13,6 +14,7 @@ import lombok.Data;
 @Data
 public class StaffCarryoverRequest {
 
+    @Positive(message = "sourceTermId must be positive")
     private Long sourceTermId;
 
     @NotNull
