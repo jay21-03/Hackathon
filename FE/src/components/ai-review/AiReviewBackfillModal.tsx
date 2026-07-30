@@ -36,6 +36,19 @@ export function AiReviewBackfillModal({
   const [until, setUntil] = useState(defaultUntil);
   const [runReview, setRunReview] = useState(true);
 
+  const sinceDate = since ? new Date(since) : null;
+  const untilDate = until ? new Date(until) : null;
+  const sinceError = since ? null : "since is required";
+  const untilError =
+    sinceDate && untilDate && untilDate.getTime() < sinceDate.getTime()
+      ? "until must be greater than or equal to since"
+      : null;
+  const rangeError =
+    sinceDate && untilDate && untilDate.getTime() - sinceDate.getTime() > 90 * 24 * 60 * 60 * 1000
+      ? "backfill range must not exceed 90 days"
+      : null;
+  const formInvalid = Boolean(sinceError || untilError || rangeError);
+
   if (!open) return null;
 
   return (
@@ -55,9 +68,12 @@ export function AiReviewBackfillModal({
           className="mt-md space-y-md"
           onSubmit={(e) => {
             e.preventDefault();
+            if (formInvalid || !sinceDate || !untilDate) {
+              return;
+            }
             onSubmit({
-              since: new Date(since).toISOString(),
-              until: new Date(until).toISOString(),
+              since: sinceDate.toISOString(),
+              until: untilDate.toISOString(),
               runReview
             });
           }}
@@ -71,6 +87,7 @@ export function AiReviewBackfillModal({
               onChange={(e) => setSince(e.target.value)}
               required
             />
+            {sinceError ? <span className="font-body-xs text-error">{sinceError}</span> : null}
           </label>
           <label className="flex flex-col gap-1 font-label-sm text-on-surface-variant">
             Đến
@@ -81,6 +98,8 @@ export function AiReviewBackfillModal({
               onChange={(e) => setUntil(e.target.value)}
               required
             />
+            {untilError ? <span className="font-body-xs text-error">{untilError}</span> : null}
+            {rangeError ? <span className="font-body-xs text-error">{rangeError}</span> : null}
           </label>
           <label className="flex items-center gap-sm font-body-sm text-on-surface">
             <input
@@ -94,7 +113,7 @@ export function AiReviewBackfillModal({
             <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={loading}>
               Hủy
             </Button>
-            <Button type="submit" size="sm" loading={loading}>
+            <Button type="submit" size="sm" loading={loading} disabled={formInvalid || loading}>
               Backfill
             </Button>
           </div>
