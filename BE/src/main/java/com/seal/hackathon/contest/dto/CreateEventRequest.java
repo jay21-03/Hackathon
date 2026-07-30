@@ -8,6 +8,7 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -49,6 +50,7 @@ public class CreateEventRequest {
     private Integer maxTeams;
 
     @NotNull(message = "academicTermId must not be null")
+    @Positive(message = "academicTermId must be positive")
     private Long academicTermId;
 
     @JsonIgnore
@@ -94,5 +96,11 @@ public class CreateEventRequest {
     @JsonIgnore
     public boolean hasNoForbiddenTeamSizeFields() {
         return !hasForbiddenTeamSizeFields();
+    }
+
+    @AssertTrue(message = "UNKNOWN_JSON_FIELD")
+    @JsonIgnore
+    public boolean hasNoUnknownFields() {
+        return extraFields.isEmpty();
     }
 }

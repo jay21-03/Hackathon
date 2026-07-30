@@ -24,6 +24,7 @@ import com.seal.hackathon.common.enums.SystemRole;
 import com.seal.hackathon.common.security.OrganizerAuthorizationService;
 import com.seal.hackathon.common.util.PaginatedLists;
 import com.seal.hackathon.contest.dto.EventListItemResponse;
+import com.seal.hackathon.contest.entity.Event;
 import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
@@ -36,6 +37,7 @@ import com.seal.hackathon.aireview.repository.TeamRepositoryEntityRepository;
 import com.seal.hackathon.ranking.entity.RankingResult;
 import com.seal.hackathon.scoring.repository.ScoreSheetRepository;
 import com.seal.hackathon.ranking.repository.RankingResultRepository;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -114,6 +116,7 @@ public class AcademicTermService {
     public AcademicTermResponse updateTerm(Long termId, UpdateAcademicTermRequest request) {
         organizerAuthorizationService.requireOrganizer();
         AcademicTerm term = getTermEntity(termId);
+        boolean timelineChanged = request.getStartDate() != null || request.getEndDate() != null;
 
         if (request.getName() != null) {
             term.setName(normalizeRequired(request.getName(), "name must not be blank"));
@@ -130,6 +133,9 @@ public class AcademicTermService {
         }
 
         validateDateRange(term.getStartDate(), term.getEndDate());
+        if (timelineChanged) {
+            validateTermContainsExistingEvents(term);
+        }
         term.setUpdatedAt(OffsetDateTime.now());
         return toResponse(academicTermRepository.save(term));
     }
@@ -358,6 +364,27 @@ public class AcademicTermService {
         if (!startDate.isBefore(endDate)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate must be before endDate");
         }
+    }
+
+    private void validateTermContainsExistingEvents(AcademicTerm term) {
+        if (term.getStartDate() == null || term.getEndDate() == null) {
+            return;
+        }
+        for (Event event : eventRepository.findByAcademicTermId(
+                term.getId(), Sort.by(Sort.Order.asc("startDate"), Sort.Order.asc("id")))) {
+            if (!isEventWithinTerm(event, term.getStartDate(), term.getEndDate())) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "TERM_TIMELINE_CONFLICT_WITH_EXISTING_EVENTS");
+            }
+        }
+    }
+
+    private boolean isEventWithinTerm(Event event, LocalDate termStartDate, LocalDate termEndDate) {
+        if (event.getStartDate() == null || event.getEndDate() == null) {
+            return true;
+        }
+        return !termStartDate.isAfter(event.getStartDate()) && !event.getEndDate().isAfter(termEndDate);
     }
 
     private AcademicTerm getTermEntity(Long termId) {

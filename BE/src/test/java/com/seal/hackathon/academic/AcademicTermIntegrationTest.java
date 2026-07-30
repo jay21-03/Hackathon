@@ -300,6 +300,60 @@ class AcademicTermIntegrationTest {
     }
 
     @Test
+    void updateTerm_rejectsWhenExistingEventFallsOutsideNewTimeline() throws Exception {
+        eventRepository.save(Event.builder()
+                .name("Spring Event")
+                .startDate(LocalDate.of(2026, 3, 1))
+                .endDate(LocalDate.of(2026, 3, 2))
+                .registrationStartAt(OffsetDateTime.parse("2026-02-20T08:00:00+07:00"))
+                .registrationEndAt(OffsetDateTime.parse("2026-02-28T23:59:00+07:00"))
+                .maxTeams(10)
+                .minTeamSize(1)
+                .maxTeamSize(5)
+                .status(EventStatus.DRAFT)
+                .academicTermId(springTerm.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/admin/academic-terms/" + springTerm.getId())
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("endDate", "2026-03-01"))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message")
+                        .value("TERM_TIMELINE_CONFLICT_WITH_EXISTING_EVENTS"));
+    }
+
+    @Test
+    void updateTerm_allowsBoundaryContainingExistingEvent() throws Exception {
+        eventRepository.save(Event.builder()
+                .name("Boundary Spring Event")
+                .startDate(LocalDate.of(2026, 3, 1))
+                .endDate(LocalDate.of(2026, 3, 2))
+                .registrationStartAt(OffsetDateTime.parse("2026-02-20T08:00:00+07:00"))
+                .registrationEndAt(OffsetDateTime.parse("2026-02-28T23:59:00+07:00"))
+                .maxTeams(10)
+                .minTeamSize(1)
+                .maxTeamSize(5)
+                .status(EventStatus.DRAFT)
+                .academicTermId(springTerm.getId())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/admin/academic-terms/" + springTerm.getId())
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "startDate", "2026-03-01",
+                                "endDate", "2026-03-02"))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.startDate").value("2026-03-01"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.endDate").value("2026-03-02"));
+    }
+
+    @Test
     void termScopedLists_supportPagination() throws Exception {
         Event event = eventRepository.save(Event.builder()
                 .name("Spring Event")
