@@ -176,6 +176,9 @@ public class ContestManagementService {
         }
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        assertEventConfigurationFieldsMutable(event, request);
+        boolean eventTimelineChanged = request.getStartDate() != null || request.getEndDate() != null;
+        boolean maxTeamsChanged = request.getMaxTeams() != null;
 
         if (request.getName() != null) {
             event.setName(normalizeRequired(request.getName(), "name must not be blank"));
@@ -221,6 +224,12 @@ public class ContestManagementService {
                 event.getEndDate(),
                 academicTerm.getStartDate(),
                 academicTerm.getEndDate());
+        if (eventTimelineChanged) {
+            validateEventContainsExistingRounds(event);
+        }
+        if (maxTeamsChanged) {
+            validateMaxTeamsNotBelowConfirmed(event.getId(), event.getMaxTeams());
+        }
         event.setMinTeamSize(FIXED_MIN_TEAM_SIZE);
         event.setMaxTeamSize(FIXED_MAX_TEAM_SIZE);
         event.setUpdatedAt(OffsetDateTime.now());
@@ -291,6 +300,7 @@ public class ContestManagementService {
         }
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        assertEventAcceptsStructureChange(event);
         validateRoundTimeline(request.getStartAt(), request.getEndAt());
         validateRoundWithinEvent(
                 request.getStartAt(), request.getEndAt(), event.getStartDate(), event.getEndDate());
@@ -319,6 +329,8 @@ public class ContestManagementService {
     public RoundResponse updateRound(Long roundId, UpdateRoundRequest request) {
         organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
         Round round = getRoundEntity(roundId);
+        assertRoundStructureMutable(round);
+        boolean roundTimelineChanged = request.getStartAt() != null || request.getEndAt() != null;
 
         if (request.getName() != null) {
             round.setName(normalizeRequired(request.getName(), "name must not be blank"));
@@ -346,6 +358,9 @@ public class ContestManagementService {
         validateRoundWithinEvent(
                 round.getStartAt(), round.getEndAt(), event.getStartDate(), event.getEndDate());
         validateRoundNoOverlap(round.getEventId(), roundId, round.getStartAt(), round.getEndAt());
+        if (roundTimelineChanged) {
+            validateRoundContainsExistingProblems(round);
+        }
         round.setUpdatedAt(OffsetDateTime.now());
         return toRoundResponse(roundRepository.save(round));
     }
@@ -393,6 +408,8 @@ public class ContestManagementService {
     @Transactional
     public BoardResponse createBoard(Long roundId, CreateBoardRequest request) {
         organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
+        Round round = getRoundEntity(roundId);
+        assertRoundStructureMutable(round);
 
         String normalizedBoardName = normalizeRequired(request.getName(), "name must not be blank");
         if (boardRepository.existsByRoundIdAndBoardOrder(roundId, request.getBoardOrder())) {
@@ -420,6 +437,7 @@ public class ContestManagementService {
     public BoardResponse updateBoard(Long boardId, UpdateBoardRequest request) {
         organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
         Board board = getBoardEntity(boardId);
+        assertRoundStructureMutable(getRoundEntity(board.getRoundId()));
 
         String mergedName = request.getName() == null
                 ? board.getName()
@@ -472,6 +490,7 @@ public class ContestManagementService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
         Round round = roundRepository.findById(board.getRoundId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Round not found"));
+        assertRoundStructureMutable(round);
 
         if (boardSlotRepository.existsByBoardIdAndTeamNumber(boardId, request.getTeamNumber())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "teamNumber already exists in this board");
@@ -493,6 +512,7 @@ public class ContestManagementService {
     public AssignResponse assignTeamToSlot(Long roundId, Long slotId, AssignRequest request) {
         organizerAuthorizationService.requireRoundOwnedByCurrentOrganizer(roundId);
         BoardSlot slot = getBoardSlotEntity(slotId);
+        assertRoundStructureMutable(getRoundEntity(slot.getRoundId()));
         assertBoardStructureMutable(slot.getBoardId());
         if (!slot.getRoundId().equals(roundId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slot does not belong to round");
@@ -1067,6 +1087,7 @@ public class ContestManagementService {
         organizerAuthorizationService.requireBoardOwnedByCurrentOrganizer(boardId);
         Board board = getBoardEntity(boardId);
         Round round = getRoundEntity(board.getRoundId());
+        assertRoundStructureMutable(round);
 
         validateProblemWindow(request.getReleaseAt(), request.getCloseAt());
         validateProblemWithinRound(
@@ -1100,6 +1121,8 @@ public class ContestManagementService {
         }
         Problem problem = getProblemEntity(problemId);
         assertProblemMutable(problem);
+        Board boardForLock = getBoardEntity(problem.getBoardId());
+        assertRoundStructureMutable(getRoundEntity(boardForLock.getRoundId()));
         boolean wasReleased = isProblemReleasedNow(problem);
 
         if (request.getTitle() != null) {
@@ -1153,6 +1176,8 @@ public class ContestManagementService {
         organizerAuthorizationService.requireProblemOwnedByCurrentOrganizer(problemId);
         Problem problem = getProblemEntity(problemId);
         assertProblemMutable(problem);
+        Board board = getBoardEntity(problem.getBoardId());
+        assertRoundStructureMutable(getRoundEntity(board.getRoundId()));
         String attachmentUrl = problem.getAttachmentUrl();
         problemRepository.delete(problem);
         fileStorageService.deleteByPublicUrl(attachmentUrl);
@@ -1162,6 +1187,7 @@ public class ContestManagementService {
     public void deleteBoardSlot(Long slotId) {
         organizerAuthorizationService.requireSlotOwnedByCurrentOrganizer(slotId);
         BoardSlot slot = getBoardSlotEntity(slotId);
+        assertRoundStructureMutable(getRoundEntity(slot.getRoundId()));
         if (slot.getTeamId() != null) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "SLOT_HAS_TEAM — unassign team before deleting slot");
@@ -1389,6 +1415,96 @@ public class ContestManagementService {
     private void assertRoundAllowsAssignment(Round round) {
         if (round.getStatus() == RoundStatus.SCORING || round.getStatus() == RoundStatus.COMPLETED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ROUND_NOT_PLANNED");
+        }
+    }
+
+    private void assertEventAcceptsStructureChange(Event event) {
+        if (event == null) {
+            return;
+        }
+        if (EnumSet.of(EventStatus.IN_PROGRESS, EventStatus.COMPLETED, EventStatus.CANCELLED)
+                .contains(event.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "EVENT_CONFIGURATION_LOCKED");
+        }
+    }
+
+    private void assertEventConfigurationFieldsMutable(Event event, UpdateEventRequest request) {
+        if (event == null || request == null) {
+            return;
+        }
+        if (!EnumSet.of(EventStatus.IN_PROGRESS, EventStatus.COMPLETED, EventStatus.CANCELLED)
+                .contains(event.getStatus())) {
+            return;
+        }
+        boolean changesConfiguration = request.getStartDate() != null
+                || request.getEndDate() != null
+                || request.getRegistrationStartAt() != null
+                || request.getRegistrationEndAt() != null
+                || request.getMaxTeams() != null
+                || request.getAcademicTermId() != null;
+        if (changesConfiguration) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "EVENT_CONFIGURATION_LOCKED");
+        }
+    }
+
+    private void validateMaxTeamsNotBelowConfirmed(Long eventId, Integer maxTeams) {
+        if (eventId == null || maxTeams == null) {
+            return;
+        }
+        long confirmedCount = teamRepository.countByEventIdAndStatus(eventId, TeamStatus.CONFIRMED);
+        if (maxTeams < confirmedCount) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "MAX_TEAMS_BELOW_CONFIRMED_COUNT");
+        }
+    }
+
+    private void validateEventContainsExistingRounds(Event event) {
+        if (event == null || event.getStartDate() == null || event.getEndDate() == null) {
+            return;
+        }
+        for (Round round : roundRepository.findByEventId(event.getId())) {
+            if (round.getStartAt() == null || round.getEndAt() == null) {
+                continue;
+            }
+            boolean contained = ContestTimelineValidation.isRoundStartWithinEvent(round.getStartAt(), event.getStartDate())
+                    && ContestTimelineValidation.isRoundEndWithinEvent(round.getEndAt(), event.getEndDate());
+            if (!contained) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "EVENT_TIMELINE_CONFLICT_WITH_EXISTING_ROUNDS");
+            }
+        }
+    }
+
+    private void assertRoundStructureMutable(Round round) {
+        if (round == null) {
+            return;
+        }
+        if (!EnumSet.of(RoundStatus.DRAFT, RoundStatus.UPCOMING).contains(round.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "ROUND_STRUCTURE_LOCKED");
+        }
+    }
+
+    private void validateRoundContainsExistingProblems(Round round) {
+        if (round == null || round.getStartAt() == null || round.getEndAt() == null) {
+            return;
+        }
+        List<Long> boardIds = boardRepository.findByRoundId(round.getId()).stream()
+                .map(Board::getId)
+                .toList();
+        if (boardIds.isEmpty()) {
+            return;
+        }
+        for (Problem problem : problemRepository.findByBoardIdIn(boardIds)) {
+            if (problem.getReleaseAt() == null || problem.getCloseAt() == null) {
+                continue;
+            }
+            boolean contained = !problem.getReleaseAt().isBefore(round.getStartAt())
+                    && !problem.getCloseAt().isAfter(round.getEndAt());
+            if (!contained) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "ROUND_TIMELINE_CONFLICT_WITH_EXISTING_PROBLEMS");
+            }
         }
     }
 

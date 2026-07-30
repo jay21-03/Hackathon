@@ -1,6 +1,7 @@
 package com.seal.hackathon.contest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seal.hackathon.academic.entity.AcademicTerm;
 import com.seal.hackathon.academic.repository.AcademicTermRepository;
 import com.seal.hackathon.authprofile.entity.User;
 import com.seal.hackathon.authprofile.entity.UserRole;
@@ -12,13 +13,18 @@ import com.seal.hackathon.common.enums.EventStatus;
 import com.seal.hackathon.common.enums.RoundStatus;
 import com.seal.hackathon.common.enums.RoundType;
 import com.seal.hackathon.common.enums.SystemRole;
+import com.seal.hackathon.common.enums.TeamStatus;
 import com.seal.hackathon.common.enums.UserStatus;
 import com.seal.hackathon.contest.entity.Board;
 import com.seal.hackathon.contest.entity.Event;
+import com.seal.hackathon.contest.entity.Problem;
 import com.seal.hackathon.contest.entity.Round;
 import com.seal.hackathon.contest.repository.BoardRepository;
 import com.seal.hackathon.contest.repository.EventRepository;
+import com.seal.hackathon.contest.repository.ProblemRepository;
 import com.seal.hackathon.contest.repository.RoundRepository;
+import com.seal.hackathon.registration.entity.Team;
+import com.seal.hackathon.registration.repository.TeamRepository;
 import com.seal.hackathon.support.IntegrationTestConfig;
 import com.seal.hackathon.support.IntegrationTestFixtures;
 import java.time.LocalDate;
@@ -82,7 +88,13 @@ class ContestTimelineValidationIntegrationTest {
     BoardRepository boardRepository;
 
     @Autowired
+    ProblemRepository problemRepository;
+
+    @Autowired
     AcademicTermRepository academicTermRepository;
+
+    @Autowired
+    TeamRepository teamRepository;
 
     String organizerJwt;
     Event event;
@@ -91,8 +103,10 @@ class ContestTimelineValidationIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        problemRepository.deleteAll();
         boardRepository.deleteAll();
         roundRepository.deleteAll();
+        teamRepository.deleteAll();
         eventRepository.deleteAll();
         userRoleRepository.deleteAll();
         userRepository.deleteAll();
@@ -111,6 +125,11 @@ class ContestTimelineValidationIntegrationTest {
                 .build());
         organizerJwt = jwtService.generateToken(organizer, Set.of("ORGANIZER"));
 
+        Long termId = IntegrationTestFixtures.defaultAcademicTermId(academicTermRepository);
+        AcademicTerm term = academicTermRepository.findById(termId).orElseThrow();
+        term.setEndDate(LocalDate.of(2026, 6, 11));
+        academicTermRepository.save(term);
+
         event = eventRepository.save(Event.builder()
                 .name("Timeline Event")
                 .startDate(LocalDate.of(2026, 6, 10))
@@ -121,7 +140,7 @@ class ContestTimelineValidationIntegrationTest {
                 .minTeamSize(1)
                 .maxTeamSize(5)
                 .status(EventStatus.DRAFT)
-                .academicTermId(IntegrationTestFixtures.defaultAcademicTermId(academicTermRepository))
+                .academicTermId(termId)
                 .createdBy(organizer.getId())
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
@@ -241,5 +260,113 @@ class ContestTimelineValidationIntegrationTest {
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.message")
                         .value("releaseAt must be on or after round startAt"));
+    }
+
+    @Test
+    void updateEvent_rejectsWhenExistingRoundFallsOutsideNewTimeline() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/admin/events/" + event.getId())
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("endDate", "2026-06-10"))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message")
+                        .value("EVENT_TIMELINE_CONFLICT_WITH_EXISTING_ROUNDS"));
+    }
+
+    @Test
+    void updateEvent_allowsBoundaryContainingExistingRound() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/admin/events/" + event.getId())
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("endDate", "2026-06-11"))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.endDate").value("2026-06-11"));
+    }
+
+    @Test
+    void updateRound_rejectsWhenExistingProblemFallsOutsideNewTimeline() throws Exception {
+        problemRepository.save(Problem.builder()
+                .boardId(board.getId())
+                .title("Problem")
+                .releaseAt(OffsetDateTime.parse("2026-06-10T09:00:00+07:00"))
+                .closeAt(OffsetDateTime.parse("2026-06-10T17:00:00+07:00"))
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/admin/rounds/" + round.getId())
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "endAt", "2026-06-10T16:00:00+07:00"))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message")
+                        .value("ROUND_TIMELINE_CONFLICT_WITH_EXISTING_PROBLEMS"));
+    }
+
+    @Test
+    void createBoard_rejectsWhenRoundStructureLocked() throws Exception {
+        round.setStatus(RoundStatus.COMPLETED);
+        roundRepository.save(round);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/rounds/" + round.getId() + "/boards")
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "name", "Board B",
+                                "boardOrder", 2))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("ROUND_STRUCTURE_LOCKED"));
+    }
+
+    @Test
+    void createProblem_rejectsWhenRoundStructureLocked() throws Exception {
+        round.setStatus(RoundStatus.SCORING);
+        roundRepository.save(round);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/boards/" + board.getId() + "/problems")
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "title", "Locked problem",
+                                "releaseAt", "2026-06-10T09:00:00+07:00",
+                                "closeAt", "2026-06-10T17:00:00+07:00"))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("ROUND_STRUCTURE_LOCKED"));
+    }
+
+    @Test
+    void updateEvent_rejectsMaxTeamsBelowConfirmedCount() throws Exception {
+        teamRepository.save(Team.builder()
+                .eventId(event.getId())
+                .name("Confirmed A")
+                .contactEmail("confirmed-a@example.com")
+                .status(TeamStatus.CONFIRMED)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+        teamRepository.save(Team.builder()
+                .eventId(event.getId())
+                .name("Confirmed B")
+                .contactEmail("confirmed-b@example.com")
+                .status(TeamStatus.CONFIRMED)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/admin/events/" + event.getId())
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("maxTeams", 1))))
+                .andExpect(MockMvcResultMatchers.status().isConflict())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message")
+                        .value("MAX_TEAMS_BELOW_CONFIRMED_COUNT"));
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/admin/events/" + event.getId())
+                        .header("Authorization", "Bearer " + organizerJwt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("maxTeams", 2))))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.maxTeams").value(2));
     }
 }
