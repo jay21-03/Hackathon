@@ -191,12 +191,8 @@ public class ScoringService {
         List<Long> skipped = new ArrayList<>();
         List<MatrixTeamRowResponse> rows = new ArrayList<>();
 
-        if (request.getRows() == null) {
-            return SaveMatrixResponse.builder()
-                    .savedTeamIds(saved)
-                    .skippedSubmittedTeamIds(skipped)
-                    .rows(rows)
-                    .build();
+        if (request == null || request.getRows() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "rows must not be null");
         }
 
         for (MatrixRowInput row : request.getRows()) {
