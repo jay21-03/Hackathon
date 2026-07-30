@@ -42,6 +42,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -77,7 +78,7 @@ public class AwardService {
         AwardCategory category = AwardCategory.builder()
                 .eventId(eventId)
                 .roundId(request.getRoundId())
-                .name(request.getName().trim())
+                .name(normalizeRequired(request.getName(), "name must not be blank"))
                 .code(code)
                 .description(request.getDescription())
                 .awardType(request.getAwardType())
@@ -89,6 +90,7 @@ public class AwardService {
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
+        validateAwardCategoryConfiguration(category, null);
         category = awardCategoryRepository.save(category);
         return buildCategoryResponse(category, List.of(), true);
     }
@@ -106,7 +108,7 @@ public class AwardService {
             category.setRoundId(request.getRoundId());
         }
         if (request.getName() != null) {
-            category.setName(request.getName().trim());
+            category.setName(normalizeRequired(request.getName(), "name must not be blank"));
         }
         if (request.getCode() != null) {
             String code = normalizeCode(request.getCode());
@@ -120,6 +122,9 @@ public class AwardService {
         }
         if (request.getAwardType() != null) {
             category.setAwardType(request.getAwardType());
+            if (request.getAwardType() == AwardType.CUSTOM) {
+                category.setRankOrder(null);
+            }
         }
         if (request.getRankOrder() != null) {
             category.setRankOrder(request.getRankOrder());
@@ -140,6 +145,7 @@ public class AwardService {
         if (request.getIsActive() != null) {
             category.setIsActive(request.getIsActive());
         }
+        validateAwardCategoryConfiguration(category, categoryId);
         category.setUpdatedAt(OffsetDateTime.now());
         category = awardCategoryRepository.save(category);
         List<TeamAward> winners = sortWinners(teamAwardRepository.findByAwardCategoryIdOrderByAwardedAtAscIdAsc(categoryId));
@@ -594,6 +600,32 @@ public class AwardService {
         }
     }
 
+    private void validateAwardCategoryConfiguration(AwardCategory category, Long excludeCategoryId) {
+        if (category.getAwardType() == AwardType.RANK && category.getRankOrder() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "RANK_AWARD_REQUIRES_RANK_ORDER");
+        }
+        if (category.getAwardType() == AwardType.CUSTOM && category.getRankOrder() != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CUSTOM_AWARD_MUST_NOT_HAVE_RANK_ORDER");
+        }
+        if (category.getRankOrder() != null && category.getRankOrder() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "rankOrder must be positive");
+        }
+        if (category.getSortOrder() != null && category.getSortOrder() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sortOrder must be zero or positive");
+        }
+        if (category.getAwardType() == AwardType.RANK && category.getRankOrder() != null) {
+            boolean duplicateRank = awardCategoryRepository
+                    .findByEventIdOrderBySortOrderAscIdAsc(category.getEventId()).stream()
+                    .filter(existing -> excludeCategoryId == null || !excludeCategoryId.equals(existing.getId()))
+                    .filter(existing -> existing.getAwardType() == AwardType.RANK)
+                    .anyMatch(existing -> Objects.equals(existing.getRoundId(), category.getRoundId())
+                            && Objects.equals(existing.getRankOrder(), category.getRankOrder()));
+            if (duplicateRank) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "AWARD_RANK_ORDER_DUPLICATE");
+            }
+        }
+    }
+
     private int nextSortOrder(Long eventId) {
         return awardCategoryRepository.findByEventIdOrderBySortOrderAscIdAsc(eventId).stream()
                 .map(AwardCategory::getSortOrder)
@@ -604,6 +636,13 @@ public class AwardService {
 
     private String normalizeCode(String code) {
         return code.trim().toUpperCase().replaceAll("\\s+", "_");
+    }
+
+    private String normalizeRequired(String value, String message) {
+        if (!StringUtils.hasText(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        }
+        return value.trim();
     }
 
     private List<TeamAward> sortWinners(List<TeamAward> winners) {

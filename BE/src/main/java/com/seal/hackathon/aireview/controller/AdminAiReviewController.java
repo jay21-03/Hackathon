@@ -17,6 +17,7 @@ import com.seal.hackathon.aireview.service.AiReviewBulkJobService;
 import com.seal.hackathon.aireview.service.AiReviewService;
 
 import com.seal.hackathon.common.response.ApiResponse;
+import jakarta.validation.Valid;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
@@ -106,13 +107,13 @@ public class AdminAiReviewController {
 
     @PostMapping("/teams/{teamId}/ai-reviews/backfill")
     public ApiResponse<BackfillCommitsResponse> backfillCommits(
-            @PathVariable Long teamId, @RequestBody BackfillCommitsRequest request) {
+            @PathVariable Long teamId, @Valid @RequestBody BackfillCommitsRequest request) {
         return ApiResponse.ok(aiReviewService.backfillCommits(teamId, request));
     }
 
     @PostMapping("/events/{eventId}/teams/{teamId}/ai-reviews/backfill")
     public ApiResponse<BackfillCommitsResponse> backfillCommits(
-            @PathVariable Long eventId, @PathVariable Long teamId, @RequestBody BackfillCommitsRequest request) {
+            @PathVariable Long eventId, @PathVariable Long teamId, @Valid @RequestBody BackfillCommitsRequest request) {
         return ApiResponse.ok(aiReviewService.backfillCommits(eventId, teamId, request));
     }
 

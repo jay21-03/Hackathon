@@ -86,4 +86,10 @@ public class UpdateEventRequest {
     public boolean hasNoForbiddenTeamSizeFields() {
         return !hasForbiddenTeamSizeFields();
     }
+
+    @AssertTrue(message = "UNKNOWN_JSON_FIELD")
+    @JsonIgnore
+    public boolean hasNoUnknownFields() {
+        return extraFields.isEmpty();
+    }
 }
