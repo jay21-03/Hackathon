@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.seal.hackathon.common.util.ContestTimelineValidation;
+import com.seal.hackathon.common.util.HttpUrlValidation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Size;
@@ -14,7 +15,6 @@ import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
-import org.springframework.util.StringUtils;
 
 @Data
 public class UpdateProblemRequest {
@@ -23,8 +23,10 @@ public class UpdateProblemRequest {
 
     @Size(max = 10000, message = "description must not exceed 10000 characters")
     private String description;
+    @Size(max = 2048, message = "externalLink must not exceed 2048 characters")
     private String externalLink;
 
+    @Size(max = 2048, message = "attachmentUrl must not exceed 2048 characters")
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
     private String attachmentUrl;
@@ -70,13 +72,16 @@ public class UpdateProblemRequest {
         return ContestTimelineValidation.isProblemWindowValid(releaseAt, closeAt);
     }
 
-    @AssertTrue(message = "externalLink must start with http:// or https://")
+    @AssertTrue(message = "attachmentUrl must be an http(s) URL or managed uploaded file URL")
+    @JsonIgnore
+    public boolean isAttachmentUrlValid() {
+        return HttpUrlValidation.isOptionalProblemAttachmentUrl(attachmentUrl);
+    }
+
+    @AssertTrue(message = "externalLink must be a valid http(s) URL")
     @JsonIgnore
     public boolean isExternalLinkValid() {
-        if (!StringUtils.hasText(externalLink)) {
-            return true;
-        }
-        return externalLink.trim().matches("^https?://.+");
+        return HttpUrlValidation.isOptionalHttpUrl(externalLink);
     }
 
     @AssertTrue(message = "boardId and createdBy cannot be updated")

@@ -1,10 +1,14 @@
 package com.seal.hackathon.scoring.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.Data;
 
 @Data
@@ -18,4 +22,22 @@ public class MatrixRowInput {
 
     @Valid
     private List<ScoreItemInput> scores;
+
+    @AssertTrue(message = "DUPLICATE_CRITERIA_SCORE")
+    @JsonIgnore
+    public boolean hasUniqueCriteriaScores() {
+        if (scores == null) {
+            return true;
+        }
+        Set<Long> seen = new HashSet<>();
+        for (ScoreItemInput score : scores) {
+            if (score == null || score.getCriteriaId() == null) {
+                continue;
+            }
+            if (!seen.add(score.getCriteriaId())) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

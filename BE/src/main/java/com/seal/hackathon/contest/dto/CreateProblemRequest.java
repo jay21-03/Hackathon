@@ -2,6 +2,7 @@ package com.seal.hackathon.contest.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.seal.hackathon.common.util.ContestTimelineValidation;
+import com.seal.hackathon.common.util.HttpUrlValidation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
@@ -9,7 +10,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
 import lombok.Data;
-import org.springframework.util.StringUtils;
 
 @Data
 public class CreateProblemRequest {
@@ -22,6 +22,7 @@ public class CreateProblemRequest {
     private String description;
     @Size(max = 2048, message = "attachmentUrl must not exceed 2048 characters")
     private String attachmentUrl;
+    @Size(max = 2048, message = "externalLink must not exceed 2048 characters")
     private String externalLink;
 
     @NotNull(message = "releaseAt must not be null")
@@ -38,12 +39,15 @@ public class CreateProblemRequest {
         return ContestTimelineValidation.isProblemWindowValid(releaseAt, closeAt);
     }
 
-    @AssertTrue(message = "externalLink must start with http:// or https://")
+    @AssertTrue(message = "attachmentUrl must be an http(s) URL or managed uploaded file URL")
+    @JsonIgnore
+    public boolean isAttachmentUrlValid() {
+        return HttpUrlValidation.isOptionalProblemAttachmentUrl(attachmentUrl);
+    }
+
+    @AssertTrue(message = "externalLink must be a valid http(s) URL")
     @JsonIgnore
     public boolean isExternalLinkValid() {
-        if (!StringUtils.hasText(externalLink)) {
-            return true;
-        }
-        return externalLink.trim().matches("^https?://.+");
+        return HttpUrlValidation.isOptionalHttpUrl(externalLink);
     }
 }
