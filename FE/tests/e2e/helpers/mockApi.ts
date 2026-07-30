@@ -4,7 +4,7 @@ const sampleEvent = {
   id: 1,
   name: "SEAL Hackathon 2026",
   startDate: "2026-06-01",
-  endDate: "2026-06-02",
+  endDate: "2026-12-31",
   registrationStartAt: "2026-05-01T08:00:00+07:00",
   registrationEndAt: "2026-12-31T23:59:00+07:00",
   minTeamSize: 1,
@@ -34,7 +34,7 @@ export const sampleProblem = {
   attachmentUrl: "/api/v1/files/problems/1/mock-de.pdf",
   externalLink: "https://drive.google.com/file/d/mock/view",
   releaseAt: "2026-06-01T08:00:00+07:00",
-  closeAt: "2026-12-31T23:59:00+07:00"
+  closeAt: "2026-06-01T18:00:00+07:00"
 };
 
 export const sampleTeam = {
@@ -72,7 +72,7 @@ const sampleAcademicTerms = [
     year: 2026,
     termType: "SPRING",
     startDate: "2026-01-01",
-    endDate: "2026-05-31",
+    endDate: "2026-12-31",
     status: "ACTIVE",
     eventCount: 1
   }
