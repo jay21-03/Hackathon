@@ -159,7 +159,7 @@ test("event list filters when academic term changes", async ({ page }) => {
 
           ? [{ id: 2, name: "Fall Hackathon", status: "DRAFT", startDate: "2026-10-10", endDate: "2026-10-12", registrationStartAt: "2026-09-01T08:00:00+07:00", registrationEndAt: "2026-10-01T23:59:00+07:00", academicTermId: 2 }]
 
-          : [{ id: 1, name: "SEAL Hackathon 2026", status: "REGISTRATION_OPEN", startDate: "2026-06-01", endDate: "2026-06-02", registrationStartAt: "2026-05-01T08:00:00+07:00", registrationEndAt: "2026-12-31T23:59:00+07:00", academicTermId: 1 }];
+          : [{ id: 1, name: "SEAL Hackathon 2026", status: "REGISTRATION_OPEN", startDate: "2026-06-01", endDate: "2026-06-02", registrationStartAt: "2026-05-01T08:00:00+07:00", registrationEndAt: "2026-06-02T23:59:00+07:00", academicTermId: 1 }];
 
       await route.fulfill({
 
