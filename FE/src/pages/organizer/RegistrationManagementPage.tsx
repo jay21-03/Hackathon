@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import type { PagedResult } from "../../types/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ReasonConfirmAction } from "../../components/feedback/ReasonConfirmAction";
+import { ConfirmAction } from "../../components/feedback/ConfirmAction";
 import { RetryPanel } from "../../components/feedback/RetryPanel";
 import { useToast } from "../../components/feedback/ToastProvider";
 import { Badge } from "../../components/ui/Badge";
@@ -21,6 +22,8 @@ import { useEventTeamSummary } from "../../hooks/useEventTeamSummary";
 import { invalidateAfterTeamMutation } from "../../lib/invalidateAppQueries";
 import { queryKeys } from "../../lib/queryKeys";
 import { fetchEventDetail } from "../../services/eventsApi";
+import { seedDemoRegistrations } from "../../services/demoSeedApi";
+import { enableDemoSeed } from "../../config/features";
 import { getStatusLabel, getTeamRegistrationStatusLabel, getTeamRegistrationStatusTone } from "../../domain/status";
 import {
   fetchTeam,
@@ -119,6 +122,7 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
   const [detailTeam, setDetailTeam] = useState<TeamDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [seedLoading, setSeedLoading] = useState(false);
 
   function memberCount(team: TeamDetailResponse) {
     return team.members?.length ?? 0;
@@ -235,15 +239,65 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
     notify("Đã tải file CSV.", "success");
   }
 
+  async function createDemoTeams() {
+    if (!eventId) return;
+    setSeedLoading(true);
+    try {
+      const result = await seedDemoRegistrations(eventId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.teams.byEvent(eventId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.teams.summary(eventId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.scoring.eventProgress(eventId) })
+      ]);
+      if (
+        result.regularTeamsCreated === 0 &&
+        result.singleMemberTeamsCreated === 0 &&
+        result.teamsSkipped > 0
+      ) {
+        notify("Dữ liệu demo đã tồn tại.", "success");
+        return;
+      }
+      notify(
+        `Đã tạo ${result.regularTeamsCreated} đội demo thường và ${result.singleMemberTeamsCreated} đội một thành viên. Tổng hiện tại: ${result.totalTeamsAfterSeed}/${result.eventQuota}.`,
+        result.warnings?.length ? "warning" : "success"
+      );
+    } catch (err) {
+      notify(resolveApiError(err, "Không tạo được đội demo."), "danger");
+    } finally {
+      setSeedLoading(false);
+    }
+  }
+
   const confirmed = confirmedTotal;
   const pending = pendingTotal;
   const awaitingApproval = awaitingApprovalTotal;
   const waitlist = waitlistTotal;
+  const demoSeedAction =
+    enableDemoSeed && eventId ? (
+      <ConfirmAction
+        title="Tạo đội demo?"
+        message="Hệ thống sẽ tạo 14 đội có 3-5 thành viên và 6 đội một thành viên. Dữ liệu seed sẽ ở trạng thái chờ duyệt. Dữ liệu thật hiện có không bị xóa."
+        confirmLabel="Tạo đội demo"
+        onConfirm={() => void createDemoTeams()}
+      >
+        <Button
+          type="button"
+          variant="secondary"
+          icon={<Icon name="auto_fix_high" />}
+          loading={seedLoading}
+          disabled={seedLoading}
+        >
+          Tạo đội demo
+        </Button>
+      </ConfirmAction>
+    ) : null;
 
   if (loading || eventLoading || summaryLoading) return <ModuleSkeleton rows={4} variant="table" />;
 
   return (
     <div className="space-y-lg">
+      {embedded && demoSeedAction ? <div className="flex flex-wrap justify-end gap-sm">{demoSeedAction}</div> : null}
       {!embedded ? (
         <>
           <PageHeader
@@ -253,6 +307,7 @@ export function RegistrationManagementPage({ embedded = false }: { embedded?: bo
             actions={
               <>
                 <OrganizerContextBar />
+                {demoSeedAction}
                 <Badge tone="success">
                   {confirmed}/{quota || "—"} quota
                 </Badge>
