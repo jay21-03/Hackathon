@@ -32,7 +32,7 @@ test("team registration pre-fills captain student profile", async ({ page }) => 
           startDate: "2026-06-01",
           endDate: "2026-06-02",
           registrationStartAt: "2026-01-01T00:00:00+07:00",
-          registrationEndAt: "2027-12-31T23:59:00+07:00",
+          registrationEndAt: "2026-06-02T23:59:00+07:00",
           minTeamSize: 1,
           maxTeamSize: 5,
           maxTeams: 50
@@ -139,7 +139,7 @@ test("organizer lifecycle: open registration", async ({ page }) => {
             startDate: "2026-06-01",
             endDate: "2026-06-02",
             registrationStartAt: "2026-05-01T08:00:00+07:00",
-            registrationEndAt: "2026-12-31T23:59:00+07:00",
+            registrationEndAt: "2026-06-02T23:59:00+07:00",
             minTeamSize: 1,
             maxTeamSize: 5,
             maxTeams: 50
