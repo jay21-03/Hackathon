@@ -380,10 +380,13 @@ public class ScoringService {
         eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
+        int roundsProcessed = 0;
         int boardsProcessed = 0;
         int sheetsCreated = 0;
         int sheetsSubmitted = 0;
+        int submittedSheetsPreserved = 0;
         int itemsCopied = 0;
+        int itemsCreated = 0;
         int skippedTeamsWithoutSample = 0;
         OffsetDateTime now = OffsetDateTime.now();
 
@@ -392,7 +395,24 @@ public class ScoringService {
             if (criteria.isEmpty()) {
                 continue;
             }
-            for (Board board : ContestOrdering.sortBoards(boardRepository.findByRoundId(round.getId()))) {
+            List<Board> roundBoards = ContestOrdering.sortBoards(boardRepository.findByRoundId(round.getId()));
+            ScoreSheet roundSample = findSubmittedSampleForRound(roundBoards);
+            if (roundSample == null) {
+                skippedTeamsWithoutSample += roundBoards.stream()
+                        .mapToInt(board -> sortedScorableSlotsWithTeams(board.getId()).size())
+                        .sum();
+                continue;
+            }
+            Map<Long, ScoreItem> sampleItems = scoreItemRepository.findByScoreSheetId(roundSample.getId()).stream()
+                    .collect(Collectors.toMap(ScoreItem::getCriteriaId, item -> item, (left, right) -> left));
+            if (sampleItems.isEmpty()) {
+                skippedTeamsWithoutSample += roundBoards.stream()
+                        .mapToInt(board -> sortedScorableSlotsWithTeams(board.getId()).size())
+                        .sum();
+                continue;
+            }
+            roundsProcessed++;
+            for (Board board : roundBoards) {
                 List<JudgeAssignment> assignments = judgeAssignmentRepository.findByBoardId(board.getId());
                 List<BoardSlot> slots = sortedScorableSlotsWithTeams(board.getId());
                 if (assignments.isEmpty() || slots.isEmpty()) {
@@ -400,22 +420,13 @@ public class ScoringService {
                 }
                 boardsProcessed++;
                 for (BoardSlot slot : slots) {
-                    ScoreSheet sample = scoreSheetRepository.findByBoardIdAndTeamId(board.getId(), slot.getTeamId())
-                            .stream()
-                            .filter(sheet -> sheet.getStatus() == ScoreSheetStatus.SUBMITTED)
-                            .findFirst()
-                            .orElse(null);
-                    if (sample == null) {
-                        skippedTeamsWithoutSample++;
-                        continue;
-                    }
-                    List<ScoreItem> sampleItems = scoreItemRepository.findByScoreSheetId(sample.getId());
                     for (JudgeAssignment assignment : assignments) {
                         ScoreSheet sheet = scoreSheetRepository
                                 .findByBoardIdAndTeamIdAndJudgeId(
                                         board.getId(), slot.getTeamId(), assignment.getJudgeId())
                                 .orElse(null);
                         if (sheet != null && sheet.getStatus() == ScoreSheetStatus.SUBMITTED) {
+                            submittedSheetsPreserved++;
                             continue;
                         }
                         if (sheet == null) {
@@ -433,21 +444,24 @@ public class ScoringService {
                         } else {
                             scoreItemRepository.deleteByScoreSheetId(sheet.getId());
                         }
-                        for (ScoreItem item : sampleItems) {
-                            if (criteria.stream().noneMatch(c -> c.getId().equals(item.getCriteriaId()))) {
-                                continue;
-                            }
+                        for (ScoreCriteria criterion : criteria) {
+                            ScoreItem sampleItem = sampleItems.get(criterion.getId());
                             scoreItemRepository.save(ScoreItem.builder()
                                     .scoreSheetId(sheet.getId())
-                                    .criteriaId(item.getCriteriaId())
-                                    .scoreValue(item.getScoreValue())
-                                    .comment("Demo copy: " + (item.getComment() == null ? "" : item.getComment()))
+                                    .criteriaId(criterion.getId())
+                                    .scoreValue(generateDemoScore(
+                                            eventId,
+                                            round.getId(),
+                                            board.getId(),
+                                            slot.getTeamId(),
+                                            assignment.getJudgeId(),
+                                            criterion,
+                                            sampleItem))
+                                    .comment(generateDemoComment(slot.getTeamId(), assignment.getJudgeId(), criterion))
                                     .build());
-                            itemsCopied++;
+                            itemsCreated++;
                         }
-                        sheet.setGeneralFeedback(sample.getGeneralFeedback() == null
-                                ? "Demo: điểm được bù từ phiếu giám khảo đã chấm."
-                                : "Demo copy: " + sample.getGeneralFeedback());
+                        sheet.setGeneralFeedback(generateDemoFeedback(slot.getTeamId(), assignment.getJudgeId()));
                         submitSheetInternal(sheet, criteria);
                         sheetsSubmitted++;
                     }
@@ -457,12 +471,86 @@ public class ScoringService {
 
         return DemoScoringCompletionResponse.builder()
                 .eventId(eventId)
+                .roundsProcessed(roundsProcessed)
                 .boardsProcessed(boardsProcessed)
+                .submittedSheetsPreserved(submittedSheetsPreserved)
                 .scoreSheetsCreated(sheetsCreated)
                 .scoreSheetsSubmitted(sheetsSubmitted)
                 .scoreItemsCopied(itemsCopied)
+                .scoreItemsCreated(itemsCreated)
                 .skippedTeamsWithoutSample(skippedTeamsWithoutSample)
                 .build();
+    }
+
+    private ScoreSheet findSubmittedSampleForRound(List<Board> boards) {
+        for (Board board : boards) {
+            for (ScoreSheet sheet : scoreSheetRepository.findByBoardId(board.getId())) {
+                if (sheet.getStatus() == ScoreSheetStatus.SUBMITTED) {
+                    return sheet;
+                }
+            }
+        }
+        return null;
+    }
+
+    private BigDecimal generateDemoScore(
+            Long eventId,
+            Long roundId,
+            Long boardId,
+            Long teamId,
+            Long judgeId,
+            ScoreCriteria criterion,
+            ScoreItem sampleItem) {
+        double min = criterion.getMinScore() != null ? criterion.getMinScore().doubleValue() : 0D;
+        double max = criterion.getMaxScore() != null ? criterion.getMaxScore().doubleValue() : 10D;
+        double range = Math.max(1D, max - min);
+        double base = sampleItem != null && sampleItem.getScoreValue() != null
+                ? sampleItem.getScoreValue().doubleValue()
+                : min + (range * 0.75D);
+
+        double teamBias = (stableUnit(eventId, roundId, teamId, 101L) * 2D) - 1D;
+        double judgeBias = (stableUnit(eventId, boardId, judgeId, 211L) * 2D) - 1D;
+        double criteriaBias = (stableUnit(teamId, judgeId, criterion.getId(), 307L) * 2D) - 1D;
+        double raw = base
+                + (teamBias * range * 0.22D)
+                + (judgeBias * range * 0.05D)
+                + (criteriaBias * range * 0.04D);
+        double clamped = Math.max(min, Math.min(max, raw));
+        return BigDecimal.valueOf(clamped).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String generateDemoComment(Long teamId, Long judgeId, ScoreCriteria criterion) {
+        String[] comments = {
+            "Demo: dap ung tot tieu chi, con vai diem co the toi uu.",
+            "Demo: phan trinh bay ro, muc hoan thien kha on.",
+            "Demo: y tuong tot, can lam sac net hon o chi tiet trien khai.",
+            "Demo: san pham van hanh duoc, tac dong the hien tuong doi ro.",
+            "Demo: co nen tang tot, trai nghiem con co the muot hon."
+        };
+        return comments[stableIndex(comments.length, teamId, judgeId, criterion.getId(), 401L)];
+    }
+
+    private String generateDemoFeedback(Long teamId, Long judgeId) {
+        String[] feedback = {
+            "Demo: doi co huong tiep can ro rang, ket qua du thuyet phuc de so sanh xep hang.",
+            "Demo: phan trinh bay va san pham dat muc tot, van con khong gian cai thien.",
+            "Demo: giai phap the hien duoc gia tri chinh, diem so duoc sinh phuc vu kich ban demo.",
+            "Demo: doi hoan thanh phan lon yeu cau, muc do noi bat khac nhau theo tung tieu chi."
+        };
+        return feedback[stableIndex(feedback.length, teamId, judgeId, 503L)];
+    }
+
+    private int stableIndex(int size, Long... values) {
+        return (int) Math.floor(stableUnit(values) * size) % size;
+    }
+
+    private double stableUnit(Long... values) {
+        long hash = 1125899906842597L;
+        for (Long value : values) {
+            hash = 31L * hash + (value == null ? 0L : value);
+        }
+        long positive = hash == Long.MIN_VALUE ? 0L : Math.abs(hash);
+        return (positive % 10_000L) / 10_000D;
     }
 
     private ScoreProgressResponse buildScoreProgress(BoardContext ctx) {
